@@ -24,6 +24,7 @@
 #       04-Sep-08 (boija02)     ING_TST/output is unlikely to work, so changed
 #                               to II_SYSTEM. Don't create SEPPARAMDB if it's
 #                               defined, which is likely to mean remote testing
+#	10-Mar-09 (boija02)	Correcting typo in conditional.
 #
 #
 #------------------------------------------------------------------------------
@@ -79,7 +80,7 @@ work=$1
 
 if [ "$work" = "init" ]
 then
-  if [ "$SEPPARAMDB" = ""]
+  if [ "$SEPPARAMDB" = "" ]
   then
     echo "Creating JDBC test database @ ",`date`
     echo ""
@@ -101,7 +102,7 @@ then
     echo "Starting JDBC SEP Tests @ ",`date`
     echo ""
 
-  if [ "$SEPPARAMDB" = ""]
+  if [ "$SEPPARAMDB" = "" ]
   then
     SEPPARAMDB=jdbcdb
     export SEPPARAMDB
