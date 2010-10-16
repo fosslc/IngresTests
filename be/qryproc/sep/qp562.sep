@@ -1,0 +1,129 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : qp562.sep
+  Suite         : bw!qryproc
+  Focus         : Ingres Regression Test
+                : Test for bug 120784 - isolation level is not set correctly
+                : in 'set session read write, isolation_level=.....
+                :
+                : This session will generate a timeout error if the bug is
+                : not fixed.
+                :
+  Databases     : SEPPARAMDB
+  Tables        : b120784_*
+  Filled Files  : b120784.sc
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv 
+  Summary       : Verifies fix for bug 120784
+                :
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 14-Oct-2008 (wanfr01) Created.
+                : 14-Oct-2008 (sarjo01) Formalized for piccolo.
+                : 03-Nov-2008 (wanfr01) Cleaned up compiler warnings
+		: 11-Feb-2009 (boija02) More compiler warnings on VMS
+*/
+? sql -s SEPPARAMDB
+<< 
+
+>> 
+* drop table b120784_1t\g
+<<
+~
+>>
+* create table b120784_1t (id integer not null)  \g
+<<
+>>
+* insert into b120784_1t values(0)  \g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? fill b120784.sc
+!!
+#include <stdio.h>
+#include <stdlib.h>
+
+EXEC SQL include sqlca;
+ 
+int getout();
+
+int main(int argc, char *argv[])
+{
+    EXEC SQL BEGIN declare section;
+        int counter;
+        char dbname[100];
+    exec sql end declare section;
+    exec sql whenever sqlerror call getout;
+
+    sprintf ( dbname, argv[1]);
+    EXEC SQL connect :dbname session 1;
+    EXEC SQL connect :dbname session 2;
+
+    EXEC SQL set_sql (session = 1);
+    EXEC SQL set lockmode session where readlock=exclusive;
+    EXEC SQL select id into :counter from b120784_1t;
+
+    EXEC SQL set_sql (session = 2);
+    EXEC SQL set lockmode session where timeout=3;
+    EXEC SQL set session read write,isolation level read uncommitted;
+    EXEC SQL select id into :counter from b120784_1t;
+
+    EXEC SQL disconnect;   
+    return (0);
+}
+
+
+int getout()
+{   
+    EXEC SQL BEGIN declare section;
+	char errmsg[101];
+    EXEC SQL END declare section;
+    printf("SQLCODE: %d : ", sqlca.sqlcode);
+    exec sql inquire_sql (:errmsg = ERRORTEXT);
+    printf ("Error text: %s\n",errmsg);
+    EXEC SQL disconnect; 
+    exit(-1);
+    return(0);
+}
+!!
+? esqlc b120784.sc
+<<
+ESQL b120784.sc:
+>>
+<<
+>>
+? sepcc b120784.c
+<<
+>>
+<<
+b120784.c
+>>
+? seplnk b120784
+<<
+>>
+? run b120784.exe SEPPARAMDB
+<<
+>>
+? delete b120784.c
+<<
+~
+>>
+? delete b120784.o
+<<
+~
+>>
+? delete b120784.obj
+<<
+~
+>>
+? delete b120784.exe
+<<
+~
+>>
