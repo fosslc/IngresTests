@@ -1,0 +1,251 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : dtu28.sep 
+  Suite         : be!datatypes
+  Focus         : Ingres Regression Test
+                : Test for bug 117034 - wrong results after running a dbproc
+		:	containing a for/do select
+                :
+  Databases     : SEPPARAMDB3 (Unicode database required) 
+  Tables        : dtu28_t*
+  Filled Files  : 
+  Copied Files  : dtu28_t1.dat
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Verifies fix for bug 117034 
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 25-Jul-2008 (wanfr01) Created.
+                : 31-Jul-2008 (sarjo01) Formalized for piccolo. 
+                : 22-Oct-2008 (wanfr01) Test does not currently run on VMS
+*/
+.if !(VMS)
+? fill dtu28_t1.dat
+!!
+!!
+? cp @file(ing_tst,be,datatypes,data,dtu28_t1.dat) dtu28_t1.dat
+<<
+>>
+? sql -s SEPPARAMDB3
+<< 
+
+>> 
+* drop dtu28_t1\g
+<<
+~
+>>
+* drop dtu28_t2\g
+<<
+~
+>>
+* drop procedure dtu28_proc1\g
+<<
+~
+>>
+* create table dtu28_t1( -
+	week_num decimal(2,0) not null, -
+	segmentation_time date not null, -
+	probe_id nvarchar(50) not null, -
+	source_object_type nvarchar(20) not null, -
+	source_object nvarchar(400) not null, -
+	relationship nvarchar(20) not null, -
+	dest_object_type nvarchar(20) not null, -
+	dest_object nvarchar(400) not null, -
+	first_date date not null, -
+	last_date date not null, -
+	observed_count decimal(30,0) not null -
+)\g
+<<
+>>
+* copy dtu28_t1( -
+	week_num= varchar(0)tab, -
+	segmentation_time= c0tab, -
+	probe_id= nvarchar(0)tab, -
+	source_object_type= nvarchar(0)tab, -
+	source_object= nvarchar(0)tab, -
+	relationship= nvarchar(0)tab, -
+	dest_object_type= nvarchar(0)tab, -
+	dest_object= nvarchar(0)tab, -
+	first_date= c0tab, -
+	last_date= c0tab, -
+	observed_count= varchar(0)nl, -
+	nl= d0nl) -
+from 'dtu28_t1.dat'\g
+<<
+(19398 rows)
+>>
+* create table dtu28_t2( -
+	week_num decimal(2,0) not null, -
+	summary_date date not null, -
+	probe_id nvarchar(50) not null, -
+	source_object_type nvarchar(20) not null, -
+	source_object nvarchar(400) not null, -
+	relationship nvarchar(20) not null, -
+	dest_object_type nvarchar(20) not null, -
+	dest_object nvarchar(400) not null, -
+	first_date date not null, -
+	last_date date not null, -
+	observed_count decimal(30,0) not null -
+)\g
+<<
+>>
+* CREATE PROCEDURE dtu28_proc1 -
+AS -
+DECLARE -
+	lcProgramName		NVARCHAR(50) NOT NULL; -
+	lvStartDateTime		DATE; -
+	lvEndDateTime		DATE; -
+	lvToday			DATE; -
+	lvNextDay		DATE; -
+        lvDateToSum		DATE; -
+	lvRowCount		INTEGER NOT NULL; -
+	lvTotalRowCount		INTEGER NOT NULL; -
+	lvErrorNumber		INTEGER NOT NULL; -
+	lvDiffInDays		INTEGER; -
+	lvLoopCounter		INTEGER; -
+	lvmsg			VARCHAR(200) NOT NULL; -
+BEGIN -
+	 -
+	lcProgramName 	= 'dtu28_proc1';	 -
+	lvStartDateTime	= DATE('NOW');  -
+	lvEndDateTime	= DATE('NOW');  -
+	lvToday		= DATE('TODAY') + DATE('0 HOUR');  -
+	lvRowCount	= 0; -
+	lvTotalRowCount	= 0; -
+	lvDiffInDays	= 0; -
+	 -
+	for -
+		SELECT DATE_TRUNC('DAY', FIRST_DATE) -
+		  INTO lvDateToSum -
+		  FROM dtu28_t1 -
+		 WHERE FIRST_DATE < date('today') -
+		 GROUP BY DATE_TRUNC('DAY', FIRST_DATE) -
+		 ORDER BY 1 -
+   	do		 -
+		lvNextDay = lvDateToSum + date('1 day');   -
+		INSERT INTO dtu28_t2 -
+			(WEEK_NUM, -
+		 	SUMMARY_DATE, -
+			PROBE_ID, -
+			SOURCE_OBJECT_TYPE, -
+			SOURCE_OBJECT, -
+			RELATIONSHIP, -
+			DEST_OBJECT_TYPE, -
+			DEST_OBJECT, -
+			FIRST_DATE, -
+			LAST_DATE, -
+			OBSERVED_COUNT) -
+		 SELECT WEEK_NUM, -
+		 	lvDateToSum, -
+			PROBE_ID, -
+			SOURCE_OBJECT_TYPE, -
+			SOURCE_OBJECT, -
+			RELATIONSHIP, -
+			DEST_OBJECT_TYPE, -
+			DEST_OBJECT, -
+			MIN(FIRST_DATE), -
+			MAX(LAST_DATE), -
+			SUM(OBSERVED_COUNT) -
+	   	  FROM  dtu28_t1 -
+	  	  WHERE FIRST_DATE >= lvDateToSum -
+	     	    AND FIRST_DATE <  lvNextDay -
+	 	  GROUP BY WEEK_NUM, -
+		 	2, -
+		 	PROBE_ID, -
+			SOURCE_OBJECT_TYPE, -
+			SOURCE_OBJECT, -
+			RELATIONSHIP, -
+			DEST_OBJECT_TYPE, -
+			DEST_OBJECT; -
+	 -
+		SELECT iierrornumber, iirowcount INTO lvErrorNumber, lvRowCount;		 -
+		if (lvErrorNumber > 0) THEN  -
+			if (lvErrorNumber = 50001) Or (lvErrorNumber = -30210) THEN -
+			 	lvErrorNumber = 0; -
+			else -
+		   		lvmsg = 'Error: A database error occurred while executing dtu28_proc1; insert into KB_TBL failed. DB error number (' + VARCHAR(lvErrorNumber) + ').';  -
+		   		message lvmsg with destination = (error_log);  -
+			endif; -
+		endif; -
+		if (lvErrorNumber = 0) then -
+			COMMIT; -
+		else -
+			ROLLBACK; -
+		endif; -
+   	endfor; -
+END; \g
+<<
+>>
+* \q
+<<
+>>
+? optimizedb -zc -zk -zv SEPPARAMDB3
+<<
+~
+>>
+? sql -s SEPPARAMDB3
+<< 
+
+>> 
+* execute procedure dtu28_proc1;\g
+<<
+>>
+/*
+ *  The following two queries will return 10 rows if bug
+ *  117034 is fixed.
+ *
+*/
+*      select DATE_TRUNC('DAY',  FIRST_DATE) AS SUM_DATE, -
+             SUM(OBSERVED_COUNT) AS OBSERVED_COUNT -
+        FROM dtu28_t1 -
+       group by -
+            DATE_TRUNC('DAY',  FIRST_DATE) -
+       ORDER BY 1;\g
+<<
+
++-------------------------+--------------------------------+
+|sum_date                 |observed_count                  |
++-------------------------+--------------------------------+
+|11-jul-2001              |                        35434149|
+|09-jun-2006              |                         1618066|
+|12-jun-2006              |                         1894257|
+|14-jun-2006              |                         2060322|
+|15-jun-2006              |                        21197766|
+|16-jun-2006              |                          122856|
+|21-jun-2006              |                            3256|
+|22-jun-2006              |                       212706182|
+|11-oct-2006              |                       135197939|
+|15-oct-2006              |                        21197766|
++-------------------------+--------------------------------+
+(10 rows)
+>>
+*       SELECT SUMMARY_DATE, -
+             SUM( OBSERVED_COUNT) AS OBSERVED_COUNT -
+        FROM dtu28_t2 -
+    GROUP BY SUMMARY_DATE -
+    ORDER BY 1;\g
+<<
+
++-------------------------+--------------------------------+
+|summary_date             |observed_count                  |
++-------------------------+--------------------------------+
+|11-jul-2001              |                        35434149|
+|09-jun-2006              |                         1618066|
+|12-jun-2006              |                         1894257|
+|14-jun-2006              |                         2060322|
+|15-jun-2006              |                        21197766|
+|16-jun-2006              |                          122856|
+|21-jun-2006              |                            3256|
+|22-jun-2006              |                       212706182|
+|11-oct-2006              |                       135197939|
+|15-oct-2006              |                        21197766|
++-------------------------+--------------------------------+
+(10 rows)
+>>
+* \q
+<<
+>>
+.endif

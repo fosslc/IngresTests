@@ -1,0 +1,278 @@
+/*
+
+  Copyright (c) 2007 Ingres Corporation
+
+  Test Name     : dtu25.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 2006 Release 3 New Feature:
+                : upper(), lower() support for Unicode  
+
+  Databases     : SEPPARAMDB3 (unidb)
+  Tables        : unicasetest 
+  Filled Files  : dtu25.sc
+  Copied Files  : udata.ucd, specialcasing.txt
+  Output Files  :
+  Prerequisites : 
+  Run as user   : testenv
+  Summary       : Basic functionality test:
+                : 1) Copy current Unicode database files into current directory 
+                : 2) Scan and merge both files and store codepoint, uppercase
+                : value and lowercase value for each codepoint in a table
+                : 3) Issue a query comparing all stored upper/lower case
+                : values with the values returned by the upper() and lower()
+                : functions.
+                : 4) Print any codepoints where there is a mismatch, i.e.
+                : the function returns an unexpected value. 
+
+  Exp. DIFFs    : None
+  History       : 26-Jun-2007 (sarjo01) Created.
+                : 21-Aug-2007 (sarjo01) For issue 120734, change test to
+                :    match new DBMS behavior which now ignores conditional
+                :    speacial casings.
+	        : 29-Jul-2008 (joea)    Remove extraneous argument in printf
+                :    call.
+                : 22-Oct-2008 (wanfr01) Test does not currently run on VMS
+*/
+.if !(VMS)
+? cp @file(ii_system,ingres,files,collation,udata.ucd) uni.db 
+<<
+>>
+? cp @file(ii_system,ingres,files,collation,specialcasing.txt) unicase.db 
+<<
+>>
+? fill dtu25.sc
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL include sqlca;
+
+#define NUMROWS 65536
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL begin declare section; 
+      int   i;
+      char  *dbname;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[5];
+      } nvcp, nvuc, nvlc;
+      unsigned int cpval, ucval, lcval;
+   EXEC SQL end declare section;
+
+   FILE *fp, *fps;
+   char linebuff[256], *p;
+
+   if ((fp = fopen("uni.db", "r")) == NULL)
+   {
+      printf("File uni.db not found\n");
+      exit(-1);
+   }
+   if ((fps = fopen("unicase.db", "r")) == NULL)
+   {
+      printf("File unicase.db not found\n");
+      exit(-1);
+   }
+   dbname = argv[1];
+
+   EXEC SQL whenever sqlerror stop;
+
+   EXEC SQL connect :dbname;
+
+   EXEC SQL set autocommit on; 
+
+   EXEC SQL whenever sqlerror continue; 
+
+   EXEC SQL drop table unicasetest;
+
+   EXEC SQL whenever sqlerror call sqlprint; 
+
+   EXEC SQL create table unicasetest (
+            idx       integer,
+            cflag     tinyint,
+	    codepoint nvarchar(5),
+	    upperval  nvarchar(5),
+	    lowerval  nvarchar(5)
+            );
+
+   nvcp.len = 1;
+   nvcp.text[0] = 0;
+
+   EXEC SQL insert into unicasetest
+               values (0, 0, :nvcp, :nvcp, :nvcp);
+
+   for (i = 1; i < NUMROWS; i*=2)
+   {
+      EXEC SQL insert into unicasetest (idx)
+               select idx + :i from unicasetest;
+   }
+   EXEC SQL modify unicasetest to btree on idx;
+
+   while (fgets(linebuff, 255, fp) != NULL) 
+   {
+      p = linebuff;
+      while (isspace(*p))
+         ++p;
+      if (*p == '\0' || *p == '#')
+         continue;
+      sscanf(p, "%X", &cpval);
+      if (cpval <= 0xFFFF)
+      {
+         for (i = 0; i < 12; p++)
+         {
+            if (*p == ';')
+               i++;
+         }
+         if (*p == ';')
+         {
+            ucval = cpval;
+            p++;
+         }
+         else
+         {
+            sscanf(p, "%X", &ucval);
+            p += 5;
+         }
+         if (*p == ';')
+         {
+            lcval = cpval;
+         }
+         else
+         {
+            sscanf(p, "%X", &lcval);
+         }
+         nvcp.len = 1;
+         nvcp.text[0] = cpval;
+         nvuc.len = 1;
+         nvuc.text[0] = ucval;
+         nvlc.len = 1;
+         nvlc.text[0] = lcval;
+         EXEC SQL repeated update unicasetest set
+                  cflag = 1,
+                  codepoint = :nvcp,
+                  upperval  = :nvuc, 
+                  lowerval  = :nvlc 
+                  where idx = :cpval;
+      }
+   }
+   fclose(fp);
+   while (fgets(linebuff, 255, fps) != NULL)
+   {
+      p = linebuff;
+      while (isspace(*p))
+         ++p;
+      if (*p == '\0' || *p == '#')
+         continue;
+      sscanf(p, "%X", &cpval);
+
+      if (cpval > 0xFFFF)
+         continue;
+
+      p += 6;
+      i = 0;
+      while (*p != ';')
+      {
+         while (isspace(*p))
+            ++p;
+         sscanf(p, "%X", &lcval); 
+         p += 4;
+         nvlc.text[i] = lcval;
+         i++;
+      }
+      nvlc.len = i;
+      p++;
+      while (*p != ';')
+         p++;
+      p += 2;
+      i = 0;
+      while (*p != ';')
+      {
+         while (isspace(*p))
+            ++p;
+         sscanf(p, "%X", &ucval);
+         p += 4;
+         nvuc.text[i] = ucval;
+         i++;
+      }
+      nvuc.len = i;
+      while (*p != ';')
+         ++p;
+      ++p;
+      while (isspace(*p))
+         ++p;
+/*
+** The next statement checks for conditional casing info.
+** If a conditional is found, then skip the special casing for this codepoint,
+** excepting 03A3 (Ucase sigma)
+*/
+
+      if (*p != '#' && cpval != 0x03A3)
+         continue;
+
+      EXEC SQL repeated update unicasetest set
+               cflag = 1,
+               upperval  = :nvuc,
+               lowerval  = :nvlc
+               where idx = :cpval;
+
+   }
+
+   EXEC SQL select idx into :i from unicasetest
+       where cflag = 1 and idx > 0 and
+       (upper(codepoint) <> upperval or lower(codepoint) <> lowerval)
+       order by 1;
+   EXEC SQL begin;
+      printf("Codepoint: %04X\n", i); 
+   EXEC SQL end;
+
+   printf("Done\n"); 
+   EXEC SQL disconnect;
+}
+!!
+? esqlc dtu25.sc
+<<
+ESQL dtu25.sc:
+>>
+<<
+>>
+? sepcc dtu25.c
+<<
+>>
+<<
+dtu25.c
+>>
+? seplnk dtu25
+<<
+>>
+? run dtu25.exe SEPPARAMDB3
+<<
+Done
+>>
+? delete dtu25.c
+<<
+~
+>>
+? delete dtu25.exe
+<<
+~
+>>
+? delete dtu25.o
+<<
+~
+>>
+? delete dtu25.obj
+<<
+~
+>>
+? delete uni.db 
+<<
+~
+>>
+? delete unicase.db 
+<<
+~
+>>
+.endif

@@ -1,0 +1,483 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : dt64.sep
+  Suite         : be/datatypes
+  Focus         : Ingres 2006 Release 2 New Feature:
+                : Automatic char / integer coercion 
+
+  Databases     : SEPPARAMDB3 (test requires Unicode types) 
+  Tables        : dt64_t1,dt64_t2,dt64_t3,dt64_t4
+  Filled Files  : 
+  Copied Files  : 
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Basic feature test. Tests that an appropriate automatic
+                : coercion is performed in various contexts.
+
+  Exp. DIFFs    : None 
+  History       : 01-Aug-2006 (sarjo01) Created.
+                : 04-Aug-2006 (sarjo01) Recanonized after fix for 107610.
+                : 30-Aug-2006 (sarjo01) Recanonized after fix for 108190. 
+                : 18-Sep-2006 (sarjo01) Rewritten, recanonized after SIR
+                :                       116208 revision.
+	        :  1-oct-2007 (kibro01) b119191 - Updated message for US0B61
+
+          29-Oct-2007	(kiria01) b117790
+		Updating canons reflecting string-number coercion changes.
+	  10-Nov-2007   (kiria01) b119410
+		Updated canons to include additional float-string matches.
+          31-Jan-2008   (vande02) Updating 2 canons due to change 490382 which
+                addressed an uninitialised value, correcting this means we are
+                able to disambiguate the trim call for float arguments, so the
+		ambiguous errors no longer occur. Confirmed by Level 2.
+          10-Mar-2008	(kiria01) b120043
+			Updating canons for less ambiguous SUM and AVG
+			operators due to coercion changes for date operators.
+          22-Oct-2008 (wanfr01) Test does not currently run on VMS
+*/
+
+.if !(VMS)
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* drop dt64_t1, dt64_t2, dt64_t3, dt64_t4\g
+<<
+~
+>>
+* create table dt64_t1 (a1_i int, a2_bi bigint, a3_si smallint, a4_ti tinyint,  a5_f-
+lt float, a6_flt4 float4)\g
+<<
+
+>>
+* create table dt64_t2 (c1_chr char(8), c2_vch varchar(8), c3_nch nchar(8),  c4_vnch-
+ nvarchar(8))\g
+<<
+
+>>
+* insert into dt64_t1 values ('99', '99', '99', '99', '99', '99')\g
+<<
+(1 row)
+>>
+* insert into dt64_t2 values (99, 99, 99, 99)\g
+<<
+(1 row)
+>>
+* insert into dt64_t2 values (99, 99, '99', '99')\g
+<<
+(1 row)
+>>
+* select * from dt64_t1\g
+<<
+
++-------------+----------------------+------+------+-----------+-----------+
+|a1_i         |a2_bi                 |a3_si |a4_ti |a5_flt     |a6_flt4    |
++-------------+----------------------+------+------+-----------+-----------+
+|           99|                    99|    99|    99|     99.000|     99.000|
++-------------+----------------------+------+------+-----------+-----------+
+(1 row)
+>>
+* select * from dt64_t2\g
+<<
+
++--------+--------+----------------+----------------+
+|c1_chr  |c2_vch  |c3_nch          |c4_vnch         |
++--------+--------+----------------+----------------+
+|99      |99      |99              |99              |
+|99      |99      |99              |99              |
++--------+--------+----------------+----------------+
+(2 rows)
+>>
+* update dt64_t1 set a1_i = '98', a2_bi = '98', a3_si = '98', a4_ti = '98',  a5_flt -
+= '98', a6_flt4 = '98'\g
+<<
+(1 row)
+>>
+* update dt64_t2 set c1_chr = 98, c2_vch = 98, c3_nch = 98, c4_vnch = 98\g
+<<
+(2 rows)
+>>
+* update dt64_t2 set c1_chr = 98, c2_vch = 98, c3_nch = '98', c4_vnch = '98'\g
+<<
+(2 rows)
+>>
+* select * from dt64_t1\g
+<<
+
++-------------+----------------------+------+------+-----------+-----------+
+|a1_i         |a2_bi                 |a3_si |a4_ti |a5_flt     |a6_flt4    |
++-------------+----------------------+------+------+-----------+-----------+
+|           98|                    98|    98|    98|     98.000|     98.000|
++-------------+----------------------+------+------+-----------+-----------+
+(1 row)
+>>
+* select * from dt64_t2\g
+<<
+
++--------+--------+----------------+----------------+
+|c1_chr  |c2_vch  |c3_nch          |c4_vnch         |
++--------+--------+----------------+----------------+
+|98      |98      |98              |98              |
+|98      |98      |98              |98              |
++--------+--------+----------------+----------------+
+(2 rows)
+>>
+* select * from dt64_t1 where  a1_i = '98' and a1_i = 98 and  a2_bi = '98' and a2_bi-
+ = 98 and  a3_si = '98' and a3_si = 98 and  a4_ti = '98' and a4_ti = 98 and  a5_flt -
+= '98' and a5_flt = 98 \g 
+<<
+
++-------------+----------------------+------+------+-----------+-----------+
+|a1_i         |a2_bi                 |a3_si |a4_ti |a5_flt     |a6_flt4    |
++-------------+----------------------+------+------+-----------+-----------+
+|           98|                    98|    98|    98|     98.000|     98.000|
++-------------+----------------------+------+------+-----------+-----------+
+(1 row)
+>>
+* select * from dt64_t2 where  c1_chr = '98' and c1_chr = 98 and  c2_vch = '98' and -
+c2_vch = 98 and  c3_nch = '98' and c3_nch = 98 and  c4_vnch = '98' and c4_vnch = 98 -
+\g
+<<
+
++--------+--------+----------------+----------------+
+|c1_chr  |c2_vch  |c3_nch          |c4_vnch         |
++--------+--------+----------------+----------------+
+|98      |98      |98              |98              |
+|98      |98      |98              |98              |
++--------+--------+----------------+----------------+
+(2 rows)
+>>
+* insert into dt64_t1 values ('XY', '99', '99', '99', '99', '99')\g
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Mon Oct 29 15:20:48 2007)
+
+>>
+* insert into dt64_t1 values ('99', 'XY', '99', '99', '99', '99')\g
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Mon Oct 29 15:20:48 2007)
+
+>>
+* insert into dt64_t1 values ('99', '99', 'XY', '99', '99', '99')\g
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Mon Oct 29 15:20:48 2007)
+
+>>
+* insert into dt64_t1 values ('99', '99', '99', 'XY', '99', '99')\g
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Mon Oct 29 15:20:48 2007)
+
+>>
+* insert into dt64_t1 values ('99', '99', '99', '99', 'XY', '99')\g
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Mon Oct 29 15:20:48 2007)
+
+>>
+* insert into dt64_t1 values ('99', '99', '99', '99', '99', 'XY')\g
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Mon Oct 29 15:20:48 2007)
+
+>>
+* select * from dt64_t1\g
+<<
+
++-------------+----------------------+------+------+-----------+-----------+
+|a1_i         |a2_bi                 |a3_si |a4_ti |a5_flt     |a6_flt4    |
++-------------+----------------------+------+------+-----------+-----------+
+|           98|                    98|    98|    98|     98.000|     98.000|
++-------------+----------------------+------+------+-----------+-----------+
+(1 row)
+>>
+* insert into dt64_t2 values ('99', '99', '99', '99')\g
+<<
+(1 row)
+>>
+* insert into dt64_t1 select c1_chr, c2_vch, c3_nch, c4_vnch, c1_chr, c1_chr  from d-
+t64_t2 where c1_chr = '99'\g
+<<
+(1 row)
+>>
+* insert into dt64_t1 select c1_chr, c2_vch, c3_nch, c4_vnch, c1_chr, 99  from dt64_-
+t2 where c1_chr = '99'\g
+<<
+(1 row)
+>>
+* insert into dt64_t1 select c1_chr, c2_vch, c3_nch, c4_vnch, 99, 99  from dt64_t2 w-
+here c1_chr = '99'\g
+<<
+(1 row)
+>>
+* insert into dt64_t1 select 99, 99, 99, 99, 99, 99 from dt64_t2  where c1_chr = '99-
+'\g
+<<
+(1 row)
+>>
+* select * from dt64_t1 order by 1\g
+<<
+
++-------------+----------------------+------+------+-----------+-----------+
+|a1_i         |a2_bi                 |a3_si |a4_ti |a5_flt     |a6_flt4    |
++-------------+----------------------+------+------+-----------+-----------+
+|           98|                    98|    98|    98|     98.000|     98.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
++-------------+----------------------+------+------+-----------+-----------+
+(5 rows)
+>>
+* insert into dt64_t2 values ('XX', 'XX', 'XX', 'XX')\g
+<<
+(1 row)
+>>
+* select * from dt64_t2 order by 1\g
+<<
+
++--------+--------+----------------+----------------+
+|c1_chr  |c2_vch  |c3_nch          |c4_vnch         |
++--------+--------+----------------+----------------+
+|98      |98      |98              |98              |
+|98      |98      |98              |98              |
+|99      |99      |99              |99              |
+|XX      |XX      |XX              |XX              |
++--------+--------+----------------+----------------+
+(4 rows)
+>>
+* insert into dt64_t1 (a1_i) values ('XX')\g
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Mon Oct 29 15:20:49 2007)
+
+>>
+* select * from dt64_t1 order by 1\g
+<<
+
++-------------+----------------------+------+------+-----------+-----------+
+|a1_i         |a2_bi                 |a3_si |a4_ti |a5_flt     |a6_flt4    |
++-------------+----------------------+------+------+-----------+-----------+
+|           98|                    98|    98|    98|     98.000|     98.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
++-------------+----------------------+------+------+-----------+-----------+
+(5 rows)
+>>
+* select * from dt64_t1 where a1_i = '99' and a2_bi = '99'  and a3_si = '99' and a4_-
+ti = '99' and a5_flt = '99' and a6_flt4 = '99'\g
+<<
+
++-------------+----------------------+------+------+-----------+-----------+
+|a1_i         |a2_bi                 |a3_si |a4_ti |a5_flt     |a6_flt4    |
++-------------+----------------------+------+------+-----------+-----------+
+|           99|                    99|    99|    99|     99.000|     99.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
+|           99|                    99|    99|    99|     99.000|     99.000|
++-------------+----------------------+------+------+-----------+-----------+
+(4 rows)
+>>
+* select * from dt64_t2 where c1_chr = 99 and c2_vch = 99  and c3_nch = 99 and c4_vn-
+ch = 99 order by 1\g
+<<
+
++--------+--------+----------------+----------------+
+|c1_chr  |c2_vch  |c3_nch          |c4_vnch         |
++--------+--------+----------------+----------------+
+|99      |99      |99              |99              |
++--------+--------+----------------+----------------+
+(1 row)
+>>
+* delete from dt64_t2 where c1_chr = 'XX'\g
+<<
+(1 row)
+>>
+* select * from dt64_t2 where c1_chr = 99 and c2_vch = 99  and c3_nch = 99 and c4_vn-
+ch = 99 order by 1\g
+<<
+
++------+------+----------+----------+
+|c1_chr|c2_vch|c3_nch    |c4_vnch   |
++------+------+----------+----------+
+|99    |99    |99        |99        |
++------+------+----------+----------+
+(1 row)
+>>
+* select a1_i from dt64_t1, dt64_t2 where  a1_i = c1_chr order by 1\g
+<<
+
++-------------+
+|a1_i         |
++-------------+
+|           98|
+|           98|
+|           99|
+|           99|
+|           99|
+|           99|
++-------------+
+(6 rows)
+>>
+* select trim(a1_i), trim(a2_bi), trim(a3_si), trim(a4_ti),  trim(a5_flt), trim(a6_f-
+lt4) from dt64_t1 order by 1\g
+<<
+
++-------------+----------------------+------+------+-----------+-----------+
+|col1         |col2                  |col3  |col4  |col5       |col6       |
++-------------+----------------------+------+------+-----------+-----------+
+|98           |98                    |98    |98    |98.000     |98.000     |
+|99           |99                    |99    |99    |99.000     |99.000     |
+|99           |99                    |99    |99    |99.000     |99.000     |
+|99           |99                    |99    |99    |99.000     |99.000     |
+|99           |99                    |99    |99    |99.000     |99.000     |
++-------------+----------------------+------+------+-----------+-----------+
+(5 rows)
+>>
+* select trim(99), trim(99.0)\g
+<<
+
++------+------+
+|col1  |col2  |
++------+------+
+|99    |99.0  |
++------+------+
+(1 row)
+>>
+* select int(sqrt(c1_chr)), int(sqrt(c2_vch)),  int(sqrt(c3_nch)), int(sqrt(c4_vnch)-
+) from dt64_t2 order by 1\g
+<<
+
++-------------+-------------+-------------+-------------+
+|col1         |col2         |col3         |col4         |
++-------------+-------------+-------------+-------------+
+|            9|            9|            9|            9|
+|            9|            9|            9|            9|
+|            9|            9|            9|            9|
++-------------+-------------+-------------+-------------+
+(3 rows)
+>>
+* drop procedure dt64_p1\g
+<<
+~
+>>
+* create procedure dt64_p1 (val1 integer, val2 char(10)) as   declare      p_char ch-
+ar(10) not null;      p_int int not null;   begin      p_char = val1;      p_int = v-
+al2;   end\g
+<<
+
+>>
+* drop procedure dt64_p2\g
+<<
+~
+>>
+* create procedure dt64_p2 as   declare      p_char char(10) not null;      p_int in-
+t not null;   begin      p_char = 99;      p_int = '99';   end\g
+<<
+
+>>
+* create table dt64_t3 (a1_i int, a2_bi bigint, a3_si smallint, a4_ti tinyint,  a5_f-
+lt float, a6_flt4 float4,  constraint con1 check (a1_i > 99 and a2_bi > 99 and a3_si-
+ > 99 and  a4_ti > 99 and a5_flt > 99 and a6_flt4 > 99))\g
+<<
+
+>>
+* insert into dt64_t3 values (  '100', '100', '100', '100', '100', '100')\g
+<<
+(1 row)
+>>
+* insert into dt64_t3 values (  '99', '100', '100', '100', '100', '100')\g
+<<
+E_US1905 Check integrity constraint '"con1"'
+    on table '"dt64_t3"' was violated.
+    (Wed Jul 26 12:33:08 2006)
+
+>>
+* insert into dt64_t3 values (  '100', '100', '100', '100', '99', '100')\g
+<<
+E_US1905 Check integrity constraint '"con1"'
+    on table '"dt64_t3"' was violated.
+    (Wed Jul 26 12:33:08 2006)
+
+>>
+* delete from dt64_t1\g
+<<
+(5 rows)
+>>
+* delete from dt64_t2\g
+<<
+(3 rows)
+>>
+* insert into dt64_t2 values ('98', '98', '98', '98')\g
+<<
+(1 row)
+>>
+* insert into dt64_t1 values (99, 99, 99, 99, 99, 99)\g
+<<
+(1 row)
+>>
+* update dt64_t1 from dt64_t2 t2 set a1_i = t2.c1_chr\g
+<<
+(1 row)
+>>
+* update dt64_t2 from dt64_t1 t1 set c1_chr = t1.a1_i\g
+<<
+(1 row)
+>>
+* select * from dt64_t1 union select *,c1_chr,c2_vch from dt64_t2 order by 1\g
+<<
+
++-------------+----------------------+----------------+----------------+-----------+-
+-----------+
+|a1_i         |a2_bi                 |a3_si           |a4_ti           |a5_flt     |-
+a6_flt4    |
++-------------+----------------------+----------------+----------------+-----------+-
+-----------+
+|98           |98                    |98              |98              |98         |-
+98         |
+|98           |99                    |99              |99              |99.000     |-
+99.000     |
++-------------+----------------------+----------------+----------------+-----------+-
+-----------+
+(2 rows)
+>>
+* create table dt64_t4 (char_col char(5))\g
+<<
+
+>>
+* insert into dt64_t4 values ('98')\g
+<<
+(1 row)
+>>
+* insert into dt64_t4 values ('99')\g
+<<
+(1 row)
+>>
+* insert into dt64_t4 values ('100')\g
+<<
+(1 row)
+>>
+* select avg(char_col) from dt64_t4\g
+<<
+
++-----------+
+|col1       |
++-----------+
+|     99.000|
++-----------+
+(1 row)
+>>
+* \q
+<<
+~
+>>
+
+
+Ending at: Mon Mar 10 14:30:20 2008
+.endif
