@@ -209,6 +209,8 @@
 # 10-Sep-2007 (sarjo01)
 #               Added setting of SEPPARAMDB, SEPPARAMAPI_INC variables to API
 #               run section for new test, api13.sep
+# 08-Sep-2008 (sarjo01)
+#               Moved setting of SEPPARAMAPI_INC to global location. 
 
 #
 betestlist="access accntl alttbl api blob c2secure datetime datatypes miscfunc fastload lar qryproc ttpp util"
@@ -272,6 +274,9 @@ errorHelp() {
 }
 
 umask 2 
+
+# Set variable needed for api program compilation
+export SEPPARAMAPI_INC=-I$II_SYSTEM/ingres/files
 
 # Set the output directory for test results.
 #
@@ -385,7 +390,6 @@ then
 			  echo "Creating Directory - $TST_OUTPUT/access"
 			  mkdir $TST_OUTPUT/access
 		   fi
-
 			echo "Creating BE/Access database @ ", `date`
 			echo ""
 			destroydb accessdb1 >>$TST_OUTPUT/beinit.out
@@ -962,7 +966,6 @@ then
                         LIS_FILE=beapi.lis
                         OUT_FILE=beapi.out
                         export AREA
-                        SEPPARAMAPI_INC=-I$II_SYSTEM/ingres/files
 			SEPPARAMDB=apidb2
                         export SEPPARAMAPI_INC
                         export SEPPARAMDB
