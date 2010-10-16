@@ -49,8 +49,8 @@ executor %TST_CFG%\gcaunix.cfg > %TST_OUTPUT%\gca%val%.out
 goto END
 
 :ODBC
-if "%1"=="init" destroydb -utestenv %SEPPARAM_NODE% >>%TST_OUTPUT%\odbcinit.out
-if "%1"=="init" createdb -utestenv %SEPPARAM_NODE% >>%TST_OUTPUT%\odbcinit.out
+if "%1"=="init" destroydb -utestenv %SEPPARAM_ODB% >>%TST_OUTPUT%\odbcinit.out
+if "%1"=="init" createdb -utestenv %SEPPARAM_ODB% >>%TST_OUTPUT%\odbcinit.out
 if "%1"=="init" goto END
 executor %TST_CFG%\odbc.cfg > %TST_OUTPUT%\odbc.out
 goto END
