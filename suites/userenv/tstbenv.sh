@@ -13,6 +13,7 @@
 #
 # 29-Sep-2008 (vande02) Added the ING_CHARSET variable to enble UTF8 testing.
 #
+# 22-Apr-2009 (vande02) Replacing ING_CHARSET references with SEPPARAM_CHARSET.
 #=======================================================================
 #           GENERAL INGRES SYSTEM SETTINGS FOR TEST ENVIRONMENT
 #=======================================================================
@@ -23,7 +24,7 @@ ING_TST=/qa1/tst;			export ING_TST
 # Root directory for test tools
 ING_TOOLS=/qa1/tools;			export ING_TOOLS
 # Root directory for test output
-TST_OUTPUT=/qa1/output/2006r2;		export TST_OUTPUT
+TST_OUTPUT=< .. >;			export TST_OUTPUT
 # Directory holding test lists
 TST_LISTEXEC=$ING_TST/suites/acceptst;  export TST_LISTEXEC
 # Where Ingres should get configuration info.
@@ -32,8 +33,8 @@ II_CONFIG=$II_SYSTEM/ingres/files;	export II_CONFIG
 II_DATE_CENTURY_BOUNDARY=10;		export II_DATE_CENTURY_BOUNDARY
 # On BSD change this to /usr/ucb/vi
 ING_EDIT=/usr/bin/vi;			export ING_EDIT
-# Set to character set under test
-ING_CHARSET=< .. >;			export ING_CHARSET
+# Set this variable to character set under test (i.e. ISO88591, UTF8)
+SEPPARAM_CHARSET=< .. >;                export SEPPARAM_CHARSET
 
 #=======================================================================
 # SHARED LIBRARY PATH SETTINGS 

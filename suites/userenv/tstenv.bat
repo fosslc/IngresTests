@@ -1,6 +1,6 @@
 @ECHO OFF
 REM =========================================================================
-REM Copyright (c) 2008 Ingres Corporation
+REM Copyright (c) 2009 Ingres Corporation
 REM
 REM
 REM
@@ -16,6 +16,7 @@ REM
 REM 27-Aug-2008 (vande02) Changed '@CA' indicators to generic indicator for
 REM			  those lines which need customization.
 REM 29-Sep-2008 (vande02) Added the ING_CHARSET variable to enble UTF8 testing.
+REM 22-Apr-2009 (vande02) Replacing ING_CHARSET references with SEPPARAM_CHARSET
 REM
 REM =========================================================================
 
@@ -36,11 +37,11 @@ set ING_TST=< .. >
 
 REM =========================================================================
 REM
-REM     SET THIS VARIABLE TO UTF8 IF TESTING THAT CHARACTER SET
+REM     SET THIS VARIABLE TO THE CHARACTER SET UNDER TEST (i.e. ISO88591, UTF8) 
 REM
 REM =========================================================================
 
-set ING_CHARSET=< .. >
+set SEPPARAM_CHARSET=< .. >
 
 REM =========================================================================
 REM
