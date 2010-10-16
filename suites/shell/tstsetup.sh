@@ -180,6 +180,9 @@
 #		branch.
 #	04-Aug-2008 (boija02)
 #		set_params no longer throws errors on nonexistent params
+#	07-Jan-2009 (toumi01)
+#		Make sure required on_error and on_log_full c2 security
+#		settings are defined.
 #	26-Aug-2008 (vande02)
 #		Backing out change of 29-Nov-2007.  The correct parameter name
 #		is date_alias as of II 9.1.1 and the install default is
@@ -422,6 +425,8 @@ echo " "
 iisetres ii."*".c2.max_log_size 1200
 iisetres ii."*".c2.audit_log_1 $II_SYSTEM/ingres/files/audit.1
 iisetres ii."*".c2.audit_log_2 $II_SYSTEM/ingres/files/audit.2
+iisetres ii."*".c2.on_error STOPAUDIT
+iisetres ii."*".c2.on_log_full SUSPEND
 echo "Setting Protocol Bridge listen addresses"
 echo " "
 iisetres ii.$SERVER_HOST.gcb."*".tcp_ip.port        `ingprenv II_INSTALLATION`1
