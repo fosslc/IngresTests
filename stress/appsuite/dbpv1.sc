@@ -8,6 +8,7 @@
 **  History:
 **
 **  01-Oct-2009 sarjo01: Created.
+**  08-Oct-2009 sarjo01: Disable GTT create for type 0 proc. 
 **
 */
 #ifdef _WIN32
@@ -333,9 +334,12 @@ retry2:
 
          EXEC SQL whenever sqlerror call sqlprint; 
 
-         EXEC SQL declare global temporary table session.dbpv1_temp
-                  as select * from dbpv1_template on commit preserve rows
-                  with norecovery;
+         if (proctype != 0)
+         {
+            EXEC SQL declare global temporary table session.dbpv1_temp
+                     as select * from dbpv1_template on commit preserve rows
+                     with norecovery;
+         }
 
       }
 /*
