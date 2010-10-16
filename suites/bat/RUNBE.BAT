@@ -1,8 +1,8 @@
 @echo off
-REM Copyright (c) 2004 Ingres Corporation
+REM Copyright (c) 2008 Ingres Corporation
 REM 
-REM  
-REM SCRIPT FOR RUNNING AUTOMATED BACK-END TESTS FOR INGRES r3 (WINDOWS).
+REM
+REM SCRIPT FOR RUNNING AUTOMATED BACK-END TESTS FOR INGRES
 REM
 REM
 REM Description:
@@ -134,11 +134,8 @@ REM			Setup Area
 REM ---------------------------------------------------------------------------
 
 setlocal
-cls
-color 0b
 
-REM    Set the output directory for test results.
-REM
+CALL ipset SERVER_HOST=iigetres ii.*.config.server_host
 
 REM Set a variable that can be used to check the character set
 REM
@@ -171,7 +168,6 @@ set flag=%1
 if "%1"=="init" if not "%2"=="" goto INIT
 if "%1"=="be" goto NEXT
 if "%1"=="clean" goto CLEAN
-	color 0c
 	echo ***  User must input the modules to be initalized 
 	echo ***  or specify "all".
 	echo.
@@ -179,12 +175,9 @@ if "%1"=="clean" goto CLEAN
 	echo               or 
 	echo               runbe init access util
 	echo.
-	pause
-	color
 	goto END2
 :NEXT
 if "%1"=="be" if not "%2"=="" goto RUNTEST
-	color 0c
 	echo ***  User must input the modules to be run
 	echo ***  or specify all
 	echo. 
@@ -192,8 +185,6 @@ if "%1"=="be" if not "%2"=="" goto RUNTEST
 	echo               or
 	echo               runbe be access util
 	echo.
-	pause
-	color
 	goto END2
 rem ----------------------------------------------------------------------------
 rem                        Initialization Area
@@ -412,6 +403,16 @@ if "%2"=="" goto END
 	  title   Creating BE\C2SECURE database @ %datevar% . . .
 	  destroydb securedb >>%TST_OUTPUT%\beinit.out
 	  createdb securedb >>%TST_OUTPUT%\beinit.out
+
+qawtl "TURNING C2 SECURITY AUDITING ON THEN STOPPING AND RESTARTING INGRES"
+
+	  PCecho "Turning C2 Security Auditing ON"
+          qasetuser ingres iisetres ii.*.c2.security_auditing ON
+          qasetuser ingres ingstop
+          sleep 5
+          qasetuser ingres ingstart
+          sleep 5
+
 	  set AREA=c2secure
 	  if "%2"=="all" goto END
 	  shift
@@ -867,5 +868,4 @@ goto END2
 
 :END2
 endlocal
-color
 title Done  
