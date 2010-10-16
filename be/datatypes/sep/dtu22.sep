@@ -1,0 +1,1098 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: dtu22.sep
+	Time: Wed Mar 12 11:08:09 2003
+	User Name: ingres
+	Terminal type: septerm
+
+	Test ID : dtu22.sep
+	Module  : be/datatypes
+	Filename: dtu22.sep
+	Purpose	: To test the Unicode coercion and wildcard searching support,
+                  first available with Ingres 2.6/0303 and later releases.
+	Input Files  : dtu22_tbl.sc, dtu22_stf.sc
+	Output Files : dtu22_tbl.exe, dtu22_stf.exe
+	Database     : unidb
+	Tables       : dtu22_uni, dtu22_char
+	Synopsis     : The Ingres variable II_CHARSETxx (where xx is the
+                       installation code) will set to UTF8 in the beginning
+                       of this test, and restore to its default value at the
+                       end.
+                       This test includes two embedded C programs, the first
+                       program is to create and populate two tables.
+                       The second program is to create and execute database 
+                       queries against the tables with the non-Unicode
+                       columns are specified first, followed by the Unicode
+                       columns in the SQL queries. This test is similar to
+                       dtu14, dtu15, and dtu16(which the Unicode columns are
+                       specified first, then the non-Unicode columns).
+
+
+*** TEST CASES:
+    char_col = nchar_col
+    char_col = nvchar_col
+    vchar_col = nchar_col
+    vchar_col = nvchar_col
+    char_col LIKE nchar_col
+    char_col LIKE nvchar_col
+    vchar_col LIKE nchar_col
+    vchar_col LIKE nvchar_col
+    nchar_col LIKE 'string%'
+    nvchar_col LIKE 'string%'
+    nchar_col NOT LIKE 'string%'
+    nvchar_col NOT LIKE 'string%'
+    char_col NOT LIKE nchar_col LIKE '%string%'
+    char_col != nvchar_col LIKE '%string%' 
+    vchar_col NOT LIKE nchar_col LIKE '%string%'
+    vchar_col != nvchar_col LIKE 'string%'
+    
+
+ History: 12-Mar-2003	(wu$ca01)	Created
+          19-May-2003	(wu$ca01) Added the trim function to test cases 7, 8,
+                        9, 17, and 19. Removed the 'Known problem' section due
+                        to issue 12574215 is resolved.
+	  10-oct-2003	(somsa01) Updated to work on Windows.
+	  20-Jan-2004	(rogch01) Updated test to work on VMS.
+	  11-May-2004	(shafa01) Removed all steps used for setting the
+			II_CHARSETxx to UTF8 for all platforms. Due to Unicode
+			Coercion changes put in Ingres r3, this change should
+			only be in main and going forward.
+          18-Sep-2008	(vande02) Added conditional canons to allow for UTF8
+                        collation sequence order. Header cleanup.
+*/
+? fill dtu22_tbl.sc 
+!!
+/* This program is to create and populate 2 tables with nulls:
+** a Unicode table with the data types of nchar and nvarchar,
+** another table with the data types of char and varchar.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+typedef struct
+{
+    short len;
+    wchar_t text[1];
+} NVCH_STRUCT;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *col2[] =
+    {
+    L"Abcde",
+    L"abcde",
+    L"Fghij",
+    L"Klmno",
+    L"Pqrst",
+    L"pqrst",
+    L"Fg hij",
+    L"K lmno",
+    L"ABCDE",
+    L"ab_de",
+    };
+static wchar_t *col3[] =
+    {
+    L"Uvxyz",
+    L"abcde",
+    L"fghij",
+    L"klmno",
+    L"Klmno",
+    L"uvwxy",
+    L"aBCDE",
+    L"f*ji%",
+    L"UVXYZ",
+    L"uvwxz",
+    };
+#define NUMROWS 10
+
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int   i;
+      char  *dbname;
+      wchar_t wc1[8];
+      wchar_t wc2[8];
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[8];
+      } nv1;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[8];
+      } nv2;
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+   EXEC SQL DROP TABLE dtu22_uni;
+   EXEC SQL DROP TABLE dtu22_char;
+
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   printf("Creating tables...\n");
+
+   EXEC SQL CREATE TABLE dtu22_uni (
+	nchar_col NCHAR(7) not null,
+	nvchar_col NVARCHAR(7) not null);
+
+   EXEC SQL CREATE TABLE dtu22_char (
+	char_col CHAR(7) not null,
+ 	vchar_col VARCHAR(7) not null);
+
+   printf("Inserting into tables...\n");
+
+   for (i = 0; i < NUMROWS; i++)
+   {
+      wcscpy(wc1, col2[i]);
+      wcscpy(wc2, col3[i]);
+      UC_ASSIGN(nv1, col2[i]);
+      UC_ASSIGN(nv2, col3[i]);
+
+      EXEC SQL INSERT INTO dtu22_uni VALUES (:wc1, :wc2);
+
+   }
+
+  EXEC SQL INSERT INTO dtu22_char SELECT * FROM dtu22_uni;
+
+  printf("Operation complete\n");
+
+  EXEC SQL DISCONNECT;
+}
+!!
+? fill dtu22_stf.sc 
+!!
+/* This program is to create and execute database queries to compare
+** and search the tables using the SQL joins, operators, predicates,
+** and string functions with the non-Unicode columns as the first parameter.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  short     ind1;
+  char      st1[8];
+  char      st2[8];
+  wchar_t wc1[8], k1[8];
+  wchar_t wc2[8];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[40];
+  } nv1, nv2, k2;
+
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|===============================================================-
+==|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Select UNICODE table...");
+         EXEC SQL SELECT nchar_col, nvchar_col
+         INTO :wc1, :wc2
+         FROM dtu22_uni
+         order by nchar_col, nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|\n", wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 2:
+         print_header("Select non-UNICODE table...");
+         EXEC SQL SELECT char_col, vchar_col
+         INTO :st1, :st2
+         FROM dtu22_char
+         order by char_col, vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%s|\n", st1, st2);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("char_col = nchar_col...");
+         EXEC SQL SELECT dtu22_char.char_col, dtu22_uni.nchar_col
+         INTO :st1, :wc1
+         FROM dtu22_char, dtu22_uni
+         WHERE dtu22_char.char_col = dtu22_uni.nchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st1, wc1);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         print_header("char_col = nvchar_col...");
+         EXEC SQL SELECT dtu22_char.char_col, dtu22_uni.nvchar_col
+         INTO :st1, :wc2
+         FROM dtu22_char, dtu22_uni
+         WHERE dtu22_char.char_col = dtu22_uni.nvchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("vchar_col = nchar_col...");
+         EXEC SQL SELECT dtu22_char.vchar_col, dtu22_uni.nchar_col
+         INTO :st2, :wc1
+         FROM dtu22_char, dtu22_uni
+         WHERE dtu22_char.vchar_col = dtu22_uni.nchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st2, wc1);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header("vchar_col = nvchar_col...");
+         EXEC SQL SELECT dtu22_char.vchar_col, dtu22_uni.nvchar_col
+         INTO :st2, :wc2
+         FROM dtu22_char, dtu22_uni
+         WHERE dtu22_char.vchar_col = dtu22_uni.nvchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st2, wc2);
+         EXEC SQL END;
+         break;
+
+      case 7:
+         print_header("char_col LIKE nchar_col...");
+         EXEC SQL SELECT dtu22_char.char_col, dtu22_uni.nchar_col
+         INTO :st1, :wc1
+         FROM dtu22_char, dtu22_uni
+         WHERE trim(dtu22_char.char_col) LIKE trim(dtu22_uni.nchar_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st1, wc1);
+         EXEC SQL END;
+         break;
+
+      case 8:
+         print_header("char_col LIKE nvchar_col...");
+         EXEC SQL SELECT dtu22_char.char_col, dtu22_uni.nvchar_col
+         INTO :st1, :wc2
+         FROM dtu22_char, dtu22_uni
+         WHERE trim(dtu22_char.char_col) LIKE dtu22_uni.nvchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 9:
+         print_header("vchar_col LIKE nchar_col...");
+         EXEC SQL SELECT dtu22_char.vchar_col, dtu22_uni.nchar_col
+         INTO :st2, :wc1
+         FROM dtu22_char, dtu22_uni
+         WHERE dtu22_char.vchar_col LIKE trim(dtu22_uni.nchar_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st2, wc1);
+         EXEC SQL END;
+         break;
+
+      case 10:
+         print_header("vchar_col LIKE nvchar_col...");
+         EXEC SQL SELECT dtu22_char.vchar_col, dtu22_uni.nvchar_col
+         INTO :st2, :wc2
+         FROM dtu22_char, dtu22_uni
+         WHERE dtu22_char.vchar_col LIKE dtu22_uni.nvchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st2, wc2);
+         EXEC SQL END;
+         break;
+
+
+      case 11:
+         print_header("nchar_col LIKE 'A%' OR nchar_col LIKE 'ab%'...");
+         EXEC SQL SELECT nchar_col
+         INTO :wc1
+         FROM dtu22_uni
+         WHERE nchar_col LIKE 'A%' OR nchar_col LIKE 'ab%'
+         order by nchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|\n", wc1);
+         EXEC SQL END;
+         break;
+
+      case 12:
+         print_header("nchar_col LIKE 'Fg%' OR nchar_col LIKE 'K%'...");
+         EXEC SQL SELECT nchar_col
+         INTO :wc1
+         FROM dtu22_uni
+         WHERE nchar_col LIKE 'Fg%' OR nchar_col LIKE 'K%'
+         order by nchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|\n", wc1);
+         EXEC SQL END;
+         break;
+
+      case 13:
+         print_header("nvchar_col LIKE 'U%' OR nvchar_col LIKE 'u%'...");
+         EXEC SQL SELECT nvchar_col
+         INTO :wc2
+         FROM dtu22_uni
+         WHERE nvchar_col LIKE 'U%' OR nvchar_col LIKE 'u%'
+         order by nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|\n", wc2);
+         EXEC SQL END;
+         break;
+
+      case 14:
+         print_header("nvchar_col LIKE 'f%' OR nvchar_col LIKE 'a%'...");
+         EXEC SQL SELECT nvchar_col
+         INTO :wc2
+         FROM dtu22_uni
+         WHERE nvchar_col LIKE 'f%' OR nvchar_col LIKE 'a%'
+         order by nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|\n", wc2);
+         EXEC SQL END;
+         break;
+
+      case 15:
+         print_header("nchar_col NOT LIKE '%bcde  ' AND nchar_col NOT LIKE '%qrst  '-
+...");
+         EXEC SQL SELECT nchar_col
+         INTO :wc1
+         FROM dtu22_uni
+         WHERE nchar_col NOT LIKE '%bcde  ' AND nchar_col NOT LIKE '%qrst  '
+         order by nchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|\n", wc1);
+         EXEC SQL END;
+         break;
+
+      case 16:
+         print_header("nvchar_col NOT LIKE '%lmno' AND nvchar_col NOT LIKE '%v%'..."-
+);
+         EXEC SQL SELECT nvchar_col
+         INTO :wc2
+         FROM dtu22_uni
+         WHERE nvchar_col NOT LIKE '%lmno' AND nvchar_col NOT LIKE '%v%'
+         order by nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|\n", wc2);
+         EXEC SQL END;
+         break;
+
+      case 17:
+         print_header("char_col NOT LIKE nchar_col LIKE '%cde%'...");
+         EXEC SQL SELECT dtu22_char.char_col, dtu22_uni.nchar_col
+         INTO :st1, :wc1
+         FROM dtu22_char, dtu22_uni
+         WHERE trim(dtu22_char.char_col) NOT LIKE trim(dtu22_uni.nchar_col) AND
+         dtu22_uni.nchar_col LIKE '%cde%'
+         order by dtu22_char.char_col, dtu22_uni.nchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st1, wc1);
+         EXEC SQL END;
+         break;
+
+      case 18:
+         print_header("char_col != nvchar_col LIKE '%v%'...");
+         EXEC SQL SELECT dtu22_char.char_col, dtu22_uni.nvchar_col
+         INTO :st1, :wc2
+         FROM dtu22_char, dtu22_uni
+         WHERE dtu22_char.char_col != dtu22_uni.nvchar_col AND
+         dtu22_uni.nvchar_col LIKE '%v%'
+         order by dtu22_char.char_col, dtu22_uni.nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 19:
+         print_header("vchar_col NOT LIKE nchar_col LIKE '%lmno%'...");
+         EXEC SQL SELECT dtu22_char.vchar_col, dtu22_uni.nchar_col
+         INTO :st2, :wc1
+         FROM dtu22_char, dtu22_uni
+         WHERE dtu22_char.vchar_col NOT LIKE trim(dtu22_uni.nchar_col) AND
+         dtu22_uni.nchar_col LIKE '%lmno%'
+         order by dtu22_char.vchar_col, dtu22_uni.nchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st2, wc1);
+         EXEC SQL END;
+         break;
+
+      case 20:
+         print_header("vchar_col != nvchar_col LIKE 'f%'...");
+         EXEC SQL SELECT dtu22_char.vchar_col, dtu22_uni.nvchar_col
+         INTO :st2, :wc2
+         FROM dtu22_char, dtu22_uni
+         WHERE dtu22_char.vchar_col != dtu22_uni.nvchar_col AND
+         dtu22_uni.nvchar_col LIKE 'f%'
+         order by dtu22_char.vchar_col, dtu22_uni.nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st2, wc2);
+         EXEC SQL END;
+         break;
+
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu22_tbl.sc 
+<<
+ESQL dtu22_tbl.sc:
+>>
+<<
+>>
+? sepcc dtu22_tbl 
+<<
+dtu22_tbl.c
+>>
+<<
+
+>>
+? seplnk dtu22_tbl 
+<<
+
+>>
+? esqlc dtu22_stf.sc 
+<<
+ESQL dtu22_stf.sc:
+>>
+<<
+>>
+? sepcc dtu22_stf 
+<<
+dtu22_stf.c
+>>
+<<
+
+>>
+? seplnk dtu22_stf 
+<<
+
+>>
+? run dtu22_tbl.exe SEPPARAMDB3 
+<<
+Creating tables...
+Inserting into tables...
+Operation complete
+>>
+? run dtu22_stf.exe SEPPARAMDB3 1 
+<<
+Select UNICODE table...
+|=================================================================|
+|abcde  |abcde|
+|Abcde  |Uvxyz|
+|ABCDE  |UVXYZ|
+|ab_de  |uvwxz|
+|Fg hij |aBCDE|
+|Fghij  |fghij|
+|K lmno |f*ji%|
+|Klmno  |klmno|
+|pqrst  |uvwxy|
+|Pqrst  |Klmno|
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 2 
+<< IF (ING_CHARSET == "UTF8") 
+Select non-UNICODE table...
+|=================================================================|
+|abcde  |abcde|
+|Abcde  |Uvxyz|
+|ABCDE  |UVXYZ|
+|ab_de  |uvwxz|
+|Fg hij |aBCDE|
+|Fghij  |fghij|
+|K lmno |f*ji%|
+|Klmno  |klmno|
+|pqrst  |uvwxy|
+|Pqrst  |Klmno|
+|=================================================================|
+>>
+<<
+Select non-UNICODE table...
+|=================================================================|
+|ABCDE  |UVXYZ|
+|Abcde  |Uvxyz|
+|Fg hij |aBCDE|
+|Fghij  |fghij|
+|K lmno |f*ji%|
+|Klmno  |klmno|
+|Pqrst  |Klmno|
+|ab_de  |uvwxz|
+|abcde  |abcde|
+|pqrst  |uvwxy|
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 3 
+<< IF (ING_CHARSET == "UTF8") 
+char_col = nchar_col...
+|=================================================================|
+|abcde  |abcde  |
+|Abcde  |Abcde  |
+|ABCDE  |ABCDE  |
+|ab_de  |ab_de  |
+|Fg hij |Fg hij |
+|Fghij  |Fghij  |
+|K lmno |K lmno |
+|Klmno  |Klmno  |
+|pqrst  |pqrst  |
+|Pqrst  |Pqrst  |
+|=================================================================|
+>>
+<<
+char_col = nchar_col...
+|=================================================================|
+|ABCDE  |ABCDE  |
+|Abcde  |Abcde  |
+|Fg hij |Fg hij |
+|Fghij  |Fghij  |
+|K lmno |K lmno |
+|Klmno  |Klmno  |
+|Pqrst  |Pqrst  |
+|ab_de  |ab_de  |
+|abcde  |abcde  |
+|pqrst  |pqrst  |
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 4 
+<< IF (ING_CHARSET == "UTF8") 
+char_col = nvchar_col...
+|=================================================================|
+|abcde  |abcde|
+|Klmno  |Klmno|
+|=================================================================|
+>>
+<<
+char_col = nvchar_col...
+|=================================================================|
+|Klmno  |Klmno|
+|abcde  |abcde|
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 5 
+<< IF (ING_CHARSET == "UTF8") 
+vchar_col = nchar_col...
+|=================================================================|
+|abcde|abcde  |
+|Klmno|Klmno  |
+|=================================================================|
+>>
+<<
+vchar_col = nchar_col...
+|=================================================================|
+|Klmno|Klmno  |
+|abcde|abcde  |
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 6 
+<< IF (ING_CHARSET == "UTF8") 
+vchar_col = nvchar_col...
+|=================================================================|
+|abcde|abcde|
+|aBCDE|aBCDE|
+|fghij|fghij|
+|f*ji%|f*ji%|
+|klmno|klmno|
+|Klmno|Klmno|
+|uvwxy|uvwxy|
+|uvwxz|uvwxz|
+|Uvxyz|Uvxyz|
+|UVXYZ|UVXYZ|
+|=================================================================|
+>>
+<<
+vchar_col = nvchar_col...
+|=================================================================|
+|Klmno|Klmno|
+|UVXYZ|UVXYZ|
+|Uvxyz|Uvxyz|
+|aBCDE|aBCDE|
+|abcde|abcde|
+|f*ji%|f*ji%|
+|fghij|fghij|
+|klmno|klmno|
+|uvwxy|uvwxy|
+|uvwxz|uvwxz|
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 7 
+<< IF (ING_CHARSET == "UTF8") 
+char_col LIKE nchar_col...
+|=================================================================|
+|abcde  |ab_de  |
+|abcde  |abcde  |
+|Abcde  |Abcde  |
+|ABCDE  |ABCDE  |
+|ab_de  |ab_de  |
+|Fg hij |Fg hij |
+|Fghij  |Fghij  |
+|K lmno |K lmno |
+|Klmno  |Klmno  |
+|pqrst  |pqrst  |
+|Pqrst  |Pqrst  |
+|=================================================================|
+>>
+<<
+char_col LIKE nchar_col...
+|=================================================================|
+|ABCDE  |ABCDE  |
+|Abcde  |Abcde  |
+|Fg hij |Fg hij |
+|Fghij  |Fghij  |
+|K lmno |K lmno |
+|Klmno  |Klmno  |
+|Pqrst  |Pqrst  |
+|ab_de  |ab_de  |
+|abcde  |abcde  |
+|abcde  |ab_de  |
+|pqrst  |pqrst  |
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 8 
+<< IF (ING_CHARSET == "UTF8") 
+char_col LIKE nvchar_col...
+|=================================================================|
+|abcde  |abcde|
+|Klmno  |Klmno|
+|=================================================================|
+>>
+<<
+char_col LIKE nvchar_col...
+|=================================================================|
+|Klmno  |Klmno|
+|abcde  |abcde|
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 9 
+<< IF (ING_CHARSET == "UTF8") 
+vchar_col LIKE nchar_col...
+|=================================================================|
+|abcde|ab_de  |
+|abcde|abcde  |
+|Klmno|Klmno  |
+|=================================================================|
+>>
+<<
+vchar_col LIKE nchar_col...
+|=================================================================|
+|Klmno|Klmno  |
+|abcde|abcde  |
+|abcde|ab_de  |
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 10 
+<< IF (ING_CHARSET == "UTF8") 
+vchar_col LIKE nvchar_col...
+|=================================================================|
+|abcde|abcde|
+|aBCDE|aBCDE|
+|fghij|fghij|
+|f*ji%|f*ji%|
+|klmno|klmno|
+|Klmno|Klmno|
+|uvwxy|uvwxy|
+|uvwxz|uvwxz|
+|Uvxyz|Uvxyz|
+|UVXYZ|UVXYZ|
+|=================================================================|
+>>
+<<
+vchar_col LIKE nvchar_col...
+|=================================================================|
+|Klmno|Klmno|
+|UVXYZ|UVXYZ|
+|Uvxyz|Uvxyz|
+|aBCDE|aBCDE|
+|abcde|abcde|
+|f*ji%|f*ji%|
+|fghij|fghij|
+|klmno|klmno|
+|uvwxy|uvwxy|
+|uvwxz|uvwxz|
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 11 
+<<
+nchar_col LIKE 'A%' OR nchar_col LIKE 'ab%'...
+|=================================================================|
+|abcde  |
+|Abcde  |
+|ABCDE  |
+|ab_de  |
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 12 
+<<
+nchar_col LIKE 'Fg%' OR nchar_col LIKE 'K%'...
+|=================================================================|
+|Fg hij |
+|Fghij  |
+|K lmno |
+|Klmno  |
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 13 
+<<
+nvchar_col LIKE 'U%' OR nvchar_col LIKE 'u%'...
+|=================================================================|
+|uvwxy|
+|uvwxz|
+|Uvxyz|
+|UVXYZ|
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 14 
+<<
+nvchar_col LIKE 'f%' OR nvchar_col LIKE 'a%'...
+|=================================================================|
+|abcde|
+|aBCDE|
+|fghij|
+|f*ji%|
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 15 
+<<
+nchar_col NOT LIKE '%bcde  ' AND nchar_col NOT LIKE '%qrst  '...
+|=================================================================|
+|ABCDE  |
+|ab_de  |
+|Fg hij |
+|Fghij  |
+|K lmno |
+|Klmno  |
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 16 
+<<
+nvchar_col NOT LIKE '%lmno' AND nvchar_col NOT LIKE '%v%'...
+|=================================================================|
+|abcde|
+|aBCDE|
+|fghij|
+|f*ji%|
+|UVXYZ|
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 17 
+<< IF (ING_CHARSET == "UTF8") 
+char_col NOT LIKE nchar_col LIKE '%cde%'...
+|=================================================================|
+|abcde  |Abcde  |
+|Abcde  |abcde  |
+|ABCDE  |abcde  |
+|ABCDE  |Abcde  |
+|ab_de  |abcde  |
+|ab_de  |Abcde  |
+|Fg hij |abcde  |
+|Fg hij |Abcde  |
+|Fghij  |abcde  |
+|Fghij  |Abcde  |
+|K lmno |abcde  |
+|K lmno |Abcde  |
+|Klmno  |abcde  |
+|Klmno  |Abcde  |
+|pqrst  |abcde  |
+|pqrst  |Abcde  |
+|Pqrst  |abcde  |
+|Pqrst  |Abcde  |
+|=================================================================|
+>>
+<<
+char_col NOT LIKE nchar_col LIKE '%cde%'...
+|=================================================================|
+|ABCDE  |abcde  |
+|ABCDE  |Abcde  |
+|Abcde  |abcde  |
+|Fg hij |abcde  |
+|Fg hij |Abcde  |
+|Fghij  |abcde  |
+|Fghij  |Abcde  |
+|K lmno |abcde  |
+|K lmno |Abcde  |
+|Klmno  |abcde  |
+|Klmno  |Abcde  |
+|Pqrst  |abcde  |
+|Pqrst  |Abcde  |
+|ab_de  |abcde  |
+|ab_de  |Abcde  |
+|abcde  |Abcde  |
+|pqrst  |abcde  |
+|pqrst  |Abcde  |
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 18 
+<< IF (ING_CHARSET == "UTF8") 
+char_col != nvchar_col LIKE '%v%'...
+|=================================================================|
+|abcde  |uvwxy|
+|abcde  |uvwxz|
+|abcde  |Uvxyz|
+|Abcde  |uvwxy|
+|Abcde  |uvwxz|
+|Abcde  |Uvxyz|
+|ABCDE  |uvwxy|
+|ABCDE  |uvwxz|
+|ABCDE  |Uvxyz|
+|ab_de  |uvwxy|
+|ab_de  |uvwxz|
+|ab_de  |Uvxyz|
+|Fg hij |uvwxy|
+|Fg hij |uvwxz|
+|Fg hij |Uvxyz|
+|Fghij  |uvwxy|
+|Fghij  |uvwxz|
+|Fghij  |Uvxyz|
+|K lmno |uvwxy|
+|K lmno |uvwxz|
+|K lmno |Uvxyz|
+|Klmno  |uvwxy|
+|Klmno  |uvwxz|
+|Klmno  |Uvxyz|
+|pqrst  |uvwxy|
+|pqrst  |uvwxz|
+|pqrst  |Uvxyz|
+|Pqrst  |uvwxy|
+|Pqrst  |uvwxz|
+|Pqrst  |Uvxyz|
+|=================================================================|
+>>
+<<
+char_col != nvchar_col LIKE '%v%'...
+|=================================================================|
+|ABCDE  |uvwxy|
+|ABCDE  |uvwxz|
+|ABCDE  |Uvxyz|
+|Abcde  |uvwxy|
+|Abcde  |uvwxz|
+|Abcde  |Uvxyz|
+|Fg hij |uvwxy|
+|Fg hij |uvwxz|
+|Fg hij |Uvxyz|
+|Fghij  |uvwxy|
+|Fghij  |uvwxz|
+|Fghij  |Uvxyz|
+|K lmno |uvwxy|
+|K lmno |uvwxz|
+|K lmno |Uvxyz|
+|Klmno  |uvwxy|
+|Klmno  |uvwxz|
+|Klmno  |Uvxyz|
+|Pqrst  |uvwxy|
+|Pqrst  |uvwxz|
+|Pqrst  |Uvxyz|
+|ab_de  |uvwxy|
+|ab_de  |uvwxz|
+|ab_de  |Uvxyz|
+|abcde  |uvwxy|
+|abcde  |uvwxz|
+|abcde  |Uvxyz|
+|pqrst  |uvwxy|
+|pqrst  |uvwxz|
+|pqrst  |Uvxyz|
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 19 
+<< IF (ING_CHARSET == "UTF8") 
+vchar_col NOT LIKE nchar_col LIKE '%lmno%'...
+|=================================================================|
+|abcde|K lmno |
+|abcde|Klmno  |
+|aBCDE|K lmno |
+|aBCDE|Klmno  |
+|fghij|K lmno |
+|fghij|Klmno  |
+|f*ji%|K lmno |
+|f*ji%|Klmno  |
+|klmno|K lmno |
+|klmno|Klmno  |
+|Klmno|K lmno |
+|uvwxy|K lmno |
+|uvwxy|Klmno  |
+|uvwxz|K lmno |
+|uvwxz|Klmno  |
+|Uvxyz|K lmno |
+|Uvxyz|Klmno  |
+|UVXYZ|K lmno |
+|UVXYZ|Klmno  |
+|=================================================================|
+>>
+<<
+vchar_col NOT LIKE nchar_col LIKE '%lmno%'...
+|=================================================================|
+|Klmno|K lmno |
+|UVXYZ|K lmno |
+|UVXYZ|Klmno  |
+|Uvxyz|K lmno |
+|Uvxyz|Klmno  |
+|aBCDE|K lmno |
+|aBCDE|Klmno  |
+|abcde|K lmno |
+|abcde|Klmno  |
+|f*ji%|K lmno |
+|f*ji%|Klmno  |
+|fghij|K lmno |
+|fghij|Klmno  |
+|klmno|K lmno |
+|klmno|Klmno  |
+|uvwxy|K lmno |
+|uvwxy|Klmno  |
+|uvwxz|K lmno |
+|uvwxz|Klmno  |
+|=================================================================|
+>>
+? run dtu22_stf.exe SEPPARAMDB3 20 
+<< IF (ING_CHARSET == "UTF8") 
+vchar_col != nvchar_col LIKE 'f%'...
+|=================================================================|
+|abcde|fghij|
+|abcde|f*ji%|
+|aBCDE|fghij|
+|aBCDE|f*ji%|
+|fghij|f*ji%|
+|f*ji%|fghij|
+|klmno|fghij|
+|klmno|f*ji%|
+|Klmno|fghij|
+|Klmno|f*ji%|
+|uvwxy|fghij|
+|uvwxy|f*ji%|
+|uvwxz|fghij|
+|uvwxz|f*ji%|
+|Uvxyz|fghij|
+|Uvxyz|f*ji%|
+|UVXYZ|fghij|
+|UVXYZ|f*ji%|
+|=================================================================|
+>>
+<<
+vchar_col != nvchar_col LIKE 'f%'...
+|=================================================================|
+|Klmno|fghij|
+|Klmno|f*ji%|
+|UVXYZ|fghij|
+|UVXYZ|f*ji%|
+|Uvxyz|fghij|
+|Uvxyz|f*ji%|
+|aBCDE|fghij|
+|aBCDE|f*ji%|
+|abcde|fghij|
+|abcde|f*ji%|
+|f*ji%|fghij|
+|fghij|f*ji%|
+|klmno|fghij|
+|klmno|f*ji%|
+|uvwxy|fghij|
+|uvwxy|f*ji%|
+|uvwxz|fghij|
+|uvwxz|f*ji%|
+|=================================================================|
+>>
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* drop table dtu22_uni\g
+<<
+>>
+* drop table dtu22_char\g
+<<
+>>
+* \q
+<<
+
+>>
+? delete dtu22_tbl.c 
+<<
+file was deleted
+>>
+? delete dtu22_tbl.o 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu22_tbl.obj 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu22_tbl.exe 
+<<
+file was deleted
+>>
+? delete dtu22_stf.c 
+<<
+file was deleted
+>>
+? delete dtu22_stf.o 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu22_stf.obj 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu22_stf.exe 
+<<
+file was deleted
+>>
+
+
+Ending at: Thu Sep 18 16:58:44 2008

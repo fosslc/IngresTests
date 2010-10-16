@@ -1,0 +1,436 @@
+/*
+Copyright (c) 2005 Ingres Corporation
+ 
+ 
+	Test Name: am75.sep
+	Time: Fri Feb  2 09:01:49 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	: Test the tm handling object_keys. Tests bugs in the BUGS
+		  system #'s 67402 and 49383 besides the other tests it does.
+	Input Files  : None.
+	Output Files : None.
+	Database     : SEPPARAMDB
+	Tables       : am75tbl, created and dropped by this sep.
+	Synopsis     : Test the tm's ability to handle object_keys,
+		       which few seps previously tested.  Creates a
+		       table which has an object_key which is also 
+		       the primary key. Tries to add odd hex values, 
+		       such as null, cr, backspace, etc. Tries to add
+		       values that are too small. Tries to add duplicate
+		       values. Displays the column, first as is and then
+		       masked to char, then masked to hex.
+
+ History:  2-Feb-1996	(frank)	Created
+           5-Feb-1996	(frank) Added part near the end of the test which will
+			verify that if you make a system_maintained object_key
+			column reference another system_maintained object_key
+			column, you are pretty much messed up. Why would ingres
+			let you create the reference in the first place?
+          14-Feb-1996	(frank) Added some more basic testing items, including
+			text(), varchar(), BETWEEN, NOT BETWEEN, IN, NOT IN,
+			EXISTS, NOT EXISTS, IS NULL, IS NOT NULL.
+	  18-Mar-1999	(vande02) Hard-coded VPG_SZ to 8K
+          31-Jan-2001	(syeto01) Alternate NT_GENERIC canon added to eliminate
+			diff.
+          09-Jul-2001	(rogch01) Update row orders.  Remove a few obviously
+			wrong canons.
+	  21-Mar-2005	(rogch01) Remove another wrong canon which I missed last
+			time, spotted by Cong and a further one, spotted by me.
+			Adopt standard sql -s practice and not ignore failed
+			connection.  Standardised table names.  Made one canon
+			specific to NT_GENERIC, spotted by Denise.
+          29-Aug-2005	(vande02) Adding the 'hex' funtion so queries which
+			return rows from col1 so display is consistent,
+			eliminates NT_GENERIC canons, added order by clauses
+			so several canons needed to be replaed. Aligned history.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table am75tbl \g 
+<<
+~
+>>
+* create table am75tbl (col1 object_key primary key not null not system_maintained, -
+col2 char(10))  with page_size=8192\g 
+<<
+>>
+* insert into am75tbl values (X'11223344556677881122334455667720', 'asdf') \g 
+<<
+(1 row)
+>>
+* insert into am75tbl values ('                ', 'blank') \g 
+<<
+(1 row)
+>>
+* insert into am75tbl values (X'00000000000000000000000000000000', 'nulls') \g 
+<<
+(1 row)
+>>
+* insert into am75tbl values (X'0000000000000000000000000000000D', 'cr') \g 
+<<
+(1 row)
+>>
+* insert into am75tbl values (X'00000000000000000000000000000007', 'bell') \g 
+<<
+(1 row)
+>>
+* insert into am75tbl values (X'00000000000000000000000000000008', 'backspace')\g 
+<<
+(1 row)
+>>
+* insert into am75tbl values (X'00000000000000000000000000000009', 'tab') \g 
+<<
+(1 row)
+>>
+* insert into am75tbl values (X'0000000000000000000000000000007F', 'del') \g 
+<<
+(1 row)
+>>
+* insert into am75tbl values ('1234567812345678', 'original') \g 
+<<
+(1 row)
+>>
+* insert into am75tbl values ('2345678923456789', 'another') \g 
+<<
+(1 row)
+>>
+* insert into am75tbl values ('1234567812345678', 'duplicate') \g 
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Fri Feb  2 09:08:15 1996)
+
+>>
+* insert into am75tbl values (X'31323334353637383132333435363738', 'duplicate') \g 
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Fri Feb  2 09:08:54 1996)
+
+>>
+* insert into am75tbl values ('1234', 'sizesmall') \g 
+<<
+E_AD5080 The conversion from the datatype specified (length 4 bytes) to
+    logical key type (ie. table_key or object_key with length 16 bytes) failed
+    because the lengths of the two datatypes were not the same.
+    (Fri Feb  2 09:09:15 1996)
+
+>>
+* insert into am75tbl values ('', 'nosize') \g 
+<<
+E_AD5080 The conversion from the datatype specified (length 0 bytes) to
+    logical key type (ie. table_key or object_key with length 16 bytes) failed
+    because the lengths of the two datatypes were not the same.
+    (Fri Feb  2 09:09:32 1996)
+
+>>
+* insert into am75tbl values (object_key('small'), 'small') \g 
+<<
+E_AD5080 The conversion from the datatype specified (length 5 bytes) to
+    logical key type (ie. table_key or object_key with length 16 bytes) failed
+    because the lengths of the two datatypes were not the same.
+    (Fri Feb  2 09:10:07 1996)
+
+>>
+* insert into am75tbl values ('123456789123456789','too big?') \g 
+<<
+(1 row)
+>>
+* select max(col1) from am75tbl \g 
+<<
+
++----------------+
+|col1            |
++----------------+
+|2345678923456789|
++----------------+
+(1 row)
+>>
+* select hex (min(col1)) from am75tbl \g 
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|00000000000000000000000000000000|
++--------------------------------+
+(1 row)
+>>
+* select hex(col1), col2 from am75tbl order by 2\g 
+<<
+
++--------------------------------+----------+
+|col1                            |col2      |
++--------------------------------+----------+
+|32333435363738393233343536373839|another   |
+|11223344556677881122334455667720|asdf      |
+|00000000000000000000000000000008|backspace |
+|00000000000000000000000000000007|bell      |
+|20202020202020202020202020202020|blank     |
+|0000000000000000000000000000000D|cr        |
+|0000000000000000000000000000007F|del       |
+|00000000000000000000000000000000|nulls     |
+|31323334353637383132333435363738|original  |
+|00000000000000000000000000000009|tab       |
+|31323334353637383931323334353637|too big?  |
++--------------------------------+----------+
+(11 rows)
+>>
+* select hex(char(col1)), col2 from am75tbl order by 2\g 
+<<
+
++--------------------------------+----------+
+|col1                            |col2      |
++--------------------------------+----------+
+|32333435363738393233343536373839|another   |
+|11223344556677881122334455667720|asdf      |
+|00000000000000000000000000000008|backspace |
+|00000000000000000000000000000007|bell      |
+|20202020202020202020202020202020|blank     |
+|0000000000000000000000000000000D|cr        |
+|0000000000000000000000000000007F|del       |
+|00000000000000000000000000000000|nulls     |
+|31323334353637383132333435363738|original  |
+|00000000000000000000000000000009|tab       |
+|31323334353637383931323334353637|too big?  |
++--------------------------------+----------+
+(11 rows)
+>>
+* select hex(char(col1)), col2 from am75tbl order by 2\g 
+<<
+
++--------------------------------+----------+
+|col1                            |col2      |
++--------------------------------+----------+
+|32333435363738393233343536373839|another   |
+|11223344556677881122334455667720|asdf      |
+|00000000000000000000000000000008|backspace |
+|00000000000000000000000000000007|bell      |
+|20202020202020202020202020202020|blank     |
+|0000000000000000000000000000000D|cr        |
+|0000000000000000000000000000007F|del       |
+|00000000000000000000000000000000|nulls     |
+|31323334353637383132333435363738|original  |
+|00000000000000000000000000000009|tab       |
+|31323334353637383931323334353637|too big?  |
++--------------------------------+----------+
+(11 rows)
+>>
+* select hex(varchar(col1)), col2 from am75tbl order by 2\g
+<<
+
++--------------------------------+----------+
+|col1                            |col2      |
++--------------------------------+----------+
+|32333435363738393233343536373839|another   |
+|11223344556677881122334455667720|asdf      |
+|00000000000000000000000000000008|backspace |
+|00000000000000000000000000000007|bell      |
+|20202020202020202020202020202020|blank     |
+|0000000000000000000000000000000D|cr        |
+|0000000000000000000000000000007F|del       |
+|00000000000000000000000000000000|nulls     |
+|31323334353637383132333435363738|original  |
+|00000000000000000000000000000009|tab       |
+|31323334353637383931323334353637|too big?  |
++--------------------------------+----------+
+(11 rows)
+>>
+* select hex(text(col1)), col2 from am75tbl order by 2\g
+<<
+
++--------------------------------+----------+
+|col1                            |col2      |
++--------------------------------+----------+
+|32333435363738393233343536373839|another   |
+|11223344556677881122334455667720|asdf      |
+|00000000000000000000000000000008|backspace |
+|00000000000000000000000000000007|bell      |
+|20202020202020202020202020202020|blank     |
+|0000000000000000000000000000000D|cr        |
+|0000000000000000000000000000007F|del       |
+|00000000000000000000000000000000|nulls     |
+|31323334353637383132333435363738|original  |
+|00000000000000000000000000000009|tab       |
+|31323334353637383931323334353637|too big?  |
++--------------------------------+----------+
+(11 rows)
+>>
+* select hex(col1) from am75tbl group by col1 having col1 between min(col1) and max(-
+col1) order by 1\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|00000000000000000000000000000000|
+|00000000000000000000000000000007|
+|00000000000000000000000000000008|
+|00000000000000000000000000000009|
+|0000000000000000000000000000000D|
+|0000000000000000000000000000007F|
+|11223344556677881122334455667720|
+|20202020202020202020202020202020|
+|31323334353637383132333435363738|
+|31323334353637383931323334353637|
+|32333435363738393233343536373839|
++--------------------------------+
+(11 rows)
+>>
+* select col1 from am75tbl group by col1 having col1 not between min(col1) and max(c-
+ol1) \g
+<<
+
++----------------+
+|col1            |
++----------------+
++----------------+
+(0 rows)
+>>
+* select col1 from am75tbl group by col1 having col1 in (select max(col1) from am75t-
+bl) \g
+<<
+
++----------------+
+|col1            |
++----------------+
+|2345678923456789|
++----------------+
+(1 row)
+>>
+* select hex(col1) from am75tbl group by col1 having col1 not in (select max(col1) f-
+rom am75tbl) order by 1\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|00000000000000000000000000000000|
+|00000000000000000000000000000007|
+|00000000000000000000000000000008|
+|00000000000000000000000000000009|
+|0000000000000000000000000000000D|
+|0000000000000000000000000000007F|
+|11223344556677881122334455667720|
+|20202020202020202020202020202020|
+|31323334353637383132333435363738|
+|31323334353637383931323334353637|
++--------------------------------+
+(10 rows)
+>>
+* select hex(col1) from am75tbl where exists (select max(col1) from am75tbl) order b-
+y 1\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|00000000000000000000000000000000|
+|00000000000000000000000000000007|
+|00000000000000000000000000000008|
+|00000000000000000000000000000009|
+|0000000000000000000000000000000D|
+|0000000000000000000000000000007F|
+|11223344556677881122334455667720|
+|20202020202020202020202020202020|
+|31323334353637383132333435363738|
+|31323334353637383931323334353637|
+|32333435363738393233343536373839|
++--------------------------------+
+(11 rows)
+>>
+* select col1 from am75tbl where not exists (select max(col1) from am75tbl) \g
+<<
+
++----------------+
+|col1            |
++----------------+
++----------------+
+(0 rows)
+>>
+* select * from am75tbl where col1 is null \g
+<<
+
++----------------+----------+
+|col1            |col2      |
++----------------+----------+
++----------------+----------+
+(0 rows)
+>>
+* select hex(col1), col2 from am75tbl where col1 is not null order by 2\g
+<<
+
++--------------------------------+----------+
+|col1                            |col2      |
++--------------------------------+----------+
+|32333435363738393233343536373839|another   |
+|11223344556677881122334455667720|asdf      |
+|00000000000000000000000000000008|backspace |
+|00000000000000000000000000000007|bell      |
+|20202020202020202020202020202020|blank     |
+|0000000000000000000000000000000D|cr        |
+|0000000000000000000000000000007F|del       |
+|00000000000000000000000000000000|nulls     |
+|31323334353637383132333435363738|original  |
+|00000000000000000000000000000009|tab       |
+|31323334353637383931323334353637|too big?  |
++--------------------------------+----------+
+(11 rows)
+>>
+* create table am75_t_r_c (col1 object_key primary key with system_maintained, col2 -
+char(10)) with page_size=8192 \g
+<<
+>>
+* create table am75_t_r_c_2 (col1 char(10), col2 object_key with system_maintained c-
+onstraint tempconstraint references am75_t_r_c) with page_size=8192 \g
+<<
+>>
+* insert into am75_t_r_c (col2) values ('frank') \g
+<<
+(1 row)
+>>
+* insert into am75_t_r_c_2 (col1) values ('no way') \g
+<<
+E_US1906 Cannot INSERT into table '"am75_t_r_c_2"' because the values do not
+    match those in table '"am75_t_r_c"' (violation of REFERENTIAL constraint
+    '"tempconstraint"').
+    (Mon Feb  5 11:15:14 1996)
+
+>>
+* rollback \g 
+<<
+>>
+* drop table am75tbl \g 
+<<
+E_US0AC1 DROP: 'am75tbl' does not exist or is not owned by you.
+    (Fri Feb  2 09:12:23 1996)
+
+>>
+* drop table am75_t_r_c \g
+<<
+E_US0AC1 DROP: 'am75_t_r_c' does not exist or is not owned by you.
+    (Mon Feb  5 11:15:30 1996)
+
+>>
+* drop table am75_t_r_c_2 \g
+<<
+E_US0AC1 DROP: 'am75_t_r_c_2' does not exist or is not owned by you.
+    (Mon Feb  5 11:15:35 1996)
+
+>>
+* commit \g 
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Mon Aug 29 18:38:38 2005

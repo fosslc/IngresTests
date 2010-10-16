@@ -1,0 +1,208 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: fld03.sep
+	Time: Thu Oct 24 12:57:29 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename: fld03.sep
+	Purpose	: To test fastload with heap table.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : t1, t2
+	Synopsis     : 
+ 	Assertions   : 1. If a table is a heap table and if it is empty, then
+			  fastload could load data into the table successfully.
+		       2. If a table is a heap table and if it already contain
+			  rows, then fastload could load data into the table
+			  successfully.
+
+ History: 24-Oct-1996	(chosh01)	Created
+          11-Dec-1996	(panph01)
+          24-Mar-1997	(ivlbi01)
+	  28-Jul-1998	(chegu01) added "delete t1.in*" command for cleanup.
+	  23-Mar-1999	(vande02) Hard-coded VPG_SZ to 4K and changed 'sql -s
+                                  SEPPARAMDB' canon to be empty, therfore, if
+                                  the test db does not exist, you will catch
+                                  the msg. "TM could not connect to db."
+         30-Apr-2003    (sinra04) Corrected "delete t1.in*" command to 
+                                  "delete t1.in" so that file does gets
+                                  deleted from output directory.
+          24-Jun-2004   (vande02) Updating canons with new text for expected
+                        	  warning message as of Ingres r3.  Aligned
+				  history comments.
+           5-Sep-2008	(vande02) Added new main canons when fastload info
+                                  is displayed in a certain order from MAIN
+                                  versus the order from II 9.2.
+*/
+? fill setup.sql 
+!!
+create table t1(col1 integer, col2 varchar(20)) with page_size=4096;commit; \p\g
+create table t2(col1 integer, col2 varchar(20)) with page_size=4096;commit;\p\g
+insert into t2 values(1111111, 'aaaaaaaaaaa'); commit;\p\g
+insert into t2 values(2222222, 'bbbbbbbbbbbb'); commit; \p\g
+insert into t2 values(3333333, 'cccccccccccc'); commit; \p \g
+copy table t2() into 't1.in'; \p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table t1,t2;commit;  \g
+<<
+~
+>>
+* \i setup.sql
+<<
+ create table t1(col1 integer, col2 varchar(20)) with page_size=4096;commit; 
+create table t2(col1 integer, col2 varchar(20)) with page_size=4096;commit;
+insert into t2 values(1111111, 'aaaaaaaaaaa'); commit;
+(1 row)
+insert into t2 values(2222222, 'bbbbbbbbbbbb'); commit; 
+(1 row)
+insert into t2 values(3333333, 'cccccccccccc'); commit; 
+(1 row)
+copy table t2() into 't1.in'; 
+(3 rows)
+>>
+* select * from t1;commit;\g
+<<
+
++-------------+--------------------+
+|col1         |col2                |
++-------------+--------------------+
++-------------+--------------------+
+(0 rows)
+>>
+* select * from t2; commit;\g
+<<
+
++-------------+--------------------+
+|col1         |col2                |
++-------------+--------------------+
+|      1111111|aaaaaaaaaaa         |
+|      2222222|bbbbbbbbbbbb        |
+|      3333333|cccccccccccc        |
++-------------+--------------------+
+(3 rows)
+>>
+* \q
+<<
+~
+>>
+? fastload SEPPARAMDB -table=t1 -file=t1.in 
+<<
+Row size   : 28
+Rows loaded: 3
+Total bytes: 84
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 28 bytes in length.  Fastload will load a record from
+each contiguous 28 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+>>
+<<
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 28 bytes in length.  Fastload will load a record from
+each contiguous 28 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+Row size   : 28
+Rows loaded: 3
+Total bytes: 84
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from t1; \g
+<<
+
++-------------+--------------------+
+|col1         |col2                |
++-------------+--------------------+
+|      1111111|aaaaaaaaaaa         |
+|      2222222|bbbbbbbbbbbb        |
+|      3333333|cccccccccccc        |
++-------------+--------------------+
+(3 rows)
+>>
+* \q
+<<
+~
+>>
+? fastload SEPPARAMDB -table=t1 -file=t1.in 
+<<
+Row size   : 28
+Rows loaded: 3
+Total bytes: 84
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 28 bytes in length.  Fastload will load a record from
+each contiguous 28 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+>>
+<<
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 28 bytes in length.  Fastload will load a record from
+each contiguous 28 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+Row size   : 28
+Rows loaded: 3
+Total bytes: 84
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from t1; \g
+<<
+
++-------------+--------------------+
+|col1         |col2                |
++-------------+--------------------+
+|      1111111|aaaaaaaaaaa         |
+|      2222222|bbbbbbbbbbbb        |
+|      3333333|cccccccccccc        |
+|      1111111|aaaaaaaaaaa         |
+|      2222222|bbbbbbbbbbbb        |
+|      3333333|cccccccccccc        |
++-------------+--------------------+
+(6 rows)
+>>
+* drop table t1, t2;commit;\g
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? delete t1.in 
+<<
+~
+>>
+
+
+Ending at: Fri Sep  5 12:53:17 2008

@@ -1,0 +1,1511 @@
+/*
+	Test Name: dtu16.sep
+	Time: Thu Feb 27 01:08:09 2003
+	User Name: ingres
+	Terminal type: septerm
+
+	Test ID : dtu16.sep
+	Module  : be/datatypes
+	Filename: dtu16.sep
+	Purpose	: To test the unicode coercion support, first available with
+                  Ingres 2.6/0303 and later releases.
+	Input Files  : dtu16_tbl.sc, dtu16_compare.sc
+	Output Files : dtu16_tbl.exe, dtu16_compare.exe
+	Database     : unidb
+	Tables       : dtu16_uni, dtu16_char
+	Synopsis     : The Ingres variable II_CHARSETxx (where xx is the
+                       installation code) will set to UTF8 in the beginning
+                       of this test, and restore to its default value at the
+                       end.
+                       This test includes two embedded C programs, the first
+                       program is to create and populate two tables: one
+                       Unicode table with the Unicode data types (nchar and
+                       nvarchar), another table with the character data types
+                       (char and varchar). The second program is to create and
+                       execute database queries to compare and search the
+                       tables using the SQL !=, <, <=, >, >= predicates.
+
+*** TEST CASES:
+    nchar_col != char_col
+    nchar_col != vchar_col
+    nvchar_col != char_col
+    nvchar_col != vchar_col
+    nchar_col < char_col
+    nchar_col < vchar_col
+    nvchar_col < char_col
+    nvchar_col < vchar_col
+    nchar_col <= char_col
+    nchar_col <= vchar_col
+    nvchar_col <= char_col
+    nvchar_col <= vchar_col
+    nchar_col > char_col
+    nchar_col > vchar_col
+    nvchar_col > char_col
+    nvchar_col > vchar_col
+    nchar_col >= char_col
+    nchar_col >= vchar_col
+    nvchar_col >= char_col
+    nvchar_col >= vchar_col
+
+ History: 27-Feb-2003	(wu$ca01)	Created
+	  10-oct-2003	(somsa01) Updated to work on Windows.
+ 	  20-Jan-2004	(rogch01) Updated test to work on VMS.
+	  11-May-2004	(shafa01) Removed all steps used for setting the
+			II_CHARSETxx to UTF8 for all platforms. Due to Unicode
+			Coercion changes put in Ingres r3, this change should
+			only be in main and going forward.
+*/
+? fill dtu16_tbl.sc
+!!
+/* This program is to create and populate 2 tables:
+** a Unicode table with the data types of nchar and nvarchar,
+** another table with the data types of char and varchar.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+typedef struct
+{
+    short len;
+    wchar_t text[1];
+} NVCH_STRUCT;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *col2[] =
+    {
+    L"Cathy",
+    L"KATHY",
+    L"John",
+    L"JON",
+    L"Denise",
+    L"DENNIS",
+    L"Alan",
+    L"ALLEN",
+    };
+static wchar_t *col3[] =
+    {
+    L"123 abc ",
+    L"456 def",
+    L"ghi 789",
+    L"jkl 012",
+    L"3456 mnop",
+    L"7890 qrst",
+    L"uvwxyz 123456",
+    L"ABCD 7890",
+    };
+#define NUMROWS 8
+
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int   i;
+      char  *dbname;
+      wchar_t wc1[11];
+      wchar_t wc2[21];
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[11];
+      } nv1;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[21];
+      } nv2;
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+   EXEC SQL DROP TABLE dtu16_uni;
+   EXEC SQL DROP TABLE dtu16_char;
+
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   printf("Creating tables...\n");
+
+   EXEC SQL CREATE TABLE dtu16_uni (
+	int INTEGER,
+	nchar_col NCHAR(10) not null,
+	nvchar_col NVARCHAR(20) not null);
+
+   EXEC SQL CREATE TABLE dtu16_char (
+	int INTEGER,
+	char_col CHAR(12) not null,
+ 	vchar_col VARCHAR(25) not null);
+
+   printf("Inserting rows into unicode table...\n");
+
+   for (i = 0; i < NUMROWS; i++)
+   {
+      wcscpy(wc1, col2[i]);
+      wcscpy(wc2, col3[i]);
+      UC_ASSIGN(nv1, col2[i]);
+      UC_ASSIGN(nv2, col3[i]);
+
+      EXEC SQL INSERT INTO dtu16_uni VALUES (:i, :wc1, :wc2);
+
+   }
+
+  printf("Inserting rows into non-unicode table...\n");
+
+  EXEC SQL INSERT INTO dtu16_char values (0, 'Cathleen', '123 ABC');
+  EXEC SQL INSERT INTO dtu16_char values (1, 'KATHERINE', '456 DEF');
+  EXEC SQL INSERT INTO dtu16_char values (2, 'John', 'ghi 789');
+  EXEC SQL INSERT INTO dtu16_char values (3, 'JON', 'jkl 789');
+  EXEC SQL INSERT INTO dtu16_char values (4, 'Rufus', '3456 MNOP');
+  EXEC SQL INSERT INTO dtu16_char values (5, 'RUPHUS', '7890 QRST');
+  EXEC SQL INSERT INTO dtu16_char values (6, 'Alan', 'uvwxyz 123456');
+  EXEC SQL INSERT INTO dtu16_char values (7, 'ALLEN', 'ABCD 7890');
+
+  printf("Operation complete\n");
+
+  EXEC SQL DISCONNECT;
+}
+!!
+? fill dtu16_compare.sc
+!!
+/* This program is to create and execute database queries to compare
+** and search the tables using the SQL !=, <, <=, >, >= predicates.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  char      st1[13];
+  char      st2[26];
+  wchar_t wc1[11], k1[11];
+  wchar_t wc2[21];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[21];
+  } nv1, nv2, k2;
+
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|=================================================================|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Select UNICODE table...");
+         EXEC SQL SELECT int, nchar_col, nvchar_col
+         INTO :i1, :wc1, :wc2
+         FROM dtu16_uni
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 2:
+         print_header("Select NON-UNICODE table...");
+         EXEC SQL SELECT int, char_col, vchar_col
+         INTO :i1, :st1, :st2
+         FROM dtu16_char
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%s|%s|\n", i1, st1, st2);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("nchar_col != char_col...");
+         EXEC SQL SELECT dtu16_uni.nchar_col, dtu16_char.char_col
+         INTO :wc1, :st1
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nchar_col != dtu16_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         print_header("nchar_col != vchar_col...");
+         EXEC SQL SELECT dtu16_uni.nchar_col, dtu16_char.vchar_col
+         INTO :wc1, :st2
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nchar_col != dtu16_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st2);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("nvchar_col != char_col...");
+         EXEC SQL SELECT dtu16_uni.nvchar_col, dtu16_char.char_col
+         INTO :wc2, :st1
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nvchar_col != dtu16_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header("nvchar_col != vchar_col...");
+         EXEC SQL SELECT dtu16_uni.nvchar_col, dtu16_char.vchar_col
+         INTO :wc2, :st2
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nvchar_col != dtu16_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st2);
+         EXEC SQL END;
+         break;
+
+      case 7:
+         print_header("nchar_col < char_col...");
+         EXEC SQL SELECT dtu16_uni.nchar_col, dtu16_char.char_col
+         INTO :wc1, :st1
+         FROM dtu16_uni, dtu16_char 
+         WHERE dtu16_uni.nchar_col < dtu16_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break;
+
+      case 8:
+         print_header("nchar_col < vchar_col...");
+         EXEC SQL SELECT dtu16_uni.nchar_col, dtu16_char.vchar_col
+         INTO :wc1, :st2
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nchar_col < dtu16_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st2);
+         EXEC SQL END;
+         break;
+
+      case 9:
+         print_header("nvchar_col < char_col...");
+         EXEC SQL SELECT dtu16_uni.nvchar_col, dtu16_char.char_col
+         INTO :wc2, :st1
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nvchar_col < dtu16_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break;
+
+      case 10:
+         print_header("nvchar_col < vchar_col...");
+         EXEC SQL SELECT dtu16_uni.nvchar_col, dtu16_char.vchar_col
+         INTO :wc2, :st2
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nvchar_col < dtu16_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st2);
+         EXEC SQL END;
+         break;
+
+
+      case 11:
+         print_header("nchar_col <= char_col...");
+         EXEC SQL SELECT dtu16_uni.nchar_col, dtu16_char.char_col
+         INTO :wc1, :st1
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nchar_col <= dtu16_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break; 
+
+      case 12:
+         print_header("nchar_col <= vchar_col...");
+         EXEC SQL SELECT dtu16_uni.nchar_col, dtu16_char.vchar_col
+         INTO :wc1, :st2
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nchar_col <= dtu16_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st2);
+         EXEC SQL END;
+         break; 
+
+      case 13:
+         print_header("nvchar_col <= char_col...");
+         EXEC SQL SELECT dtu16_uni.nvchar_col, dtu16_char.char_col
+         INTO :wc2, :st1
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nvchar_col <= dtu16_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break; 
+
+      case 14:
+         print_header("nvchar_col <= vchar_col...");
+         EXEC SQL SELECT dtu16_uni.nvchar_col, dtu16_char.vchar_col
+         INTO :wc2, :st2
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nvchar_col <= dtu16_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st2);
+         EXEC SQL END;
+         break; 
+
+      case 15:
+         print_header("nchar_col > char_col...");
+         EXEC SQL SELECT dtu16_uni.nchar_col, dtu16_char.char_col
+         INTO :wc1, :st1
+         FROM dtu16_uni, dtu16_char 
+         WHERE dtu16_uni.nchar_col > dtu16_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break;
+
+      case 16:
+         print_header("nchar_col > vchar_col...");
+         EXEC SQL SELECT dtu16_uni.nchar_col, dtu16_char.vchar_col
+         INTO :wc1, :st2
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nchar_col > dtu16_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st2);
+         EXEC SQL END;
+         break;
+
+      case 17:
+         print_header("nvchar_col > char_col...");
+         EXEC SQL SELECT dtu16_uni.nvchar_col, dtu16_char.char_col
+         INTO :wc2, :st1
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nvchar_col > dtu16_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break;         
+
+      case 18:
+         print_header("nvchar_col > vchar_col...");
+         EXEC SQL SELECT dtu16_uni.nvchar_col, dtu16_char.vchar_col
+         INTO :wc2, :st2
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nvchar_col > dtu16_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st2);
+         EXEC SQL END;
+         break;
+
+      case 19:
+         print_header("nchar_col >= char_col...");
+         EXEC SQL SELECT dtu16_uni.nchar_col, dtu16_char.char_col
+         INTO :wc1, :st1
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nchar_col >= dtu16_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break; 
+
+      case 20:
+         print_header("nchar_col >= vchar_col...");
+         EXEC SQL SELECT dtu16_uni.nchar_col, dtu16_char.vchar_col
+         INTO :wc1, :st2
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nchar_col >= dtu16_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st2);
+         EXEC SQL END;
+         break; 
+
+      case 21:
+         print_header("nvchar_col >= char_col...");
+         EXEC SQL SELECT dtu16_uni.nvchar_col, dtu16_char.char_col
+         INTO :wc2, :st1
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nvchar_col >= dtu16_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break; 
+
+      case 22:
+         print_header("nvchar_col >= vchar_col...");
+         EXEC SQL SELECT dtu16_uni.nvchar_col, dtu16_char.vchar_col
+         INTO :wc2, :st2
+         FROM dtu16_uni, dtu16_char
+         WHERE dtu16_uni.nvchar_col >= dtu16_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st2);
+         EXEC SQL END;
+         break; 
+
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu16_tbl.sc
+<<
+ESQL dtu16_tbl.sc:
+>>
+<<
+>>
+? sepcc dtu16_tbl
+<<
+dtu16_tbl.c
+>>
+<<
+
+>>
+? seplnk dtu16_tbl
+<<
+
+>>
+? esqlc dtu16_compare.sc
+<<
+ESQL dtu16_compare.sc:
+>>
+<<
+>>
+? sepcc dtu16_compare
+<<
+dtu16_compare.c
+>>
+<<
+
+>>
+? seplnk dtu16_compare
+<<
+
+>>
+? run dtu16_tbl.exe SEPPARAMDB3
+<<
+Creating tables...
+Inserting rows into unicode table...
+Inserting rows into non-unicode table...
+Operation complete
+>>
+? run dtu16_compare.exe SEPPARAMDB3 1
+<<
+Select UNICODE table...
+|=================================================================|
+|  0|Cathy     |123 abc |
+|  1|KATHY     |456 def|
+|  2|John      |ghi 789|
+|  3|JON       |jkl 012|
+|  4|Denise    |3456 mnop|
+|  5|DENNIS    |7890 qrst|
+|  6|Alan      |uvwxyz 123456|
+|  7|ALLEN     |ABCD 7890|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 2
+<<
+Select NON-UNICODE table...
+|=================================================================|
+|  0|Cathleen    |123 ABC|
+|  1|KATHERINE   |456 DEF|
+|  2|John        |ghi 789|
+|  3|JON         |jkl 789|
+|  4|Rufus       |3456 MNOP|
+|  5|RUPHUS      |7890 QRST|
+|  6|Alan        |uvwxyz 123456|
+|  7|ALLEN       |ABCD 7890|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 3
+<<
+nchar_col != char_col...
+|=================================================================|
+|Alan      |ALLEN       |
+|Alan      |RUPHUS      |
+|Alan      |Rufus       |
+|Alan      |KATHERINE   |
+|Alan      |Cathleen    |
+|Alan      |JON         |
+|Alan      |John        |
+|ALLEN     |KATHERINE   |
+|ALLEN     |Cathleen    |
+|ALLEN     |Alan        |
+|ALLEN     |Rufus       |
+|ALLEN     |JON         |
+|ALLEN     |John        |
+|ALLEN     |RUPHUS      |
+|Cathy     |ALLEN       |
+|Cathy     |JON         |
+|Cathy     |Cathleen    |
+|Cathy     |Alan        |
+|Cathy     |John        |
+|Cathy     |KATHERINE   |
+|Cathy     |RUPHUS      |
+|Cathy     |Rufus       |
+|Denise    |John        |
+|Denise    |KATHERINE   |
+|Denise    |Rufus       |
+|Denise    |JON         |
+|Denise    |ALLEN       |
+|Denise    |RUPHUS      |
+|Denise    |Alan        |
+|Denise    |Cathleen    |
+|DENNIS    |Cathleen    |
+|DENNIS    |Rufus       |
+|DENNIS    |KATHERINE   |
+|DENNIS    |JON         |
+|DENNIS    |John        |
+|DENNIS    |RUPHUS      |
+|DENNIS    |ALLEN       |
+|DENNIS    |Alan        |
+|John      |Cathleen    |
+|John      |JON         |
+|John      |KATHERINE   |
+|John      |RUPHUS      |
+|John      |Rufus       |
+|John      |ALLEN       |
+|John      |Alan        |
+|JON       |KATHERINE   |
+|JON       |Cathleen    |
+|JON       |Rufus       |
+|JON       |John        |
+|JON       |Alan        |
+|JON       |RUPHUS      |
+|JON       |ALLEN       |
+|KATHY     |ALLEN       |
+|KATHY     |Cathleen    |
+|KATHY     |KATHERINE   |
+|KATHY     |John        |
+|KATHY     |JON         |
+|KATHY     |Rufus       |
+|KATHY     |RUPHUS      |
+|KATHY     |Alan        |
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 4
+<<
+nchar_col != vchar_col...
+|=================================================================|
+|Alan      |ABCD 7890|
+|Alan      |uvwxyz 123456|
+|Alan      |3456 MNOP|
+|Alan      |jkl 789|
+|Alan      |123 ABC|
+|Alan      |ghi 789|
+|Alan      |456 DEF|
+|Alan      |7890 QRST|
+|ALLEN     |ABCD 7890|
+|ALLEN     |ghi 789|
+|ALLEN     |456 DEF|
+|ALLEN     |123 ABC|
+|ALLEN     |uvwxyz 123456|
+|ALLEN     |jkl 789|
+|ALLEN     |7890 QRST|
+|ALLEN     |3456 MNOP|
+|Cathy     |uvwxyz 123456|
+|Cathy     |jkl 789|
+|Cathy     |123 ABC|
+|Cathy     |ghi 789|
+|Cathy     |ABCD 7890|
+|Cathy     |7890 QRST|
+|Cathy     |456 DEF|
+|Cathy     |3456 MNOP|
+|Denise    |123 ABC|
+|Denise    |ghi 789|
+|Denise    |456 DEF|
+|Denise    |uvwxyz 123456|
+|Denise    |jkl 789|
+|Denise    |7890 QRST|
+|Denise    |3456 MNOP|
+|Denise    |ABCD 7890|
+|DENNIS    |123 ABC|
+|DENNIS    |ghi 789|
+|DENNIS    |456 DEF|
+|DENNIS    |uvwxyz 123456|
+|DENNIS    |jkl 789|
+|DENNIS    |7890 QRST|
+|DENNIS    |3456 MNOP|
+|DENNIS    |ABCD 7890|
+|John      |123 ABC|
+|John      |ghi 789|
+|John      |456 DEF|
+|John      |3456 MNOP|
+|John      |jkl 789|
+|John      |uvwxyz 123456|
+|John      |7890 QRST|
+|John      |ABCD 7890|
+|JON       |ABCD 7890|
+|JON       |123 ABC|
+|JON       |ghi 789|
+|JON       |456 DEF|
+|JON       |3456 MNOP|
+|JON       |jkl 789|
+|JON       |uvwxyz 123456|
+|JON       |7890 QRST|
+|KATHY     |ABCD 7890|
+|KATHY     |123 ABC|
+|KATHY     |456 DEF|
+|KATHY     |ghi 789|
+|KATHY     |jkl 789|
+|KATHY     |3456 MNOP|
+|KATHY     |7890 QRST|
+|KATHY     |uvwxyz 123456|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 5
+<<
+nvchar_col != char_col...
+|=================================================================|
+|123 abc |ALLEN       |
+|123 abc |Alan        |
+|123 abc |JON         |
+|123 abc |Cathleen    |
+|123 abc |John        |
+|123 abc |RUPHUS      |
+|123 abc |KATHERINE   |
+|123 abc |Rufus       |
+|3456 mnop|Cathleen    |
+|3456 mnop|John        |
+|3456 mnop|KATHERINE   |
+|3456 mnop|Alan        |
+|3456 mnop|JON         |
+|3456 mnop|RUPHUS      |
+|3456 mnop|Rufus       |
+|3456 mnop|ALLEN       |
+|456 def|ALLEN       |
+|456 def|Cathleen    |
+|456 def|KATHERINE   |
+|456 def|John        |
+|456 def|JON         |
+|456 def|Rufus       |
+|456 def|RUPHUS      |
+|456 def|Alan        |
+|7890 qrst|Cathleen    |
+|7890 qrst|John        |
+|7890 qrst|KATHERINE   |
+|7890 qrst|Rufus       |
+|7890 qrst|JON         |
+|7890 qrst|Alan        |
+|7890 qrst|RUPHUS      |
+|7890 qrst|ALLEN       |
+|ABCD 7890|ALLEN       |
+|ABCD 7890|Cathleen    |
+|ABCD 7890|John        |
+|ABCD 7890|KATHERINE   |
+|ABCD 7890|Rufus       |
+|ABCD 7890|JON         |
+|ABCD 7890|Alan        |
+|ABCD 7890|RUPHUS      |
+|ghi 789|Cathleen    |
+|ghi 789|KATHERINE   |
+|ghi 789|John        |
+|ghi 789|JON         |
+|ghi 789|Rufus       |
+|ghi 789|RUPHUS      |
+|ghi 789|Alan        |
+|ghi 789|ALLEN       |
+|jkl 012|ALLEN       |
+|jkl 012|Cathleen    |
+|jkl 012|KATHERINE   |
+|jkl 012|John        |
+|jkl 012|JON         |
+|jkl 012|Rufus       |
+|jkl 012|RUPHUS      |
+|jkl 012|Alan        |
+|uvwxyz 123456|Cathleen    |
+|uvwxyz 123456|KATHERINE   |
+|uvwxyz 123456|John        |
+|uvwxyz 123456|JON         |
+|uvwxyz 123456|Rufus       |
+|uvwxyz 123456|RUPHUS      |
+|uvwxyz 123456|Alan        |
+|uvwxyz 123456|ALLEN       |
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 6
+<<
+nvchar_col != vchar_col...
+|=================================================================|
+|123 abc |ABCD 7890|
+|123 abc |uvwxyz 123456|
+|123 abc |jkl 789|
+|123 abc |123 ABC|
+|123 abc |ghi 789|
+|123 abc |7890 QRST|
+|123 abc |456 DEF|
+|123 abc |3456 MNOP|
+|3456 mnop|456 DEF|
+|3456 mnop|123 ABC|
+|3456 mnop|jkl 789|
+|3456 mnop|ghi 789|
+|3456 mnop|ABCD 7890|
+|3456 mnop|3456 MNOP|
+|3456 mnop|uvwxyz 123456|
+|3456 mnop|7890 QRST|
+|456 def|ABCD 7890|
+|456 def|123 ABC|
+|456 def|456 DEF|
+|456 def|ghi 789|
+|456 def|jkl 789|
+|456 def|3456 MNOP|
+|456 def|7890 QRST|
+|456 def|uvwxyz 123456|
+|7890 qrst|456 DEF|
+|7890 qrst|123 ABC|
+|7890 qrst|jkl 789|
+|7890 qrst|ghi 789|
+|7890 qrst|7890 QRST|
+|7890 qrst|3456 MNOP|
+|7890 qrst|ABCD 7890|
+|7890 qrst|uvwxyz 123456|
+|ABCD 7890|123 ABC|
+|ABCD 7890|ghi 789|
+|ABCD 7890|456 DEF|
+|ABCD 7890|3456 MNOP|
+|ABCD 7890|jkl 789|
+|ABCD 7890|uvwxyz 123456|
+|ABCD 7890|7890 QRST|
+|ghi 789|123 ABC|
+|ghi 789|456 DEF|
+|ghi 789|jkl 789|
+|ghi 789|3456 MNOP|
+|ghi 789|7890 QRST|
+|ghi 789|uvwxyz 123456|
+|ghi 789|ABCD 7890|
+|jkl 012|123 ABC|
+|jkl 012|456 DEF|
+|jkl 012|ghi 789|
+|jkl 012|jkl 789|
+|jkl 012|3456 MNOP|
+|jkl 012|7890 QRST|
+|jkl 012|uvwxyz 123456|
+|jkl 012|ABCD 7890|
+|uvwxyz 123456|123 ABC|
+|uvwxyz 123456|456 DEF|
+|uvwxyz 123456|ghi 789|
+|uvwxyz 123456|jkl 789|
+|uvwxyz 123456|3456 MNOP|
+|uvwxyz 123456|7890 QRST|
+|uvwxyz 123456|ABCD 7890|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 7
+<<
+nchar_col < char_col...
+|=================================================================|
+|Alan      |ALLEN       |
+|Alan      |RUPHUS      |
+|Alan      |Cathleen    |
+|Alan      |Rufus       |
+|Alan      |KATHERINE   |
+|Alan      |JON         |
+|Alan      |John        |
+|ALLEN     |RUPHUS      |
+|ALLEN     |Rufus       |
+|ALLEN     |KATHERINE   |
+|ALLEN     |Cathleen    |
+|ALLEN     |JON         |
+|ALLEN     |John        |
+|Cathy     |KATHERINE   |
+|Cathy     |Rufus       |
+|Cathy     |JON         |
+|Cathy     |RUPHUS      |
+|Cathy     |John        |
+|Denise    |JON         |
+|Denise    |John        |
+|Denise    |RUPHUS      |
+|Denise    |Rufus       |
+|Denise    |KATHERINE   |
+|DENNIS    |John        |
+|DENNIS    |KATHERINE   |
+|DENNIS    |Rufus       |
+|DENNIS    |JON         |
+|DENNIS    |RUPHUS      |
+|John      |KATHERINE   |
+|John      |JON         |
+|John      |Rufus       |
+|John      |RUPHUS      |
+|JON       |Rufus       |
+|JON       |KATHERINE   |
+|JON       |RUPHUS      |
+|KATHY     |Rufus       |
+|KATHY     |RUPHUS      |
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 8
+<<
+nchar_col < vchar_col...
+|=================================================================|
+|Alan      |uvwxyz 123456|
+|Alan      |jkl 789|
+|Alan      |ghi 789|
+|ALLEN     |uvwxyz 123456|
+|ALLEN     |jkl 789|
+|ALLEN     |ghi 789|
+|Cathy     |ghi 789|
+|Cathy     |jkl 789|
+|Cathy     |uvwxyz 123456|
+|Denise    |uvwxyz 123456|
+|Denise    |jkl 789|
+|Denise    |ghi 789|
+|DENNIS    |jkl 789|
+|DENNIS    |ghi 789|
+|DENNIS    |uvwxyz 123456|
+|John      |uvwxyz 123456|
+|JON       |uvwxyz 123456|
+|KATHY     |uvwxyz 123456|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 9
+<<
+nvchar_col < char_col...
+|=================================================================|
+|123 abc |ALLEN       |
+|123 abc |Alan        |
+|123 abc |JON         |
+|123 abc |Cathleen    |
+|123 abc |John        |
+|123 abc |RUPHUS      |
+|123 abc |KATHERINE   |
+|123 abc |Rufus       |
+|3456 mnop|Alan        |
+|3456 mnop|RUPHUS      |
+|3456 mnop|ALLEN       |
+|3456 mnop|Cathleen    |
+|3456 mnop|John        |
+|3456 mnop|KATHERINE   |
+|3456 mnop|Rufus       |
+|3456 mnop|JON         |
+|456 def|ALLEN       |
+|456 def|Cathleen    |
+|456 def|KATHERINE   |
+|456 def|John        |
+|456 def|JON         |
+|456 def|Rufus       |
+|456 def|RUPHUS      |
+|456 def|Alan        |
+|7890 qrst|Cathleen    |
+|7890 qrst|John        |
+|7890 qrst|KATHERINE   |
+|7890 qrst|Rufus       |
+|7890 qrst|JON         |
+|7890 qrst|Alan        |
+|7890 qrst|RUPHUS      |
+|7890 qrst|ALLEN       |
+|ABCD 7890|Cathleen    |
+|ABCD 7890|John        |
+|ABCD 7890|KATHERINE   |
+|ABCD 7890|Rufus       |
+|ABCD 7890|JON         |
+|ABCD 7890|Alan        |
+|ABCD 7890|RUPHUS      |
+|ABCD 7890|ALLEN       |
+|ghi 789|KATHERINE   |
+|ghi 789|John        |
+|ghi 789|JON         |
+|ghi 789|Rufus       |
+|ghi 789|RUPHUS      |
+|jkl 012|KATHERINE   |
+|jkl 012|John        |
+|jkl 012|JON         |
+|jkl 012|Rufus       |
+|jkl 012|RUPHUS      |
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 10
+<<
+nvchar_col < vchar_col...
+|=================================================================|
+|123 abc |ABCD 7890|
+|123 abc |uvwxyz 123456|
+|123 abc |jkl 789|
+|123 abc |123 ABC|
+|123 abc |ghi 789|
+|123 abc |7890 QRST|
+|123 abc |456 DEF|
+|123 abc |3456 MNOP|
+|3456 mnop|456 DEF|
+|3456 mnop|jkl 789|
+|3456 mnop|ghi 789|
+|3456 mnop|7890 QRST|
+|3456 mnop|3456 MNOP|
+|3456 mnop|ABCD 7890|
+|3456 mnop|uvwxyz 123456|
+|456 def|456 DEF|
+|456 def|ghi 789|
+|456 def|jkl 789|
+|456 def|7890 QRST|
+|456 def|uvwxyz 123456|
+|456 def|ABCD 7890|
+|7890 qrst|ghi 789|
+|7890 qrst|jkl 789|
+|7890 qrst|7890 QRST|
+|7890 qrst|uvwxyz 123456|
+|7890 qrst|ABCD 7890|
+|ABCD 7890|uvwxyz 123456|
+|ABCD 7890|jkl 789|
+|ABCD 7890|ghi 789|
+|ghi 789|uvwxyz 123456|
+|ghi 789|jkl 789|
+|jkl 012|jkl 789|
+|jkl 012|uvwxyz 123456|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 11
+<<
+nchar_col <= char_col...
+|=================================================================|
+|Alan      |ALLEN       |
+|Alan      |Alan        |
+|Alan      |RUPHUS      |
+|Alan      |Rufus       |
+|Alan      |JON         |
+|Alan      |John        |
+|Alan      |KATHERINE   |
+|Alan      |Cathleen    |
+|ALLEN     |Cathleen    |
+|ALLEN     |Rufus       |
+|ALLEN     |KATHERINE   |
+|ALLEN     |JON         |
+|ALLEN     |John        |
+|ALLEN     |ALLEN       |
+|ALLEN     |RUPHUS      |
+|Cathy     |KATHERINE   |
+|Cathy     |Rufus       |
+|Cathy     |JON         |
+|Cathy     |John        |
+|Cathy     |RUPHUS      |
+|Denise    |KATHERINE   |
+|Denise    |JON         |
+|Denise    |John        |
+|Denise    |RUPHUS      |
+|Denise    |Rufus       |
+|DENNIS    |John        |
+|DENNIS    |KATHERINE   |
+|DENNIS    |JON         |
+|DENNIS    |RUPHUS      |
+|DENNIS    |Rufus       |
+|John      |KATHERINE   |
+|John      |John        |
+|John      |JON         |
+|John      |Rufus       |
+|John      |RUPHUS      |
+|JON       |RUPHUS      |
+|JON       |KATHERINE   |
+|JON       |Rufus       |
+|JON       |JON         |
+|KATHY     |Rufus       |
+|KATHY     |RUPHUS      |
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 12
+<<
+nchar_col <= vchar_col...
+|=================================================================|
+|Alan      |uvwxyz 123456|
+|Alan      |jkl 789|
+|Alan      |ghi 789|
+|ALLEN     |uvwxyz 123456|
+|ALLEN     |jkl 789|
+|ALLEN     |ghi 789|
+|Cathy     |ghi 789|
+|Cathy     |jkl 789|
+|Cathy     |uvwxyz 123456|
+|Denise    |uvwxyz 123456|
+|Denise    |jkl 789|
+|Denise    |ghi 789|
+|DENNIS    |jkl 789|
+|DENNIS    |ghi 789|
+|DENNIS    |uvwxyz 123456|
+|John      |uvwxyz 123456|
+|JON       |uvwxyz 123456|
+|KATHY     |uvwxyz 123456|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 13
+<<
+nvchar_col <= char_col...
+|=================================================================|
+|123 abc |ALLEN       |
+|123 abc |Alan        |
+|123 abc |JON         |
+|123 abc |Cathleen    |
+|123 abc |John        |
+|123 abc |RUPHUS      |
+|123 abc |KATHERINE   |
+|123 abc |Rufus       |
+|3456 mnop|Alan        |
+|3456 mnop|RUPHUS      |
+|3456 mnop|ALLEN       |
+|3456 mnop|Cathleen    |
+|3456 mnop|John        |
+|3456 mnop|KATHERINE   |
+|3456 mnop|Rufus       |
+|3456 mnop|JON         |
+|456 def|ALLEN       |
+|456 def|Cathleen    |
+|456 def|KATHERINE   |
+|456 def|John        |
+|456 def|JON         |
+|456 def|Rufus       |
+|456 def|RUPHUS      |
+|456 def|Alan        |
+|7890 qrst|Cathleen    |
+|7890 qrst|John        |
+|7890 qrst|KATHERINE   |
+|7890 qrst|Rufus       |
+|7890 qrst|JON         |
+|7890 qrst|Alan        |
+|7890 qrst|RUPHUS      |
+|7890 qrst|ALLEN       |
+|ABCD 7890|Cathleen    |
+|ABCD 7890|John        |
+|ABCD 7890|KATHERINE   |
+|ABCD 7890|Rufus       |
+|ABCD 7890|JON         |
+|ABCD 7890|Alan        |
+|ABCD 7890|RUPHUS      |
+|ABCD 7890|ALLEN       |
+|ghi 789|KATHERINE   |
+|ghi 789|John        |
+|ghi 789|JON         |
+|ghi 789|Rufus       |
+|ghi 789|RUPHUS      |
+|jkl 012|KATHERINE   |
+|jkl 012|John        |
+|jkl 012|JON         |
+|jkl 012|Rufus       |
+|jkl 012|RUPHUS      |
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 14
+<<
+nvchar_col <= vchar_col...
+|=================================================================|
+|123 abc |ABCD 7890|
+|123 abc |uvwxyz 123456|
+|123 abc |jkl 789|
+|123 abc |123 ABC|
+|123 abc |ghi 789|
+|123 abc |7890 QRST|
+|123 abc |456 DEF|
+|123 abc |3456 MNOP|
+|3456 mnop|ghi 789|
+|3456 mnop|456 DEF|
+|3456 mnop|3456 MNOP|
+|3456 mnop|jkl 789|
+|3456 mnop|uvwxyz 123456|
+|3456 mnop|7890 QRST|
+|3456 mnop|ABCD 7890|
+|456 def|456 DEF|
+|456 def|ghi 789|
+|456 def|jkl 789|
+|456 def|7890 QRST|
+|456 def|uvwxyz 123456|
+|456 def|ABCD 7890|
+|7890 qrst|ghi 789|
+|7890 qrst|jkl 789|
+|7890 qrst|7890 QRST|
+|7890 qrst|ABCD 7890|
+|7890 qrst|uvwxyz 123456|
+|ABCD 7890|ghi 789|
+|ABCD 7890|uvwxyz 123456|
+|ABCD 7890|jkl 789|
+|ABCD 7890|ABCD 7890|
+|ghi 789|jkl 789|
+|ghi 789|uvwxyz 123456|
+|ghi 789|ghi 789|
+|jkl 012|jkl 789|
+|jkl 012|uvwxyz 123456|
+|uvwxyz 123456|uvwxyz 123456|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 15
+<<
+nchar_col > char_col...
+|=================================================================|
+|ALLEN     |Alan        |
+|Cathy     |ALLEN       |
+|Cathy     |Cathleen    |
+|Cathy     |Alan        |
+|Denise    |ALLEN       |
+|Denise    |Alan        |
+|Denise    |Cathleen    |
+|DENNIS    |Cathleen    |
+|DENNIS    |ALLEN       |
+|DENNIS    |Alan        |
+|John      |Alan        |
+|John      |Cathleen    |
+|John      |ALLEN       |
+|JON       |ALLEN       |
+|JON       |Cathleen    |
+|JON       |Alan        |
+|JON       |John        |
+|KATHY     |Cathleen    |
+|KATHY     |ALLEN       |
+|KATHY     |Alan        |
+|KATHY     |KATHERINE   |
+|KATHY     |John        |
+|KATHY     |JON         |
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 16
+<<
+nchar_col > vchar_col...
+|=================================================================|
+|Alan      |ABCD 7890|
+|Alan      |7890 QRST|
+|Alan      |123 ABC|
+|Alan      |3456 MNOP|
+|Alan      |456 DEF|
+|ALLEN     |456 DEF|
+|ALLEN     |123 ABC|
+|ALLEN     |ABCD 7890|
+|ALLEN     |3456 MNOP|
+|ALLEN     |7890 QRST|
+|Cathy     |ABCD 7890|
+|Cathy     |7890 QRST|
+|Cathy     |123 ABC|
+|Cathy     |3456 MNOP|
+|Cathy     |456 DEF|
+|Denise    |123 ABC|
+|Denise    |ABCD 7890|
+|Denise    |456 DEF|
+|Denise    |7890 QRST|
+|Denise    |3456 MNOP|
+|DENNIS    |7890 QRST|
+|DENNIS    |123 ABC|
+|DENNIS    |3456 MNOP|
+|DENNIS    |456 DEF|
+|DENNIS    |ABCD 7890|
+|John      |3456 MNOP|
+|John      |jkl 789|
+|John      |ABCD 7890|
+|John      |7890 QRST|
+|John      |123 ABC|
+|John      |ghi 789|
+|John      |456 DEF|
+|JON       |456 DEF|
+|JON       |123 ABC|
+|JON       |jkl 789|
+|JON       |ghi 789|
+|JON       |7890 QRST|
+|JON       |3456 MNOP|
+|JON       |ABCD 7890|
+|KATHY     |ghi 789|
+|KATHY     |jkl 789|
+|KATHY     |3456 MNOP|
+|KATHY     |7890 QRST|
+|KATHY     |123 ABC|
+|KATHY     |ABCD 7890|
+|KATHY     |456 DEF|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 17
+<<
+nvchar_col > char_col...
+|=================================================================|
+|ghi 789|ALLEN       |
+|ghi 789|Cathleen    |
+|ghi 789|Alan        |
+|jkl 012|Cathleen    |
+|jkl 012|Alan        |
+|jkl 012|ALLEN       |
+|uvwxyz 123456|KATHERINE   |
+|uvwxyz 123456|John        |
+|uvwxyz 123456|JON         |
+|uvwxyz 123456|Rufus       |
+|uvwxyz 123456|RUPHUS      |
+|uvwxyz 123456|Alan        |
+|uvwxyz 123456|ALLEN       |
+|uvwxyz 123456|Cathleen    |
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 18
+<<
+nvchar_col > vchar_col...
+|=================================================================|
+|3456 mnop|123 ABC|
+|456 def|123 ABC|
+|456 def|3456 MNOP|
+|7890 qrst|3456 MNOP|
+|7890 qrst|456 DEF|
+|7890 qrst|123 ABC|
+|ABCD 7890|3456 MNOP|
+|ABCD 7890|456 DEF|
+|ABCD 7890|123 ABC|
+|ABCD 7890|7890 QRST|
+|ghi 789|456 DEF|
+|ghi 789|3456 MNOP|
+|ghi 789|123 ABC|
+|ghi 789|7890 QRST|
+|ghi 789|ABCD 7890|
+|jkl 012|123 ABC|
+|jkl 012|456 DEF|
+|jkl 012|ghi 789|
+|jkl 012|3456 MNOP|
+|jkl 012|7890 QRST|
+|jkl 012|ABCD 7890|
+|uvwxyz 123456|123 ABC|
+|uvwxyz 123456|456 DEF|
+|uvwxyz 123456|ghi 789|
+|uvwxyz 123456|jkl 789|
+|uvwxyz 123456|3456 MNOP|
+|uvwxyz 123456|7890 QRST|
+|uvwxyz 123456|ABCD 7890|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 19
+<<
+nchar_col >= char_col...
+|=================================================================|
+|Alan      |Alan        |
+|ALLEN     |ALLEN       |
+|ALLEN     |Alan        |
+|Cathy     |Cathleen    |
+|Cathy     |ALLEN       |
+|Cathy     |Alan        |
+|Denise    |Cathleen    |
+|Denise    |ALLEN       |
+|Denise    |Alan        |
+|DENNIS    |Alan        |
+|DENNIS    |Cathleen    |
+|DENNIS    |ALLEN       |
+|John      |John        |
+|John      |Cathleen    |
+|John      |ALLEN       |
+|John      |Alan        |
+|JON       |JON         |
+|JON       |ALLEN       |
+|JON       |Alan        |
+|JON       |John        |
+|JON       |Cathleen    |
+|KATHY     |Cathleen    |
+|KATHY     |ALLEN       |
+|KATHY     |Alan        |
+|KATHY     |KATHERINE   |
+|KATHY     |John        |
+|KATHY     |JON         |
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 20
+<<
+nchar_col >= vchar_col...
+|=================================================================|
+|Alan      |ABCD 7890|
+|Alan      |7890 QRST|
+|Alan      |123 ABC|
+|Alan      |3456 MNOP|
+|Alan      |456 DEF|
+|ALLEN     |456 DEF|
+|ALLEN     |123 ABC|
+|ALLEN     |ABCD 7890|
+|ALLEN     |3456 MNOP|
+|ALLEN     |7890 QRST|
+|Cathy     |ABCD 7890|
+|Cathy     |7890 QRST|
+|Cathy     |123 ABC|
+|Cathy     |3456 MNOP|
+|Cathy     |456 DEF|
+|Denise    |123 ABC|
+|Denise    |ABCD 7890|
+|Denise    |456 DEF|
+|Denise    |7890 QRST|
+|Denise    |3456 MNOP|
+|DENNIS    |7890 QRST|
+|DENNIS    |123 ABC|
+|DENNIS    |3456 MNOP|
+|DENNIS    |456 DEF|
+|DENNIS    |ABCD 7890|
+|John      |3456 MNOP|
+|John      |jkl 789|
+|John      |ABCD 7890|
+|John      |7890 QRST|
+|John      |123 ABC|
+|John      |ghi 789|
+|John      |456 DEF|
+|JON       |456 DEF|
+|JON       |123 ABC|
+|JON       |jkl 789|
+|JON       |ghi 789|
+|JON       |7890 QRST|
+|JON       |3456 MNOP|
+|JON       |ABCD 7890|
+|KATHY     |ghi 789|
+|KATHY     |jkl 789|
+|KATHY     |3456 MNOP|
+|KATHY     |7890 QRST|
+|KATHY     |123 ABC|
+|KATHY     |ABCD 7890|
+|KATHY     |456 DEF|
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 21
+<<
+nvchar_col >= char_col...
+|=================================================================|
+|ghi 789|ALLEN       |
+|ghi 789|Cathleen    |
+|ghi 789|Alan        |
+|jkl 012|Cathleen    |
+|jkl 012|Alan        |
+|jkl 012|ALLEN       |
+|uvwxyz 123456|KATHERINE   |
+|uvwxyz 123456|John        |
+|uvwxyz 123456|JON         |
+|uvwxyz 123456|Rufus       |
+|uvwxyz 123456|RUPHUS      |
+|uvwxyz 123456|Alan        |
+|uvwxyz 123456|ALLEN       |
+|uvwxyz 123456|Cathleen    |
+|=================================================================|
+>>
+? run dtu16_compare.exe SEPPARAMDB3 22
+<<
+nvchar_col >= vchar_col...
+|=================================================================|
+|3456 mnop|123 ABC|
+|456 def|123 ABC|
+|456 def|3456 MNOP|
+|7890 qrst|3456 MNOP|
+|7890 qrst|123 ABC|
+|7890 qrst|456 DEF|
+|ABCD 7890|123 ABC|
+|ABCD 7890|ABCD 7890|
+|ABCD 7890|456 DEF|
+|ABCD 7890|7890 QRST|
+|ABCD 7890|3456 MNOP|
+|ghi 789|456 DEF|
+|ghi 789|ABCD 7890|
+|ghi 789|ghi 789|
+|ghi 789|123 ABC|
+|ghi 789|7890 QRST|
+|ghi 789|3456 MNOP|
+|jkl 012|123 ABC|
+|jkl 012|456 DEF|
+|jkl 012|ghi 789|
+|jkl 012|3456 MNOP|
+|jkl 012|7890 QRST|
+|jkl 012|ABCD 7890|
+|uvwxyz 123456|123 ABC|
+|uvwxyz 123456|456 DEF|
+|uvwxyz 123456|ghi 789|
+|uvwxyz 123456|jkl 789|
+|uvwxyz 123456|3456 MNOP|
+|uvwxyz 123456|7890 QRST|
+|uvwxyz 123456|uvwxyz 123456|
+|uvwxyz 123456|ABCD 7890|
+|=================================================================|
+>>
+? sql -s SEPPARAMDB3
+<<
+
+>>
+* drop table dtu16_uni\g
+<<
+>>
+* drop table dtu16_char\g
+<<
+>>
+* \q
+<<
+
+>>
+? delete dtu16_tbl.c
+<<
+file was deleted
+>>
+? delete dtu16_tbl.o
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu16_tbl.obj
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu16_tbl.exe
+<<
+file was deleted
+>>
+? delete dtu16_compare.c
+<<
+file was deleted
+>>
+? delete dtu16_compare.o
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu16_compare.obj
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu16_compare.exe
+<<
+file was deleted
+>>
+
+Ending at: Thu Feb 27 02:32:00 2003

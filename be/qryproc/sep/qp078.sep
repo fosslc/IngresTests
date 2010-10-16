@@ -1,0 +1,530 @@
+/*
+Copyright (c) 2006 Ingres Corporation
+
+	Test Name: qp078.sep
+	Time: Tue May  8 19:21:52 1990
+	User Name: testenv
+ 
+	Test ID : qp078
+	Module  : 
+	Filename: qp078.sep
+	Purpose	: test the select into :variables  in embedded C.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : bldg
+	Synopsis     : Create a few dbproc's that select from a table into
+			C variables and displays it.
+
+	Setup   : efa00.sep
+
+	History	: xx-xxx-1989     Created
+	     7-9-1991	(Author)  altered path to source files. copied over
+				  driver.sc and compile rather than copying
+				  driver.o
+          12-Aug-1993	(garys)   updated canon to accept different reported
+				  line numbers for syntax errors in query script
+	   7-MAR-1997	(vissu01) Modified for NT
+           2-Nov-2006	(vande02) Update canon where procedure gives expected
+				  E_US0836 but a new line number in error.
+				  Align history, and add Copyright.
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa05.sc 
+!!
+/*
+**	efa05.sc
+**
+**	basic functionality: select
+**
+**	history:
+**		oct 10/89 sgp
+**			- created.
+*/
+
+#define EFA05
+
+#include "driverefstub.h"
+
+exec sql include 'dbph.sc';
+#include <stdio.h>
+
+exec sql include sqlca;
+
+/***********/
+/* efa05() */
+/***********/
+
+efa05()
+{
+	exec sql begin declare section;
+	char	junk_buf[60];
+	char	bldg_buf[2];
+	int	rcount;
+	exec sql end declare section;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa05: select statement\n");
+
+	drop_tables(BLDG_TABLE);
+	build_tables(BLDG_TABLE);
+
+	/**********/
+	/* test 1 */
+	/**********/
+
+	printf("\n    test 1: simple select\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa05_01;
+
+	/* create the proc */
+	exec sql create procedure efa05_01 (
+		city	varchar(15)	not null with default
+	) as
+	declare
+		bldg		varchar(2)	not null with default;
+		mesg_buf	varchar(81)	not null with default;
+	begin
+
+		select bldg
+			into :bldg
+			from bldg
+			where city = :city;
+
+		mesg_buf = vchar(iirowcount) + ' row(s) found for city = ' + city;
+		message mesg_buf;
+
+		mesg_buf = bldg + ' building found for city = ' + city;
+		message mesg_buf;
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa05_01 ( city = 'Berkeley' );
+	exec sql execute procedure efa05_01 ( city = 'Chic%' );
+	exec sql execute procedure efa05_01 ( city = 'Washington' );
+	exec sql execute procedure efa05_01 ( city = 'Petaluma' );
+
+	printf("\n    test 1.5: try to pass like argument\n");
+	printf("\n       bug 21440 - like in dbp doesn't take var_name\n");
+	printf("\n       bug 21440 is fixed now...\n");
+
+	printf("         beg try like outside proc...\n");
+
+	strcpy(junk_buf,"Peta%");
+	exec sql select bldg 
+		into :bldg_buf
+		from bldg
+		where city like :junk_buf;
+	exec sql begin;
+	exec sql end;
+	exec sql inquire_ingres ( :rcount = rowcount);
+	printf("          found %d where city like :junk_buf (%s)\n",
+		rcount,
+		junk_buf
+	);
+
+	strcpy(junk_buf,"Chic%");
+	exec sql select bldg 
+		into :bldg_buf
+		from bldg
+		where city like :junk_buf;
+	exec sql begin;
+	exec sql end;
+	exec sql inquire_ingres ( :rcount = rowcount);
+	printf("          found %d where city like :junk_buf (%s)\n",
+		rcount,
+		junk_buf
+	);
+
+	strcpy(junk_buf,"Berkeley");
+	exec sql select bldg 
+		into :bldg_buf
+		from bldg
+		where city like :junk_buf;
+	exec sql begin;
+	exec sql end;
+	exec sql inquire_ingres ( :rcount = rowcount);
+	printf("          found %d where city like :junk_buf (%s)\n",
+		rcount,
+		junk_buf
+	);
+
+	printf("         end try like outside proc...\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa05_01;
+
+	/* create the proc */
+	exec sql create procedure efa05_01 (
+		city	varchar(15)	not null with default
+	) as
+	declare
+		bldg		varchar(2)	not null with default;
+		mesg_buf	varchar(81)	not null with default;
+	begin
+
+		select bldg
+			into :bldg
+			from bldg
+			where city like :city;
+
+		mesg_buf = vchar(iirowcount) 
+			+ ' row(s) found for city like ' 
+			+ city;
+		message mesg_buf;
+
+		mesg_buf = bldg + ' building found for city like ' + city;
+		message mesg_buf;
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa05_01 ( city = 'Ber_eley' );
+	exec sql execute procedure efa05_01 ( city = 'Chic%' );
+	exec sql execute procedure efa05_01 ( city = 'Washington' );
+	exec sql execute procedure efa05_01 ( city = 'Petaluma' );
+
+	/**********/
+	/* test 2 */
+	/**********/
+
+	printf("\n    test 2: non dynamic like in db proc\n");
+
+	printf("like check begin\n");
+	exec sql select *
+		into :bldg
+		from bldg
+		where city like 'Wash%';
+	exec sql begin;
+		printf("found bldg %s in city %s\n",bldg.bldg,bldg.city);
+	exec sql end;
+	printf("like check end\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa05_02;
+
+	/* create the proc */
+	exec sql create procedure efa05_02 as
+	declare
+		bldg		varchar(2)	not null with default;
+		mesg_buf	varchar(81)	not null with default;
+	begin
+
+		select bldg
+			into :bldg
+			from bldg
+			where city like 'Chic%';
+
+		mesg_buf = vchar(iirowcount) 
+			+ ' row(s) found for city like Chic%';
+		message mesg_buf;
+
+		mesg_buf = bldg + ' building found for city ' + city;
+		message mesg_buf;
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa05_02;
+
+	/**********/
+	/* test 3 */
+	/**********/
+
+	printf("\n    test 3: try variable where clause on select\n");
+	printf("\n       syntax error on variable where clause.\n");
+	printf("\n       bug 8501.\n");
+	printf("\n    \n");
+
+	/* drop the proc */
+	exec sql drop procedure efa05_03;
+
+	/* create the proc */
+	exec sql create procedure efa05_03 (
+		city	varchar(15)	not null with default
+	) as
+	declare
+		bldg		varchar(2)	not null with default;
+		mesg_buf	varchar(81)	not null with default;
+		qual_buf	varchar(81)	not null with default;
+	begin
+
+		qual_buf = 'city = ''' + city + '''';
+		mesg_buf = 'qual_buf = ' + qual_buf;
+		message mesg_buf;
+
+		select bldg
+			into :bldg
+			from bldg
+			where :qual_buf;
+
+		mesg_buf = vchar(iirowcount) + ' row(s) found for city ' + city;
+		message mesg_buf;
+
+		mesg_buf = bldg + ' building found for city ' + city;
+		message mesg_buf;
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa05_03 ( city = 'Berkeley' );
+	exec sql execute procedure efa05_03 ( city = 'Chic%' );
+	exec sql execute procedure efa05_03 ( city = 'Washington' );
+	exec sql execute procedure efa05_03 ( city = 'Petaluma' );
+
+} /* efa05() */
+!!
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc efa05.sc 
+<<
+ESQL efa05.sc:
+>>
+? sepcc efa05.c 
+<<
+>>
+<<
+efa05.c
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa05 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+~
+>>
+* drop table bldg;\g
+<<
+~
+>>
+* drop procedure efa05_01;\g
+<<
+~
+>>
+* drop procedure efa05_02;\g
+<<
+~
+>>
+* drop procedure efa05_03;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa05 
+/*
+*/
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa05
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa05 XX
+
+  efa05: select statement
+  dropping bldg table...
+E_US0AC1 DROP: 'bldg' does not exist or is not owned by you.
+    (Thu Nov  2 11:36:11 2006)
+  creating bldg table...
+
+    test 1: simple select
+E_US0965 Procedure 'efa05_01' not found.
+    (Thu Nov  2 11:36:11 2006)
+MESSAGE 0: 1 row(s) found for city = Berkeley
+MESSAGE 0: A building found for city = Berkeley
+MESSAGE 0: 0 row(s) found for city = Chic%
+MESSAGE 0:  building found for city = Chic%
+MESSAGE 0: 1 row(s) found for city = Washington
+MESSAGE 0: D building found for city = Washington
+MESSAGE 0: 0 row(s) found for city = Petaluma
+MESSAGE 0:  building found for city = Petaluma
+
+    test 1.5: try to pass like argument
+
+       bug 21440 - like in dbp doesn't take var_name
+
+       bug 21440 is fixed now...
+         beg try like outside proc...
+          found 0 where city like :junk_buf (Peta%)
+          found 1 where city like :junk_buf (Chic%)
+          found 2 where city like :junk_buf (Berkeley)
+         end try like outside proc...
+MESSAGE 0: 1 row(s) found for city like Ber_eley
+MESSAGE 0: A building found for city like Ber_eley
+MESSAGE 0: 1 row(s) found for city like Chic%
+MESSAGE 0: C building found for city like Chic%
+MESSAGE 0: 1 row(s) found for city like Washington
+MESSAGE 0: D building found for city like Washington
+MESSAGE 0: 0 row(s) found for city like Petaluma
+MESSAGE 0:  building found for city like Petaluma
+
+    test 2: non dynamic like in db proc
+like check begin
+found bldg D  in city Washington     
+found bldg F  in city Washington     
+like check end
+E_US0965 Procedure 'efa05_02' not found.
+    (Thu Nov  2 11:36:11 2006)
+E_US0836 line 19, Column 'city' not found in any specified table.
+    (Thu Nov  2 11:36:11 2006)
+E_US0965 Procedure 'efa05_02' not found.
+    (Thu Nov  2 11:36:11 2006)
+
+    test 3: try variable where clause on select
+
+       syntax error on variable where clause.
+
+       bug 8501.
+
+    
+E_US0965 Procedure 'efa05_03' not found.
+    (Thu Nov  2 11:36:11 2006)
+E_US09C5 line 22, Syntax error on ';'.  The correct syntax is: 
+    SELECT [ALL|DISTINCT] target_list 
+      FROM table(s) 
+      [WHERE search_cond] 
+      [GROUP BY col(s)] 
+      [HAVING search_cond] 
+ [UNION subselect] 
+ [ORDER BY col(s)]
+    (Thu Nov  2 11:36:11 2006)
+E_US0965 Procedure 'efa05_03' not found.
+    (Thu Nov  2 11:36:11 2006)
+E_US0965 Procedure 'efa05_03' not found.
+    (Thu Nov  2 11:36:11 2006)
+E_US0965 Procedure 'efa05_03' not found.
+    (Thu Nov  2 11:36:11 2006)
+E_US0965 Procedure 'efa05_03' not found.
+    (Thu Nov  2 11:36:11 2006)
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driverefstub.h 
+<<
+~
+>>
+? delete driveref.c 
+<<
+~
+>>
+? delete driveref.obj 
+<<
+~
+>>
+? delete driveref.o 
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~
+>>
+? delete dbph.c 
+<<
+~
+>>
+? delete dbpmisc.sc 
+<<
+~
+>>
+? delete dbpmisc.c 
+<<
+~
+>>
+? delete dbpmisc.obj 
+<<
+~
+>>
+? delete dbpmisc.o 
+<<
+~
+>>
+? delete efa05.c 
+<<
+~
+>>
+? delete efa05.obj 
+<<
+~
+>>
+? delete efa05.o 
+<<
+~
+>>
+
+
+Ending at: Thu Nov  2 11:42:44 2006

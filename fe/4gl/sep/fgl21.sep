@@ -1,0 +1,1311 @@
+/*
+	Test Name: pha23.sep
+	Time: Wed Jun  6 15:29:11 1990
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : pha23
+	Module  : 4gl
+	Filename: pha23.sep
+	Purpose	: Confirmatory Basic test of Database statements in 4gl.
+	Input Files  : (none)
+	Output Files : (none)
+	Database     : SEPPARAMDB
+	Tables       : pha23_tbl
+	Synopsis     : Using ISQL, create table pha23_tbl, and load it with
+                       5 rows. Create an application and run it. Query the
+                       table, add and delete database rows, re-query. Exit
+                       from the application. Destroy the application and the
+                       form, and drop the table.
+
+        NOTE: This is an updated version of Kelly's pha00. This copy is
+              modified for 6.4, and has been restructured for portability.
+
+	NOTE: One of the canon's in this test has captured a return 
+	      message from ABF "$NULL$ERROR", a SIR #47808 has been filed 
+	      requesting that a more appropriate message be issued to
+	      the user. If this SIR is ever acted on, it will break
+	      this test and a new canon will have to be captured.
+
+	History	: 06-jun-1990	Created			www
+		  26-jul-1991   (dufour) Removed table drops and creates
+				required for initialization to a separate 
+				initilization script in basis/fe.
+
+		  09-nov-1992 (gillnh2o)
+			Added another note above that draws attention
+			to the fact that if SIR #47808 is ever acted
+			on and $NULL$ERROR is changed to a more informative
+			message, a new canon will have to be generated.
+        	  21-Jun-1993 (sandhya) changed filename to 8 characters
+			      to make the test more portable.
+		  28-Jun-1993 (sandhya) Changed the Notes section below
+			      to refer to right init script.
+********************************************************************************
+				     Notes
+1.	The ingtest!basis!init!fglinit.sep script for the 4GL tests must
+	be run prior to execution of this script.
+2.	A SEPPARAMDB logical/variable must be assigned.
+********************************************************************************
+
+          11-Aug-1993	(brenda) Accepted a new canon for the change in wording
+                        of "4GL name" to "INGRES/4GL name" in the display of
+                        an error message.
+                        
+                  06-Jan-1995   changed deleter to delobj and edit into
+                                correct format.                 (QA)
+          24-Apr-1996	(clate01)
+		Modified for NT
+*/
+? delobj SEPPARAMDB -application pha23 
+<<
+~
+>>
+? delobj SEPPARAMDB -form pha23uf1 
+<<
+~
+>>
+? fill pha23.sql 
+!!
+insert into pha23_tbl (vendorno,vname,street,city,state,zip,contact) values
+(1,'Oakland Supply','12 E. 14th','Oakland','CA','94602','Fred');\p\g
+
+insert into pha23_tbl (vendorno,vname,street,city,state,zip,contact) values
+(2,'City Tubing','9 Main Street','El Cerrito','CA','94530','Albert');\p\g
+
+insert into pha23_tbl (vendorno,vname,street,city,state,zip,contact) values
+(3,'Treetop Parts','22 Galvin Drive','Albany','NY','10940','Martha');\p\g
+
+insert into pha23_tbl (vendorno,vname,street,city,state,zip,contact) values
+(4,'Estuary Specials','1 Waterway Drive','Alameda','CA','94501','Marilyn');\p\g
+
+insert into pha23_tbl (vendorno,vname,street,city,state,zip,contact) values
+(5,'Trans-Bay Treasures','2 Embarcadero','San Francisco','CA','94101','Q');\p\g\q
+!!
+? fill pha23.frm 
+!!
+COPYFORM:	6.4	1990_06_06 22:22:43 GMT  
+FORM:	pha23uf1	fields in the vendor table	
+	80	23	0	0	7	0	0	7	0	0	0	0	0	0	0	7
+FIELD:
+	0	vendorno	-30	3	0	6	1	17	0	0	6	0	11	Vendorno :	0	0	0	0	0	0	0		-i6			0	0
+	1	vname	-21	33	0	30	1	38	1	0	30	0	8	Vname :	0	0	0	0	0	0	0		c30			0	1
+	2	street	-21	23	0	20	1	29	2	0	20	0	9	Street :	0	0	0	0	0	0	0		c20			0	2
+	3	city	-21	18	0	15	1	22	3	0	15	0	7	City :	0	0	0	0	0	0	0		c15			0	3
+	4	state	-21	5	0	2	1	10	4	0	2	0	8	State :	0	0	0	0	0	0	0		c2			0	4
+	5	zip	-21	13	0	10	1	16	5	0	10	0	6	Zip :	0	0	0	0	0	0	0		c10			0	5
+	6	contact	-21	13	0	10	1	20	6	0	10	0	10	Contact :	0	0	0	0	0	0	0		c10			0	6
+TRIM:
+!!
+? fill pha23uf1.osq 
+!!
+initialize (h_err = smallint ) =
+{
+  message 'Enter retrieval parameters and select Query menuitem'  +
+    ' or add a new vendor and select AddVendor menuitem.';
+  sleep 3;
+  mode query;
+}
+
+'Query' =
+{
+  commit;
+  set lockmode on pha23_tbl where readlock = exclusive;
+  pha23uf1 = select  * from pha23_tbl
+    where qualification ( vendorno = :vendorno, vname = :vname, 
+    street = :street, city = :city, state = :state, zip = :zip, 
+    contact = :contact )
+    order by vendorno
+    {
+      initialize =
+      {
+        set_forms form( mode = 'update' );
+      }
+      'Next' =
+      {
+        next;
+      }
+
+      'Update' =
+      {
+        message 'Testing REPEATED UPDATE...' +
+          '<Update based on vendorno only>';
+        sleep 2;
+        repeated update pha23_tbl 
+        set vendorno = :vendorno,  vname = :vname,  street = :street,  
+        city = :city,  state = :state,  zip = :zip,  contact = :contact
+        where vendorno = :vendorno;
+        inquire_ingres ( h_err = errorno );
+        if h_err > 0 then
+          rollback;
+          message 'Operation failed.';
+          sleep 2;
+          endloop;
+        else
+          commit;
+          message 'Emp # ' + varchar(vendorno) + ' updated';
+          sleep 2;
+        endif;
+       
+      }
+      'Delete' = 
+      { 
+        message 'Testing REPEATED DELETE...';
+        sleep 2;
+        repeated delete from  pha23_tbl
+          where vendorno = :vendorno 
+          and  vname = :vname 
+          and  street = :street 
+          and  city = :city 
+          and  state = :state 
+          and  zip = :zip 
+          and  contact = :contact; 
+        inquire_ingres ( h_err = errorno );
+        if h_err > 0 then
+          rollback;
+          message 'Operation failed.';
+          sleep 2;
+          endloop; 
+        else
+          commit;
+          message 'Emp #' + varchar(vendorno) + ' deleted.';
+          sleep 2;
+        endif;
+        next;
+      }
+
+      'End', key frskey3 =
+      {
+        endloop;
+      }
+    }; /* End of submenu */
+    commit;
+    clear field all;
+    resume field vendorno;
+} /* end of menu item */
+
+'AddVendor' =
+{
+
+  insert into pha23_tbl
+  values (:vendorno, :vname, :street, :city, :state, :zip, :contact);
+  commit;
+
+  message 'Adding vendor # ' + varchar(vendorno);
+  sleep 1;
+  clear field all;
+  resume field vendorno;
+}
+
+
+'End', key frskey3 =
+{
+  return;
+}
+!!
+? copyform -s -i SEPPARAMDB pha23.frm 
+<<
+~
+>>
+? abf SEPPARAMDB 
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ create`CR'pha23`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`ESC'
+<<
+~
+>>
+^^ select`CR'pha23uf1`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ go`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ query`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _1                                                                    |
+|Vname : Oakland Supply                                                          |
+|Street : 12 E. 14th                                                             |
+|City : Oakland                                                                  |
+|State : CA                                                                      |
+|Zip : 94602                                                                     |
+|Contact : Fred                                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _1                                                                    |
+|Vname : Oakland Supply                                                          |
+|Street : 12 E. 14th                                                             |
+|City : Oakland                                                                  |
+|State : CA                                                                      |
+|Zip : 94602                                                                     |
+|Contact : Fred                                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+~
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _3                                                                    |
+|Vname : Treetop Parts                                                           |
+|Street : 22 Galvin Drive                                                        |
+|City : Albany                                                                   |
+|State : NY                                                                      |
+|Zip : 10940                                                                     |
+|Contact : Martha                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _3                                                                    |
+|Vname : Treetop Parts                                                           |
+|Street : 22 Galvin Drive                                                        |
+|City : Albany                                                                   |
+|State : NY                                                                      |
+|Zip : 10940                                                                     |
+|Contact : Martha                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _4                                                                    |
+|Vname : Estuary Specials                                                        |
+|Street : 1 Waterway Drive                                                       |
+|City : Alameda                                                                  |
+|State : CA                                                                      |
+|Zip : 94501                                                                     |
+|Contact : Marilyn                                                               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _4                                                                    |
+|Vname : Estuary Specials                                                        |
+|Street : 1 Waterway Drive                                                       |
+|City : Alameda                                                                  |
+|State : CA                                                                      |
+|Zip : 94501                                                                     |
+|Contact : Marilyn                                                               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _5                                                                    |
+|Vname : Trans-Bay Treasures                                                     |
+|Street : 2 Embarcadero                                                          |
+|City : San Francisco                                                            |
+|State : CA                                                                      |
+|Zip : 94101                                                                     |
+|Contact : Q                                                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _5                                                                    |
+|Vname : Trans-Bay Treasures                                                     |
+|Street : 2 Embarcadero                                                          |
+|City : San Francisco                                                            |
+|State : CA                                                                      |
+|Zip : 94101                                                                     |
+|Contact : Q                                                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% No more rows
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% No more rows
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ add`CR'h`CR'h`CR'`ESC'
+<<
+
+%% MENU RESPONSE: AddVendor
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "AddVendor"
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% An attempt to place a null value in a non-nullable ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% An attempt to place a null value in a non-nullable datatype. (E_AD1012)   
+
+%% (Wed Aug 11 14:22:44 1993)                                                
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Null was used where a string is required.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Null was used where a string is required.                                 
+
+%%  A Null value was used where an INGRES/4GL name or string value is        
+
+%% required. (E_AR0011)                                                      
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% $NULL$ERROR
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: AddVendor
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "AddVendor"
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% An attempt to place a null value in a non-nullable ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% An attempt to place a null value in a non-nullable datatype. (E_AD1012)   
+
+%% (Wed Apr 24 15:37:51 1996)                                                
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Null was used where a string is required.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Null was used where a string is required.                                 
+
+%%  A Null value was used where an INGRES/4GL name or string value is        
+
+%% required. (E_AR0011)                                                      
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% $NULL$ERROR
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ query`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'9`CR'Somebody Else's Parts`CR'Flag Blvd.`CR'Sonoma`CR'CA99123`CR'Frank`ESC-
+'
+<<
+~
+>>
+^^ add`CR'`ESC'
+<<
+
+%% MENU RESPONSE: AddVendor
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "AddVendor"
+
+%% Adding vendor # 9
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: AddVendor
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "AddVendor"
+
+%% Adding vendor # 9
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ query`CR'`ESC'
+<<
+~
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _2                                                                    |
+|Vname : City Tubing                                                             |
+|Street : 9 Main Street                                                          |
+|City : El Cerrito                                                               |
+|State : CA                                                                      |
+|Zip : 94530                                                                     |
+|Contact : Albert                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _2                                                                    |
+|Vname : City Tubing                                                             |
+|Street : 9 Main Street                                                          |
+|City : El Cerrito                                                               |
+|State : CA                                                                      |
+|Zip : 94530                                                                     |
+|Contact : Albert                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ delete`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Delete
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Delete"
+
+%% Testing REPEATED DELETE...
+%% Emp #2 deleted.
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _3                                                                    |
+|Vname : Treetop Parts                                                           |
+|Street : 22 Galvin Drive                                                        |
+|City : Albany                                                                   |
+|State : NY                                                                      |
+|Zip : 10940                                                                     |
+|Contact : Martha                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Delete
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Delete"
+
+%% Testing REPEATED DELETE...
+%% Emp #2 deleted.
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _3                                                                    |
+|Vname : Treetop Parts                                                           |
+|Street : 22 Galvin Drive                                                        |
+|City : Albany                                                                   |
+|State : NY                                                                      |
+|Zip : 10940                                                                     |
+|Contact : Martha                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'9`ESC'
+<<
+~
+>>
+^^ query`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _9                                                                    |
+|Vname : Somebody Else's Parts                                                   |
+|Street : Flag Blvd.                                                             |
+|City : Sonoma                                                                   |
+|State : CA                                                                      |
+|Zip : 99123                                                                     |
+|Contact : Frank                                                                 |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _9                                                                    |
+|Vname : Somebody Else's Parts                                                   |
+|Street : Flag Blvd.                                                             |
+|City : Sonoma                                                                   |
+|State : CA                                                                      |
+|Zip : 99123                                                                     |
+|Contact : Frank                                                                 |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Update  Delete  End                                                     |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% No more rows
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Update  Delete  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% No more rows
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* delete from pha23_tbl;\p\g
+<<
+~
+>>
+* \i pha23.sql 
+<<
+~
+>>
+? delobj SEPPARAMDB -application pha23 
+<<
+~
+>>
+? delobj SEPPARAMDB -form pha23uf1 
+<<
+~
+>>
+
+
+Ending at: Wed Apr 24 15:38:52 1996

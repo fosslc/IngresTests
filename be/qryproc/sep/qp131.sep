@@ -1,0 +1,193 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name: qp131.sep (formerly eha15.sep)
+	Time: 	
+	User Name: testenv
+ 	Test ID : qp131
+	Module  : 
+	Filename: qp131.sep
+	Purpose	: To test for bug 37347
+	Input Files  : none
+	Output Files : none 
+	Database     : SEPPARAMDB
+	Tables       : eha15_t1
+	Synopsis     : Create views based on Aggregates and use them in
+		complex calculations in selects.
+
+	History	: Created by CAMACHO.
+          27-Aug-1993	(garys)   accept new canon for returned float value
+				  (to 25 places) on selected numeric operation.
+	  26-Mar-1999	(kamra01) modified VPG_SZ to 4096
+          27-Apr-1999	(madsu02) Hard coded VPG_SZ to 2k,4k,8k. Changed canon
+				  compatible to ingresII 2.5
+           9-Nov-2006	(vande02) Removed old canons and created one with the
+				  correct number of decimal digits in the scale
+				  for the sum()aggregate query below which 
+				  involves multiplying by a decimal 100.0.  See
+				  embedded comment below.  This change is being
+				  made after discussions with Development.
+				  Header cleanup.
+          18-Jun-2007	(vande02) Replaced 2 canons with the correct number of
+				  decimal digits.
+
+				  This new result is due to the new maximum
+				  precision of 39 for decimal data types.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table eha15_t1;  \g
+<<
+~
+>>
+* create table eha15_t1 (connec c6,elapsed real,occur smallint) with page_size=4096;-
+  \g
+<<
+>>
+* insert into eha15_t1 (connec,elapsed,occur) values ('cics',.5,100);  \g
+<<
+(1 row)
+>>
+* insert into eha15_t1 (connec,elapsed,occur) values ('cics',1.5,100);  \g
+<<
+(1 row)
+>>
+* insert into eha15_t1 (connec,elapsed,occur) values ('cics',3.0,50);  \g
+<<
+(1 row)
+>>
+* insert into eha15_t1 (connec,elapsed,occur) values ('tso',2.0,50);  \g
+<<
+(1 row)
+>>
+* insert into eha15_t1 (connec,elapsed,occur) values ('tso',2.5,100);  \g
+<<
+(1 row)
+>>
+* select * from eha15_t1;  \g
+<<
+
++------+-----------+------+
+|connec|elapsed    |occur |
++------+-----------+------+
+|cics  |      0.500|   100|
+|cics  |      1.500|   100|
+|cics  |      3.000|    50|
+|tso   |      2.000|    50|
+|tso   |      2.500|   100|
++------+-----------+------+
+(5 rows)
+>>
+* commit;  \g
+<<
+>>
+* create view eha15_v1 as select sum(occur) as all_occur from eha15_t1;  \g
+<<
+>>
+* select * from eha15_v1;  \g
+<<
+
++-------------+
+|all_occur    |
++-------------+
+|          400|
++-------------+
+(1 row)
+>>
+/*
+	(vande02) 18-Jun-2007
+	Changes in Ingres 2006 Release 3 (II 9.2.0) will result
+	in an increased precision involving decimals per
+	Development.
+*/
+* select connec,((100.0 * sum(occur))/all_occur) as pct
+<<
+>>
+* 	from eha15_t1, eha15_v1 where elapsed > 1.0
+<<
+>>
+* 	group by connec, all_occur having connec = 'cics';  \g
+<<
+
++------+-----------------------------------------+
+|connec|pct                                      |
++------+-----------------------------------------+
+|cics  |                     37.50000000000000000|
++------+-----------------------------------------+
+(1 row)
+>>
+* drop view eha15_v2; \g
+<<
+~
+>>
+* create view eha15_v2 as
+<<
+>>
+* 	select connec,elapsed,occur,all_occur, 
+<<
+>>
+* 	100.0 * eha15_t1.occur/eha15_v1.all_occur as pct
+<<
+>>
+* 	from eha15_t1,eha15_v1 
+<<
+>>
+* 	where connec='cics' and
+<<
+>>
+* 	elapsed > 1.0
+<<
+>>
+* 	group by connec,elapsed,occur,all_occur;  \g
+/*
+ 	Expected problem _here_ is
+ E_OP0893 A repeat query  
+     number that is not valid is being added to a QEN_BASE.
+     ( 2-MAY-1991 14:41:08)
+*/
+<<
+>>
+* select * from eha15_v2;\g
+/*
+*/
+<<
+
++------+-----------+------+----------------------+-----------------------------------
+-------+
+|connec|elapsed    |occur |all_occur             |pct                               -
+       |
++------+-----------+------+----------------------+-----------------------------------
+-------+
+|cics  |      1.500|   100|                   400|       25.000000000000000000000000-
+0000000|
+|cics  |      3.000|    50|                   400|       12.500000000000000000000000-
+0000000|
++------+-----------+------+----------------------+-----------------------------------
+-------+
+(2 rows)
+>>
+* select ((sum(occur) * 100)/all_occur) as pig from eha15_v2
+<<
+>>
+* 	group by occur,all_occur;  \g
+<<
+
++-------------+
+|pig          |
++-------------+
+|           12|
+|           25|
++-------------+
+(2 rows)
+>>
+* drop table eha15_t1;\g
+<<
+~
+>>
+* \q
+<<
+>>
+
+
+Ending at: Mon Jun 18 20:40:05 2007

@@ -1,0 +1,433 @@
+/*
+	Test Name: ema12.sep
+	Time: Wed Oct 13 13:40:47 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : ema12.sep
+	Module  : 
+	Filename: ema12.sep
+	Purpose	: Test fix for bug 53670
+	Input Files  :
+	Output Files :
+	Database     :
+	Tables       :
+	Synopsis     : 
+
+	NOTE:	This test will kill your whole installation if the bug is 
+		not fixed.  You will have to kill -9 all ingres processes.
+
+ History: 13-Oct-1993	(jpark)	Created
+	  21-Oct-1993	(jpark) Modified -- added new scripts to test for bug.
+          21-Oct-1993	(jpark) Accepted new canon for bug fix
+	  26-March-1999  (kamra01) modified VPG_SZ to 2048	
+*/
+? fill ema12.sql 
+!!
+
+/**************** MINI BASE ****************/
+
+create table client_base (
+        code_site  smallint not null,
+        code_client  char(6) not null,
+        code_niveau_client  smallint not null,
+        nom_client  varchar(20) ,       /* not null, */
+        code_superieur  char(6),
+        commande_par  char(6) not null,
+        facturer_a  char(6) not null,
+        livrer_a  char(6) not null,
+        regle_par  char(6) not null,
+        assure_par  char(6) ,   /* not null, */
+        code_type_client  smallint not null,
+        code_atc  integer not null,
+        code_tv  integer not null with default,
+        gencod  char(13) not null,
+        nom_correspondant  varchar(20) ,        /* not null, */
+        rgt_arc_sa  smallint not null,
+        code_lib_spec_cli  integer,
+        code_type_etiq_car  smallint,
+        telephone  varchar(18),
+        ordo_tv  integer not null with default,
+        date_creation  date not null,
+        date_maj  date not null ) with page_size=2048; \p\g
+
+create table famille_produit (
+        code_famille  char(4) not null,
+        type_famille  char(1) not null,
+        code_site  smallint not null,
+        libelle  varchar(26) ,
+        famille_cumul  char(4),
+        code_comptable  char(13),
+        ref_sa  integer not null,
+        selection  char(1) not null,
+        date_creation  date not null,
+        date_maj  date not null ) with page_size=2048; \p\g
+
+create table hist_client_mens_detail (
+        code_site  smallint not null,
+        code_client  char(6) not null,
+        code_famille_commerciale  char(4) not null,
+        code_produit  char(5) not null,
+        periode  integer not null,
+        nbre_cde_h_promo  integer1 not null with default,
+        nbre_cde_promo  integer1 not null with default,
+        nbre_cde_promo_nr  integer1 not null with default,
+        tonnage_avoir  float4 not null with default,
+        tonnage_hors_promo  float4 not null with default,
+        tonnage_promo  float4 not null with default,
+        tonnage_promo_non_rist  float4 not null with default,
+        tonnage_echant  float4 not null with default,
+        ca_avoir  money not null with default,
+        ca_hors_promo  money not null with default,
+        ca_promo  money not null with default,
+        ca_promo_non_rist  money not null with default,
+        ca_echant  money not null with default ) with page_size=2048; \p\g
+
+create table produit_base (
+        code_produit  char(5) not null,
+        lib_produit  varchar(25) not null,
+        code_fam_comm  char(4) not null,
+        code_tva  smallint not null,
+        interbev  char(1) not null,
+        code_origine  smallint not null,
+        gencod_pds_var  char(13) not null,
+        qte_bar  smallint not null,
+        code_barquette  smallint not null,
+        poids_ref_bar  float4 not null,
+        toler_bar  smallint not null,
+        qte_car  smallint not null,
+        code_carton  smallint not null,
+        poids_ref_car  float4 not null,
+        toler_car  smallint not null,
+        site_fab  smallint not null,
+        poids_const_bar  char(1) not null,
+        poids_const_car  char(1) not null,
+        nbre_jour_dlc  smallint not null,
+        unite_fact  smallint not null,
+        condi_commande  smallint not null,
+        condi_livraison  smallint not null,
+        code_type_cab  smallint not null,
+        date_creation  date not null,
+        date_maj  date not null,
+        gencod_adm  char(13) not null ) with page_size=2048; \p\g
+
+create table type_client (
+        code_type_client  smallint not null,
+        lib_type_client  varchar(10) not null,
+        fact  char(1) not null,
+        stat  char(1) not null,
+        imput_compta  varchar(13) not null,
+        interbev  varchar(13) not null,
+        televente  char(1) not null,
+        cde_direct  char(1) not null,
+        date_creation  date not null,
+        date_maj  date not null ) with page_size=2048; \p\g
+
+/**************** INDEX ****************/
+
+modify client_base to isam unique on
+                code_client with page_size=2048; 
+
+create index client_sup on client_base
+        (code_superieur) with page_size=2048;
+
+create index client_fac on client_base
+        (facturer_a) with page_size=2048;
+
+create index client_com_par on client_base
+        (commande_par) with page_size=2048;
+
+create index client_regle on client_base
+        (regle_par) with page_size=2048;
+
+modify famille_produit to isam unique on
+        code_site, type_famille, code_famille with page_size=2048;
+
+modify hist_client_mens_detail to btree unique on
+        periode, code_client, code_produit with page_size=2048;
+
+create index cle_hist_mens_det on hist_client_mens_detail
+        (code_famille_commerciale)
+        with structure = btree, page_size=2048;
+
+modify produit_base to isam unique on
+        code_produit with page_size=2048;
+
+modify type_client to heap with page_size=2048;
+\p\g
+!!
+? fill ema12.tst 
+!!
+  select
+        t.stat,
+	h.code_famille_commerciale,
+	f.famille_cumul,
+	f.libelle,
+	h.code_produit,
+	p.lib_produit,
+	SUM(h.ca_hors_promo + h.ca_promo + h.ca_promo_non_rist),
+        SUM( h.tonnage_hors_promo +
+		h.tonnage_promo +
+		h.tonnage_promo_non_rist)
+  FROM
+	hist_client_mens_detail h,
+	produit_base p,
+	famille_produit f,
+	client_base b,
+	type_client t
+  WHERE
+	h.code_client = b.code_client AND
+	h.code_produit = p.code_produit AND
+	h.code_famille_commerciale = f.code_famille AND
+	b.code_type_client = t.code_type_client AND
+	(b.code_superieur=b.code_client  OR 
+	 b.code_superieur IS NULL) AND 
+        f.type_famille = 'C' AND
+	f.code_site = 50 AND
+	h.periode = 199305
+  GROUP BY
+	h.code_famille_commerciale,
+	f.libelle,
+	f.famille_cumul,
+	h.code_produit,
+	p.lib_produit,
+	t.stat;
+\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* set autocommit on;\g
+<<
+>>
+* drop table client_base, famille_produit;\g
+<<
+~
+>>
+* drop table hist_client_mens_detail, produit_base, type_client;\g
+<<
+~
+>>
+* \i ema12.sql 
+<<
+ 
+/**************** MINI BASE ****************/
+
+create table client_base (
+        code_site  smallint not null,
+        code_client  char(6) not null,
+        code_niveau_client  smallint not null,
+        nom_client  varchar(20) ,       /* not null, */
+        code_superieur  char(6),
+        commande_par  char(6) not null,
+        facturer_a  char(6) not null,
+        livrer_a  char(6) not null,
+        regle_par  char(6) not null,
+        assure_par  char(6) ,   /* not null, */
+        code_type_client  smallint not null,
+        code_atc  integer not null,
+        code_tv  integer not null with default,
+        gencod  char(13) not null,
+        nom_correspondant  varchar(20) ,        /* not null, */
+        rgt_arc_sa  smallint not null,
+        code_lib_spec_cli  integer,
+        code_type_etiq_car  smallint,
+        telephone  varchar(18),
+        ordo_tv  integer not null with default,
+        date_creation  date not null,
+        date_maj  date not null ) with page_size=2048; 
+
+create table famille_produit (
+        code_famille  char(4) not null,
+        type_famille  char(1) not null,
+        code_site  smallint not null,
+        libelle  varchar(26) ,
+        famille_cumul  char(4),
+        code_comptable  char(13),
+        ref_sa  integer not null,
+        selection  char(1) not null,
+        date_creation  date not null,
+        date_maj  date not null ) with page_size=2048; 
+
+create table hist_client_mens_detail (
+        code_site  smallint not null,
+        code_client  char(6) not null,
+        code_famille_commerciale  char(4) not null,
+        code_produit  char(5) not null,
+        periode  integer not null,
+        nbre_cde_h_promo  integer1 not null with default,
+        nbre_cde_promo  integer1 not null with default,
+        nbre_cde_promo_nr  integer1 not null with default,
+        tonnage_avoir  float4 not null with default,
+        tonnage_hors_promo  float4 not null with default,
+        tonnage_promo  float4 not null with default,
+        tonnage_promo_non_rist  float4 not null with default,
+        tonnage_echant  float4 not null with default,
+        ca_avoir  money not null with default,
+        ca_hors_promo  money not null with default,
+        ca_promo  money not null with default,
+        ca_promo_non_rist  money not null with default,
+        ca_echant  money not null with default ) with page_size=2048; 
+
+create table produit_base (
+        code_produit  char(5) not null,
+        lib_produit  varchar(25) not null,
+        code_fam_comm  char(4) not null,
+        code_tva  smallint not null,
+        interbev  char(1) not null,
+        code_origine  smallint not null,
+        gencod_pds_var  char(13) not null,
+        qte_bar  smallint not null,
+        code_barquette  smallint not null,
+        poids_ref_bar  float4 not null,
+        toler_bar  smallint not null,
+        qte_car  smallint not null,
+        code_carton  smallint not null,
+        poids_ref_car  float4 not null,
+        toler_car  smallint not null,
+        site_fab  smallint not null,
+        poids_const_bar  char(1) not null,
+        poids_const_car  char(1) not null,
+        nbre_jour_dlc  smallint not null,
+        unite_fact  smallint not null,
+        condi_commande  smallint not null,
+        condi_livraison  smallint not null,
+        code_type_cab  smallint not null,
+        date_creation  date not null,
+        date_maj  date not null,
+        gencod_adm  char(13) not null ) with page_size=2048; 
+
+create table type_client (
+        code_type_client  smallint not null,
+        lib_type_client  varchar(10) not null,
+        fact  char(1) not null,
+        stat  char(1) not null,
+        imput_compta  varchar(13) not null,
+        interbev  varchar(13) not null,
+        televente  char(1) not null,
+        cde_direct  char(1) not null,
+        date_creation  date not null,
+        date_maj  date not null ) with page_size=2048; 
+
+/**************** INDEX ****************/
+
+modify client_base to isam unique on
+                code_client with page_size=2048; 
+
+create index client_sup on client_base
+        (code_superieur) with page_size=2048;
+
+create index client_fac on client_base
+        (facturer_a) with page_size=2048;
+
+create index client_com_par on client_base
+        (commande_par) with page_size=2048;
+
+create index client_regle on client_base
+        (regle_par) with page_size=2048;
+
+modify famille_produit to isam unique on
+        code_site, type_famille, code_famille with page_size=2048;
+
+modify hist_client_mens_detail to btree unique on
+        periode, code_client, code_produit with page_size=2048;
+
+create index cle_hist_mens_det on hist_client_mens_detail
+        (code_famille_commerciale)
+        with structure = btree, page_size=2048;
+
+modify produit_base to isam unique on
+        code_produit with page_size=2048;
+
+modify type_client to heap with page_size=2048;
+(0 rows)
+(0 rows)
+(0 rows)
+(0 rows)
+(0 rows)
+(0 rows)
+(0 rows)
+(0 rows)
+(0 rows)
+(0 rows)
+>>
+* \i ema12.tst
+<<
+   select
+        t.stat,
+	h.code_famille_commerciale,
+	f.famille_cumul,
+	f.libelle,
+	h.code_produit,
+	p.lib_produit,
+	SUM(h.ca_hors_promo + h.ca_promo + h.ca_promo_non_rist),
+        SUM( h.tonnage_hors_promo +
+		h.tonnage_promo +
+		h.tonnage_promo_non_rist)
+  FROM
+	hist_client_mens_detail h,
+	produit_base p,
+	famille_produit f,
+	client_base b,
+	type_client t
+  WHERE
+	h.code_client = b.code_client AND
+	h.code_produit = p.code_produit AND
+	h.code_famille_commerciale = f.code_famille AND
+	b.code_type_client = t.code_type_client AND
+	(b.code_superieur=b.code_client  OR 
+	 b.code_superieur IS NULL) AND 
+        f.type_famille = 'C' AND
+	f.code_site = 50 AND
+	h.periode = 199305
+  GROUP BY
+	h.code_famille_commerciale,
+	f.libelle,
+	f.famille_cumul,
+	h.code_produit,
+	p.lib_produit,
+	t.stat;
+
++------+------+------+--------------------------+------+-------------------------+---
+------------------+-----------+
+|stat  |code_f|famill|libelle                   |code_p|lib_produit              |co-
+l7                |col8       |
++------+------+------+--------------------------+------+-------------------------+---
+------------------+-----------+
++------+------+------+--------------------------+------+-------------------------+---
+------------------+-----------+
+(0 rows)
+>>
+* \q
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from client_base;\g
+<<
+
++------+------+------+--------------------+------+------+------+------+------+-------
++------+-------------+-------------+-------------+--------------------+------+-------
+-------+------+------------------+-------------+-------------------------+-----------
+---------------+
+|code_s|code_c|code_n|nom_client          |code_s|comman|factur|livrer|regle_|assure-
+|code_t|code_atc     |code_tv      |gencod       |nom_correspondant   |rgt_ar|code_l-
+ib_spec|code_t|telephone         |ordo_tv      |date_creation            |date_maj  -
+               |
++------+------+------+--------------------+------+------+------+------+------+-------
++------+-------------+-------------+-------------+--------------------+------+-------
+-------+------+------------------+-------------+-------------------------+-----------
+---------------+
++------+------+------+--------------------+------+------+------+------+------+-------
++------+-------------+-------------+-------------+--------------------+------+-------
+-------+------+------------------+-------------+-------------------------+-----------
+---------------+
+(0 rows)
+>>
+* \q
+<<
+>>
+
+
+Ending at: Thu Oct 21 14:49:18 1993

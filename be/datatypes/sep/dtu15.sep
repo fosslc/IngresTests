@@ -1,0 +1,778 @@
+/*
+	Test Name: dtu15.sep
+	Time: Wed Feb 26 01:08:09 2003
+	User Name: ingres
+	Terminal type: septerm
+
+	Test ID : dtu15.sep
+	Module  : be/datatypes
+	Filename: dtu15.sep
+	Purpose	: To test the Unicode coercion and wildcard searching support,
+                  first available with Ingres 2.6/0303 and later releases.
+	Input Files  : dtu15_tbl.sc, dtu15_like.sc
+	Output Files : dtu15_tbl.exe, dtu15_like.exe
+	Database     : unidb
+	Tables       : dtu15_uni, dtu15_char
+	Synopsis     : The Ingres variable II_CHARSETxx (where xx is the
+                       installation code) will set to UTF8 in the beginning
+                       of this test, and restore to its default value at the
+                       end.
+                       This test includes two embedded C programs, the first
+                       program is to create and populate two tables: one
+                       Unicode table with the Unicode data types (nchar and
+                       nvarchar), another table with the character data types
+                       (char and varchar). The second program is to create and
+                       execute database queries to compare and search the
+                       tables using the SQL LIKE/NOT LIKE predicates.
+
+*** TEST CASES:
+    nchar_col LIKE char_col
+    nchar_col LIKE vchar_col
+    nvchar_col LIKE char_col
+    nvchar_col LIKE vchar_col
+    nchar_col NOT LIKE char_col
+    nchar_col NOT LIKE vchar_col
+    nvchar_col NOT LIKE char_col
+    nvchar_col NOT LIKE vchar_col
+
+ History: 26-Feb-2003	(wu$ca01)	Created
+          19-May-2003	(wu$ca01) Added the trim() function to test cases 3 
+                        and 7.
+	  10-oct-2003	(somsa01) Updated test to work on Windows.
+   	  20-Jan-2004	(rogch01) Updated test to work on VMS.
+	  11-May-2004	(shafa01) Removed all steps used for setting the
+			II_CHARSETxx to UTF8 for all platforms. Due to Unicode
+			Coercion changes put in Ingres r3, this change should
+			only be in main and going forward.
+*/
+? fill dtu15_tbl.sc
+!!
+/* This program is to create and populate 2 tables:
+** a Unicode table with the data types of nchar and nvarchar,
+** another table with the data types of char and varchar.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+typedef struct
+{
+    short len;
+    wchar_t text[1];
+} NVCH_STRUCT;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *col2[] =
+    {
+    L"DEF",
+    L"def",
+    L"LMN",
+    L"lmn",
+    L"$168",
+    L"= to",
+    L"Q**Q",
+    L"200%",
+    };
+static wchar_t *col3[] =
+    {
+    L"%age",
+    L"D&B",
+    L"v~v",
+    L"p!q",
+    L"JKL",
+    L"1b2d3f",
+    L"o0o",
+    L"f/m",
+    };
+#define NUMROWS 8
+
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int   i;
+      char  *dbname;
+      wchar_t wc1[11];
+      wchar_t wc2[31];
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[11];
+      } nv1;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[31];
+      } nv2;
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+   EXEC SQL DROP TABLE dtu15_uni;
+   EXEC SQL DROP TABLE dtu15_char;
+
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   printf("Creating tables...\n");
+
+   EXEC SQL CREATE TABLE dtu15_uni (
+	int INTEGER,
+	nchar_col NCHAR(10) not null,
+	nvchar_col NVARCHAR(30) not null);
+
+   EXEC SQL CREATE TABLE dtu15_char (
+	int INTEGER,
+	char_col CHAR(10) not null,
+ 	vchar_col VARCHAR(40) not null);
+
+   printf("Inserting rows into unicode table...\n");
+
+   for (i = 0; i < NUMROWS; i++)
+   {
+      wcscpy(wc1, col2[i]);
+      wcscpy(wc2, col3[i]);
+      UC_ASSIGN(nv1, col2[i]);
+      UC_ASSIGN(nv2, col3[i]);
+
+      EXEC SQL INSERT INTO dtu15_uni VALUES (:i, :wc1, :wc2);
+
+   }
+
+  printf("Inserting rows into non-unicode table...\n");
+
+  EXEC SQL INSERT INTO dtu15_char values (0, 'DEF', '%age');
+  EXEC SQL INSERT INTO dtu15_char values (1, 'def', 'D&B');
+  EXEC SQL INSERT INTO dtu15_char values (2, 'LMN', 'v~v');
+  EXEC SQL INSERT INTO dtu15_char values (3, 'lmn', 'p!q');
+  EXEC SQL INSERT INTO dtu15_char values (4, '$168', 'JKL');
+  EXEC SQL INSERT INTO dtu15_char values (5, '#-sign', '200%');
+  EXEC SQL INSERT INTO dtu15_char values (6, '= to', 'f/m');
+  EXEC SQL INSERT INTO dtu15_char values (7, 'x^y', 'OoO');
+
+  printf("Operation complete\n");
+
+  EXEC SQL DISCONNECT;
+}
+!!
+? fill dtu15_like.sc
+!!
+/* This program is to create and execute database queries to compare
+** and search the tables using the SQL LIKE/NOT LIKE predicates.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  char      st1[11];
+  char      st2[41];
+  wchar_t wc1[11], k1[11];
+  wchar_t wc2[31];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[31];
+  } nv1, nv2, k2;
+
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|=================================================================|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Select UNICODE table...");
+         EXEC SQL SELECT int, nchar_col, nvchar_col
+         INTO :i1, :wc1, :wc2
+         FROM dtu15_uni
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 2:
+         print_header("Select NON-UNICODE table...");
+         EXEC SQL SELECT int, char_col, vchar_col
+         INTO :i1, :st1, :st2
+         FROM dtu15_char
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%s|%s|\n", i1, st1, st2);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("nchar_col LIKE char_col...");
+         EXEC SQL SELECT dtu15_uni.nchar_col, dtu15_char.char_col
+         INTO :wc1, :st1
+         FROM dtu15_uni, dtu15_char
+         WHERE trim(dtu15_uni.nchar_col) LIKE trim(dtu15_char.char_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         print_header("nchar_col LIKE vchar_col...");
+         EXEC SQL SELECT dtu15_uni.nchar_col, dtu15_char.vchar_col
+         INTO :wc1, :st2
+         FROM dtu15_uni, dtu15_char
+         WHERE dtu15_uni.nchar_col LIKE dtu15_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st2);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("nvchar_col LIKE char_col...");
+         EXEC SQL SELECT dtu15_uni.nvchar_col, dtu15_char.char_col
+         INTO :wc2, :st1
+         FROM dtu15_uni, dtu15_char
+         WHERE dtu15_uni.nvchar_col LIKE dtu15_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header("nvchar_col LIKE vchar_col...");
+         EXEC SQL SELECT dtu15_uni.nvchar_col, dtu15_char.vchar_col
+         INTO :wc2, :st2
+         FROM dtu15_uni, dtu15_char
+         WHERE dtu15_uni.nvchar_col LIKE dtu15_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st2);
+         EXEC SQL END;
+         break;
+
+      case 7:
+         print_header("nchar_col NOT LIKE char_col...");
+         EXEC SQL SELECT dtu15_uni.nchar_col, dtu15_char.char_col
+         INTO :wc1, :st1
+         FROM dtu15_uni, dtu15_char 
+         WHERE trim(dtu15_uni.nchar_col) NOT LIKE trim(dtu15_char.char_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break;
+
+      case 8:
+         print_header("nchar_col NOT LIKE vchar_col...");
+         EXEC SQL SELECT dtu15_uni.nchar_col, dtu15_char.vchar_col
+         INTO :wc1, :st2
+         FROM dtu15_uni, dtu15_char
+         WHERE dtu15_uni.nchar_col NOT LIKE dtu15_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st2);
+         EXEC SQL END;
+         break;
+
+      case 9:
+         print_header("nvchar_col NOT LIKE char_col...");
+         EXEC SQL SELECT dtu15_uni.nvchar_col, dtu15_char.char_col
+         INTO :wc2, :st1
+         FROM dtu15_uni, dtu15_char
+         WHERE dtu15_uni.nvchar_col NOT LIKE dtu15_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break;         
+
+      case 10:
+         print_header("nvchar_col NOT LIKE vchar_col...");
+         EXEC SQL SELECT dtu15_uni.nvchar_col, dtu15_char.vchar_col
+         INTO :wc2, :st2
+         FROM dtu15_uni, dtu15_char
+         WHERE dtu15_uni.nvchar_col NOT LIKE dtu15_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st2);
+         EXEC SQL END;
+         break;
+
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu15_tbl.sc
+<<
+ESQL dtu15_tbl.sc:
+>>
+<<
+>>
+? sepcc dtu15_tbl
+<<
+dtu15_tbl.c
+>>
+<<
+
+>>
+? seplnk dtu15_tbl
+<<
+
+>>
+? esqlc dtu15_like.sc
+<<
+ESQL dtu15_like.sc:
+>>
+<<
+>>
+? sepcc dtu15_like
+<<
+dtu15_like.c
+>>
+<<
+
+>>
+? seplnk dtu15_like
+<<
+
+>>
+? run dtu15_tbl.exe SEPPARAMDB3
+<<
+Creating tables...
+Inserting rows into unicode table...
+Inserting rows into non-unicode table...
+Operation complete
+>>
+? run dtu15_like.exe SEPPARAMDB3 1
+<<
+Select UNICODE table...
+|=================================================================|
+|  0|DEF       |%age|
+|  1|def       |D&B|
+|  2|LMN       |v~v|
+|  3|lmn       |p!q|
+|  4|$168      |JKL|
+|  5|= to      |1b2d3f|
+|  6|Q**Q      |o0o|
+|  7|200%      |f/m|
+|=================================================================|
+>>
+? run dtu15_like.exe SEPPARAMDB3 2
+<<
+Select NON-UNICODE table...
+|=================================================================|
+|  0|DEF       |%age|
+|  1|def       |D&B|
+|  2|LMN       |v~v|
+|  3|lmn       |p!q|
+|  4|$168      |JKL|
+|  5|#-sign    |200%|
+|  6|= to      |f/m|
+|  7|x^y       |OoO|
+|=================================================================|
+>>
+? run dtu15_like.exe SEPPARAMDB3 3
+<<
+nchar_col LIKE char_col...
+|=================================================================|
+|$168      |$168      |
+|def       |def       |
+|DEF       |DEF       |
+|lmn       |lmn       |
+|LMN       |LMN       |
+|= to      |= to      |
+|=================================================================|
+>>
+? run dtu15_like.exe SEPPARAMDB3 4
+<<
+nchar_col LIKE vchar_col...
+|=================================================================|
+|200%      |200%|
+|=================================================================|
+>>
+? run dtu15_like.exe SEPPARAMDB3 5
+<<
+nvchar_col LIKE char_col...
+|=================================================================|
+|=================================================================|
+>>
+? run dtu15_like.exe SEPPARAMDB3 6
+<<
+nvchar_col LIKE vchar_col...
+|=================================================================|
+|%age|%age|
+|D&B|D&B|
+|f/m|f/m|
+|JKL|JKL|
+|p!q|p!q|
+|v~v|v~v|
+|=================================================================|
+>>
+? run dtu15_like.exe SEPPARAMDB3 7
+<<
+nchar_col NOT LIKE char_col...
+|=================================================================|
+|$168      |x^y       |
+|$168      |= to      |
+|$168      |#-sign    |
+|$168      |lmn       |
+|$168      |LMN       |
+|$168      |def       |
+|$168      |DEF       |
+|200%      |$168      |
+|200%      |lmn       |
+|200%      |DEF       |
+|200%      |LMN       |
+|200%      |def       |
+|200%      |x^y       |
+|200%      |#-sign    |
+|200%      |= to      |
+|def       |lmn       |
+|def       |LMN       |
+|def       |DEF       |
+|def       |$168      |
+|def       |#-sign    |
+|def       |x^y       |
+|def       |= to      |
+|DEF       |x^y       |
+|DEF       |def       |
+|DEF       |$168      |
+|DEF       |lmn       |
+|DEF       |LMN       |
+|DEF       |= to      |
+|DEF       |#-sign    |
+|lmn       |DEF       |
+|lmn       |def       |
+|lmn       |LMN       |
+|lmn       |$168      |
+|lmn       |#-sign    |
+|lmn       |= to      |
+|lmn       |x^y       |
+|LMN       |def       |
+|LMN       |lmn       |
+|LMN       |$168      |
+|LMN       |#-sign    |
+|LMN       |= to      |
+|LMN       |x^y       |
+|LMN       |DEF       |
+|Q**Q      |DEF       |
+|Q**Q      |def       |
+|Q**Q      |LMN       |
+|Q**Q      |lmn       |
+|Q**Q      |$168      |
+|Q**Q      |#-sign    |
+|Q**Q      |= to      |
+|Q**Q      |x^y       |
+|= to      |DEF       |
+|= to      |def       |
+|= to      |LMN       |
+|= to      |lmn       |
+|= to      |$168      |
+|= to      |#-sign    |
+|= to      |x^y       |
+|=================================================================|
+>>
+? run dtu15_like.exe SEPPARAMDB3 8
+<<
+nchar_col NOT LIKE vchar_col...
+|=================================================================|
+|$168      |OoO|
+|$168      |f/m|
+|$168      |JKL|
+|$168      |p!q|
+|$168      |%age|
+|$168      |v~v|
+|$168      |D&B|
+|$168      |200%|
+|200%      |OoO|
+|200%      |f/m|
+|200%      |%age|
+|200%      |JKL|
+|200%      |D&B|
+|200%      |p!q|
+|200%      |v~v|
+|def       |OoO|
+|def       |f/m|
+|def       |D&B|
+|def       |%age|
+|def       |v~v|
+|def       |200%|
+|def       |JKL|
+|def       |p!q|
+|DEF       |f/m|
+|DEF       |%age|
+|DEF       |p!q|
+|DEF       |v~v|
+|DEF       |OoO|
+|DEF       |D&B|
+|DEF       |200%|
+|DEF       |JKL|
+|lmn       |OoO|
+|lmn       |%age|
+|lmn       |D&B|
+|lmn       |v~v|
+|lmn       |p!q|
+|lmn       |JKL|
+|lmn       |200%|
+|lmn       |f/m|
+|LMN       |%age|
+|LMN       |D&B|
+|LMN       |v~v|
+|LMN       |p!q|
+|LMN       |JKL|
+|LMN       |200%|
+|LMN       |f/m|
+|LMN       |OoO|
+|Q**Q      |%age|
+|Q**Q      |D&B|
+|Q**Q      |v~v|
+|Q**Q      |p!q|
+|Q**Q      |JKL|
+|Q**Q      |200%|
+|Q**Q      |f/m|
+|Q**Q      |OoO|
+|= to      |%age|
+|= to      |D&B|
+|= to      |v~v|
+|= to      |p!q|
+|= to      |JKL|
+|= to      |200%|
+|= to      |f/m|
+|= to      |OoO|
+|=================================================================|
+>>
+? run dtu15_like.exe SEPPARAMDB3 9
+<<
+nvchar_col NOT LIKE char_col...
+|=================================================================|
+|1b2d3f|x^y       |
+|1b2d3f|#-sign    |
+|1b2d3f|$168      |
+|1b2d3f|lmn       |
+|1b2d3f|DEF       |
+|1b2d3f|LMN       |
+|1b2d3f|def       |
+|1b2d3f|= to      |
+|%age|lmn       |
+|%age|DEF       |
+|%age|x^y       |
+|%age|= to      |
+|%age|LMN       |
+|%age|#-sign    |
+|%age|def       |
+|%age|$168      |
+|D&B|x^y       |
+|D&B|DEF       |
+|D&B|def       |
+|D&B|LMN       |
+|D&B|lmn       |
+|D&B|$168      |
+|D&B|#-sign    |
+|D&B|= to      |
+|f/m|x^y       |
+|f/m|DEF       |
+|f/m|LMN       |
+|f/m|def       |
+|f/m|$168      |
+|f/m|lmn       |
+|f/m|= to      |
+|f/m|#-sign    |
+|JKL|DEF       |
+|JKL|LMN       |
+|JKL|def       |
+|JKL|$168      |
+|JKL|lmn       |
+|JKL|= to      |
+|JKL|#-sign    |
+|JKL|x^y       |
+|o0o|DEF       |
+|o0o|LMN       |
+|o0o|def       |
+|o0o|$168      |
+|o0o|lmn       |
+|o0o|= to      |
+|o0o|#-sign    |
+|o0o|x^y       |
+|p!q|x^y       |
+|p!q|DEF       |
+|p!q|def       |
+|p!q|LMN       |
+|p!q|lmn       |
+|p!q|$168      |
+|p!q|#-sign    |
+|p!q|= to      |
+|v~v|DEF       |
+|v~v|def       |
+|v~v|LMN       |
+|v~v|lmn       |
+|v~v|$168      |
+|v~v|#-sign    |
+|v~v|= to      |
+|v~v|x^y       |
+|=================================================================|
+>>
+? run dtu15_like.exe SEPPARAMDB3 10
+<<
+nvchar_col NOT LIKE vchar_col...
+|=================================================================|
+|1b2d3f|OoO|
+|1b2d3f|f/m|
+|1b2d3f|D&B|
+|1b2d3f|%age|
+|1b2d3f|200%|
+|1b2d3f|JKL|
+|1b2d3f|p!q|
+|1b2d3f|v~v|
+|%age|D&B|
+|%age|OoO|
+|%age|JKL|
+|%age|p!q|
+|%age|f/m|
+|%age|v~v|
+|%age|200%|
+|D&B|%age|
+|D&B|v~v|
+|D&B|p!q|
+|D&B|JKL|
+|D&B|200%|
+|D&B|f/m|
+|D&B|OoO|
+|f/m|D&B|
+|f/m|%age|
+|f/m|p!q|
+|f/m|v~v|
+|f/m|200%|
+|f/m|JKL|
+|f/m|OoO|
+|JKL|200%|
+|JKL|p!q|
+|JKL|OoO|
+|JKL|f/m|
+|JKL|%age|
+|JKL|v~v|
+|JKL|D&B|
+|o0o|D&B|
+|o0o|%age|
+|o0o|p!q|
+|o0o|v~v|
+|o0o|200%|
+|o0o|JKL|
+|o0o|OoO|
+|o0o|f/m|
+|p!q|%age|
+|p!q|D&B|
+|p!q|v~v|
+|p!q|JKL|
+|p!q|200%|
+|p!q|f/m|
+|p!q|OoO|
+|v~v|D&B|
+|v~v|p!q|
+|v~v|JKL|
+|v~v|200%|
+|v~v|f/m|
+|v~v|OoO|
+|v~v|%age|
+|=================================================================|
+>>
+? sql -s SEPPARAMDB3
+<<
+
+>>
+* drop table dtu15_uni\g
+<<
+>>
+* drop table dtu15_char\g
+<<
+>>
+* \q
+<<
+
+>>
+? delete dtu15_tbl.c
+<<
+file was deleted
+>>
+? delete dtu15_tbl.o
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu15_tbl.obj
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu15_tbl.exe
+<<
+file was deleted
+>>
+? delete dtu15_like.c
+<<
+file was deleted
+>>
+? delete dtu15_like.o
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu15_like.obj
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu15_like.exe
+<<
+file was deleted
+>>
+Ending at: Wed Feb 26 02:32:00 2003

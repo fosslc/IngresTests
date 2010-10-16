@@ -1,0 +1,206 @@
+/*
+	Test Name: dtu00.sep
+	Time: Fri Nov  9 20:58:09 2001
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : dtu00.sep
+	Module  : be/datatypes
+	Filename: dtu00.sep
+	Purpose	: To test the new unicode datatypes, first available with
+                  Ingres 2.6/0106 and later releases.
+	Input Files  : dtu00.sc
+	Output Files : dtu00.exe
+	Database     : unidb
+	Tables       : test_nchar, test_nchar2, test_nchar3, test_nvarchar,
+                       test_nvarchar2, test_lnvarchar, test_lnvarchar2
+	Synopsis     : This test is to create and load the tables with the new 
+                       unicode data types: nchar, nvarchar, and long nvarchar.
+                       These tables will be used throughout all the unicode 
+                       tests(dtu00.sep - dtu14.sep).
+
+ History:  9-Nov-2001	(wu$ca01)	Created
+          28-May-2002   (sarjo01) Change %ls to %S, modularize canon.
+*/
+? fill dtu00.sc
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+typedef struct
+{
+    short len;
+    wchar_t text[1];
+} NVCH_STRUCT;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *col2[] =
+    {
+    L"ABC",
+    L"STUVWXYZ",
+    L"DEF",
+    L"stuvwxyz",
+    L"GHI",
+    L"LMNOPQRS",
+    L"ABCDE   ",
+    L"Z   ",
+    };
+static wchar_t *col3[] =
+    {
+    L"This is a string to be inserted for testing.",
+    L"Max fit 1 123456789 123456789 123456789 123456789 123456789 end.",
+    L"This is a second string to be inserted for testing.",
+    L"Max fit 2 123456789 123456789 123456789 123456789 123456789 end.",
+    L"This is a third string to be inserted for testing.",
+    L"Max fit 3 123456789 123456789 123456789 123456789 123456789 end.",
+    L"Contains 37 chars, padded with spaces                           ",
+    L"Z",
+    };
+#define NUMROWS 8
+
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int   i;
+      char      *dbname;
+      wchar_t wc1[9];
+      wchar_t wc2[65];
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[9];
+      } nv1;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[65];
+      } nv2;
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR continue; 
+
+   EXEC SQL DROP TABLE test_nchar;
+   EXEC SQL DROP TABLE test_nchar2;
+   EXEC SQL DROP TABLE test_nchar3;
+   EXEC SQL DROP TABLE test_nvarchar;
+   EXEC SQL DROP TABLE test_nvarchar2;
+   EXEC SQL DROP TABLE test_lnvarchar;
+   EXEC SQL DROP TABLE test_lnvarchar2;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint; 
+
+   printf("Creating tables...\n");
+
+   EXEC SQL CREATE TABLE test_nchar (
+	col1 INTEGER,
+	col2 NCHAR(8),
+	col3 NCHAR(64));
+
+   EXEC SQL CREATE TABLE test_nchar2 (
+	col1 INTEGER,
+	col2 NCHAR(8) not null,
+	col3 NCHAR(64) not null);
+
+   EXEC SQL CREATE TABLE test_nchar3 (
+	col1 INTEGER,
+	col2 NCHAR(3),
+	col3 NVARCHAR(3));
+
+   EXEC SQL CREATE TABLE test_nvarchar (
+	col1 INTEGER,
+	col2 NVARCHAR(8),
+	col3 NVARCHAR(64));
+
+   EXEC SQL CREATE TABLE test_nvarchar2 (
+	col1 INTEGER,
+	col2 NVARCHAR(8) not null,
+	col3 NVARCHAR(64) not null);
+
+   EXEC SQL CREATE TABLE test_lnvarchar (
+	col1 INTEGER,
+	col2 LONG NVARCHAR,
+	col3 LONG NVARCHAR);
+
+   EXEC SQL CREATE TABLE test_lnvarchar2 (
+	col1 INTEGER,
+	col2 LONG NVARCHAR not null,
+	col3 LONG NVARCHAR not null);
+
+   printf("Inserting rows...\n");
+
+   for (i = 0; i < NUMROWS; i++)
+   {
+      wcscpy(wc1, col2[i]);
+      wcscpy(wc2, col3[i]);
+      UC_ASSIGN(nv1, col2[i]);
+      UC_ASSIGN(nv2, col3[i]);
+
+      EXEC SQL INSERT INTO test_nchar      VALUES (:i, :wc1, :wc2);
+      EXEC SQL INSERT INTO test_nchar      VALUES (:i, :nv1, :nv2);
+      EXEC SQL INSERT INTO test_nchar2     VALUES (:i, :wc1, :wc2);
+      EXEC SQL INSERT INTO test_nchar2     VALUES (:i, :nv1, :nv2);
+      EXEC SQL INSERT INTO test_nvarchar   VALUES (:i, :wc1, :wc2);
+      EXEC SQL INSERT INTO test_nvarchar   VALUES (:i, :nv1, :nv2);
+      EXEC SQL INSERT INTO test_nvarchar2  VALUES (:i, :wc1, :wc2);
+      EXEC SQL INSERT INTO test_nvarchar2  VALUES (:i, :nv1, :nv2);
+      EXEC SQL INSERT INTO test_lnvarchar  VALUES (:i, :wc1, :wc2);
+      EXEC SQL INSERT INTO test_lnvarchar  VALUES (:i, :nv1, :nv2);
+      EXEC SQL INSERT INTO test_lnvarchar2 VALUES (:i, :wc1, :wc2);
+      EXEC SQL INSERT INTO test_lnvarchar2 VALUES (:i, :nv1, :nv2);
+  } 
+
+  printf("Operation complete\n");
+
+  EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu00.sc 
+<<
+~
+>>
+? sepcc dtu00 
+<<
+~
+>>
+? seplnk dtu00 
+<<
+~
+>>
+? run dtu00.exe SEPPARAMDB3 
+<<
+Creating tables...
+Inserting rows...
+Operation complete
+>>
+? delete dtu00.c
+<<
+~
+>>
+? delete dtu00.o
+<<
+~
+>>
+? delete dtu00.obj
+<<
+~
+>>
+? delete dtu00.exe
+<<
+~
+>>
+
+
+
+Ending at: Fri Nov  9 21:02:00 2001

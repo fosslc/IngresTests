@@ -1,0 +1,138 @@
+/*
+	Test Name: qp283.sep
+	Time: Tue May 13 15:13:17 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :	runme.sc
+	Output Files :	runme.c, runme.o, runme.exe
+	Database     :	SEPPARAMDB
+	Tables       :
+	Synopsis     :	A procedure is created with "set of" for statement
+			level rule or global temp table.  If the procedure
+			is invoked using "execute procedure" statement alone,
+			inconsistency in error message should not be found.
+			(bug 82246)	
+			ESQL version of qp274.sep.
+
+ History: 13-May-1997	(cheis01)	Created
+	  26-March-1999  (kamra01) modified VPG_SZ to 4096
+*/
+? fill runme.sc 
+!!
+exec sql include sqlca;
+
+#include <stdio.h>
+
+main(argc, argv)
+int argc;
+char **argv;
+{
+	exec sql begin declare section;
+	char	dbname[20];
+	char	col;
+	exec sql end declare section;
+
+	strcpy(dbname, argv[1]);
+	exec sql connect :dbname;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	exec sql drop table t1;
+	exec sql drop procedure p1;
+
+	printf("\ncreate table t1 (col int) with page_size=4096;\n\n");
+	exec sql create table t1 (col int) with page_size=4096;
+
+	printf("create procedure p1 (pt1 set of (c1 int))\n");
+	printf("as begin insert into t1 select * from pt1 end;\n");
+	exec sql create procedure p1 (pt1 set of (c1 int))
+		as begin insert into t1 select * from pt1 end;
+
+	printf("\nexecute procedure p1(pt1=:col);\n");
+	exec sql execute procedure p1(pt1=:col);
+	/* ":col" : esql does not character alone */
+
+	printf("\nexecute procedure p1(pt1=9);\n");
+	exec sql execute procedure p1(pt1=9);
+
+	printf("\nexecute procedure p1(pt1='yahoo');\n");
+	exec sql execute procedure p1(pt1='yahoo');
+
+	printf("\nexecute procedure p1(yahoo=9);\n");
+	exec sql execute procedure p1(yahoo=9);
+
+	exec sql drop procedure p1;
+	exec sql drop table t1;
+
+	exec sql commit;
+	exec sql disconnect;
+}
+!!
+? sepesqlc runme 
+<<
+ESQL runme.sc:
+>>
+? sepcc runme 
+<<
+~
+>>
+? seplnk runme 
+<<
+>>
+? run runme.exe SEPPARAMDB 
+<<
+E_US0AC1 DROP: 't1' does not exist or is not owned by you.
+    (Tue May 27 13:42:42 1997)
+E_US0965 Procedure 'p1' not found.
+    (Tue May 27 13:42:42 1997)
+
+create table t1 (col int) with page_size=4096;
+
+create procedure p1 (pt1 set of (c1 int))
+as begin insert into t1 select * from pt1 end;
+
+execute procedure p1(pt1=:col);
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Tue May 27 13:42:42 1997)
+
+execute procedure p1(pt1=9);
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Tue May 27 13:42:42 1997)
+
+execute procedure p1(pt1='yahoo');
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Tue May 27 13:42:42 1997)
+
+execute procedure p1(yahoo=9);
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Tue May 27 13:42:42 1997)
+>>
+? delete runme.c 
+<<
+file was deleted
+>>
+? delete runme.o 
+<<
+~
+>>
+? delete runme.obj 
+<<
+~
+>>
+? delete runme.exe 
+<<
+file was deleted
+>>
+
+
+Ending at: Tue May 27 13:42:48 1997

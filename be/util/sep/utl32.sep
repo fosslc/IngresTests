@@ -1,0 +1,409 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name: utl32.sep
+	Time: Mon Apr  9 16:03:15 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl32.sep
+	Module  : be/util
+	Filename: utl32.sep
+	Purpose	: To test the new copydb flags first available with Ingres
+                  II 2.6/0106 and later releases.
+	Input Files  : modify.in
+	Output Files : modify.out
+	Database     : utildb3, utildb4
+	Tables       : util_copydb_table, util_alongtablenameforingres,
+                       util_alongtablename
+	Synopsis     : This test case is to modify table util_copydb_table with
+                       indexes created on the table columns. Index util_idx1 is 
+                       created on column name with persistence. Index util_idx2
+                       is created on column address with nopersistence. Index 
+                       util_idx3 is created on column DOB with compression. Then
+                       the table is modified to btree with fillfactor=80, 
+                       compression. Followed by modifying the indexes. Then,
+		       these modify statements in copy.out from the database
+		       utildb3 is copied into another database, utildb4.
+
+ History:  9-Apr-2001	(wu$ca01) Created
+           9-Aug-2001	(wu$ca01) Added commands to cleanup temporary test 
+                        files at the end. Clarified the Purpose text.
+           8-Oct-2001   (devjo01) Add alternate canon for LP64 (64 bit pointer
+                        in "coupon" placeholder for long data type columns 
+                        effects row widths, etc.)
+          11-Dec-2001	(wu$ca01) Added a fill file to recreate the objects
+                        for other copydb tests since the database has 
+                        been modify.
+          23-Jun-2004   (wu$ca01) Remove help tables/indexes and replace with
+                        select tables/indexes. Verify specific attributes by
+                        selecting from the catalogs.
+          08-May-2007   (vande02) Added temporary file cleanup, removed \p.
+*/
+? fill utl32_drop.sql 
+!!
+drop table util_copydb_table\g
+drop table util_alongtablenameforingres\g
+drop table util_alongtablename\g
+drop dbevent util_event1\g
+!!
+? fill tables.sql 
+!!
+drop table util_copydb_table\g
+drop table util_alongtablenameforingres\g
+drop table util_alongtablename\g
+drop index util_idx1\g
+drop index util_idx2\g
+drop index util_idx3\g
+drop view util_view1\g
+drop dbevent util_event1\g
+drop synonym util_maintable\g
+drop synonym util_shortname\g
+drop procedure util_proc1\g
+drop rule util_rule1\g
+drop security_alarm on util_alongtablename\g
+alter table util_copydb_table drop constraint util_const1 restrict\g
+alter table util_copydb_table drop constraint util_const2 restrict\g
+
+create table util_copydb_table(name varchar(10) not null , state c(2), city char(15), address text(30), zip int, DOB date not null, gender byte, age decimal(3,0), status byte varying(10), id float, height float(4), weight smallint, class integer1,  industry long byte, title long varchar, salary money, code object_key, tablekey table_key, type blob)\g
+
+insert into util_copydb_table values('bebe', 'IL', 'chicago', '111 michigan avenue',60611, '01-11-1971', 'f', 30, 'single',109, 160.6, 120, 111, 'business', 'accountant', 32000, 'kkkkkkkkkkkkkkkk', '12345678', 'abcdefghijklmnopqrstuvwxyz')\g
+
+insert into util_copydb_table values('katie','IL', 'springfield', '2944 dirksen parkway', 62703, '02-12-1960', 'f',41, 'divorced', 120, 165, 122, 99, 'business',  'consultant', 40000, 'kkkkkkkkkkkkkkkk', '12345678', 'abc1234567890efghijklmnopq')\g
+
+insert into util_copydb_table values('bill', 'IL', 'rockford', '4218 newburg', 61108, '03-13-1955', 'm', 46, 'married', 99,  180, 203, 56, 'business', 'manager', 70000, 'kkkkkkkkkkkkkkkk', '12345678', 'xyz99999999988888888666666')\g
+
+insert into util_copydb_table values('christian', 'IL', 'batavia', '555 randall road', 60510, '04-14-1979', 'm', 22, 'single', 12, 175, 160, 11, 'business', 'intern', 18000, 'kkkkkkkkkkkkkkkk', '12345678', 'w000-12689-#####^et=******')\g
+
+insert into util_copydb_table values('darien', 'IL', 'joliet', '3802 plainfield', 60435, '05-25-1975', 'm', 26, 'single', 39, 180, 170, 70, 'business', 'technical support', 45000, 'kkkkkkkkkkkkkkkk', '12345678', 'yr<2001>@!#$%^&*()_+={}[]?')\g
+
+insert into util_copydb_table values('faith', 'IL', 'elgin', '251 grove avenue', 60120, '06-06-1939', 'f', 62, 'married', 222, 160, 150, 33, 'business', 'senior manager', 110000, 'kkkkkkkkkkkkkkkk', '12345678', '$1234567890.00,^%%%%%%%%%%')\g
+
+insert into util_copydb_table values('jack', 'IL', 'chicago', '2500 s state', 60616,'11-05-1973', 'm', 28, 'single', 570, 169, 140, 27, 'business', 'sale representative', 55000, 'kkkkkkkkkkkkkkkk', '12345678', 'testing 4 blob datatypes')\g
+
+insert into util_copydb_table values('mary', 'IL', 'zion', '3399 sheridan road', 60099, '07-10-1956', 'f', 45, 'divorced', 317, 155, 180, 100, 'business', 'developer', 35000, 'kkkkkkkkkkkkkkkk', '12345678', 'po:4xxx8qrstuvwxyz920123456')\g
+
+insert into util_copydb_table values('nick', 'IL', 'peoria', '2600 westlake', 61615,'08-18-1970', 'm', 31, 'married', 344, 180, 175, 32, 'business', 'financial consultant', 31000, 'kkkkkkkkkkkkkkkk', '12345678', 'a0b9c8d7e6f5g4h3i2j1k10l11m')\g
+
+insert into util_copydb_table values('steven', 'IL', 'decatur', '500 east fitzgerald', 62521, '12-25-1950', 'm', 51, 'married', 129, 176, 165, 25, 'business', 'manager', 60000, 'kkkkkkkkkkkkkkkk', '12345678', 'pleezzzzzz:P:):(:q^_^%*Q*!')\g
+
+create table util_alongtablenameforingres(name text(10), hire_date date, years int)\g
+insert into util_alongtablenameforingres values('bebe', '03-20-1995', 6)\g
+insert into util_alongtablenameforingres values('katie', '01-01-1990',11 )\g
+insert into util_alongtablenameforingres values('bill', '02-21-1989',12)\g
+insert into util_alongtablenameforingres values('christian', '08-25-2000', 1)\g 
+insert into util_alongtablenameforingres values('darien', '11-20-1999',2 )\g
+insert into util_alongtablenameforingres values('faith', '09-15-1980', 21)\g
+insert into util_alongtablenameforingres values('jack', '03-11-1998', 3)\g
+insert into util_alongtablenameforingres values('mary', '01-01-1991', 10)\g
+insert into util_alongtablenameforingres values('nick', '10-01-1997', 4 )\g
+insert into util_alongtablenameforingres values('steven', '01-01-1988', 13)\g
+
+create table util_alongtablename(data char(10), id int)\g	
+insert into util_alongtablename values('zz', 2)\g
+insert into util_alongtablename values('aaaa', 4)\g
+insert into util_alongtablename values('dddddddd', 8)\g
+insert into util_alongtablename values('x', 1)\g
+
+create index util_idx1 on util_copydb_table(name) with structure=hash, persistence\g
+create index util_idx2 on util_copydb_table(address) with structure=isam, nopersistence\g
+create index util_idx3 on util_copydb_table(DOB) unique with structure=isam, compression\g 
+
+alter table util_copydb_table add constraint util_const1 check (salary>0)\g
+alter table util_copydb_table add constraint util_const2 check(age>21)\g
+
+create view util_view1(name, salary, hire_date) as select util_copydb_table.name, util_copydb_table.salary, util_alongtablenameforingres.hire_date from util_copydb_table, util_alongtablenameforingres where util_copydb_table.name=util_alongtablenameforingres.name\g
+
+create synonym util_maintable for util_copydb_table\g
+create synonym util_shortname for util_alongtablenameforingres\g
+
+create dbevent util_event1\g
+
+register dbevent util_event1\g
+
+create procedure util_proc1(data char(10) not null, id int not null) as begin update util_alongtablename set id=:id where data=:data; end\g
+
+create rule util_rule1 after insert into util_alongtablename where old.id<0 execute procedure util_proc1(data=old.data, id=0)\g
+
+create security_alarm util_alarm1 on table util_alongtablename if success when update by public\g
+
+grant select on "testenv".util_alongtablename to pvusr1\g
+grant insert on "testenv".util_alongtablename to pvusr1\g
+grant select on "testenv".util_alongtablename to pvusr2\g
+grant update on "testenv".util_alongtablename to pvusr2\g
+grant delete on "testenv".util_alongtablename to pvusr2\g
+grant register on dbevent util_event1 to pvusr1\g
+
+comment on table util_copydb_table is 'This is the main table that I will use'\g
+!!
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* select count(*) from util_copydb_table \g
+<<
+
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* modify util_copydb_table to btree with fillfactor=80,compression\g 
+<<
+ 
+(10 rows)
+>>
+* modify util_idx1 to btree with persistence\g 
+<<
+ 
+(10 rows)
+>>
+* modify util_idx2 to btree with persistence\g 
+<<
+ 
+E_US0845 Table 'util_idx2' does not exist or is not owned by you.
+    (Mon Apr  9 16:07:08 2001)
+
+>>
+* modify util_idx3 to btree with persistence, compression\g 
+<<
+ 
+E_US0845 Table 'util_idx3' does not exist or is not owned by you.
+    (Mon Apr  9 16:07:43 2001)
+
+>>
+* select count(*) from util_copydb_table \g
+<<
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* select storage_structure from iitables where table_name='util_copydb_table' \g
+<<
+
++----------------+
+|storage_structur|
++----------------+
+|BTREE           |
++----------------+
+(1 row)
+>>
+* select is_compressed from iitables where table_name='util_copydb_table' \g
+<<
+
++------+
+|is_com|
++------+
+|Y     |
++------+
+(1 row)
+>>
+* select key_is_compressed from iitables where table_name='util_copydb_table' \g
+<<
+
++------+
+|key_is|
++------+
+|Y     |
++------+
+(1 row)
+>>
+* select name from util_idx1 order by name \g
+<<
+
++----------+
+|name      |
++----------+
+|bebe      |
+|bill      |
+|christian |
+|darien    |
+|faith     |
+|jack      |
+|katie     |
+|mary      |
+|nick      |
+|steven    |
++----------+
+(10 rows)
+>>
+* select address from util_idx2 order by address \g
+<<
+E_US0845 Table 'util_idx2' does not exist or is not owned by you.
+    (Wed Jun 23 13:04:14 2004)
+
+>>
+* select DOB from util_idx3 order by DOB \g
+<<
+E_US0845 Table 'util_idx3' does not exist or is not owned by you.
+    (Wed Jun 23 13:04:16 2004)
+
+>>
+* \q 
+<<
+
+>>
+? copydb -add_drop -with_tables -with_data -with_modify -with_index -infile=modify.in -
+-outfile=modify.out -noint utildb3 
+<<
+~
+>>
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* \i modify.out 
+<<
+~
+>>
+* \i tables.sql
+/*
+Since database utildb3 has been modified, need to reset the database for the 
+next test.
+*/
+<<
+~
+>>
+* \q 
+<<
+
+>>
+? sql -s SEPPARAMDB4 
+<<
+
+>>
+* \i utl32_drop.sql
+<<
+~
+>>
+* \i modify.in 
+<<
+~
+>>
+* select count(*) from util_copydb_table \g
+<<
+
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* select storage_structure from iitables where table_name='util_copydb_table' \g
+<<
+
++----------------+
+|storage_structur|
++----------------+
+|BTREE           |
++----------------+
+(1 row)
+>>
+* select is_compressed from iitables where table_name='util_copydb_table' \g
+<<
+
++------+
+|is_com|
++------+
+|Y     |
++------+
+(1 row)
+>>
+* select key_is_compressed from iitables where table_name='util_copydb_table' \g
+<<
+
++------+
+|key_is|
++------+
+|Y     |
++------+
+(1 row)
+>>
+* select name from util_idx1 order by name \g
+<<
+
++----------+
+|name      |
++----------+
+|bebe      |
+|bill      |
+|christian |
+|darien    |
+|faith     |
+|jack      |
+|katie     |
+|mary      |
+|nick      |
+|steven    |
++----------+
+(10 rows)
+>>
+* select address from util_idx2 order by address \g
+<<
+E_US0845 Table 'util_idx2' does not exist or is not owned by you.
+    (Wed Jun 23 13:04:55 2004)
+
+>>
+* select DOB from util_idx3 order by DOB \g
+<<
+E_US0845 Table 'util_idx3' does not exist or is not owned by you.
+    (Wed Jun 23 13:04:56 2004)
+
+>>
+* select count(*) from util_alongtablenameforingres \g
+<<
+
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* select count(*) from util_alongtablename \g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* \q 
+<<
+
+>>
+? delete modify.in 
+<<
+~
+>>
+? delete modify.out 
+<<
+~
+>>
+? delete all.in 
+<<
+~
+>>
+? delete all.out 
+<<
+~
+>>
+? delete util_alongtablename.testenv
+<<
+~
+>>
+? delete util_alongtablenameforingres.testenv
+<<
+~
+>>
+
+
+Ending at: Mon Oct  8 17:56:39 2001

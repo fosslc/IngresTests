@@ -1,0 +1,1776 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: dtu17.sep
+	Time: Mon Mar 03 01:08:09 2003
+	User Name: ingres
+	Terminal type: septerm
+
+	Test ID : dtu17.sep
+	Module  : be/datatypes
+	Filename: dtu17.sep
+	Purpose	: To test the Unicode coercion and wildcard searching support,
+                  first available with Ingres 2.6/0303 and later releases.
+	Input Files  : dtu17_tbl.sc, dtu17_combine.sc
+	Output Files : dtu17_tbl.exe, dtu17_combine.exe
+	Database     : unidb
+	Tables       : dtu17_uni, dtu17_char
+	Synopsis     : The Ingres variable II_CHARSETxx (where xx is the
+                       installation code) will set to UTF8 in the beginning
+                       of this test, and restore to its default value at the
+                       end.
+                       This test includes two embedded C programs, the first
+                       program is to create and populate two tables: one
+                       Unicode table with the Unicode data types (nchar and
+                       nvarchar), another table with the character data types
+                       (char and varchar). The second program is to create and
+                       execute database queries to compare and search the
+                       tables using the SQL + with LIKE/NOT LIKE predicates,
+                       trim(), and concat() functions.
+
+*** TEST CASES:
+    nchar_col + char_col...LIKE...
+    nchar_col + vchar_col...LIKE...
+    nvchar_col + char_col...LIKE...
+    nvchar_col + vchar_col...NOT LIKE...
+    concat(nchar_col, char_col)
+    concat(nchar_col, vchar_col)
+    concat(nvchar_col, char_col)
+    concat(nvchar_col, vchar_col)
+    trim(nchar_col) + '-' + trim(char_col)
+    trim(nchar_col) + '+' + vchar_col
+    nvchar_col + '**' + trim(char_col)
+    nvchar_col + '_' + vchar_col
+    
+
+ History: 03-Mar-2003	(wu$ca01)	Created
+          19-May-2003	(wu$ca01) Changed the variable 'wcc' size from 64 to
+                        128. Removed the 'Known problem' section due to issue
+                        12547807 is resolved.
+	  20-oct-2003	(somsa01) Updated to work on Windows.
+	  20-Jan-2004	(rogch01) Updated test to work on VMS.
+	  11-May-2004	(shafa01) Removed all steps used for setting the
+			II_CHARSETxx to UTF8 for all platforms. Due to Unicode
+			Coercion changes put in Ingres r3, this change should
+			only be in main and going forward.
+          18-Sep-2008	(vande02) Added conditional canons to allow for UTF8
+                        collation sequence order. Header cleanup.
+*/
+? fill dtu17_tbl.sc 
+!!
+/* This program is to create and populate 2 tables:
+** a Unicode table with the data types of nchar and nvarchar,
+** another table with the data types of char and varchar.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+typedef struct
+{
+    short len;
+    wchar_t text[1];
+} NVCH_STRUCT;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *col2[] =
+    {
+    L"one",
+    L"two",
+    L"Three",
+    L"four",
+    L"Five",
+    L"six",
+    L"Seven",
+    L"eight",
+    };
+static wchar_t *col3[] =
+    {
+    L"nine",
+    L"TEN",
+    L"twenty",
+    L"THIRTY",
+    L"FIFTY",
+    L"SEVENTY",
+    L"EIGHTY",
+    L"NINTY",
+    };
+#define NUMROWS 8
+
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int   i;
+      char  *dbname;
+      wchar_t wc1[7];
+      wchar_t wc2[26];
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[7];
+      } nv1;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[26];
+      } nv2;
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+   EXEC SQL DROP TABLE dtu17_uni;
+   EXEC SQL DROP TABLE dtu17_char;
+
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   printf("Creating tables...\n");
+
+   EXEC SQL CREATE TABLE dtu17_uni (
+	nchar_col NCHAR(6) not null,
+	nvchar_col NVARCHAR(25) not null);
+
+   EXEC SQL CREATE TABLE dtu17_char (
+	char_col CHAR(17) not null,
+ 	vchar_col VARCHAR(30) not null);
+
+   printf("Inserting rows into unicode table...\n");
+
+   for (i = 0; i < NUMROWS; i++)
+   {
+      wcscpy(wc1, col2[i]);
+      wcscpy(wc2, col3[i]);
+      UC_ASSIGN(nv1, col2[i]);
+      UC_ASSIGN(nv2, col3[i]);
+
+      EXEC SQL INSERT INTO dtu17_uni VALUES (:wc1, :wc2);
+
+   }
+
+  printf("Inserting rows into non-unicode table...\n");
+
+  EXEC SQL INSERT INTO dtu17_char values ('hundred', 'HUNDRED');
+  EXEC SQL INSERT INTO dtu17_char values ('thousand', 'THOUSAND');
+  EXEC SQL INSERT INTO dtu17_char values ('ten-thousand', 'TEN_THOUSAND');
+  EXEC SQL INSERT INTO dtu17_char values ('hundred^thousand', 'HUNDRED&THOUSAND');
+  EXEC SQL INSERT INTO dtu17_char values ('million', 'MILLION');
+  EXEC SQL INSERT INTO dtu17_char values ('ten*million', 'TEN MILLION');
+  EXEC SQL INSERT INTO dtu17_char values ('HUNDRED million', 'hundred MILLION');
+  EXEC SQL INSERT INTO dtu17_char values ('billion', 'BILLION');
+
+  printf("Operation complete\n");
+
+  EXEC SQL DISCONNECT;
+}
+!!
+? fill dtu17_combine.sc 
+!!
+/* This program is to create and execute database queries to compare
+** and search the tables using the SQL + with LIKE/NOT LIKE predicates,
+** trim(), and concat() functions.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  char      st1[18];
+  char      st2[31];
+  wchar_t wc1[7], k1[7];
+  wchar_t wc2[26];
+  wchar_t wcc[128];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[26];
+  } nv1, nv2, k2;
+
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|===============================================================-
+==|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Select UNICODE table...");
+         EXEC SQL SELECT nchar_col, nvchar_col
+         INTO :wc1, :wc2
+         FROM dtu17_uni
+         order by nchar_col, nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|\n", wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 2:
+         print_header("Select NON-UNICODE table...");
+         EXEC SQL SELECT char_col, vchar_col
+         INTO :st1, :st2
+         FROM dtu17_char
+         order by char_col, vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%s|\n", st1, st2);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("nchar_col + char_col...");
+         EXEC SQL SELECT dtu17_uni.nchar_col, dtu17_char.char_col,
+         dtu17_uni.nchar_col + dtu17_char.char_col 
+         INTO :wc1, :st1, :wcc
+         FROM dtu17_uni, dtu17_char
+         WHERE dtu17_uni.nchar_col LIKE 'on%' AND dtu17_char.char_col
+         LIKE 'hun%'
+         order by dtu17_uni.nchar_col, dtu17_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc1, st1, wcc);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         print_header("nchar_col + vchar_col...");
+         EXEC SQL SELECT dtu17_uni.nchar_col, dtu17_char.vchar_col,
+         dtu17_uni.nchar_col + dtu17_char.vchar_col
+         INTO :wc1, :st2, :wcc
+         FROM dtu17_uni, dtu17_char
+         WHERE dtu17_uni.nchar_col LIKE 'eig%' AND dtu17_char.vchar_col
+         LIKE 'TEN%'
+         order by dtu17_uni.nchar_col, dtu17_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc1, st2, wcc);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("nvchar_col + char_col...");
+         EXEC SQL SELECT dtu17_uni.nvchar_col, dtu17_char.char_col,
+         dtu17_uni.nvchar_col + dtu17_char.char_col
+         INTO :wc2, :st1, :wcc
+         FROM dtu17_uni, dtu17_char
+         WHERE dtu17_uni.nvchar_col like 'S%' AND dtu17_char.char_col
+         LIKE 'bill%'
+         order by dtu17_uni.nvchar_col, dtu17_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc2, st1, wcc);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header("nvchar_col + vchar_col...");
+         EXEC SQL SELECT dtu17_uni.nvchar_col, dtu17_char.vchar_col,
+         dtu17_uni.nvchar_col + dtu17_char.vchar_col
+         INTO :wc2, :st2, :wcc
+         FROM dtu17_uni, dtu17_char
+         WHERE dtu17_uni.nvchar_col NOT LIKE '%TY'
+         AND dtu17_char.vchar_col NOT LIKE '%LION'
+         order by dtu17_uni.nvchar_col, dtu17_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc2, st2, wcc);
+         EXEC SQL END;
+         break;
+
+      case 7:
+         print_header("concat(nchar_col, char_col)...");
+         EXEC SQL SELECT dtu17_uni.nchar_col, dtu17_char.char_col,
+         concat(dtu17_uni.nchar_col, dtu17_char.char_col) 
+         INTO :wc1, :st1, :wcc
+         FROM dtu17_uni, dtu17_char
+         order by dtu17_uni.nchar_col, dtu17_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc1, st1, wcc);
+         EXEC SQL END;
+         break;
+
+      case 8:
+         print_header("concat(nchar_col, vchar_col)...");
+         EXEC SQL SELECT dtu17_uni.nchar_col, dtu17_char.vchar_col,
+         concat(dtu17_uni.nchar_col, dtu17_char.vchar_col)
+         INTO :wc1, :st2, :wcc
+         FROM dtu17_uni, dtu17_char
+         order by dtu17_uni.nchar_col, dtu17_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc1, st2, wcc);
+         EXEC SQL END;
+         break;
+
+      case 9:
+         print_header("concat(nvchar_col, char_col)...");
+         EXEC SQL SELECT dtu17_uni.nvchar_col, dtu17_char.char_col,
+         concat(dtu17_uni.nvchar_col, dtu17_char.char_col)
+         INTO :wc2, :st1, :wcc
+         FROM dtu17_uni, dtu17_char
+         order by dtu17_uni.nvchar_col, dtu17_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc2, st1, wcc);
+         EXEC SQL END;
+         break;
+
+      case 10:
+         print_header("concat(nvchar_col, vchar_col)...");
+         EXEC SQL SELECT dtu17_uni.nvchar_col, dtu17_char.vchar_col,
+         concat(dtu17_uni.nvchar_col+' ', dtu17_char.vchar_col)
+         INTO :wc2, :st2, :wcc
+         FROM dtu17_uni, dtu17_char
+         order by dtu17_uni.nvchar_col, dtu17_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc2, st2, wcc);
+         EXEC SQL END;
+         break;
+
+      case 11:
+         print_header("trim(nchar_col) + '-' + trim(char_col)...");
+         EXEC SQL SELECT dtu17_uni.nchar_col, dtu17_char.char_col,
+         trim(dtu17_uni.nchar_col) + '-' + trim(dtu17_char.char_col)
+         INTO :wc1, :st1, :wcc
+         FROM dtu17_uni, dtu17_char 
+         order by dtu17_uni.nchar_col, dtu17_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc1, st1, wcc);
+         EXEC SQL END;
+         break;
+
+      case 12:
+         print_header("trim(nchar_col) + '+' + vchar_col...");
+         EXEC SQL SELECT dtu17_uni.nchar_col, dtu17_char.vchar_col,
+         trim(dtu17_uni.nchar_col) + '+' + dtu17_char.vchar_col
+         INTO :wc1, :st2, :wcc
+         FROM dtu17_uni, dtu17_char 
+         order by dtu17_uni.nchar_col, dtu17_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc1, st2, wcc);
+         EXEC SQL END;
+         break;
+ 
+      case 13:
+         print_header("nvchar_col + '**' + trim(char_col)...");
+         EXEC SQL SELECT dtu17_uni.nvchar_col, dtu17_char.char_col,
+         dtu17_uni.nvchar_col + '**' + trim(dtu17_char.char_col)
+         INTO :wc2, :st1, :wcc
+         FROM dtu17_uni, dtu17_char 
+         order by dtu17_uni.nvchar_col, dtu17_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc2, st1, wcc);
+         EXEC SQL END;
+         break;
+
+      case 14:
+         print_header("nvchar_col + '_' + vchar_col...");
+         EXEC SQL SELECT dtu17_uni.nvchar_col, dtu17_char.vchar_col,
+         dtu17_uni.nvchar_col + '_' + dtu17_char.vchar_col
+         INTO :wc2, :st2, :wcc
+         FROM dtu17_uni, dtu17_char 
+         order by dtu17_uni.nvchar_col, dtu17_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc2, st2, wcc);
+         EXEC SQL END;
+         break;
+
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu17_tbl.sc 
+<<
+ESQL dtu17_tbl.sc:
+>>
+<<
+>>
+? sepcc dtu17_tbl 
+<<
+dtu17_tbl.c
+>>
+<<
+
+>>
+? seplnk dtu17_tbl 
+<<
+
+>>
+? esqlc dtu17_combine.sc 
+<<
+ESQL dtu17_combine.sc:
+>>
+<<
+>>
+? sepcc dtu17_combine 
+<<
+dtu17_combine.c
+>>
+<<
+
+>>
+? seplnk dtu17_combine 
+<<
+
+>>
+? run dtu17_tbl.exe SEPPARAMDB3 
+<<
+Creating tables...
+Inserting rows into unicode table...
+Inserting rows into non-unicode table...
+Operation complete
+>>
+? run dtu17_combine.exe SEPPARAMDB3 1 
+<<
+Select UNICODE table...
+|=================================================================|
+|eight |NINTY|
+|Five  |FIFTY|
+|four  |THIRTY|
+|one   |nine|
+|Seven |EIGHTY|
+|six   |SEVENTY|
+|Three |twenty|
+|two   |TEN|
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 2 
+<< IF (ING_CHARSET == "UTF8") 
+Select NON-UNICODE table...
+|=================================================================|
+|billion          |BILLION|
+|hundred          |HUNDRED|
+|HUNDRED million  |hundred MILLION|
+|hundred^thousand |HUNDRED&THOUSAND|
+|million          |MILLION|
+|ten*million      |TEN MILLION|
+|ten-thousand     |TEN_THOUSAND|
+|thousand         |THOUSAND|
+|=================================================================|
+>>
+<<
+Select NON-UNICODE table...
+|=================================================================|
+|HUNDRED million  |hundred MILLION|
+|billion          |BILLION|
+|hundred          |HUNDRED|
+|hundred^thousand |HUNDRED&THOUSAND|
+|million          |MILLION|
+|ten*million      |TEN MILLION|
+|ten-thousand     |TEN_THOUSAND|
+|thousand         |THOUSAND|
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 3 
+<<
+nchar_col + char_col...
+|=================================================================|
+|one   |hundred          |one   hundred
+       |
+|one   |hundred^thousand |one   hundred^thousand
+       |
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 4 
+<<
+nchar_col + vchar_col...
+|=================================================================|
+|eight |TEN MILLION|eight TEN MILLION                   |
+|eight |TEN_THOUSAND|eight TEN_THOUSAND                  |
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 5 
+<<
+nvchar_col + char_col...
+|=================================================================|
+|SEVENTY|billion          |SEVENTYbillion          |
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 6 
+<<
+nvchar_col + vchar_col...
+|=================================================================|
+|nine|HUNDRED|nineHUNDRED|
+|nine|HUNDRED&THOUSAND|nineHUNDRED&THOUSAND|
+|nine|TEN_THOUSAND|nineTEN_THOUSAND|
+|nine|THOUSAND|nineTHOUSAND|
+|TEN|HUNDRED|TENHUNDRED|
+|TEN|HUNDRED&THOUSAND|TENHUNDRED&THOUSAND|
+|TEN|TEN_THOUSAND|TENTEN_THOUSAND|
+|TEN|THOUSAND|TENTHOUSAND|
+|twenty|HUNDRED|twentyHUNDRED|
+|twenty|HUNDRED&THOUSAND|twentyHUNDRED&THOUSAND|
+|twenty|TEN_THOUSAND|twentyTEN_THOUSAND|
+|twenty|THOUSAND|twentyTHOUSAND|
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 7 
+<< IF (ING_CHARSET == "UTF8") 
+concat(nchar_col, char_col)...
+|=================================================================|
+|eight |billion          |eight billion                                             -
+                |
+|eight |hundred          |eight hundred                                             -
+                |
+|eight |HUNDRED million  |eight HUNDRED million                                     -
+                |
+|eight |hundred^thousand |eight hundred^thousand                                    -
+                |
+|eight |million          |eight million                                             -
+                |
+|eight |ten*million      |eight ten*million                                         -
+                |
+|eight |ten-thousand     |eight ten-thousand                                        -
+                |
+|eight |thousand         |eight thousand                                            -
+                |
+|Five  |billion          |Five  billion                                             -
+                |
+|Five  |hundred          |Five  hundred                                             -
+                |
+|Five  |HUNDRED million  |Five  HUNDRED million                                     -
+                |
+|Five  |hundred^thousand |Five  hundred^thousand                                    -
+                |
+|Five  |million          |Five  million                                             -
+                |
+|Five  |ten*million      |Five  ten*million                                         -
+                |
+|Five  |ten-thousand     |Five  ten-thousand                                        -
+                |
+|Five  |thousand         |Five  thousand                                            -
+                |
+|four  |billion          |four  billion                                             -
+                |
+|four  |hundred          |four  hundred                                             -
+                |
+|four  |HUNDRED million  |four  HUNDRED million                                     -
+                |
+|four  |hundred^thousand |four  hundred^thousand                                    -
+                |
+|four  |million          |four  million                                             -
+                |
+|four  |ten*million      |four  ten*million                                         -
+                |
+|four  |ten-thousand     |four  ten-thousand                                        -
+                |
+|four  |thousand         |four  thousand                                            -
+                |
+|one   |billion          |one   billion                                             -
+                |
+|one   |hundred          |one   hundred                                             -
+                |
+|one   |HUNDRED million  |one   HUNDRED million                                     -
+                |
+|one   |hundred^thousand |one   hundred^thousand                                    -
+                |
+|one   |million          |one   million                                             -
+                |
+|one   |ten*million      |one   ten*million                                         -
+                |
+|one   |ten-thousand     |one   ten-thousand                                        -
+                |
+|one   |thousand         |one   thousand                                            -
+                |
+|Seven |billion          |Seven billion                                             -
+                |
+|Seven |hundred          |Seven hundred                                             -
+                |
+|Seven |HUNDRED million  |Seven HUNDRED million                                     -
+                |
+|Seven |hundred^thousand |Seven hundred^thousand                                    -
+                |
+|Seven |million          |Seven million                                             -
+                |
+|Seven |ten*million      |Seven ten*million                                         -
+                |
+|Seven |ten-thousand     |Seven ten-thousand                                        -
+                |
+|Seven |thousand         |Seven thousand                                            -
+                |
+|six   |billion          |six   billion                                             -
+                |
+|six   |hundred          |six   hundred                                             -
+                |
+|six   |HUNDRED million  |six   HUNDRED million                                     -
+                |
+|six   |hundred^thousand |six   hundred^thousand                                    -
+                |
+|six   |million          |six   million                                             -
+                |
+|six   |ten*million      |six   ten*million                                         -
+                |
+|six   |ten-thousand     |six   ten-thousand                                        -
+                |
+|six   |thousand         |six   thousand                                            -
+                |
+|Three |billion          |Three billion                                             -
+                |
+|Three |hundred          |Three hundred                                             -
+                |
+|Three |HUNDRED million  |Three HUNDRED million                                     -
+                |
+|Three |hundred^thousand |Three hundred^thousand                                    -
+                |
+|Three |million          |Three million                                             -
+                |
+|Three |ten*million      |Three ten*million                                         -
+                |
+|Three |ten-thousand     |Three ten-thousand                                        -
+                |
+|Three |thousand         |Three thousand                                            -
+                |
+|two   |billion          |two   billion                                             -
+                |
+|two   |hundred          |two   hundred                                             -
+                |
+|two   |HUNDRED million  |two   HUNDRED million                                     -
+                |
+|two   |hundred^thousand |two   hundred^thousand                                    -
+                |
+|two   |million          |two   million                                             -
+                |
+|two   |ten*million      |two   ten*million                                         -
+                |
+|two   |ten-thousand     |two   ten-thousand                                        -
+                |
+|two   |thousand         |two   thousand                                            -
+                |
+|=================================================================|
+>>
+<<
+concat(nchar_col, char_col)...
+|=================================================================|
+|eight |HUNDRED million  |eight HUNDRED million        |
+|eight |billion          |eight billion        |
+|eight |hundred          |eight hundred        |
+|eight |hundred^thousand |eight hundred^thousand        |
+|eight |million          |eight million        |
+|eight |ten*million      |eight ten*million        |
+|eight |ten-thousand     |eight ten-thousand        |
+|eight |thousand         |eight thousand        |
+|Five  |HUNDRED million  |Five  HUNDRED million        |
+|Five  |billion          |Five  billion        |
+|Five  |hundred          |Five  hundred        |
+|Five  |hundred^thousand |Five  hundred^thousand        |
+|Five  |million          |Five  million        |
+|Five  |ten*million      |Five  ten*million        |
+|Five  |ten-thousand     |Five  ten-thousand        |
+|Five  |thousand         |Five  thousand        |
+|four  |HUNDRED million  |four  HUNDRED million        |
+|four  |billion          |four  billion        |
+|four  |hundred          |four  hundred        |
+|four  |hundred^thousand |four  hundred^thousand        |
+|four  |million          |four  million        |
+|four  |ten*million      |four  ten*million        |
+|four  |ten-thousand     |four  ten-thousand        |
+|four  |thousand         |four  thousand        |
+|one   |HUNDRED million  |one   HUNDRED million        |
+|one   |billion          |one   billion        |
+|one   |hundred          |one   hundred        |
+|one   |hundred^thousand |one   hundred^thousand        |
+|one   |million          |one   million        |
+|one   |ten*million      |one   ten*million        |
+|one   |ten-thousand     |one   ten-thousand        |
+|one   |thousand         |one   thousand        |
+|Seven |HUNDRED million  |Seven HUNDRED million        |
+|Seven |billion          |Seven billion        |
+|Seven |hundred          |Seven hundred        |
+|Seven |hundred^thousand |Seven hundred^thousand        |
+|Seven |million          |Seven million        |
+|Seven |ten*million      |Seven ten*million        |
+|Seven |ten-thousand     |Seven ten-thousand        |
+|Seven |thousand         |Seven thousand        |
+|six   |HUNDRED million  |six   HUNDRED million        |
+|six   |billion          |six   billion        |
+|six   |hundred          |six   hundred        |
+|six   |hundred^thousand |six   hundred^thousand        |
+|six   |million          |six   million        |
+|six   |ten*million      |six   ten*million        |
+|six   |ten-thousand     |six   ten-thousand        |
+|six   |thousand         |six   thousand        |
+|Three |HUNDRED million  |Three HUNDRED million        |
+|Three |billion          |Three billion        |
+|Three |hundred          |Three hundred        |
+|Three |hundred^thousand |Three hundred^thousand        |
+|Three |million          |Three million        |
+|Three |ten*million      |Three ten*million        |
+|Three |ten-thousand     |Three ten-thousand        |
+|Three |thousand         |Three thousand        |
+|two   |HUNDRED million  |two   HUNDRED million        |
+|two   |billion          |two   billion        |
+|two   |hundred          |two   hundred        |
+|two   |hundred^thousand |two   hundred^thousand        |
+|two   |million          |two   million        |
+|two   |ten*million      |two   ten*million        |
+|two   |ten-thousand     |two   ten-thousand        |
+|two   |thousand         |two   thousand        |
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 8 
+<< IF (ING_CHARSET == "UTF8") 
+concat(nchar_col, vchar_col)...
+|=================================================================|
+|eight |BILLION|eight BILLION                       |
+|eight |HUNDRED|eight HUNDRED                       |
+|eight |hundred MILLION|eight hundred MILLION               |
+|eight |HUNDRED&THOUSAND|eight HUNDRED&THOUSAND              |
+|eight |MILLION|eight MILLION                       |
+|eight |TEN MILLION|eight TEN MILLION                   |
+|eight |TEN_THOUSAND|eight TEN_THOUSAND                  |
+|eight |THOUSAND|eight THOUSAND                      |
+|Five  |BILLION|Five  BILLION                       |
+|Five  |HUNDRED|Five  HUNDRED                       |
+|Five  |hundred MILLION|Five  hundred MILLION               |
+|Five  |HUNDRED&THOUSAND|Five  HUNDRED&THOUSAND              |
+|Five  |MILLION|Five  MILLION                       |
+|Five  |TEN MILLION|Five  TEN MILLION                   |
+|Five  |TEN_THOUSAND|Five  TEN_THOUSAND                  |
+|Five  |THOUSAND|Five  THOUSAND                      |
+|four  |BILLION|four  BILLION                       |
+|four  |HUNDRED|four  HUNDRED                       |
+|four  |hundred MILLION|four  hundred MILLION               |
+|four  |HUNDRED&THOUSAND|four  HUNDRED&THOUSAND              |
+|four  |MILLION|four  MILLION                       |
+|four  |TEN MILLION|four  TEN MILLION                   |
+|four  |TEN_THOUSAND|four  TEN_THOUSAND                  |
+|four  |THOUSAND|four  THOUSAND                      |
+|one   |BILLION|one   BILLION                       |
+|one   |HUNDRED|one   HUNDRED                       |
+|one   |hundred MILLION|one   hundred MILLION               |
+|one   |HUNDRED&THOUSAND|one   HUNDRED&THOUSAND              |
+|one   |MILLION|one   MILLION                       |
+|one   |TEN MILLION|one   TEN MILLION                   |
+|one   |TEN_THOUSAND|one   TEN_THOUSAND                  |
+|one   |THOUSAND|one   THOUSAND                      |
+|Seven |BILLION|Seven BILLION                       |
+|Seven |HUNDRED|Seven HUNDRED                       |
+|Seven |hundred MILLION|Seven hundred MILLION               |
+|Seven |HUNDRED&THOUSAND|Seven HUNDRED&THOUSAND              |
+|Seven |MILLION|Seven MILLION                       |
+|Seven |TEN MILLION|Seven TEN MILLION                   |
+|Seven |TEN_THOUSAND|Seven TEN_THOUSAND                  |
+|Seven |THOUSAND|Seven THOUSAND                      |
+|six   |BILLION|six   BILLION                       |
+|six   |HUNDRED|six   HUNDRED                       |
+|six   |hundred MILLION|six   hundred MILLION               |
+|six   |HUNDRED&THOUSAND|six   HUNDRED&THOUSAND              |
+|six   |MILLION|six   MILLION                       |
+|six   |TEN MILLION|six   TEN MILLION                   |
+|six   |TEN_THOUSAND|six   TEN_THOUSAND                  |
+|six   |THOUSAND|six   THOUSAND                      |
+|Three |BILLION|Three BILLION                       |
+|Three |HUNDRED|Three HUNDRED                       |
+|Three |hundred MILLION|Three hundred MILLION               |
+|Three |HUNDRED&THOUSAND|Three HUNDRED&THOUSAND              |
+|Three |MILLION|Three MILLION                       |
+|Three |TEN MILLION|Three TEN MILLION                   |
+|Three |TEN_THOUSAND|Three TEN_THOUSAND                  |
+|Three |THOUSAND|Three THOUSAND                      |
+|two   |BILLION|two   BILLION                       |
+|two   |HUNDRED|two   HUNDRED                       |
+|two   |hundred MILLION|two   hundred MILLION               |
+|two   |HUNDRED&THOUSAND|two   HUNDRED&THOUSAND              |
+|two   |MILLION|two   MILLION                       |
+|two   |TEN MILLION|two   TEN MILLION                   |
+|two   |TEN_THOUSAND|two   TEN_THOUSAND                  |
+|two   |THOUSAND|two   THOUSAND                      |
+|=================================================================|
+>>
+<<
+concat(nchar_col, vchar_col)...
+|=================================================================|
+|eight |BILLION|eight BILLION                       |
+|eight |HUNDRED|eight HUNDRED                       |
+|eight |HUNDRED&THOUSAND|eight HUNDRED&THOUSAND              |
+|eight |MILLION|eight MILLION                       |
+|eight |TEN MILLION|eight TEN MILLION                   |
+|eight |TEN_THOUSAND|eight TEN_THOUSAND                  |
+|eight |THOUSAND|eight THOUSAND                      |
+|eight |hundred MILLION|eight hundred MILLION               |
+|Five  |BILLION|Five  BILLION                       |
+|Five  |HUNDRED|Five  HUNDRED                       |
+|Five  |HUNDRED&THOUSAND|Five  HUNDRED&THOUSAND              |
+|Five  |MILLION|Five  MILLION                       |
+|Five  |TEN MILLION|Five  TEN MILLION                   |
+|Five  |TEN_THOUSAND|Five  TEN_THOUSAND                  |
+|Five  |THOUSAND|Five  THOUSAND                      |
+|Five  |hundred MILLION|Five  hundred MILLION               |
+|four  |BILLION|four  BILLION                       |
+|four  |HUNDRED|four  HUNDRED                       |
+|four  |HUNDRED&THOUSAND|four  HUNDRED&THOUSAND              |
+|four  |MILLION|four  MILLION                       |
+|four  |TEN MILLION|four  TEN MILLION                   |
+|four  |TEN_THOUSAND|four  TEN_THOUSAND                  |
+|four  |THOUSAND|four  THOUSAND                      |
+|four  |hundred MILLION|four  hundred MILLION               |
+|one   |BILLION|one   BILLION                       |
+|one   |HUNDRED|one   HUNDRED                       |
+|one   |HUNDRED&THOUSAND|one   HUNDRED&THOUSAND              |
+|one   |MILLION|one   MILLION                       |
+|one   |TEN MILLION|one   TEN MILLION                   |
+|one   |TEN_THOUSAND|one   TEN_THOUSAND                  |
+|one   |THOUSAND|one   THOUSAND                      |
+|one   |hundred MILLION|one   hundred MILLION               |
+|Seven |BILLION|Seven BILLION                       |
+|Seven |HUNDRED|Seven HUNDRED                       |
+|Seven |HUNDRED&THOUSAND|Seven HUNDRED&THOUSAND              |
+|Seven |MILLION|Seven MILLION                       |
+|Seven |TEN MILLION|Seven TEN MILLION                   |
+|Seven |TEN_THOUSAND|Seven TEN_THOUSAND                  |
+|Seven |THOUSAND|Seven THOUSAND                      |
+|Seven |hundred MILLION|Seven hundred MILLION               |
+|six   |BILLION|six   BILLION                       |
+|six   |HUNDRED|six   HUNDRED                       |
+|six   |HUNDRED&THOUSAND|six   HUNDRED&THOUSAND              |
+|six   |MILLION|six   MILLION                       |
+|six   |TEN MILLION|six   TEN MILLION                   |
+|six   |TEN_THOUSAND|six   TEN_THOUSAND                  |
+|six   |THOUSAND|six   THOUSAND                      |
+|six   |hundred MILLION|six   hundred MILLION               |
+|Three |BILLION|Three BILLION                       |
+|Three |HUNDRED|Three HUNDRED                       |
+|Three |HUNDRED&THOUSAND|Three HUNDRED&THOUSAND              |
+|Three |MILLION|Three MILLION                       |
+|Three |TEN MILLION|Three TEN MILLION                   |
+|Three |TEN_THOUSAND|Three TEN_THOUSAND                  |
+|Three |THOUSAND|Three THOUSAND                      |
+|Three |hundred MILLION|Three hundred MILLION               |
+|two   |BILLION|two   BILLION                       |
+|two   |HUNDRED|two   HUNDRED                       |
+|two   |HUNDRED&THOUSAND|two   HUNDRED&THOUSAND              |
+|two   |MILLION|two   MILLION                       |
+|two   |TEN MILLION|two   TEN MILLION                   |
+|two   |TEN_THOUSAND|two   TEN_THOUSAND                  |
+|two   |THOUSAND|two   THOUSAND                      |
+|two   |hundred MILLION|two   hundred MILLION               |
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 9 
+<< IF (ING_CHARSET == "UTF8") 
+concat(nvchar_col, char_col)...
+|=================================================================|
+|EIGHTY|billion          |EIGHTYbillion          |
+|EIGHTY|hundred          |EIGHTYhundred          |
+|EIGHTY|HUNDRED million  |EIGHTYHUNDRED million  |
+|EIGHTY|hundred^thousand |EIGHTYhundred^thousand |
+|EIGHTY|million          |EIGHTYmillion          |
+|EIGHTY|ten*million      |EIGHTYten*million      |
+|EIGHTY|ten-thousand     |EIGHTYten-thousand     |
+|EIGHTY|thousand         |EIGHTYthousand         |
+|FIFTY|billion          |FIFTYbillion          |
+|FIFTY|hundred          |FIFTYhundred          |
+|FIFTY|HUNDRED million  |FIFTYHUNDRED million  |
+|FIFTY|hundred^thousand |FIFTYhundred^thousand |
+|FIFTY|million          |FIFTYmillion          |
+|FIFTY|ten*million      |FIFTYten*million      |
+|FIFTY|ten-thousand     |FIFTYten-thousand     |
+|FIFTY|thousand         |FIFTYthousand         |
+|nine|billion          |ninebillion          |
+|nine|hundred          |ninehundred          |
+|nine|HUNDRED million  |nineHUNDRED million  |
+|nine|hundred^thousand |ninehundred^thousand |
+|nine|million          |ninemillion          |
+|nine|ten*million      |nineten*million      |
+|nine|ten-thousand     |nineten-thousand     |
+|nine|thousand         |ninethousand         |
+|NINTY|billion          |NINTYbillion          |
+|NINTY|hundred          |NINTYhundred          |
+|NINTY|HUNDRED million  |NINTYHUNDRED million  |
+|NINTY|hundred^thousand |NINTYhundred^thousand |
+|NINTY|million          |NINTYmillion          |
+|NINTY|ten*million      |NINTYten*million      |
+|NINTY|ten-thousand     |NINTYten-thousand     |
+|NINTY|thousand         |NINTYthousand         |
+|SEVENTY|billion          |SEVENTYbillion          |
+|SEVENTY|hundred          |SEVENTYhundred          |
+|SEVENTY|HUNDRED million  |SEVENTYHUNDRED million  |
+|SEVENTY|hundred^thousand |SEVENTYhundred^thousand |
+|SEVENTY|million          |SEVENTYmillion          |
+|SEVENTY|ten*million      |SEVENTYten*million      |
+|SEVENTY|ten-thousand     |SEVENTYten-thousand     |
+|SEVENTY|thousand         |SEVENTYthousand         |
+|TEN|billion          |TENbillion          |
+|TEN|hundred          |TENhundred          |
+|TEN|HUNDRED million  |TENHUNDRED million  |
+|TEN|hundred^thousand |TENhundred^thousand |
+|TEN|million          |TENmillion          |
+|TEN|ten*million      |TENten*million      |
+|TEN|ten-thousand     |TENten-thousand     |
+|TEN|thousand         |TENthousand         |
+|THIRTY|billion          |THIRTYbillion          |
+|THIRTY|hundred          |THIRTYhundred          |
+|THIRTY|HUNDRED million  |THIRTYHUNDRED million  |
+|THIRTY|hundred^thousand |THIRTYhundred^thousand |
+|THIRTY|million          |THIRTYmillion          |
+|THIRTY|ten*million      |THIRTYten*million      |
+|THIRTY|ten-thousand     |THIRTYten-thousand     |
+|THIRTY|thousand         |THIRTYthousand         |
+|twenty|billion          |twentybillion          |
+|twenty|hundred          |twentyhundred          |
+|twenty|HUNDRED million  |twentyHUNDRED million  |
+|twenty|hundred^thousand |twentyhundred^thousand |
+|twenty|million          |twentymillion          |
+|twenty|ten*million      |twentyten*million      |
+|twenty|ten-thousand     |twentyten-thousand     |
+|twenty|thousand         |twentythousand         |
+|=================================================================|
+>>
+<<
+concat(nvchar_col, char_col)...
+|=================================================================|
+|EIGHTY|HUNDRED million  |EIGHTYHUNDRED million                     |
+|EIGHTY|billion          |EIGHTYbillion                             |
+|EIGHTY|hundred          |EIGHTYhundred                             |
+|EIGHTY|hundred^thousand |EIGHTYhundred^thousand                    |
+|EIGHTY|million          |EIGHTYmillion                             |
+|EIGHTY|ten*million      |EIGHTYten*million                         |
+|EIGHTY|ten-thousand     |EIGHTYten-thousand                        |
+|EIGHTY|thousand         |EIGHTYthousand                            |
+|FIFTY|HUNDRED million  |FIFTYHUNDRED million                      |
+|FIFTY|billion          |FIFTYbillion                              |
+|FIFTY|hundred          |FIFTYhundred                              |
+|FIFTY|hundred^thousand |FIFTYhundred^thousand                     |
+|FIFTY|million          |FIFTYmillion                              |
+|FIFTY|ten*million      |FIFTYten*million                          |
+|FIFTY|ten-thousand     |FIFTYten-thousand                         |
+|FIFTY|thousand         |FIFTYthousand                             |
+|nine|HUNDRED million  |nineHUNDRED million                       |
+|nine|billion          |ninebillion                               |
+|nine|hundred          |ninehundred                               |
+|nine|hundred^thousand |ninehundred^thousand                      |
+|nine|million          |ninemillion                               |
+|nine|ten*million      |nineten*million                           |
+|nine|ten-thousand     |nineten-thousand                          |
+|nine|thousand         |ninethousand                              |
+|NINTY|HUNDRED million  |NINTYHUNDRED million                      |
+|NINTY|billion          |NINTYbillion                              |
+|NINTY|hundred          |NINTYhundred                              |
+|NINTY|hundred^thousand |NINTYhundred^thousand                     |
+|NINTY|million          |NINTYmillion                              |
+|NINTY|ten*million      |NINTYten*million                          |
+|NINTY|ten-thousand     |NINTYten-thousand                         |
+|NINTY|thousand         |NINTYthousand                             |
+|SEVENTY|HUNDRED million  |SEVENTYHUNDRED million                    |
+|SEVENTY|billion          |SEVENTYbillion                            |
+|SEVENTY|hundred          |SEVENTYhundred                            |
+|SEVENTY|hundred^thousand |SEVENTYhundred^thousand                   |
+|SEVENTY|million          |SEVENTYmillion                            |
+|SEVENTY|ten*million      |SEVENTYten*million                        |
+|SEVENTY|ten-thousand     |SEVENTYten-thousand                       |
+|SEVENTY|thousand         |SEVENTYthousand                           |
+|TEN|HUNDRED million  |TENHUNDRED million                        |
+|TEN|billion          |TENbillion                                |
+|TEN|hundred          |TENhundred                                |
+|TEN|hundred^thousand |TENhundred^thousand                       |
+|TEN|million          |TENmillion                                |
+|TEN|ten*million      |TENten*million                            |
+|TEN|ten-thousand     |TENten-thousand                           |
+|TEN|thousand         |TENthousand                               |
+|THIRTY|HUNDRED million  |THIRTYHUNDRED million                     |
+|THIRTY|billion          |THIRTYbillion                             |
+|THIRTY|hundred          |THIRTYhundred                             |
+|THIRTY|hundred^thousand |THIRTYhundred^thousand                    |
+|THIRTY|million          |THIRTYmillion                             |
+|THIRTY|ten*million      |THIRTYten*million                         |
+|THIRTY|ten-thousand     |THIRTYten-thousand                        |
+|THIRTY|thousand         |THIRTYthousand                            |
+|twenty|HUNDRED million  |twentyHUNDRED million                     |
+|twenty|billion          |twentybillion                             |
+|twenty|hundred          |twentyhundred                             |
+|twenty|hundred^thousand |twentyhundred^thousand                    |
+|twenty|million          |twentymillion                             |
+|twenty|ten*million      |twentyten*million                         |
+|twenty|ten-thousand     |twentyten-thousand                        |
+|twenty|thousand         |twentythousand                            |
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 10 
+<< IF (ING_CHARSET == "UTF8") 
+concat(nvchar_col, vchar_col)...
+|=================================================================|
+|EIGHTY|BILLION|EIGHTY BILLION|
+|EIGHTY|HUNDRED|EIGHTY HUNDRED|
+|EIGHTY|hundred MILLION|EIGHTY hundred MILLION|
+|EIGHTY|HUNDRED&THOUSAND|EIGHTY HUNDRED&THOUSAND|
+|EIGHTY|MILLION|EIGHTY MILLION|
+|EIGHTY|TEN MILLION|EIGHTY TEN MILLION|
+|EIGHTY|TEN_THOUSAND|EIGHTY TEN_THOUSAND|
+|EIGHTY|THOUSAND|EIGHTY THOUSAND|
+|FIFTY|BILLION|FIFTY BILLION|
+|FIFTY|HUNDRED|FIFTY HUNDRED|
+|FIFTY|hundred MILLION|FIFTY hundred MILLION|
+|FIFTY|HUNDRED&THOUSAND|FIFTY HUNDRED&THOUSAND|
+|FIFTY|MILLION|FIFTY MILLION|
+|FIFTY|TEN MILLION|FIFTY TEN MILLION|
+|FIFTY|TEN_THOUSAND|FIFTY TEN_THOUSAND|
+|FIFTY|THOUSAND|FIFTY THOUSAND|
+|nine|BILLION|nine BILLION|
+|nine|HUNDRED|nine HUNDRED|
+|nine|hundred MILLION|nine hundred MILLION|
+|nine|HUNDRED&THOUSAND|nine HUNDRED&THOUSAND|
+|nine|MILLION|nine MILLION|
+|nine|TEN MILLION|nine TEN MILLION|
+|nine|TEN_THOUSAND|nine TEN_THOUSAND|
+|nine|THOUSAND|nine THOUSAND|
+|NINTY|BILLION|NINTY BILLION|
+|NINTY|HUNDRED|NINTY HUNDRED|
+|NINTY|hundred MILLION|NINTY hundred MILLION|
+|NINTY|HUNDRED&THOUSAND|NINTY HUNDRED&THOUSAND|
+|NINTY|MILLION|NINTY MILLION|
+|NINTY|TEN MILLION|NINTY TEN MILLION|
+|NINTY|TEN_THOUSAND|NINTY TEN_THOUSAND|
+|NINTY|THOUSAND|NINTY THOUSAND|
+|SEVENTY|BILLION|SEVENTY BILLION|
+|SEVENTY|HUNDRED|SEVENTY HUNDRED|
+|SEVENTY|hundred MILLION|SEVENTY hundred MILLION|
+|SEVENTY|HUNDRED&THOUSAND|SEVENTY HUNDRED&THOUSAND|
+|SEVENTY|MILLION|SEVENTY MILLION|
+|SEVENTY|TEN MILLION|SEVENTY TEN MILLION|
+|SEVENTY|TEN_THOUSAND|SEVENTY TEN_THOUSAND|
+|SEVENTY|THOUSAND|SEVENTY THOUSAND|
+|TEN|BILLION|TEN BILLION|
+|TEN|HUNDRED|TEN HUNDRED|
+|TEN|hundred MILLION|TEN hundred MILLION|
+|TEN|HUNDRED&THOUSAND|TEN HUNDRED&THOUSAND|
+|TEN|MILLION|TEN MILLION|
+|TEN|TEN MILLION|TEN TEN MILLION|
+|TEN|TEN_THOUSAND|TEN TEN_THOUSAND|
+|TEN|THOUSAND|TEN THOUSAND|
+|THIRTY|BILLION|THIRTY BILLION|
+|THIRTY|HUNDRED|THIRTY HUNDRED|
+|THIRTY|hundred MILLION|THIRTY hundred MILLION|
+|THIRTY|HUNDRED&THOUSAND|THIRTY HUNDRED&THOUSAND|
+|THIRTY|MILLION|THIRTY MILLION|
+|THIRTY|TEN MILLION|THIRTY TEN MILLION|
+|THIRTY|TEN_THOUSAND|THIRTY TEN_THOUSAND|
+|THIRTY|THOUSAND|THIRTY THOUSAND|
+|twenty|BILLION|twenty BILLION|
+|twenty|HUNDRED|twenty HUNDRED|
+|twenty|hundred MILLION|twenty hundred MILLION|
+|twenty|HUNDRED&THOUSAND|twenty HUNDRED&THOUSAND|
+|twenty|MILLION|twenty MILLION|
+|twenty|TEN MILLION|twenty TEN MILLION|
+|twenty|TEN_THOUSAND|twenty TEN_THOUSAND|
+|twenty|THOUSAND|twenty THOUSAND|
+|=================================================================|
+>>
+<<
+concat(nvchar_col, vchar_col)...
+|=================================================================|
+|EIGHTY|BILLION|EIGHTY BILLION|
+|EIGHTY|HUNDRED|EIGHTY HUNDRED|
+|EIGHTY|HUNDRED&THOUSAND|EIGHTY HUNDRED&THOUSAND|
+|EIGHTY|MILLION|EIGHTY MILLION|
+|EIGHTY|TEN MILLION|EIGHTY TEN MILLION|
+|EIGHTY|TEN_THOUSAND|EIGHTY TEN_THOUSAND|
+|EIGHTY|THOUSAND|EIGHTY THOUSAND|
+|EIGHTY|hundred MILLION|EIGHTY hundred MILLION|
+|FIFTY|BILLION|FIFTY BILLION|
+|FIFTY|HUNDRED|FIFTY HUNDRED|
+|FIFTY|HUNDRED&THOUSAND|FIFTY HUNDRED&THOUSAND|
+|FIFTY|MILLION|FIFTY MILLION|
+|FIFTY|TEN MILLION|FIFTY TEN MILLION|
+|FIFTY|TEN_THOUSAND|FIFTY TEN_THOUSAND|
+|FIFTY|THOUSAND|FIFTY THOUSAND|
+|FIFTY|hundred MILLION|FIFTY hundred MILLION|
+|nine|BILLION|nine BILLION|
+|nine|HUNDRED|nine HUNDRED|
+|nine|HUNDRED&THOUSAND|nine HUNDRED&THOUSAND|
+|nine|MILLION|nine MILLION|
+|nine|TEN MILLION|nine TEN MILLION|
+|nine|TEN_THOUSAND|nine TEN_THOUSAND|
+|nine|THOUSAND|nine THOUSAND|
+|nine|hundred MILLION|nine hundred MILLION|
+|NINTY|BILLION|NINTY BILLION|
+|NINTY|HUNDRED|NINTY HUNDRED|
+|NINTY|HUNDRED&THOUSAND|NINTY HUNDRED&THOUSAND|
+|NINTY|MILLION|NINTY MILLION|
+|NINTY|TEN MILLION|NINTY TEN MILLION|
+|NINTY|TEN_THOUSAND|NINTY TEN_THOUSAND|
+|NINTY|THOUSAND|NINTY THOUSAND|
+|NINTY|hundred MILLION|NINTY hundred MILLION|
+|SEVENTY|BILLION|SEVENTY BILLION|
+|SEVENTY|HUNDRED|SEVENTY HUNDRED|
+|SEVENTY|HUNDRED&THOUSAND|SEVENTY HUNDRED&THOUSAND|
+|SEVENTY|MILLION|SEVENTY MILLION|
+|SEVENTY|TEN MILLION|SEVENTY TEN MILLION|
+|SEVENTY|TEN_THOUSAND|SEVENTY TEN_THOUSAND|
+|SEVENTY|THOUSAND|SEVENTY THOUSAND|
+|SEVENTY|hundred MILLION|SEVENTY hundred MILLION|
+|TEN|BILLION|TEN BILLION|
+|TEN|HUNDRED|TEN HUNDRED|
+|TEN|HUNDRED&THOUSAND|TEN HUNDRED&THOUSAND|
+|TEN|MILLION|TEN MILLION|
+|TEN|TEN MILLION|TEN TEN MILLION|
+|TEN|TEN_THOUSAND|TEN TEN_THOUSAND|
+|TEN|THOUSAND|TEN THOUSAND|
+|TEN|hundred MILLION|TEN hundred MILLION|
+|THIRTY|BILLION|THIRTY BILLION|
+|THIRTY|HUNDRED|THIRTY HUNDRED|
+|THIRTY|HUNDRED&THOUSAND|THIRTY HUNDRED&THOUSAND|
+|THIRTY|MILLION|THIRTY MILLION|
+|THIRTY|TEN MILLION|THIRTY TEN MILLION|
+|THIRTY|TEN_THOUSAND|THIRTY TEN_THOUSAND|
+|THIRTY|THOUSAND|THIRTY THOUSAND|
+|THIRTY|hundred MILLION|THIRTY hundred MILLION|
+|twenty|BILLION|twenty BILLION|
+|twenty|HUNDRED|twenty HUNDRED|
+|twenty|HUNDRED&THOUSAND|twenty HUNDRED&THOUSAND|
+|twenty|MILLION|twenty MILLION|
+|twenty|TEN MILLION|twenty TEN MILLION|
+|twenty|TEN_THOUSAND|twenty TEN_THOUSAND|
+|twenty|THOUSAND|twenty THOUSAND|
+|twenty|hundred MILLION|twenty hundred MILLION|
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 11 
+<< IF (ING_CHARSET == "UTF8") 
+trim(nchar_col) + '-' + trim(char_col)...
+|=================================================================|
+|eight |billion          |eight-billion|
+|eight |hundred          |eight-hundred|
+|eight |HUNDRED million  |eight-HUNDRED million|
+|eight |hundred^thousand |eight-hundred^thousand|
+|eight |million          |eight-million|
+|eight |ten*million      |eight-ten*million|
+|eight |ten-thousand     |eight-ten-thousand|
+|eight |thousand         |eight-thousand|
+|Five  |billion          |Five-billion|
+|Five  |hundred          |Five-hundred|
+|Five  |HUNDRED million  |Five-HUNDRED million|
+|Five  |hundred^thousand |Five-hundred^thousand|
+|Five  |million          |Five-million|
+|Five  |ten*million      |Five-ten*million|
+|Five  |ten-thousand     |Five-ten-thousand|
+|Five  |thousand         |Five-thousand|
+|four  |billion          |four-billion|
+|four  |hundred          |four-hundred|
+|four  |HUNDRED million  |four-HUNDRED million|
+|four  |hundred^thousand |four-hundred^thousand|
+|four  |million          |four-million|
+|four  |ten*million      |four-ten*million|
+|four  |ten-thousand     |four-ten-thousand|
+|four  |thousand         |four-thousand|
+|one   |billion          |one-billion|
+|one   |hundred          |one-hundred|
+|one   |HUNDRED million  |one-HUNDRED million|
+|one   |hundred^thousand |one-hundred^thousand|
+|one   |million          |one-million|
+|one   |ten*million      |one-ten*million|
+|one   |ten-thousand     |one-ten-thousand|
+|one   |thousand         |one-thousand|
+|Seven |billion          |Seven-billion|
+|Seven |hundred          |Seven-hundred|
+|Seven |HUNDRED million  |Seven-HUNDRED million|
+|Seven |hundred^thousand |Seven-hundred^thousand|
+|Seven |million          |Seven-million|
+|Seven |ten*million      |Seven-ten*million|
+|Seven |ten-thousand     |Seven-ten-thousand|
+|Seven |thousand         |Seven-thousand|
+|six   |billion          |six-billion|
+|six   |hundred          |six-hundred|
+|six   |HUNDRED million  |six-HUNDRED million|
+|six   |hundred^thousand |six-hundred^thousand|
+|six   |million          |six-million|
+|six   |ten*million      |six-ten*million|
+|six   |ten-thousand     |six-ten-thousand|
+|six   |thousand         |six-thousand|
+|Three |billion          |Three-billion|
+|Three |hundred          |Three-hundred|
+|Three |HUNDRED million  |Three-HUNDRED million|
+|Three |hundred^thousand |Three-hundred^thousand|
+|Three |million          |Three-million|
+|Three |ten*million      |Three-ten*million|
+|Three |ten-thousand     |Three-ten-thousand|
+|Three |thousand         |Three-thousand|
+|two   |billion          |two-billion|
+|two   |hundred          |two-hundred|
+|two   |HUNDRED million  |two-HUNDRED million|
+|two   |hundred^thousand |two-hundred^thousand|
+|two   |million          |two-million|
+|two   |ten*million      |two-ten*million|
+|two   |ten-thousand     |two-ten-thousand|
+|two   |thousand         |two-thousand|
+|=================================================================|
+>>
+<<
+trim(nchar_col) + '-' + trim(char_col)...
+|=================================================================|
+|eight |HUNDRED million  |eight-HUNDRED million|
+|eight |billion          |eight-billion|
+|eight |hundred          |eight-hundred|
+|eight |hundred^thousand |eight-hundred^thousand|
+|eight |million          |eight-million|
+|eight |ten*million      |eight-ten*million|
+|eight |ten-thousand     |eight-ten-thousand|
+|eight |thousand         |eight-thousand|
+|Five  |HUNDRED million  |Five-HUNDRED million|
+|Five  |billion          |Five-billion|
+|Five  |hundred          |Five-hundred|
+|Five  |hundred^thousand |Five-hundred^thousand|
+|Five  |million          |Five-million|
+|Five  |ten*million      |Five-ten*million|
+|Five  |ten-thousand     |Five-ten-thousand|
+|Five  |thousand         |Five-thousand|
+|four  |HUNDRED million  |four-HUNDRED million|
+|four  |billion          |four-billion|
+|four  |hundred          |four-hundred|
+|four  |hundred^thousand |four-hundred^thousand|
+|four  |million          |four-million|
+|four  |ten*million      |four-ten*million|
+|four  |ten-thousand     |four-ten-thousand|
+|four  |thousand         |four-thousand|
+|one   |HUNDRED million  |one-HUNDRED million|
+|one   |billion          |one-billion|
+|one   |hundred          |one-hundred|
+|one   |hundred^thousand |one-hundred^thousand|
+|one   |million          |one-million|
+|one   |ten*million      |one-ten*million|
+|one   |ten-thousand     |one-ten-thousand|
+|one   |thousand         |one-thousand|
+|Seven |HUNDRED million  |Seven-HUNDRED million|
+|Seven |billion          |Seven-billion|
+|Seven |hundred          |Seven-hundred|
+|Seven |hundred^thousand |Seven-hundred^thousand|
+|Seven |million          |Seven-million|
+|Seven |ten*million      |Seven-ten*million|
+|Seven |ten-thousand     |Seven-ten-thousand|
+|Seven |thousand         |Seven-thousand|
+|six   |HUNDRED million  |six-HUNDRED million|
+|six   |billion          |six-billion|
+|six   |hundred          |six-hundred|
+|six   |hundred^thousand |six-hundred^thousand|
+|six   |million          |six-million|
+|six   |ten*million      |six-ten*million|
+|six   |ten-thousand     |six-ten-thousand|
+|six   |thousand         |six-thousand|
+|Three |HUNDRED million  |Three-HUNDRED million|
+|Three |billion          |Three-billion|
+|Three |hundred          |Three-hundred|
+|Three |hundred^thousand |Three-hundred^thousand|
+|Three |million          |Three-million|
+|Three |ten*million      |Three-ten*million|
+|Three |ten-thousand     |Three-ten-thousand|
+|Three |thousand         |Three-thousand|
+|two   |HUNDRED million  |two-HUNDRED million|
+|two   |billion          |two-billion|
+|two   |hundred          |two-hundred|
+|two   |hundred^thousand |two-hundred^thousand|
+|two   |million          |two-million|
+|two   |ten*million      |two-ten*million|
+|two   |ten-thousand     |two-ten-thousand|
+|two   |thousand         |two-thousand|
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 12 
+<< IF (ING_CHARSET == "UTF8") 
+trim(nchar_col) + '+' + vchar_col...
+|=================================================================|
+|eight |BILLION|eight+BILLION|
+|eight |HUNDRED|eight+HUNDRED|
+|eight |hundred MILLION|eight+hundred MILLION|
+|eight |HUNDRED&THOUSAND|eight+HUNDRED&THOUSAND|
+|eight |MILLION|eight+MILLION|
+|eight |TEN MILLION|eight+TEN MILLION|
+|eight |TEN_THOUSAND|eight+TEN_THOUSAND|
+|eight |THOUSAND|eight+THOUSAND|
+|Five  |BILLION|Five+BILLION|
+|Five  |HUNDRED|Five+HUNDRED|
+|Five  |hundred MILLION|Five+hundred MILLION|
+|Five  |HUNDRED&THOUSAND|Five+HUNDRED&THOUSAND|
+|Five  |MILLION|Five+MILLION|
+|Five  |TEN MILLION|Five+TEN MILLION|
+|Five  |TEN_THOUSAND|Five+TEN_THOUSAND|
+|Five  |THOUSAND|Five+THOUSAND|
+|four  |BILLION|four+BILLION|
+|four  |HUNDRED|four+HUNDRED|
+|four  |hundred MILLION|four+hundred MILLION|
+|four  |HUNDRED&THOUSAND|four+HUNDRED&THOUSAND|
+|four  |MILLION|four+MILLION|
+|four  |TEN MILLION|four+TEN MILLION|
+|four  |TEN_THOUSAND|four+TEN_THOUSAND|
+|four  |THOUSAND|four+THOUSAND|
+|one   |BILLION|one+BILLION|
+|one   |HUNDRED|one+HUNDRED|
+|one   |hundred MILLION|one+hundred MILLION|
+|one   |HUNDRED&THOUSAND|one+HUNDRED&THOUSAND|
+|one   |MILLION|one+MILLION|
+|one   |TEN MILLION|one+TEN MILLION|
+|one   |TEN_THOUSAND|one+TEN_THOUSAND|
+|one   |THOUSAND|one+THOUSAND|
+|Seven |BILLION|Seven+BILLION|
+|Seven |HUNDRED|Seven+HUNDRED|
+|Seven |hundred MILLION|Seven+hundred MILLION|
+|Seven |HUNDRED&THOUSAND|Seven+HUNDRED&THOUSAND|
+|Seven |MILLION|Seven+MILLION|
+|Seven |TEN MILLION|Seven+TEN MILLION|
+|Seven |TEN_THOUSAND|Seven+TEN_THOUSAND|
+|Seven |THOUSAND|Seven+THOUSAND|
+|six   |BILLION|six+BILLION|
+|six   |HUNDRED|six+HUNDRED|
+|six   |hundred MILLION|six+hundred MILLION|
+|six   |HUNDRED&THOUSAND|six+HUNDRED&THOUSAND|
+|six   |MILLION|six+MILLION|
+|six   |TEN MILLION|six+TEN MILLION|
+|six   |TEN_THOUSAND|six+TEN_THOUSAND|
+|six   |THOUSAND|six+THOUSAND|
+|Three |BILLION|Three+BILLION|
+|Three |HUNDRED|Three+HUNDRED|
+|Three |hundred MILLION|Three+hundred MILLION|
+|Three |HUNDRED&THOUSAND|Three+HUNDRED&THOUSAND|
+|Three |MILLION|Three+MILLION|
+|Three |TEN MILLION|Three+TEN MILLION|
+|Three |TEN_THOUSAND|Three+TEN_THOUSAND|
+|Three |THOUSAND|Three+THOUSAND|
+|two   |BILLION|two+BILLION|
+|two   |HUNDRED|two+HUNDRED|
+|two   |hundred MILLION|two+hundred MILLION|
+|two   |HUNDRED&THOUSAND|two+HUNDRED&THOUSAND|
+|two   |MILLION|two+MILLION|
+|two   |TEN MILLION|two+TEN MILLION|
+|two   |TEN_THOUSAND|two+TEN_THOUSAND|
+|two   |THOUSAND|two+THOUSAND|
+|=================================================================|
+>>
+<<
+trim(nchar_col) + '+' + vchar_col...
+|=================================================================|
+|eight |BILLION|eight+BILLION|
+|eight |HUNDRED|eight+HUNDRED|
+|eight |HUNDRED&THOUSAND|eight+HUNDRED&THOUSAND|
+|eight |MILLION|eight+MILLION|
+|eight |TEN MILLION|eight+TEN MILLION|
+|eight |TEN_THOUSAND|eight+TEN_THOUSAND|
+|eight |THOUSAND|eight+THOUSAND|
+|eight |hundred MILLION|eight+hundred MILLION|
+|Five  |BILLION|Five+BILLION|
+|Five  |HUNDRED|Five+HUNDRED|
+|Five  |HUNDRED&THOUSAND|Five+HUNDRED&THOUSAND|
+|Five  |MILLION|Five+MILLION|
+|Five  |TEN MILLION|Five+TEN MILLION|
+|Five  |TEN_THOUSAND|Five+TEN_THOUSAND|
+|Five  |THOUSAND|Five+THOUSAND|
+|Five  |hundred MILLION|Five+hundred MILLION|
+|four  |BILLION|four+BILLION|
+|four  |HUNDRED|four+HUNDRED|
+|four  |HUNDRED&THOUSAND|four+HUNDRED&THOUSAND|
+|four  |MILLION|four+MILLION|
+|four  |TEN MILLION|four+TEN MILLION|
+|four  |TEN_THOUSAND|four+TEN_THOUSAND|
+|four  |THOUSAND|four+THOUSAND|
+|four  |hundred MILLION|four+hundred MILLION|
+|one   |BILLION|one+BILLION|
+|one   |HUNDRED|one+HUNDRED|
+|one   |HUNDRED&THOUSAND|one+HUNDRED&THOUSAND|
+|one   |MILLION|one+MILLION|
+|one   |TEN MILLION|one+TEN MILLION|
+|one   |TEN_THOUSAND|one+TEN_THOUSAND|
+|one   |THOUSAND|one+THOUSAND|
+|one   |hundred MILLION|one+hundred MILLION|
+|Seven |BILLION|Seven+BILLION|
+|Seven |HUNDRED|Seven+HUNDRED|
+|Seven |HUNDRED&THOUSAND|Seven+HUNDRED&THOUSAND|
+|Seven |MILLION|Seven+MILLION|
+|Seven |TEN MILLION|Seven+TEN MILLION|
+|Seven |TEN_THOUSAND|Seven+TEN_THOUSAND|
+|Seven |THOUSAND|Seven+THOUSAND|
+|Seven |hundred MILLION|Seven+hundred MILLION|
+|six   |BILLION|six+BILLION|
+|six   |HUNDRED|six+HUNDRED|
+|six   |HUNDRED&THOUSAND|six+HUNDRED&THOUSAND|
+|six   |MILLION|six+MILLION|
+|six   |TEN MILLION|six+TEN MILLION|
+|six   |TEN_THOUSAND|six+TEN_THOUSAND|
+|six   |THOUSAND|six+THOUSAND|
+|six   |hundred MILLION|six+hundred MILLION|
+|Three |BILLION|Three+BILLION|
+|Three |HUNDRED|Three+HUNDRED|
+|Three |HUNDRED&THOUSAND|Three+HUNDRED&THOUSAND|
+|Three |MILLION|Three+MILLION|
+|Three |TEN MILLION|Three+TEN MILLION|
+|Three |TEN_THOUSAND|Three+TEN_THOUSAND|
+|Three |THOUSAND|Three+THOUSAND|
+|Three |hundred MILLION|Three+hundred MILLION|
+|two   |BILLION|two+BILLION|
+|two   |HUNDRED|two+HUNDRED|
+|two   |HUNDRED&THOUSAND|two+HUNDRED&THOUSAND|
+|two   |MILLION|two+MILLION|
+|two   |TEN MILLION|two+TEN MILLION|
+|two   |TEN_THOUSAND|two+TEN_THOUSAND|
+|two   |THOUSAND|two+THOUSAND|
+|two   |hundred MILLION|two+hundred MILLION|
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 13 
+<< IF (ING_CHARSET == "UTF8") 
+nvchar_col + '**' + trim(char_col)...
+|=================================================================|
+|EIGHTY|billion          |EIGHTY**billion|
+|EIGHTY|hundred          |EIGHTY**hundred|
+|EIGHTY|HUNDRED million  |EIGHTY**HUNDRED million|
+|EIGHTY|hundred^thousand |EIGHTY**hundred^thousand|
+|EIGHTY|million          |EIGHTY**million|
+|EIGHTY|ten*million      |EIGHTY**ten*million|
+|EIGHTY|ten-thousand     |EIGHTY**ten-thousand|
+|EIGHTY|thousand         |EIGHTY**thousand|
+|FIFTY|billion          |FIFTY**billion|
+|FIFTY|hundred          |FIFTY**hundred|
+|FIFTY|HUNDRED million  |FIFTY**HUNDRED million|
+|FIFTY|hundred^thousand |FIFTY**hundred^thousand|
+|FIFTY|million          |FIFTY**million|
+|FIFTY|ten*million      |FIFTY**ten*million|
+|FIFTY|ten-thousand     |FIFTY**ten-thousand|
+|FIFTY|thousand         |FIFTY**thousand|
+|nine|billion          |nine**billion|
+|nine|hundred          |nine**hundred|
+|nine|HUNDRED million  |nine**HUNDRED million|
+|nine|hundred^thousand |nine**hundred^thousand|
+|nine|million          |nine**million|
+|nine|ten*million      |nine**ten*million|
+|nine|ten-thousand     |nine**ten-thousand|
+|nine|thousand         |nine**thousand|
+|NINTY|billion          |NINTY**billion|
+|NINTY|hundred          |NINTY**hundred|
+|NINTY|HUNDRED million  |NINTY**HUNDRED million|
+|NINTY|hundred^thousand |NINTY**hundred^thousand|
+|NINTY|million          |NINTY**million|
+|NINTY|ten*million      |NINTY**ten*million|
+|NINTY|ten-thousand     |NINTY**ten-thousand|
+|NINTY|thousand         |NINTY**thousand|
+|SEVENTY|billion          |SEVENTY**billion|
+|SEVENTY|hundred          |SEVENTY**hundred|
+|SEVENTY|HUNDRED million  |SEVENTY**HUNDRED million|
+|SEVENTY|hundred^thousand |SEVENTY**hundred^thousand|
+|SEVENTY|million          |SEVENTY**million|
+|SEVENTY|ten*million      |SEVENTY**ten*million|
+|SEVENTY|ten-thousand     |SEVENTY**ten-thousand|
+|SEVENTY|thousand         |SEVENTY**thousand|
+|TEN|billion          |TEN**billion|
+|TEN|hundred          |TEN**hundred|
+|TEN|HUNDRED million  |TEN**HUNDRED million|
+|TEN|hundred^thousand |TEN**hundred^thousand|
+|TEN|million          |TEN**million|
+|TEN|ten*million      |TEN**ten*million|
+|TEN|ten-thousand     |TEN**ten-thousand|
+|TEN|thousand         |TEN**thousand|
+|THIRTY|billion          |THIRTY**billion|
+|THIRTY|hundred          |THIRTY**hundred|
+|THIRTY|HUNDRED million  |THIRTY**HUNDRED million|
+|THIRTY|hundred^thousand |THIRTY**hundred^thousand|
+|THIRTY|million          |THIRTY**million|
+|THIRTY|ten*million      |THIRTY**ten*million|
+|THIRTY|ten-thousand     |THIRTY**ten-thousand|
+|THIRTY|thousand         |THIRTY**thousand|
+|twenty|billion          |twenty**billion|
+|twenty|hundred          |twenty**hundred|
+|twenty|HUNDRED million  |twenty**HUNDRED million|
+|twenty|hundred^thousand |twenty**hundred^thousand|
+|twenty|million          |twenty**million|
+|twenty|ten*million      |twenty**ten*million|
+|twenty|ten-thousand     |twenty**ten-thousand|
+|twenty|thousand         |twenty**thousand|
+|=================================================================|
+>>
+<<
+nvchar_col + '**' + trim(char_col)...
+|=================================================================|
+|EIGHTY|HUNDRED million  |EIGHTY**HUNDRED million|
+|EIGHTY|billion          |EIGHTY**billion|
+|EIGHTY|hundred          |EIGHTY**hundred|
+|EIGHTY|hundred^thousand |EIGHTY**hundred^thousand|
+|EIGHTY|million          |EIGHTY**million|
+|EIGHTY|ten*million      |EIGHTY**ten*million|
+|EIGHTY|ten-thousand     |EIGHTY**ten-thousand|
+|EIGHTY|thousand         |EIGHTY**thousand|
+|FIFTY|HUNDRED million  |FIFTY**HUNDRED million|
+|FIFTY|billion          |FIFTY**billion|
+|FIFTY|hundred          |FIFTY**hundred|
+|FIFTY|hundred^thousand |FIFTY**hundred^thousand|
+|FIFTY|million          |FIFTY**million|
+|FIFTY|ten*million      |FIFTY**ten*million|
+|FIFTY|ten-thousand     |FIFTY**ten-thousand|
+|FIFTY|thousand         |FIFTY**thousand|
+|nine|HUNDRED million  |nine**HUNDRED million|
+|nine|billion          |nine**billion|
+|nine|hundred          |nine**hundred|
+|nine|hundred^thousand |nine**hundred^thousand|
+|nine|million          |nine**million|
+|nine|ten*million      |nine**ten*million|
+|nine|ten-thousand     |nine**ten-thousand|
+|nine|thousand         |nine**thousand|
+|NINTY|HUNDRED million  |NINTY**HUNDRED million|
+|NINTY|billion          |NINTY**billion|
+|NINTY|hundred          |NINTY**hundred|
+|NINTY|hundred^thousand |NINTY**hundred^thousand|
+|NINTY|million          |NINTY**million|
+|NINTY|ten*million      |NINTY**ten*million|
+|NINTY|ten-thousand     |NINTY**ten-thousand|
+|NINTY|thousand         |NINTY**thousand|
+|SEVENTY|HUNDRED million  |SEVENTY**HUNDRED million|
+|SEVENTY|billion          |SEVENTY**billion|
+|SEVENTY|hundred          |SEVENTY**hundred|
+|SEVENTY|hundred^thousand |SEVENTY**hundred^thousand|
+|SEVENTY|million          |SEVENTY**million|
+|SEVENTY|ten*million      |SEVENTY**ten*million|
+|SEVENTY|ten-thousand     |SEVENTY**ten-thousand|
+|SEVENTY|thousand         |SEVENTY**thousand|
+|TEN|HUNDRED million  |TEN**HUNDRED million|
+|TEN|billion          |TEN**billion|
+|TEN|hundred          |TEN**hundred|
+|TEN|hundred^thousand |TEN**hundred^thousand|
+|TEN|million          |TEN**million|
+|TEN|ten*million      |TEN**ten*million|
+|TEN|ten-thousand     |TEN**ten-thousand|
+|TEN|thousand         |TEN**thousand|
+|THIRTY|HUNDRED million  |THIRTY**HUNDRED million|
+|THIRTY|billion          |THIRTY**billion|
+|THIRTY|hundred          |THIRTY**hundred|
+|THIRTY|hundred^thousand |THIRTY**hundred^thousand|
+|THIRTY|million          |THIRTY**million|
+|THIRTY|ten*million      |THIRTY**ten*million|
+|THIRTY|ten-thousand     |THIRTY**ten-thousand|
+|THIRTY|thousand         |THIRTY**thousand|
+|twenty|HUNDRED million  |twenty**HUNDRED million|
+|twenty|billion          |twenty**billion|
+|twenty|hundred          |twenty**hundred|
+|twenty|hundred^thousand |twenty**hundred^thousand|
+|twenty|million          |twenty**million|
+|twenty|ten*million      |twenty**ten*million|
+|twenty|ten-thousand     |twenty**ten-thousand|
+|twenty|thousand         |twenty**thousand|
+|=================================================================|
+>>
+? run dtu17_combine.exe SEPPARAMDB3 14 
+<< IF (ING_CHARSET == "UTF8") 
+nvchar_col + '_' + vchar_col...
+|=================================================================|
+|EIGHTY|BILLION|EIGHTY_BILLION|
+|EIGHTY|HUNDRED|EIGHTY_HUNDRED|
+|EIGHTY|hundred MILLION|EIGHTY_hundred MILLION|
+|EIGHTY|HUNDRED&THOUSAND|EIGHTY_HUNDRED&THOUSAND|
+|EIGHTY|MILLION|EIGHTY_MILLION|
+|EIGHTY|TEN MILLION|EIGHTY_TEN MILLION|
+|EIGHTY|TEN_THOUSAND|EIGHTY_TEN_THOUSAND|
+|EIGHTY|THOUSAND|EIGHTY_THOUSAND|
+|FIFTY|BILLION|FIFTY_BILLION|
+|FIFTY|HUNDRED|FIFTY_HUNDRED|
+|FIFTY|hundred MILLION|FIFTY_hundred MILLION|
+|FIFTY|HUNDRED&THOUSAND|FIFTY_HUNDRED&THOUSAND|
+|FIFTY|MILLION|FIFTY_MILLION|
+|FIFTY|TEN MILLION|FIFTY_TEN MILLION|
+|FIFTY|TEN_THOUSAND|FIFTY_TEN_THOUSAND|
+|FIFTY|THOUSAND|FIFTY_THOUSAND|
+|nine|BILLION|nine_BILLION|
+|nine|HUNDRED|nine_HUNDRED|
+|nine|hundred MILLION|nine_hundred MILLION|
+|nine|HUNDRED&THOUSAND|nine_HUNDRED&THOUSAND|
+|nine|MILLION|nine_MILLION|
+|nine|TEN MILLION|nine_TEN MILLION|
+|nine|TEN_THOUSAND|nine_TEN_THOUSAND|
+|nine|THOUSAND|nine_THOUSAND|
+|NINTY|BILLION|NINTY_BILLION|
+|NINTY|HUNDRED|NINTY_HUNDRED|
+|NINTY|hundred MILLION|NINTY_hundred MILLION|
+|NINTY|HUNDRED&THOUSAND|NINTY_HUNDRED&THOUSAND|
+|NINTY|MILLION|NINTY_MILLION|
+|NINTY|TEN MILLION|NINTY_TEN MILLION|
+|NINTY|TEN_THOUSAND|NINTY_TEN_THOUSAND|
+|NINTY|THOUSAND|NINTY_THOUSAND|
+|SEVENTY|BILLION|SEVENTY_BILLION|
+|SEVENTY|HUNDRED|SEVENTY_HUNDRED|
+|SEVENTY|hundred MILLION|SEVENTY_hundred MILLION|
+|SEVENTY|HUNDRED&THOUSAND|SEVENTY_HUNDRED&THOUSAND|
+|SEVENTY|MILLION|SEVENTY_MILLION|
+|SEVENTY|TEN MILLION|SEVENTY_TEN MILLION|
+|SEVENTY|TEN_THOUSAND|SEVENTY_TEN_THOUSAND|
+|SEVENTY|THOUSAND|SEVENTY_THOUSAND|
+|TEN|BILLION|TEN_BILLION|
+|TEN|HUNDRED|TEN_HUNDRED|
+|TEN|hundred MILLION|TEN_hundred MILLION|
+|TEN|HUNDRED&THOUSAND|TEN_HUNDRED&THOUSAND|
+|TEN|MILLION|TEN_MILLION|
+|TEN|TEN MILLION|TEN_TEN MILLION|
+|TEN|TEN_THOUSAND|TEN_TEN_THOUSAND|
+|TEN|THOUSAND|TEN_THOUSAND|
+|THIRTY|BILLION|THIRTY_BILLION|
+|THIRTY|HUNDRED|THIRTY_HUNDRED|
+|THIRTY|hundred MILLION|THIRTY_hundred MILLION|
+|THIRTY|HUNDRED&THOUSAND|THIRTY_HUNDRED&THOUSAND|
+|THIRTY|MILLION|THIRTY_MILLION|
+|THIRTY|TEN MILLION|THIRTY_TEN MILLION|
+|THIRTY|TEN_THOUSAND|THIRTY_TEN_THOUSAND|
+|THIRTY|THOUSAND|THIRTY_THOUSAND|
+|twenty|BILLION|twenty_BILLION|
+|twenty|HUNDRED|twenty_HUNDRED|
+|twenty|hundred MILLION|twenty_hundred MILLION|
+|twenty|HUNDRED&THOUSAND|twenty_HUNDRED&THOUSAND|
+|twenty|MILLION|twenty_MILLION|
+|twenty|TEN MILLION|twenty_TEN MILLION|
+|twenty|TEN_THOUSAND|twenty_TEN_THOUSAND|
+|twenty|THOUSAND|twenty_THOUSAND|
+|=================================================================|
+>>
+<<
+nvchar_col + '_' + vchar_col...
+|=================================================================|
+|EIGHTY|BILLION|EIGHTY_BILLION|
+|EIGHTY|HUNDRED|EIGHTY_HUNDRED|
+|EIGHTY|HUNDRED&THOUSAND|EIGHTY_HUNDRED&THOUSAND|
+|EIGHTY|MILLION|EIGHTY_MILLION|
+|EIGHTY|TEN MILLION|EIGHTY_TEN MILLION|
+|EIGHTY|TEN_THOUSAND|EIGHTY_TEN_THOUSAND|
+|EIGHTY|THOUSAND|EIGHTY_THOUSAND|
+|EIGHTY|hundred MILLION|EIGHTY_hundred MILLION|
+|FIFTY|BILLION|FIFTY_BILLION|
+|FIFTY|HUNDRED|FIFTY_HUNDRED|
+|FIFTY|HUNDRED&THOUSAND|FIFTY_HUNDRED&THOUSAND|
+|FIFTY|MILLION|FIFTY_MILLION|
+|FIFTY|TEN MILLION|FIFTY_TEN MILLION|
+|FIFTY|TEN_THOUSAND|FIFTY_TEN_THOUSAND|
+|FIFTY|THOUSAND|FIFTY_THOUSAND|
+|FIFTY|hundred MILLION|FIFTY_hundred MILLION|
+|nine|BILLION|nine_BILLION|
+|nine|HUNDRED|nine_HUNDRED|
+|nine|HUNDRED&THOUSAND|nine_HUNDRED&THOUSAND|
+|nine|MILLION|nine_MILLION|
+|nine|TEN MILLION|nine_TEN MILLION|
+|nine|TEN_THOUSAND|nine_TEN_THOUSAND|
+|nine|THOUSAND|nine_THOUSAND|
+|nine|hundred MILLION|nine_hundred MILLION|
+|NINTY|BILLION|NINTY_BILLION|
+|NINTY|HUNDRED|NINTY_HUNDRED|
+|NINTY|HUNDRED&THOUSAND|NINTY_HUNDRED&THOUSAND|
+|NINTY|MILLION|NINTY_MILLION|
+|NINTY|TEN MILLION|NINTY_TEN MILLION|
+|NINTY|TEN_THOUSAND|NINTY_TEN_THOUSAND|
+|NINTY|THOUSAND|NINTY_THOUSAND|
+|NINTY|hundred MILLION|NINTY_hundred MILLION|
+|SEVENTY|BILLION|SEVENTY_BILLION|
+|SEVENTY|HUNDRED|SEVENTY_HUNDRED|
+|SEVENTY|HUNDRED&THOUSAND|SEVENTY_HUNDRED&THOUSAND|
+|SEVENTY|MILLION|SEVENTY_MILLION|
+|SEVENTY|TEN MILLION|SEVENTY_TEN MILLION|
+|SEVENTY|TEN_THOUSAND|SEVENTY_TEN_THOUSAND|
+|SEVENTY|THOUSAND|SEVENTY_THOUSAND|
+|SEVENTY|hundred MILLION|SEVENTY_hundred MILLION|
+|TEN|BILLION|TEN_BILLION|
+|TEN|HUNDRED|TEN_HUNDRED|
+|TEN|HUNDRED&THOUSAND|TEN_HUNDRED&THOUSAND|
+|TEN|MILLION|TEN_MILLION|
+|TEN|TEN MILLION|TEN_TEN MILLION|
+|TEN|TEN_THOUSAND|TEN_TEN_THOUSAND|
+|TEN|THOUSAND|TEN_THOUSAND|
+|TEN|hundred MILLION|TEN_hundred MILLION|
+|THIRTY|BILLION|THIRTY_BILLION|
+|THIRTY|HUNDRED|THIRTY_HUNDRED|
+|THIRTY|HUNDRED&THOUSAND|THIRTY_HUNDRED&THOUSAND|
+|THIRTY|MILLION|THIRTY_MILLION|
+|THIRTY|TEN MILLION|THIRTY_TEN MILLION|
+|THIRTY|TEN_THOUSAND|THIRTY_TEN_THOUSAND|
+|THIRTY|THOUSAND|THIRTY_THOUSAND|
+|THIRTY|hundred MILLION|THIRTY_hundred MILLION|
+|twenty|BILLION|twenty_BILLION|
+|twenty|HUNDRED|twenty_HUNDRED|
+|twenty|HUNDRED&THOUSAND|twenty_HUNDRED&THOUSAND|
+|twenty|MILLION|twenty_MILLION|
+|twenty|TEN MILLION|twenty_TEN MILLION|
+|twenty|TEN_THOUSAND|twenty_TEN_THOUSAND|
+|twenty|THOUSAND|twenty_THOUSAND|
+|twenty|hundred MILLION|twenty_hundred MILLION|
+|=================================================================|
+>>
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* drop table dtu17_uni\g
+<<
+>>
+* drop table dtu17_char\g
+<<
+>>
+* \q
+<<
+
+>>
+? delete dtu17_tbl.c 
+<<
+file was deleted
+>>
+? delete dtu17_tbl.o 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu17_tbl.obj 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu17_tbl.exe 
+<<
+file was deleted
+>>
+? delete dtu17_combine.c 
+<<
+file was deleted
+>>
+? delete dtu17_combine.o 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu17_combine.obj 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu17_combine.exe 
+<<
+file was deleted
+>>
+
+
+Ending at: Thu Sep 18 16:31:50 2008

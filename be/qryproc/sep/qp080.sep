@@ -1,0 +1,350 @@
+/*
+	Test Name: efa07.sep
+	Time: Fri May 18 17:31:56 1990
+	User Name: testenv
+ 
+	Test ID : efa07
+	Module  : 
+	Filename: efa07.sep
+	Purpose	: Test update command in a dbproc in embedded C.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : all_types_simple_table
+	Synopsis     : Create a table and updsate using update command
+			inside of embedded C
+
+	Setup   : efa00.sep
+
+	History	: xx-xxx-1989	Created				Author
+		  7-MAR-1997    (vissu01) Modified for NT
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa07.sc 
+!!
+/*
+**	efa07.sc
+**
+**	basic functionality: update
+**
+**	history:
+**		oct 10/89 sgp
+**			- created.
+*/
+
+#define EFA07
+
+#include "driverefstub.h"
+
+exec sql include 'dbph.sc';
+#include <stdio.h>
+
+exec sql include sqlca;
+
+/***********/
+/* efa07() */
+/***********/
+
+efa07()
+{
+	exec sql begin declare section;
+	exec sql end declare section;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa07: update statement\n");
+	drop_tables(ALL_TYPES_SIMPLE_TABLE);
+	build_tables(ALL_TYPES_SIMPLE_TABLE);
+
+	/**********/
+	/* test 1 */
+	/**********/
+
+	printf("\n    test 1: update all_types_simple table\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa07_01;
+
+	/* create the proc */
+	exec sql create procedure efa07_01 (
+		on_i4		integer		not null with default,
+		i1		i1		not null with default,
+		i2		i2		not null with default,
+		i4		i4		not null with default,
+		f4		f4		not null with default,
+		f8		f8		not null with default,
+		c10		c10		not null with default,
+		char10		char(10)	not null with default,
+		vchar10		text(10)	not null with default,
+		varchar10	varchar(10)	not null with default,
+		d		date		not null with default,
+		m		money		not null with default
+	)as
+	declare
+		mesg_buf	varchar(100)	not null with default;
+	begin
+
+		message 'updating all_types_simple';
+		update all_types_simple
+			set
+				i1		= :i1,
+				i2		= :i2,
+				i4		= :i4,
+				f4		= :f4,
+				f8		= :f8,
+				c10		= :c10,
+				char10		= :char10,
+				vchar10		= :vchar10,
+				varchar10	= :varchar10,
+				d		= :d,
+				m		= :m
+			where i4 = :on_i4;
+
+		if iierrornumber > 0
+		then
+			mesg_buf = 'efa07_01 iierrornumber = '
+				+ vchar(iierrornumber);
+			message mesg_buf;
+		endif;
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa07_01 (
+			on_i4		= 5,
+			i1		= 12,
+			i2		= 120,
+			i4		= 1200,
+			f4		= .12,
+			f8		= .012,
+			c10		= 'zaz',
+			char10		= 'zaaz',
+			vchar10		= 'zaaaz',
+			varchar10	= 'zaaaaz',
+			d		= '01-feb-1960',
+			m		= '$12.00'
+	);
+
+	dump_tables(ALL_TYPES_SIMPLE_TABLE);
+
+} /* efa07() */
+!!
+? sepesqlc driver.sc
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc efa07.sc 
+<<
+ESQL efa07.sc:
+>>
+? sepcc efa07.c 
+<<
+>>
+<<
+efa07.c
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa07 
+<<
+>>
+? sql SEPPARAMDB -s
+<<
+~
+>>
+* drop table all_types_simple;\g
+<<
+~
+>>
+* drop procedure efa07_01;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa07 
+<<
+TEST DRIVER
+source : driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa07
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa07 XX
+
+  efa07: update statement
+  dropping all_types_simple table...
+E_US0AC1 DROP: 'all_types_simple' does not exist or is not owned by you.
+    (Fri May 18 17:32:15 1990)
+  creating all_types_simple table...
+
+    test 1: update all_types_simple table
+E_US0965 Procedure 'efa07_01' not found.
+    (Fri May 18 17:32:17 1990)
+MESSAGE 0: updating all_types_simple
+contents of all_types_simple:
+-----------------------------
+ i1 = 1, i2 = 1, i4 = 1, f4 = 1.000000, f8 = 1.000000,
+ c10 = 000000001 , char10 = 000000001 , vchar10 = 000000001, varchar10 = 000000001,
+ d = 01-jan-1582              , m = 1.000000
+-----------------------------
+ i1 = 2, i2 = 2, i4 = 2, f4 = 2.000000, f8 = 2.000000,
+ c10 = 000000002 , char10 = 000000002 , vchar10 = 000000002, varchar10 = 000000002,
+ d = 03-mar-1583              , m = 2.000000
+-----------------------------
+ i1 = 3, i2 = 3, i4 = 3, f4 = 3.000000, f8 = 3.000000,
+ c10 = 000000003 , char10 = 000000003 , vchar10 = 000000003, varchar10 = 000000003,
+ d = 05-may-1584              , m = 3.000000
+-----------------------------
+ i1 = 4, i2 = 4, i4 = 4, f4 = 4.000000, f8 = 4.000000,
+ c10 = 000000004 , char10 = 000000004 , vchar10 = 000000004, varchar10 = 000000004,
+ d = 07-jul-1585              , m = 4.000000
+-----------------------------
+ i1 = 6, i2 = 6, i4 = 6, f4 = 6.000000, f8 = 6.000000,
+ c10 = 000000006 , char10 = 000000006 , vchar10 = 000000006, varchar10 = 000000006,
+ d = 11-nov-1587              , m = 6.000000
+-----------------------------
+ i1 = 7, i2 = 7, i4 = 7, f4 = 7.000000, f8 = 7.000000,
+ c10 = 000000007 , char10 = 000000007 , vchar10 = 000000007, varchar10 = 000000007,
+ d = 13-jan-1589              , m = 7.000000
+-----------------------------
+ i1 = 8, i2 = 8, i4 = 8, f4 = 8.000000, f8 = 8.000000,
+ c10 = 000000008 , char10 = 000000008 , vchar10 = 000000008, varchar10 = 000000008,
+ d = 15-mar-1590              , m = 8.000000
+-----------------------------
+ i1 = 9, i2 = 9, i4 = 9, f4 = 9.000000, f8 = 9.000000,
+ c10 = 000000009 , char10 = 000000009 , vchar10 = 000000009, varchar10 = 000000009,
+ d = 17-may-1591              , m = 9.000000
+-----------------------------
+ i1 = 10, i2 = 10, i4 = 10, f4 = 10.000000, f8 = 10.000000,
+ c10 = 000000010 , char10 = 000000010 , vchar10 = 000000010, varchar10 = 000000010,
+ d = 19-jul-1592              , m = 10.000000
+-----------------------------
+ i1 = 12, i2 = 120, i4 = 1200, f4 = 0.120000, f8 = 0.012000,
+ c10 = zaz       , char10 = zaaz      , vchar10 = zaaaz, varchar10 = zaaaaz,
+ d = 01-feb-1960              , m = 12.000000
+-----------------------------
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.sc
+<<
+~
+>>
+? delete driver.c
+<<
+~
+>>
+? delete driver.obj
+<<
+~
+>>
+? delete driver.o
+<<
+~
+>>
+? delete driverefstub.h 
+<<
+~
+>>
+? delete driveref.c 
+<<
+~
+>>
+? delete driveref.obj 
+<<
+~
+>>
+? delete driveref.o
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~
+>>
+? delete dbph.c 
+<<
+~
+>>
+? delete dbpmisc.sc 
+<<
+~
+>>
+? delete dbpmisc.c 
+<<
+~
+>>
+? delete dbpmisc.obj 
+<<
+~
+>>
+? delete dbpmisc.o
+<<
+~
+>>
+? delete efa07.c 
+<<
+~
+>>
+? delete efa07.obj 
+<<
+~
+>>
+? delete efa07.o
+<<
+~
+>>
+   
+
+
+Ending at: Fri May 18 17:32:28 1990

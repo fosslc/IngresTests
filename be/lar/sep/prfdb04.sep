@@ -1,0 +1,730 @@
+/*
+	Test Name: prfdb04.sep
+	Time: Wed Feb  8 18:27:53 1995
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : prfdb04.sep
+	Module  : be/lar
+	Filename: prfdb04.sep
+	Purpose	: Test table-level rollforwarddb with blob table
+	                 > using/not using -noblobs option
+	                 > journaled and nonjournaled.
+	Input Files  : fillblob.sc, updateblob.sc, f2500,
+	               prfdb04.sep, bea24.sep (used for blob contents)
+	Output Files : fillblob.[c,o,exe], updateblob.[c,o,exe]
+	Database     : SEPPARAMDB
+	Tables       : blobtbl
+	Synopsis     : Using esqlc programs, creates a blob table and
+	               populates it.  Ckpdb -j, insert & update,
+	               rollforwarddb -table.  Checks blob contents.
+	               Updates a row to alter blob data, then does a
+	               rollforwarddb -table -noblobs.  Checks contents:
+	               non-blob data (filename) should be readable but
+	               extended table should be marked inconsistent.
+	               Reloads with db-level rollforwarddb and retests with
+	               journaling on.
+
+ History:  8-Feb-1995	(holla02)	Created
+          13-Feb-1995	(holla02)  Modified structure & canons
+          28-Feb-1995	(holla02)  Took new canons
+          12-Nov-2007   (drivi01)  Rename all binaries containing word "update"
+                                   to use "updte" instead, to avoid Vista's
+                                   installer detection.
+*/
+? fill fillblob.sc 
+!!
+#include <stdio.h>
+
+EXEC SQL INCLUDE SQLCA;
+char result[100001];
+main(argc,argv)
+int argc;
+char **argv;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char dbname[50];
+char filename[256];
+EXEC SQL END DECLARE SECTION;
+
+int get_handler();
+int put_handler();
+void erreur();
+
+if (argc < 3)
+	{
+	printf ("\nUsage : fillblob <dbname> <filename> [create]\n");
+	exit(1);
+	}
+strcpy(dbname, argv[1]);
+strcpy(filename,argv[2]);
+EXEC SQL WHENEVER SQLERROR STOP;
+EXEC SQL CONNECT :dbname;
+EXEC SQL WHENEVER SQLERROR CALL erreur;
+
+if (argc == 4)
+	{	
+	EXEC SQL WHENEVER SQLERROR CONTINUE;
+	EXEC SQL DROP TABLE blobtbl;
+	EXEC SQL WHENEVER SQLERROR CALL erreur;
+	EXEC SQL CREATE TABLE blobtbl
+		( filename varchar(256), filecontent long varchar);
+	}
+
+EXEC SQL INSERT INTO blobtbl 
+	VALUES(:filename,datahandler(put_handler(filename)));
+
+EXEC SQL COMMIT;
+
+EXEC SQL DISCONNECT;
+}
+
+void erreur()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char message[256];
+EXEC SQL END DECLARE SECTION;
+
+EXEC SQL INQUIRE_SQL(:message=errortext);
+printf("\nSQL ERROR: %s",message);
+EXEC SQL ROLLBACK;
+EXEC SQL DISCONNECT;
+exit(1);
+}
+
+int put_handler(filename)
+char *filename;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char mon_segment[3000];
+int longueur;
+EXEC SQL END DECLARE SECTION;
+
+FILE *fic;
+int nitems;
+
+fic = fopen (filename,"r");
+if (fic == (FILE*)0) 
+	{
+	printf ("FillBlob Error: Cannot open file %s\n",filename);
+	exit(1);
+	}
+while (fgets(mon_segment,100,fic)!= NULL )
+	{
+	longueur = strlen (mon_segment);
+	EXEC SQL PUT DATA (segment=:mon_segment,segmentlength=:longueur);
+	}
+EXEC SQL PUT DATA (dataend = 1);
+}
+
+int get_handler()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char mon_segment[101];
+int longueur;
+int data_end;
+EXEC SQL END DECLARE SECTION;
+EXEC SQL WHENEVER SQLERROR call erreur;
+
+strcpy(result,"");
+
+data_end = 0;
+
+while (data_end != 1)
+	{
+	EXEC SQL GET DATA (:mon_segment = segment, :longueur=segmentlength,
+				:data_end = dataend)
+	WITH maxlength =100;
+	strcat (result, mon_segment);
+	}
+}
+
+!!
+? fill updteblob.sc 
+!!
+#include <stdio.h>
+
+EXEC SQL INCLUDE SQLCA;
+main(argc,argv)
+int argc;
+char **argv;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char dbname[50];
+char filename[256];
+char oldname[256];
+EXEC SQL END DECLARE SECTION;
+
+int put_handler();
+void erreur();
+
+if (argc < 4)
+	{
+	printf ("\nUsage : updteblob <dbname> <filename> <oldname>\n");
+	exit(1);
+	}
+strcpy(dbname, argv[1]);
+strcpy(filename,argv[2]);
+strcpy(oldname, argv[3]);
+EXEC SQL WHENEVER SQLERROR STOP;
+EXEC SQL CONNECT :dbname;
+EXEC SQL WHENEVER SQLERROR CALL erreur;
+
+EXEC SQL UPDATE blobtbl 
+	SET filecontent = datahandler(put_handler(filename))
+	WHERE filename = :oldname;
+
+EXEC SQL COMMIT;
+
+EXEC SQL DISCONNECT;
+}
+
+void erreur()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char message[256];
+EXEC SQL END DECLARE SECTION;
+
+EXEC SQL INQUIRE_SQL(:message=errortext);
+printf("\nSQL ERROR: %s",message);
+EXEC SQL ROLLBACK;
+EXEC SQL DISCONNECT;
+exit(1);
+}
+
+int put_handler(filename)
+char *filename;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char mon_segment[3000];
+int longueur;
+EXEC SQL END DECLARE SECTION;
+
+FILE *fic;
+int nitems;
+
+fic = fopen (filename,"r");
+if (fic == (FILE*)0) 
+	{
+	printf ("FillBlob Error: Cannot open file %s\n",filename);
+	exit(1);
+	}
+while (fgets(mon_segment,100,fic)!= NULL )
+	{
+	longueur = strlen (mon_segment);
+	EXEC SQL PUT DATA (segment=:mon_segment,segmentlength=:longueur);
+	}
+EXEC SQL PUT DATA (dataend = 1);
+}
+!!
+? fill f2500 
+!!
+ 100 chars --------------------------------------------------------------------------
+-------------->
+ 200 chars --------------------------------------------------------------------------
+-------------->
+ 300 chars --------------------------------------------------------------------------
+-------------->
+ 400 chars --------------------------------------------------------------------------
+-------------->
+ 500 chars --------------------------------------------------------------------------
+-------------->
+ 600 chars --------------------------------------------------------------------------
+-------------->
+ 700 chars --------------------------------------------------------------------------
+-------------->
+ 800 chars --------------------------------------------------------------------------
+-------------->
+ 900 chars --------------------------------------------------------------------------
+-------------->
+1000 chars --------------------------------------------------------------------------
+-------------->
+1100 chars --------------------------------------------------------------------------
+-------------->
+1200 chars --------------------------------------------------------------------------
+-------------->
+1300 chars --------------------------------------------------------------------------
+-------------->
+1400 chars --------------------------------------------------------------------------
+-------------->
+1500 chars --------------------------------------------------------------------------
+-------------->
+1600 chars --------------------------------------------------------------------------
+-------------->
+1700 chars --------------------------------------------------------------------------
+-------------->
+1800 chars --------------------------------------------------------------------------
+-------------->
+1900 chars --------------------------------------------------------------------------
+-------------->
+2000 chars --------------------------------------------------------------------------
+-------------->
+2100 chars --------------------------------------------------------------------------
+-------------->
+2200 chars --------------------------------------------------------------------------
+-------------->
+2300 chars --------------------------------------------------------------------------
+-------------->
+2400 chars --------------------------------------------------------------------------
+-------------->
+2500 chars --------------------------------------------------------------------------
+-------------->
+!!
+? cp @file(ing_tst,be,lar,sep,prfdb04.sep) prfdb04.sep 
+<<
+>>
+? cp @file(ing_tst,be,lar,sep,bea24.sep) bea24.sep 
+<<
+>>
+? sepesqlc fillblob.sc 
+<<
+ESQL fillblob.sc:
+>>
+? sepcc fillblob.c 
+<<
+>>
+? seplnk fillblob 
+<<
+>>
+? sepesqlc updteblob.sc 
+<<
+ESQL updteblob.sc:
+>>
+? sepcc updteblob.c 
+<<
+>>
+? seplnk updteblob 
+<<
+>>
+? run fillblob.exe SEPPARAMDB prfdb04.sep create 
+<<
+>>
+? run fillblob.exe SEPPARAMDB bea24.sep 
+<<
+>>
+? run fillblob.exe SEPPARAMDB updteblob.sc 
+<<
+>>
+? ckpdb -d -j SEPPARAMDB 
+<<
+~
+>>
+? run fillblob.exe SEPPARAMDB fillblob.sc 
+<<
+>>
+? run updteblob.exe SEPPARAMDB f2500 updteblob.sc 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from blobtbl;\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select filecontent from blobtbl where filename='updteblob.sc'\g 
+<<
++--------------------------------+
+|filecontent                     |
++--------------------------------+
+| 100 chars -------------------------------------------------------------------------
+--------------->\n 200 chars --------------------------------------------------------
+-------------------------------->\n 300 chars ---------------------------------------
+------------------------------------------------->\n 400 chars ----------------------
+------------------------------------------------------------------>\n 500 chars -----
+----------------------------------------------------------------------------------->-
+\n 600 chars ------------------------------------------------------------------------
+---------------->\n 700 chars -------------------------------------------------------
+--------------------------------->\n 800 chars --------------------------------------
+-------------------------------------------------->\n 900 chars ---------------------
+------------------------------------------------------------------->\n1000 chars ----
+-------------------------------------------------------------------------------------
+>\n1100 chars -----------------------------------------------------------------------
+----------------->\n1200 chars ------------------------------------------------------
+---------------------------------->\n1300 chars -------------------------------------
+--------------------------------------------------->\n1400 chars --------------------
+-------------------------------------------------------------------->\n1500 chars ---
+-------------------------------------------------------------------------------------
+->\n1600 chars ----------------------------------------------------------------------
+------------------>\n1700 chars -----------------------------------------------------
+----------------------------------->\n1800 chars ------------------------------------
+---------------------------------------------------->\n1900 chars -------------------
+--------------------------------------------------------------------->\n2000 chars --
+-------------------------------------------------------------------------------------
+-->\n2100 chars ---------------------------------------------------------------------
+------------------->\n2200 chars ----------------------------------------------------
+------------------------------------>\n2300 chars -----------------------------------
+----------------------------------------------------->\n2400 chars ------------------
+---------------------------------------------------------------------->\n2500 chars -
+-------------------------------------------------------------------------------------
+--->\n|
++--------------------------------+
+(1 row)
+>>
+* \q 
+<<
+>>
+? rollforwarddb SEPPARAMDB -table=blobtbl 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from blobtbl;\g 
+<<
++-------------+
+|col1         |
++-------------+
+|            3|
++-------------+
+(1 row)
+>>
+* select filecontent from blobtbl where filename='updteblob.sc'\g 
+<<
+
++--------------------------------+
+|filecontent                     |
++--------------------------------+
+|#include <stdio.h>\n\nEXEC SQL INCLUDE SQLCA;\nmain(argc,argv)\nint argc;\nchar **a-
+rgv;\n{\nEXEC SQL BEGIN DECLARE SECTION;\nchar dbname[50];\nchar filename[256];\ncha-
+r oldname[256];\nEXEC SQL END DECLARE SECTION;\n\nint put_handler();\nvoid erreur();-
+\n\nif (argc < 4)\n\t{\n\tprintf ("\\nUsage : updteblob <dbname> <filename> <oldnam-
+e>\\n");\n\texit(1);\n\t}\nstrcpy(dbname, argv[1]);\nstrcpy(filename,argv[2]);\nstrc-
+py(oldname, argv[3]);\nEXEC SQL WHENEVER SQLERROR STOP;\nEXEC SQL CONNECT :dbname;\n-
+EXEC SQL WHENEVER SQLERROR CALL erreur;\n\nEXEC SQL UPDATE blobtbl \n\tSET fileconte-
+nt = datahandler(put_handler(filename))\n\tWHERE filename = :oldname;\n\nEXEC SQL CO-
+MMIT;\n\nEXEC SQL DISCONNECT;\n}\n\nvoid erreur()\n{\nEXEC SQL BEGIN DECLARE SECTION-
+;\nchar message[256];\nEXEC SQL END DECLARE SECTION;\n\nEXEC SQL INQUIRE_SQL(:messag-
+e=errortext);\nprintf("\\nSQL ERROR: %s",message);\nEXEC SQL ROLLBACK;\nEXEC SQL DIS-
+CONNECT;\nexit(1);\n}\n\nint put_handler(filename)\nchar *filename;\n{\nEXEC SQL BEG-
+IN DECLARE SECTION;\nchar mon_segment[3000];\nint longueur;\nEXEC SQL END DECLARE SE-
+CTION;\n\nFILE *fic;\nint nitems;\n\nfic = fopen (filename,"r");\nif (fic == (FILE*)-
+0) \n\t{\n\tprintf ("FillBlob Error: Cannot open file %s\\n",filename);\n\texit(1);\-
+n\t}\nwhile (fgets(mon_segment,100,fic)!= NULL )\n\t{\n\tlongueur = strlen (mon_segm-
+ent);\n\tEXEC SQL PUT DATA (segment=:mon_segment,segmentlength=:longueur);\n\t}\nEXE-
+C SQL PUT DATA (dataend = 1);\n}\n|
++--------------------------------+
+(1 row)
+>>
+* select filecontent from blobtbl where filename='fillblob.sc';\g
+<<
++--------------------------------+
+|filecontent                     |
++--------------------------------+
++--------------------------------+
+(0 rows)
+>>
+* \q 
+<<
+>>
+? run fillblob.exe SEPPARAMDB fillblob.sc 
+<<
+>>
+? run updteblob.exe SEPPARAMDB f2500 updteblob.sc 
+<<
+>>
+? rollforwarddb SEPPARAMDB -table=blobtbl -noblobs 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from blobtbl;\g
+<<
++-------------+
+|col1         |
++-------------+
+|            3|
++-------------+
+(1 row)
+>>
+* select filecontent from blobtbl where filename='updteblob.sc';\g
+<<
+E_LQ003A Cannot start up 'select' query.
+    Unexpected initial protocol response.
+
+>>
+<<
+E_SC0206 An internal error prevents further processing of this query. 
+    Associated error messages which provide more detailed information about
+    the problem can be found in the INGRES error log, II_CONFIG:errlog.log
+    (Mon Feb 13 13:50:33 1995)
+
+>>
+* select filename from blobtbl;\g
+<<
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+|filename                                                                           -
+                                                                                    -
+                                                                                    -
+     |
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+|prfdb04.sep                                                                        -
+                                                                                    -
+                                                                                    -
+     |
+|bea24.sep                                                                          -
+                                                                                    -
+                                                                                    -
+     |
+|updteblob.sc                                                                      -
+                                                                                    -
+                                                                                    -
+     |
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+(3 rows)
+>>
+* \q
+<<
+>>
+? rollforwarddb SEPPARAMDB 
+<<
+~
+>>
+? ckpdb -d +j SEPPARAMDB 
+<<
+~
+>>
+? run fillblob.exe SEPPARAMDB fillblob.sc 
+<<
+>>
+? run updteblob.exe SEPPARAMDB f2500 updteblob.sc 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from blobtbl;\g
+<<
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select filecontent from blobtbl where filename='updteblob.sc';\g
+<<
++--------------------------------+
+|filecontent                     |
++--------------------------------+
+| 100 chars -------------------------------------------------------------------------
+--------------->\n 200 chars --------------------------------------------------------
+-------------------------------->\n 300 chars ---------------------------------------
+------------------------------------------------->\n 400 chars ----------------------
+------------------------------------------------------------------>\n 500 chars -----
+----------------------------------------------------------------------------------->-
+\n 600 chars ------------------------------------------------------------------------
+---------------->\n 700 chars -------------------------------------------------------
+--------------------------------->\n 800 chars --------------------------------------
+-------------------------------------------------->\n 900 chars ---------------------
+------------------------------------------------------------------->\n1000 chars ----
+-------------------------------------------------------------------------------------
+>\n1100 chars -----------------------------------------------------------------------
+----------------->\n1200 chars ------------------------------------------------------
+---------------------------------->\n1300 chars -------------------------------------
+--------------------------------------------------->\n1400 chars --------------------
+-------------------------------------------------------------------->\n1500 chars ---
+-------------------------------------------------------------------------------------
+->\n1600 chars ----------------------------------------------------------------------
+------------------>\n1700 chars -----------------------------------------------------
+----------------------------------->\n1800 chars ------------------------------------
+---------------------------------------------------->\n1900 chars -------------------
+--------------------------------------------------------------------->\n2000 chars --
+-------------------------------------------------------------------------------------
+-->\n2100 chars ---------------------------------------------------------------------
+------------------->\n2200 chars ----------------------------------------------------
+------------------------------------>\n2300 chars -----------------------------------
+----------------------------------------------------->\n2400 chars ------------------
+---------------------------------------------------------------------->\n2500 chars -
+-------------------------------------------------------------------------------------
+--->\n|
++--------------------------------+
+(1 row)
+>>
+* \q
+<<
+>>
+? rollforwarddb SEPPARAMDB -table=blobtbl 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from blobtbl;\g
+<<
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select filecontent from blobtbl where filename='updteblob.sc';\g
+<<
++--------------------------------+
+|filecontent                     |
++--------------------------------+
+| 100 chars -------------------------------------------------------------------------
+--------------->\n 200 chars --------------------------------------------------------
+-------------------------------->\n 300 chars ---------------------------------------
+------------------------------------------------->\n 400 chars ----------------------
+------------------------------------------------------------------>\n 500 chars -----
+----------------------------------------------------------------------------------->-
+\n 600 chars ------------------------------------------------------------------------
+---------------->\n 700 chars -------------------------------------------------------
+--------------------------------->\n 800 chars --------------------------------------
+-------------------------------------------------->\n 900 chars ---------------------
+------------------------------------------------------------------->\n1000 chars ----
+-------------------------------------------------------------------------------------
+>\n1100 chars -----------------------------------------------------------------------
+----------------->\n1200 chars ------------------------------------------------------
+---------------------------------->\n1300 chars -------------------------------------
+--------------------------------------------------->\n1400 chars --------------------
+-------------------------------------------------------------------->\n1500 chars ---
+-------------------------------------------------------------------------------------
+->\n1600 chars ----------------------------------------------------------------------
+------------------>\n1700 chars -----------------------------------------------------
+----------------------------------->\n1800 chars ------------------------------------
+---------------------------------------------------->\n1900 chars -------------------
+--------------------------------------------------------------------->\n2000 chars --
+-------------------------------------------------------------------------------------
+-->\n2100 chars ---------------------------------------------------------------------
+------------------->\n2200 chars ----------------------------------------------------
+------------------------------------>\n2300 chars -----------------------------------
+----------------------------------------------------->\n2400 chars ------------------
+---------------------------------------------------------------------->\n2500 chars -
+-------------------------------------------------------------------------------------
+--->\n|
++--------------------------------+
+(1 row)
+>>
+* \q
+<<
+>>
+? rollforwarddb SEPPARAMDB -table=blobtbl -noblobs 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from blobtbl;\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select filecontent from blobtbl where filename='updteblob.sc';\g
+<<
+E_LQ003A Cannot start up 'select' query.
+    Unexpected initial protocol response.
+
+>>
+<<
+E_SC0206 An internal error prevents further processing of this query. 
+    Associated error messages which provide more detailed information about
+    the problem can be found in the INGRES error log, II_CONFIG:errlog.log
+    (Mon Feb 13 13:52:26 1995)
+
+>>
+* select filename from blobtbl;\g
+<<
+
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+|filename                                                                           -
+                                                                                    -
+                                                                                    -
+     |
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+|prfdb04.sep                                                                        -
+                                                                                    -
+                                                                                    -
+     |
+|bea24.sep                                                                          -
+                                                                                    -
+                                                                                    -
+     |
+|updteblob.sc                                                                      -
+                                                                                    -
+                                                                                    -
+     |
+|fillblob.sc                                                                        -
+                                                                                    -
+                                                                                    -
+     |
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+(4 rows)
+>>
+* drop table blobtbl;\g
+<<
+>>
+* \q
+<<
+>>
+? delete fillblob.exe 
+<<
+file was deleted
+>>
+? delete fillblob.o 
+<<
+file was deleted
+>>
+? delete fillblob.c 
+<<
+file was deleted
+>>
+? delete updteblob.exe 
+<<
+file was deleted
+>>
+? delete updteblob.o 
+<<
+file was deleted
+>>
+? delete updteblob.c 
+<<
+file was deleted
+>>
+? delete prfdb04.sep 
+<<
+file was deleted
+>>
+? delete bea24.sep 
+<<
+file was deleted
+>>
+
+
+Ending at: Tue Feb 28 16:47:58 1995

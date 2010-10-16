@@ -1,0 +1,445 @@
+/*
+	Test Name: pza24sc.sep
+	Time: Tue Jan 25 11:25:03 1994
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : pza24sc.sep
+	Module  : 
+	Filename: pza24sc
+	Purpose	: to test the BYTE and VARBYTE data types
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : byte1
+	Synopsis     : Test the BYTE and VARBYTE data types with dynamic SQL
+		       Uses host language variables and structures with
+		       select (cursor and select loop), insert, and
+		       update statements that are prepared and executed
+		       to manipulate the byte data type.
+
+
+ History: 25-Jan-1994	(jbryson)   Created
+	  11-Feb-1994   (jbryson)   Corrected SQLSTATE[5] to SQLSTATE[6]
+          02-Apr-1997   Modified (chiel02)
+                        Added an alternate canon for the sepcc command.   
+*/
+? delete pza24sc.c 
+<<
+~
+>>
+? delete pza24sc.o 
+<<
+~
+>>
+? delete pza24sc.obj 
+<<
+~
+>>
+? delete pza24sc.exe 
+<<
+~
+>>
+? fill pza24sc.sc 
+!!
+/*
+** VARBYTE test --- using byte types with dynamic SQL
+*/
+
+EXEC SQL INCLUDE SQLCA;
+EXEC SQL INCLUDE SQLDA;
+
+static IISQLDA_TYPE(da3_, sqlda3, 3);
+struct da3_ *s = &sqlda3;
+
+EXEC SQL BEGIN DECLARE SECTION;
+
+static	short	x0;
+static	char	buf0[33];
+static	short	x1;
+static	char	buf1[33];
+
+static	short	ind0;
+static	short	ind1;
+
+#define BUFMAX	13
+/*
+** This test data includes some non-character data, some codes that should
+** get translated across Unix and VMS hetnet, and some trailing blanks.
+** (Want to be sure trailing blanks don't get trimmed.)
+**
+** In its most readable form, the test data looks like the following:
+**
+**     { BUFMAX,0,'A','B',0xa4,0xa8,0xd7,0xdd,0xf7,0xfd,0xff,'A',' ',' '};
+**
+** However, the compiler doesn't like 8-bit hex initializers for "char" types,
+** so we are using negative decimal notation instead.  (It would also work to
+** define the buffer as "unsigned char", but since we only document the use
+** of "char" I wanted to stick with that.)
+**
+*/
+VARCHAR struct {
+	short	len;
+	char	buf[BUFMAX];
+} vch1 = { BUFMAX,0,'A','B',-92,-88,-41,-35,-9,-3,-1,'A',' ',' '};
+
+VARCHAR struct {
+	short	len;
+	char	buf[BUFMAX];
+} vch2;
+short	vch2ind = 0;
+
+VARBYTE struct {
+	short	len;
+	char	buf[BUFMAX];
+} vbyte1 = { BUFMAX,0,'A','B',-92,-88,-41,-35,-9,-3,-1,'A',' ',' '};
+
+VARBYTE struct {
+	short	len;
+	char	buf[BUFMAX];
+} vbyte2;
+short	vbyte2ind = 0;
+
+#define CBUFMAX 22
+char 	cbuf1[CBUFMAX];
+short	cbuf1ind;
+char 	cbuf2[CBUFMAX];
+short	cbuf2ind;
+
+char	*dbname;
+
+int	i;
+int	n;
+
+unsigned char uc;
+
+char SQLSTATE[6];
+
+EXEC SQL END DECLARE SECTION;
+
+int main(argc,argv)
+int argc;
+char **argv;
+{
+
+    if (argc == 2)
+    {
+	dbname = argv[1];
+    }
+    else
+    {
+	printf("Usage: %s <database name>\n",argv[0]);
+	exit(1);
+    }
+
+    EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+    EXEC SQL CONNECT :dbname;
+    printf("\nCONNECT SQLSTATE = %s\n", SQLSTATE);
+
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    EXEC SQL DROP TABLE byte1;
+
+    EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+    printf("\nRecreate the test table:\n");
+
+    /* lets test the CREATE TABLE command with BYTE VARYING */
+    EXEC SQL CREATE TABLE byte1 
+	(
+	col0 integer not null, 
+	col1 byte(21),
+	col2 byte varying(21)
+	);
+    printf("CREATE SQLSTATE = %s\n", SQLSTATE);
+
+    /*
+    ** Insert data from various combinations of VARCHAR and VARBYTE
+    ** variables.  Follow up with some NULL values.
+    */
+
+    s->sqldabc = sizeof(struct da3_);
+    s->sqln = 3;
+    s->sqld = 3;
+
+    i = 1;
+    s->sqlvar[0].sqltype = IISQ_INT_TYPE;
+    s->sqlvar[0].sqllen = sizeof(i);
+    s->sqlvar[0].sqldata = (char*)&i;
+    s->sqlvar[0].sqlind = 0;
+
+    s->sqlvar[1].sqltype = IISQ_VCH_TYPE;
+    s->sqlvar[1].sqllen = BUFMAX;
+    s->sqlvar[1].sqldata = (char*)&vch1;
+    s->sqlvar[1].sqlind = 0;
+
+    s->sqlvar[2].sqltype = IISQ_VCH_TYPE;
+    s->sqlvar[2].sqllen = BUFMAX;
+    s->sqlvar[2].sqldata = (char*)&vch1;
+    s->sqlvar[2].sqlind = 0;
+
+    EXEC SQL PREPARE s0 FROM 'insert into byte1 values (?, ?, ?)';
+    EXEC SQL EXECUTE s0 USING DESCRIPTOR :s;
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+
+    i = 2;
+    s->sqlvar[1].sqltype = IISQ_VBYTE_TYPE;
+    s->sqlvar[1].sqldata = (char*)&vbyte1;
+    s->sqlvar[2].sqltype = IISQ_VBYTE_TYPE;
+    s->sqlvar[2].sqldata = (char*)&vbyte1;
+    EXEC SQL EXECUTE s0 USING DESCRIPTOR :s;
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+
+    i = 3;
+    s->sqlvar[1].sqltype = IISQ_VCH_TYPE;
+    s->sqlvar[1].sqldata = (char*)&vch1;
+    s->sqlvar[2].sqltype = IISQ_VBYTE_TYPE;
+    s->sqlvar[2].sqldata = (char*)&vbyte1;
+    EXEC SQL EXECUTE s0 USING DESCRIPTOR :s;
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+
+    i = 4;
+    s->sqlvar[1].sqltype = IISQ_VBYTE_TYPE;
+    s->sqlvar[1].sqldata = (char*)&vbyte1;
+    s->sqlvar[2].sqltype = IISQ_VCH_TYPE;
+    s->sqlvar[2].sqldata = (char*)&vch1;
+    EXEC SQL EXECUTE s0 USING DESCRIPTOR :s;
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+
+    i = 5;
+    vbyte2ind = -1;
+    s->sqlvar[1].sqltype = -IISQ_BYTE_TYPE;
+    s->sqlvar[1].sqldata = (char*)&vbyte2;
+    s->sqlvar[1].sqlind = &vbyte2ind;
+    s->sqlvar[2].sqltype = -IISQ_VBYTE_TYPE;
+    s->sqlvar[2].sqldata = (char*)&vbyte2;
+    s->sqlvar[2].sqlind = &vbyte2ind;
+    EXEC SQL EXECUTE s0 USING DESCRIPTOR :s;
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+
+    i = 6;
+    s->sqlvar[1].sqltype = IISQ_VBYTE_TYPE;
+    s->sqlvar[1].sqldata = (char*)&vbyte1;
+    s->sqlvar[1].sqlind = 0;
+    s->sqlvar[2].sqltype = IISQ_VCH_TYPE;
+    s->sqlvar[2].sqldata = (char*)&vch1;
+    s->sqlvar[2].sqlind = 0;
+    EXEC SQL EXECUTE s0 USING DESCRIPTOR :s;
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+
+    s->sqlvar[0].sqldata = (char*)&n;
+    s->sqlvar[0].sqlind = 0;
+    s->sqlvar[1].sqldata = buf0;
+    s->sqlvar[1].sqlind = &ind0;
+    s->sqlvar[2].sqldata = buf1;
+    s->sqlvar[2].sqlind = &ind1;
+
+    EXEC SQL PREPARE s1 FROM 'select col0, col1, col2 from byte1';
+    printf("\nSQLSTATE = %s\n", SQLSTATE);
+
+    EXEC SQL DESCRIBE s1 INTO :s;
+    printf("\nSQLSTATE = %s\n", SQLSTATE);
+
+    EXEC SQL EXECUTE IMMEDIATE 'select col0, col1, col2 from byte1' 
+	USING DESCRIPTOR :s;
+    EXEC SQL BEGIN;
+	printf("\n====ROW %d====\n", n);
+
+	printf("buf0 =   ");
+	for (i = 0; i < 30 && ind0 != -1 ; i++)
+        {
+           uc = buf0[i];
+           printf("%2x", (int)uc);
+        }
+        printf("\nind0 = %d", ind0);
+        if(ind0 == -1)
+           printf("  ** NULL **");
+        printf("\n");
+
+	printf("buf1 = %2d",*(short *)buf1);
+	for (i = 2; i < 32 && ind1 != -1 ; i++)
+        {
+           uc = buf1[i];
+           printf("%2x", (int)uc);
+        }
+        printf("\nind1 = %d", ind1);
+        if(ind1 == -1)
+           printf("  ** NULL **");
+        printf("\n");
+    EXEC SQL END;
+
+    /*
+    ** Now try with a cursor.
+    */
+    printf("\n\nNow retrieve through a cursor:\n");
+    EXEC SQL DECLARE c1 CURSOR FOR s1;
+    EXEC SQL OPEN c1;
+    printf("\nOPEN SQLSTATE = %s\n", SQLSTATE);
+    while (sqlca.sqlcode == 0)
+    {
+        EXEC SQL FETCH c1 USING DESCRIPTOR :s;
+	if(sqlca.sqlcode)
+	   break;
+
+	printf("\n====ROW %d====\n", n);
+
+	printf("buf0 =   ");
+	for (i = 0; i < 30 && ind0 != -1 ; i++)
+        {
+           uc = buf0[i];
+           printf("%2x", (int)uc);
+        }
+        printf("\nind0 = %d", ind0);
+        if(ind0 == -1)
+           printf("  ** NULL **");
+        printf("\n");
+
+	printf("buf1 = %2d",*(short *)buf1);
+	for (i = 2; i < 32 && ind1 != -1 ; i++)
+        {
+           uc = buf1[i];
+           printf("%2x", (int)uc);
+        }
+        printf("\nind1 = %d", ind1);
+        if(ind1 == -1)
+           printf("  ** NULL **");
+        printf("\n");
+    }
+    EXEC SQL CLOSE c1;
+
+    EXEC SQL DISCONNECT;
+    printf("\nDISCONNECT SQLSTATE = %s\n", SQLSTATE);
+
+    exit(0);
+}
+!!
+? esqlc pza24sc.sc 
+<<
+ESQL pza24sc.sc:
+>>
+<<
+>>
+? sepcc pza24sc 
+<<
+>>
+<<
+pza24sc.c 
+>>
+? seplnk pza24sc 
+<<
+>>
+? run pza24sc.exe SEPPARAMDB 
+<<
+
+CONNECT SQLSTATE = 00000
+
+Recreate the test table:
+CREATE SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+
+SQLSTATE = 00000
+
+SQLSTATE = 00000
+
+====ROW 1====
+buf0 =    04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind0 = 0
+buf1 = 13 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind1 = 0
+
+====ROW 2====
+buf0 =    04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind0 = 0
+buf1 = 13 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind1 = 0
+
+====ROW 3====
+buf0 =    04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind0 = 0
+buf1 = 13 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind1 = 0
+
+====ROW 4====
+buf0 =    04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind0 = 0
+buf1 = 13 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind1 = 0
+
+====ROW 5====
+buf0 =   
+ind0 = -1  ** NULL **
+buf1 = 13
+ind1 = -1  ** NULL **
+
+====ROW 6====
+buf0 =    04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind0 = 0
+buf1 = 13 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind1 = 0
+
+
+Now retrieve through a cursor:
+
+OPEN SQLSTATE = 00000
+
+====ROW 1====
+buf0 =    04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind0 = 0
+buf1 = 13 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind1 = 0
+
+====ROW 2====
+buf0 =    04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind0 = 0
+buf1 = 13 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind1 = 0
+
+====ROW 3====
+buf0 =    04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind0 = 0
+buf1 = 13 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind1 = 0
+
+====ROW 4====
+buf0 =    04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind0 = 0
+buf1 = 13 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind1 = 0
+
+====ROW 5====
+buf0 =   
+ind0 = -1  ** NULL **
+buf1 = 13
+ind1 = -1  ** NULL **
+
+====ROW 6====
+buf0 =    04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind0 = 0
+buf1 = 13 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ind1 = 0
+
+DISCONNECT SQLSTATE = 00000
+>>
+? delete pza24sc.c 
+<<
+~
+>>
+? delete pza24sc.o 
+<<
+~
+>>
+? delete pza24sc.obj 
+<<
+~
+>>
+? delete pza24sc.exe 
+<<
+~
+>>
+
+
+Ending at: Tue Jan 25 17:28:01 1994

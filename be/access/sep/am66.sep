@@ -1,0 +1,395 @@
+/*
+Copyright (c) 2006 Ingres Corporation
+
+	Test Name: am66.sep (formerly cha53.sep)
+	Time: Mon Mar  1 11:41:48 1993
+	User Name: rmuth
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : File extend.
+	Filename: am66.sep (formerly cha53.sep)
+	Purpose	: 
+		  Checks the File extend syntax and related error messages.
+	Input Files  :
+	Output Files :
+	Database     :	SEPPARAMDB
+	Tables       :  cha53_tbl1, cha53_index1.
+	Synopsis     :
+
+ History:  1-Mar-1993	(rmuth)	  Created
+ 	  22-Mar-1999	(kamra01) Modified the page_size to 8K instead of 8192 
+	   5-May-2004	(Sinra04) Parser is now strict about use of 'with
+				  page_size' clause in modify statements which
+				  is causing E_US1944 MODIFY error message,sep
+				  updated.  This change is for Ingres 3 behavior
+				  and going forward.
+           3-Nov-2006	(vande02) Updated canons where invalid allocation 
+				  messages E_US14DD have changed. Added
+				  Copyright, header cleanup.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* set autocommit on;\g
+<<
+>>
+* drop table cha53_tbl2;\g
+<<
+~
+>>
+* create table cha53_tbl2(a integer, b integer, c char(200)) with page_size=8192;\g
+<<
+>>
+* drop table cha53_tbl1;\g
+<<
+~
+>>
+* create table cha53_tbl1(a integer, b integer, c char(200))
+<<
+>>
+*	with allocation = 100,page_size=8192; \g
+/*
+	Allocation clause not allowed on create table statement.
+*/
+<<
+E_US07EA CREATE TABLE: WITH option 'allocation' allowed only in the
+    version of the 
+      CREATE TABLE statement using a subselect.
+    (Tue Apr 20 10:42:38 1993)
+
+>>
+* create table cha53_tbl1(a integer, b integer, c char(200)) with extend=100,page_si-
+ze=8192;\g
+/*
+	Extend clause not allowed on create table statement.
+*/
+<<
+E_US07EA CREATE TABLE: WITH option 'extend' allowed only in the version of
+    the 
+      CREATE TABLE statement using a subselect.
+    (Tue Apr 20 10:42:42 1993)
+
+>>
+* create table cha53_tbl1( a integer, b integer, c char(500)) with page_size=8192;\g
+/*
+	Default allocation and extend size is 4 and 16.
+*/
+<<
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_tbl1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_tbl1                      |            4|            4|           16|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* modify cha53_tbl1 to heap with allocation = 8388608,page_size=8192;\g
+/*
+	Check invalid values for the allocation clause.
+*/
+<<
+E_US14DD MODIFY: Invalid ALLOCATION of '8388608' specified. 
+    Must be between 4 and 8388607 inclusively.
+    (Fri Nov  3 08:19:16 2006)
+
+>>
+* modify cha53_tbl1 to heap with allocation = 3,page_size=8192;\g
+<<
+E_US14DD MODIFY: Invalid ALLOCATION of '3' specified. 
+    Must be between 4 and 8388607 inclusively.
+    (Fri Nov  3 08:19:36 2006)
+
+>>
+* modify cha53_tbl1 to heap with allocation = 2,page_size=8192;\g
+<<
+E_US14DD MODIFY: Invalid ALLOCATION of '2' specified. 
+    Must be between 4 and 8388607 inclusively.
+    (Fri Nov  3 08:19:38 2006)
+
+>>
+* modify cha53_tbl1 to heap with allocation = 1,page_size=8192;\g
+<<
+E_US14DD MODIFY: Invalid ALLOCATION of '1' specified. 
+    Must be between 4 and 8388607 inclusively.
+    (Fri Nov  3 08:19:40 2006)
+
+>>
+* modify cha53_tbl1 to heap with allocation = 0,page_size=8192;\g
+<<
+E_US14DD MODIFY: Invalid ALLOCATION of '0' specified. 
+    Must be between 4 and 8388607 inclusively.
+    (Fri Nov  3 08:19:41 2006)
+
+>>
+* modify cha53_tbl1 to heap with allocation = -100,page_size=8192;\g
+<<
+E_US09CF line 1, Syntax error on '-'.  The correct syntax is: 
+    MODIFY table TO storage-structure [UNIQUE] 
+       [ON column [ASC|DESC] {, ... }] 
+   [with_clause]
+    (Mon Mar  1 13:11:58 1993)
+
+E_US0AA2 line 1, Syntax error on '-'. An integer constant expected.
+    (Mon Mar  1 13:11:58 1993)
+>>
+* modify cha53_tbl1 to heap with extend = 8388608,page_size=8192; \g
+/*
+	Check invalid values for the EXTEND clause.
+*/
+<<
+E_US14DD MODIFY: Invalid extend of '8388608' specified. 
+    Must be between 1 and 8388607 inclusively.
+    (Mon Mar  1 13:45:24 1993)
+>>
+* modify cha53_tbl1 to heap with extend  = 0,page_size=8192; \g
+<<
+E_US14DD MODIFY: Invalid extend of '0' specified. 
+    Must be between 1 and 8388607 inclusively.
+    (Mon Mar  1 13:25:59 1993)
+>>
+* modify cha53_tbl1 to heap with extend = -100,page_size=8192; \g
+<<
+E_US09CF line 1, Syntax error on '-'.  The correct syntax is: 
+    MODIFY table TO storage-structure [UNIQUE] 
+       [ON column [ASC|DESC] {, ... }] 
+   [with_clause]
+    (Tue Apr 20 10:42:50 1993)
+
+E_US0AA2 line 1, Syntax error on '-'. An integer constant expected.
+    (Tue Apr 20 10:42:50 1993)
+>>
+* modify cha53_tbl1 to btree with allocation=55,extend=41,page_size=8192;\g
+/*
+	Specify an allocation and extend value and make sure
+	they persist across a modify.
+*/
+<<
+(0 rows)
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_tbl1';\g
+<<
+
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_tbl1                      |           55|           55|           41|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* modify cha53_tbl1 to heap with page_size=8192;\g
+<<
+(0 rows)
+>>
+* select table_name, allocated_pages, allocation_size, extend_size
+<<
+>>
+*	from iitables where table_name='cha53_tbl1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_tbl1                      |           55|           55|           41|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* create index cha53_index1 on cha53_tbl1(a) with allocation = 100, extend=32,page_s-
+ize=8192;\g
+/*
+	ALLOCATION and EXTEND clause on CREATE INDEX.
+*/
+<<
+(0 rows)
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_index1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_index1                    |          100|          100|           32|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* modify cha53_index1 to btree with page_size=8192;\g
+/*
+	Make sure values persist across a modify.
+*/
+<<
+(0 rows)
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_index1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_index1                    |          100|          100|           32|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* drop index cha53_index1;\g
+/*
+	Default allocation and extend size is 4 and 16.
+*/
+<<
+>>
+* create index cha53_index1 on cha53_tbl1(a) with page_size=8192; \g
+<<
+(0 rows)
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_index1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_index1                    |            4|            4|           16|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* modify cha53_index1 to btree with allocation = 50, extend=100,page_size=8192;\g
+/*
+	Allocation and extend clause is allowed on MODIFY INDEX, 
+	make sure it persists it persists across a modify.
+*/
+<<
+(0 rows)
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_index1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_index1                    |           50|           50|          100|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* modify cha53_index1 to btree with page_size=8192 ;\g
+<<
+(0 rows)
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_index1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_index1                    |           50|           50|          100|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* drop table cha53_tbl1;\g
+<<
+~
+>>
+* create table cha53_tbl1 as select * from cha53_tbl2 
+<<
+>>
+*	with allocation = 100, extend = 20,page_size=8192;\g
+/*
+	CREATE TABLE AS SELECT allows ALLOCATION and EXTEND clauses.
+*/
+<<
+(0 rows)
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_tbl1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_tbl1                    |          100|          100|           20|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* create index cha53_index1 on cha53_tbl1(a) with allocation = 100, extend=32,page_s-
+ize=8192;\g
+<<
+(0 rows)
+>>
+* modify cha53_tbl1 to add_extend\g
+<<
+
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_tbl1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_tbl1                    |          120|          100|           20|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_index1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_index1                    |          100|          100|           32|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* modify cha53_tbl1 to add_extend with extend =100\g
+/*
+	Add_extend allows the extend clause.
+*/
+<<
+
+>>
+* select table_name, allocated_pages, allocation_size, extend_size 
+<<
+>>
+*	from iitables where table_name='cha53_tbl1';\g
+<<
++--------------------------------+-------------+-------------+-------------+
+|table_name                      |allocated_pag|allocation_si|extend_size  |
++--------------------------------+-------------+-------------+-------------+
+|cha53_tbl1                      |          220|          100|           20|
++--------------------------------+-------------+-------------+-------------+
+(1 row)
+>>
+* modify cha53_tbl1 to add_extend with extend =100, minpages=100,page_size=8192; \g
+/*
+	Add_extend allows the extend clause.
+*/
+<<
+E_US14E2 MODIFY: 'minpages' is either an invalid option or the syntax of
+    the WITH subclause is invalid. 
+    The only valid keyword for this type of subclause is EXTEND.
+    (Tue Apr 20 10:53:06 1993)
+
+>>
+* \q
+<<
+>>
+
+
+Ending at: Fri Nov  3 08:19:49 2006

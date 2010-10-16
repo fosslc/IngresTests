@@ -1,0 +1,214 @@
+/*
+	Test Name: dtu11.sep
+	Time: Fri Nov  9 23:39:29 2001
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : dtu11.sep
+	Module  : be/datatypes
+	Filename: dtu11.sep
+	Purpose	: To test the new unicode data types first available with
+                  II 2.6/0106 and later releases.
+	Input Files  : dtu11.sc
+	Output Files : dtu11.exe
+	Database     : unidb
+	Tables       : test_nchar, test_nchar2, test_nchar3, test_nvarchar,
+                       test_nvarchar2, test_lnvarchar, test_lnvarchar2
+	Synopsis     : This test is to select unicode columns using cursor
+                       loops. 
+
+ History:  9-Nov-2001	(wu$ca01)	Created
+          28-May-2002   (sarjo01) Change %ls to %S, modularize canon.
+*/
+? fill dtu11.sc 
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i, i1, i2, rowcount;
+  wchar_t wc1[9], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, k2;
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "=======================================================\n";
+
+void print_header(char *s)
+{
+   printf("%s\n%s", s, ln);
+}
+
+void print_trailer()
+{
+   printf(ln);
+}
+
+int main(int argc, char *argv[])
+{
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   exec sql declare c1 cursor for select 
+            col1, col2 from test_nchar order by 1;
+   exec sql open c1;
+
+   EXEC SQL WHENEVER not found goto break1; 
+
+   print_header("Nchar cursor loop...");
+   for (;;)
+   {
+      exec sql fetch c1 into :i1, :nv1; 
+      UC_TERM(nv1);
+      printf("|%3d|%S|\n", i1, nv1.text);
+   }
+break1:
+   print_trailer();
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   exec sql declare c2 cursor for select
+            col1, col2 from test_nvarchar order by 1;
+   exec sql open c2;
+
+   EXEC SQL WHENEVER not found goto break2;
+
+   print_header("Nvarchar cursor loop...");
+   for (;;)
+   {
+      exec sql fetch c2 into :i1, :nv1;
+      UC_TERM(nv1);
+      printf("|%3d|%S|\n", i1, nv1.text);
+   }
+break2:
+   print_trailer();
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   exec sql declare c3 cursor for select
+            col1, col2 from test_lnvarchar order by 1;
+   exec sql open c3;
+
+   EXEC SQL WHENEVER not found goto break3;
+
+   print_header("Long nvarchar cursor loop...");
+   for (;;)
+   {
+      exec sql fetch c3 into :i1, :nv1;
+      UC_TERM(nv1);
+      printf("|%3d|%S|\n", i1, nv1.text);
+   }
+break3:
+   print_trailer();
+
+   printf("Operation complete\n");
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu11.sc 
+<<
+~
+>>
+? sepcc dtu11 
+<<
+~
+>>
+? seplnk dtu11 
+<<
+~
+>>
+? run dtu11.exe SEPPARAMDB3
+<<
+Nchar cursor loop...
+=======================================================
+|  0|ABC     |
+|  0|ABC     |
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF     |
+|  2|DEF     |
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI     |
+|  4|GHI     |
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  7|Z       |
+|  7|Z       |
+=======================================================
+Nvarchar cursor loop...
+=======================================================
+|  0|ABC|
+|  0|ABC|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF|
+|  2|DEF|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI|
+|  4|GHI|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  7|Z   |
+|  7|Z   |
+=======================================================
+Long nvarchar cursor loop...
+=======================================================
+|  0|ABC|
+|  0|ABC|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF|
+|  2|DEF|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI|
+|  4|GHI|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  7|Z   |
+|  7|Z   |
+=======================================================
+Operation complete
+>>
+? delete dtu11.c 
+<<
+~
+>>
+? delete dtu11.o 
+<<
+~
+>>
+? delete dtu11.obj 
+<<
+~
+>>
+? delete dtu11.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Nov  9 23:40:34 2001

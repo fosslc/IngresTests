@@ -1,0 +1,241 @@
+/*
+	Test Name: pza18sc.sep
+	Time: Mon Jan 17 17:00:38 1994
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : pza18sc
+	Module  : 3gl
+	Filename: pza18sc.sep
+	Purpose	: tests several FIPS features.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : "foo 1", foo, user_test, "foo view"
+	Synopsis     : Tests the following FIPS (and non-FIPS) features:
+			- Schema Language
+			- With check option semantics on views
+			- Flexible placements of SQL in host code
+			- USER with the INSERT statement
+			- SQL keywords as Host variables
+			- Global temp tables
+			- Table extend
+			- modify table to readonly
+			- the use of "CONST" and "VOLATILE" for ANSI C
+
+              This test assumes/requires the use of "testenv" as the user.
+	      This test will also run against a FIPS or Ingres database
+	      just change SEPPARAMDB to the correct database.
+
+	      NOTE: this test must be compiled with an ANSI C compiler....
+
+
+ History: 17-Jan-1994	(jbryson)	Created
+           3-Mar-1994	(jbryson) added more test coverage.
+			- Global temp tables
+			- Table extend
+			- modify table to readonly
+			- the use of "CONST" and "VOLATILE" for ANSI C
+          02-Apr-1997  Modified (chiel02)
+                       Added an alternate canon for the sepcc command.
+*/
+? delete pza18sc.c 
+<<
+~
+>>
+? delete pza18sc.o 
+<<
+~
+>>
+? delete pza18sc.obj 
+<<
+~
+>>
+? delete pza18sc.exe 
+<<
+~
+>>
+? fill pza18sc.sql 
+!!
+SET TRACE POINT PS150\p\g
+MODIFY foo2 TO NOREADONLY\p\g
+DROP SCHEMA testenv CASCADE\p\g
+!!
+? sql -utestenv -s SEPPARAMDB 
+<<
+~
+>>
+* \i pza18sc.sql
+<<
+~
+>>
+* \q 
+<<
+~
+>>
+? fill pza18sc.sc 
+!!
+/* to clean up:
+	SET TRACE POINT PS150\g
+	DROP SCHEMA testenv CASCADE\g
+*/
+EXEC SQL INCLUDE SQLCA;
+
+int main(argc,argv)
+int  argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char *argv[];
+EXEC SQL END DECLARE SECTION;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+   char user[31];
+   int  select, insert, update, delete;
+
+   /* ANSI portion of test!  ONLY testing "CONST" and "VOLATILE" */
+   CONST    char var1[10];
+   const    int  var2;
+   VOLATILE char var3[5];
+   volatile int var4;
+EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   EXEC SQL CONNECT :argv[1] IDENTIFIED BY testenv;
+
+   EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+   /* tests - Schema Language syntax */
+   printf("Before create schema\n");
+   EXEC SQL CREATE SCHEMA AUTHORIZATION testenv
+       CREATE TABLE "foo 1" ("col 1" integer)
+       CREATE TABLE foo (col1 integer, col2 integer,
+			 col3 integer, col4 integer)
+       CREATE TABLE user_test (col1 varchar(30))
+       CREATE VIEW "foo view" AS SELECT "col 1" FROM "foo 1"
+       GRANT ALL PRIVILEGES ON "foo 1" TO PUBLIC;
+
+   /* tests - USER with the INSERT statement and      */
+   /*         Flexibel placement of SSQL in host code */
+   printf("before 'USER'\n"); EXEC SQL INSERT INTO user_test values (USER);
+   EXEC SQL SELECT * INTO :user FROM user_test; printf("user =%s=\n",user);
+
+   EXEC SQL INSERT INTO foo VALUES (1,2,3,4);
+
+   /* tests - with check option semantics on views */
+   printf("Before with check option semantics\n");
+   EXEC SQL CREATE VIEW foo_view 
+	AS SELECT col1 FROM foo
+	WHERE col1 = 1
+	WITH CHECK OPTION;
+
+   EXEC SQL UPDATE foo_view
+       SET col1=3;
+
+   /* tests - SQL keywords as host variables */
+   printf("Before SQL keywords as host variables\n");
+   EXEC SQL SELECT * 
+	    INTO   :select, :insert, :update, :delete
+	    FROM foo;
+
+   printf("select=%d  insert=%d  update=%d  delete=%d\n",
+	   select,insert,update,delete);
+
+   /* tests - Global temp tables */
+   EXEC SQL DECLARE GLOBAL TEMPORARY TABLE SESSION.pza18sc 
+	(col1 integer, col2 integer,
+	 col3 decimal, col4 varchar(10))
+	 ON COMMIT PRESERVE ROWS
+	 WITH NORECOVERY;
+
+   /* tests - File extend? - mostly for syntax */
+   EXEC SQL CREATE TABLE foo2 AS SELECT * FROM SESSION.pza18sc 
+	WITH EXTEND = 4;
+   EXEC SQL MODIFY foo2 TO ADD_EXTEND WITH EXTEND = 10;
+
+   /* tests - modify table to readonly */
+   EXEC SQL MODIFY foo2 TO READONLY;
+
+   /* this will cause an error... */
+   EXEC SQL INSERT INTO foo2 VALUES (1,1,1,'213');
+
+   /* tests - modify table to noreadonly */
+   EXEC SQL MODIFY foo2 TO NOREADONLY;
+
+   EXEC SQL DISCONNECT;
+
+   exit(0);
+} /* Main Program */
+!!
+? esqlc pza18sc.sc 
+<<
+ESQL pza18sc.sc:
+>>
+<<
+>>
+? sepcc pza18sc 
+<<
+>>
+<<
+pza18sc.c
+>>
+? seplnk pza18sc 
+<<
+>>
+? run pza18sc.exe SEPPARAMDB 
+/*
+   The first canon gets used when running against an Ingres Database.
+   The second canon gets used when running against a FIPS Database.
+*/
+<<
+Before create schema
+before 'USER'
+user =testenv=
+Before with check option semantics
+E_US1910 A query will be rolled back because it resulted in a violation 
+    of CHECK OPTION defined on view "testenv"."foo_view".
+    (Thu Mar  3 15:19:55 1994)
+Before SQL keywords as host variables
+select=1  insert=2  update=3  delete=4
+E_US14E6 READONLY:  The user has issued a statement which attempted to
+    write to a READONLY table
+    (Thu Mar  3 15:19:57 1994)
+>>
+<<
+Before create schema
+before 'USER'
+user =TESTENV=
+Before with check option semantics
+E_US1910 A query will be rolled back because it resulted in a violation 
+    of CHECK OPTION defined on view "TESTENV"."FOO_VIEW".
+    (Thu Mar  3 15:19:55 1994)
+Before SQL keywords as host variables
+select=1  insert=2  update=3  delete=4
+E_US14E6 READONLY:  The user has issued a statement which attempted to
+    write to a READONLY table
+    (Thu Mar  3 15:19:57 1994)
+>>
+? delete pza18sc.c 
+<<
+~
+>>
+? delete pza18sc.o 
+<<
+~
+>>
+? delete pza18sc.obj 
+<<
+~
+>>
+? delete pza18sc.exe 
+<<
+~
+>>
+
+
+Ending at: Thu Mar  3 15:20:17 1994

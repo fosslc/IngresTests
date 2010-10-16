@@ -1,0 +1,848 @@
+/*
+	Test Name: alttbl37.sep
+	Time: Thu Jan 16 00:56:04 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : alttbl37
+	Module  : be/alttbl
+	Filename: alttbl37.sep
+	Purpose	: To Create a table with check constraints, then alter table
+		  drop column which does not have constraints on it.
+	Input Files  : none
+	Output Files : none
+	Database     : alttbldb
+	Tables       : tbl_alttbl37
+	Synopsis     : Create a table with check constraints, then alter table
+		       drop column which does not have constraints on it. Check
+		       constraints should work properly for inserts and updates
+		       before and after table is modified.
+
+ History: 16-Jan-1997	(wanya01)	Created 
+	  23-Mar-1999	(kamra01) Modified the page_size to 4K instead of
+			vpg_sz.	 
+           3-Jul-2001	(BOIJA02) Create_date format isn't tokenised, useless to
+			us, so I've lost it.
+          17-Jun-2004	(shafa01) Added order by clause for the select
+			statements preformed against iiconstraints table.
+			Also removed huge fill file and added a canon 
+			for every SQL statement. Rearranged history display.
+			Added missing test information from the header
+			section. Changed table name from t to tbl_alttbl37.
+			Corrected the 'update' statements test the constraints.
+			Added 'select' statements to verify data integrity.
+			Changed heap to btree in the modify statement as table
+			by default is created as heap.
+	
+
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* set autocommit on \g
+<<
+>>
+* drop table tbl_alttbl37 \g
+<<
+~
+>>
+* create table tbl_alttbl37 (col1 int, col2 int, col3 int) with page_size= 4096
+<<
+>>
+* \g
+<<
+>>
+* alter table tbl_alttbl37 add constraint c1 check(col1 >5 ) \g
+<<
+>>
+* alter table tbl_alttbl37 add constraint c2 check(col3 >5 ) \g
+<<
+>>
+* select constraint_name,schema_name,table_name,constraint_type,
+<<
+>>
+* text_sequence, text_segment,system_use from iiconstraints order by 
+<<
+>>
+* constraint_name \g
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+|constraint_name                 |schema_name                     |table_name       -
+               |constr|text_sequence|text_segment                                   -
+                                                                                    -
+                                                                                    -
+                         |system|
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+|c1                              |testenv                         |tbl_alttbl37     -
+               |C     |            1|CHECK(col1 >5 )                                -
+                                                                                    -
+                                                                                    -
+                         |U     |
+|c2                              |testenv                         |tbl_alttbl37     -
+               |C     |            1|CHECK(col3 >5 )                                -
+                                                                                    -
+                                                                                    -
+                         |U     |
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+(2 rows)
+>>
+* insert into tbl_alttbl37 values(1,0,8) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:24:24 2004)
+
+>>
+* insert into tbl_alttbl37 values(8,0,1) \g
+<<
+E_US1905 Check integrity constraint '"c2"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:24:27 2004)
+
+>>
+* insert into tbl_alttbl37 values (8,0,8) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+-------------+-------------+
+|col1         |col2         |col3         |
++-------------+-------------+-------------+
+|            8|            0|            8|
++-------------+-------------+-------------+
+(1 row)
+>>
+* alter table tbl_alttbl37 drop column col2 restrict \g
+<<
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            8|            8|
++-------------+-------------+
+(1 row)
+>>
+* insert into tbl_alttbl37 values(1,8) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:24:31 2004)
+
+>>
+* insert into tbl_alttbl37 values(8,1) \g
+<<
+E_US1905 Check integrity constraint '"c2"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:24:32 2004)
+
+>>
+* insert into tbl_alttbl37 values (8,8) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            8|            8|
+|            8|            8|
++-------------+-------------+
+(2 rows)
+>>
+* update tbl_alttbl37 set col1=0 where col1=8 \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 15:29:40 2004)
+
+>>
+* update tbl_alttbl37 set col1=6 where col1=8 \g
+<<
+(2 rows)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            6|            8|
+|            6|            8|
++-------------+-------------+
+(2 rows)
+>>
+* update tbl_alttbl37 set col3=0 where col3=8 \g
+<<
+E_US1905 Check integrity constraint '"c2"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 15:29:42 2004)
+
+>>
+* update tbl_alttbl37 set col3=7 where col3=8 \g
+<<
+(2 rows)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            6|            7|
+|            6|            7|
++-------------+-------------+
+(2 rows)
+>>
+* modify tbl_alttbl37 to btree \g
+<<
+(2 rows)
+>>
+* insert into tbl_alttbl37 values(1,8) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:24:46 2004)
+
+>>
+* insert into tbl_alttbl37 values(8,1) \g
+<<
+E_US1905 Check integrity constraint '"c2"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:24:48 2004)
+
+>>
+* insert into tbl_alttbl37 values(8,8) \g 
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            6|            7|
+|            6|            7|
+|            8|            8|
++-------------+-------------+
+(3 rows)
+>>
+* update tbl_alttbl37 set col1=0 where col1=8 \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 15:29:45 2004)
+
+>>
+* update tbl_alttbl37 set col1=6 where col1=8 \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            6|            8|
+|            6|            7|
+|            6|            7|
++-------------+-------------+
+(3 rows)
+>>
+* update tbl_alttbl37 set col3=0 where col3=8 \g
+<<
+E_US1905 Check integrity constraint '"c2"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 15:29:47 2004)
+
+>>
+* update tbl_alttbl37 set col3=7 where col3=8 \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1 \g
+<<
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            6|            7|
+|            6|            7|
+|            6|            7|
++-------------+-------------+
+(3 rows)
+>>
+* drop table tbl_alttbl37 \g
+<<
+>>
+* create table tbl_alttbl37 (col1 int, col2 int) with page_size= 4096 \g
+<<
+>>
+* alter table tbl_alttbl37 add constraint c1 check(col2 >5 ) \g
+<<
+>>
+* select constraint_name,schema_name,table_name,constraint_type,
+<<
+>>
+* text_sequence, text_segment,system_use from iiconstraints order by
+<<
+>>
+* constraint_name\g
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+|constraint_name                 |schema_name                     |table_name       -
+               |constr|text_sequence|text_segment                                   -
+                                                                                    -
+                                                                                    -
+                         |system|
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+|c1                              |testenv                         |tbl_alttbl37     -
+               |C     |            1|CHECK(col2 >5 )                                -
+                                                                                    -
+                                                                                    -
+                         |U     |
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+(1 row)
+>>
+* insert into tbl_alttbl37 values(8,0) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:00 2004)
+
+>>
+* insert into tbl_alttbl37 values(1,8) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+-------------+
+|col1         |col2         |
++-------------+-------------+
+|            1|            8|
++-------------+-------------+
+(1 row)
+>>
+* alter table tbl_alttbl37 drop column col1 restrict \g
+<<
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+
+|col2         |
++-------------+
+|            8|
++-------------+
+(1 row)
+>>
+* insert into tbl_alttbl37 values(2) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:04 2004)
+
+>>
+* insert into tbl_alttbl37 values(9) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+
+|col2         |
++-------------+
+|            8|
+|            9|
++-------------+
+(2 rows)
+>>
+* update tbl_alttbl37 set col2=0 where col2=9 \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:06 2004)
+
+>>
+* update tbl_alttbl37 set col2=10 where col2=9 \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+
+|col2         |
++-------------+
+|            8|
+|           10|
++-------------+
+(2 rows)
+>>
+* modify tbl_alttbl37 to btree \g
+<<
+(2 rows)
+>>
+* insert into tbl_alttbl37 values(2) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:11 2004)
+
+>>
+* insert into tbl_alttbl37 values(9) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+
+|col2         |
++-------------+
+|            8|
+|            9|
+|           10|
++-------------+
+(3 rows)
+>>
+* update tbl_alttbl37 set col2=0 where col2=9 \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:15 2004)
+
+>>
+* update tbl_alttbl37 set col2=10 where col2=9 \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1 \g
+<<
+
++-------------+
+|col2         |
++-------------+
+|            8|
+|           10|
+|           10|
++-------------+
+(3 rows)
+>>
+* drop table tbl_alttbl37 \g
+<<
+>>
+* create table tbl_alttbl37 (col1 int, col2 int) with page_size= 4096 \g
+<<
+>>
+* alter table tbl_alttbl37 add constraint c1 check(col1 >5 ) \g
+<<
+>>
+* select constraint_name,schema_name,table_name,constraint_type,
+<<
+>>
+* text_sequence, text_segment,system_use from iiconstraints order by
+<<
+>>
+* constraint_name\g
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+|constraint_name                 |schema_name                     |table_name       -
+               |constr|text_sequence|text_segment                                   -
+                                                                                    -
+                                                                                    -
+                         |system|
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+|c1                              |testenv                         |tbl_alttbl37     -
+               |C     |            1|CHECK(col1 >5 )                                -
+                                                                                    -
+                                                                                    -
+                         |U     |
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+(1 row)
+>>
+* insert into tbl_alttbl37 values(8,0) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+-------------+
+|col1         |col2         |
++-------------+-------------+
+|            8|            0|
++-------------+-------------+
+(1 row)
+>>
+* insert into tbl_alttbl37 values(1,8) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:27 2004)
+
+>>
+* alter table tbl_alttbl37 drop column col2 restrict \g
+<<
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            8|
++-------------+
+(1 row)
+>>
+* insert into tbl_alttbl37 values(2) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:30 2004)
+
+>>
+* insert into tbl_alttbl37 values(9) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            8|
+|            9|
++-------------+
+(2 rows)
+>>
+* update tbl_alttbl37 set col1=0 where col1=9 \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:32 2004)
+
+>>
+* update tbl_alttbl37 set col1=10 where col1=9 \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            8|
+|           10|
++-------------+
+(2 rows)
+>>
+* modify tbl_alttbl37 to btree \g
+<<
+(2 rows)
+>>
+* insert into tbl_alttbl37 values(2) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:38 2004)
+
+>>
+* insert into tbl_alttbl37 values(9) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            8|
+|            9|
+|           10|
++-------------+
+(3 rows)
+>>
+* update tbl_alttbl37 set col1=0 where col1=9 \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:41 2004)
+
+>>
+* update tbl_alttbl37 set col1=10 where col1=9 \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1 \g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            8|
+|           10|
+|           10|
++-------------+
+(3 rows)
+>>
+* drop table tbl_alttbl37 \g
+<<
+>>
+* create table tbl_alttbl37 (col1 int, col2 int, col3 int, col4 int, col5 int, 
+<<
+>>
+* col6 int,col7 int, col8 int, col9 int, col10 int) with page_size = 4096 \g
+<<
+>>
+* alter table tbl_alttbl37 add constraint c1 check(col10>5) \g
+<<
+>>
+* select constraint_name,schema_name,table_name,constraint_type,
+<<
+>>
+* text_sequence, text_segment,system_use from iiconstraints order by
+<<
+>> 
+* constraint_name\g
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+|constraint_name                 |schema_name                     |table_name       -
+               |constr|text_sequence|text_segment                                   -
+                                                                                    -
+                                                                                    -
+                         |system|
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+|c1                              |testenv                         |tbl_alttbl37     -
+               |C     |            1|CHECK(col10>5)                                 -
+                                                                                    -
+                                                                                    -
+                         |U     |
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------+------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------+------+
+(1 row)
+>>
+* insert into tbl_alttbl37 values(1,2,3,4,5,6,7,8,9,10) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1 \g
+<<
+
++-------------+-------------+-------------+-------------+-------------+--------------
++-------------+-------------+-------------+-------------+
+|col1         |col2         |col3         |col4         |col5         |col6         -
+|col7         |col8         |col9         |col10        |
++-------------+-------------+-------------+-------------+-------------+--------------
++-------------+-------------+-------------+-------------+
+|            1|            2|            3|            4|            5|            6-
+|            7|            8|            9|           10|
++-------------+-------------+-------------+-------------+-------------+--------------
++-------------+-------------+-------------+-------------+
+(1 row)
+>>
+* alter table tbl_alttbl37 drop column col1 restrict \g
+<<
+>>
+* alter table tbl_alttbl37 drop column col2 restrict \g
+<<
+>>
+* alter table tbl_alttbl37 drop column col3 restrict \g
+<<
+>>
+* alter table tbl_alttbl37 drop column col4 restrict \g
+<<
+>>
+* alter table tbl_alttbl37 drop column col5 restrict \g
+<<
+>>
+* alter table tbl_alttbl37 drop column col6 restrict \g
+<<
+>>
+* alter table tbl_alttbl37 drop column col7 restrict \g
+<<
+>>
+* alter table tbl_alttbl37 drop column col8 restrict \g
+<<
+>>
+* alter table tbl_alttbl37 drop column col9 restrict \g
+<<
+>>
+* select * from tbl_alttbl37 order by 1 \g
+<<
+
++-------------+
+|col10        |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* insert into tbl_alttbl37 values(2) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:25:59 2004)
+
+>>
+* insert into tbl_alttbl37 values(9) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1 \g
+<<
+
++-------------+
+|col10        |
++-------------+
+|            9|
+|           10|
++-------------+
+(2 rows)
+>>
+* update tbl_alttbl37 set col10=0 where col10=9 \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 15:30:18 2004)
+
+>>
+* update tbl_alttbl37 set col10=10 where col10=9 \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1 \g
+<<
+
++-------------+
+|col10        |
++-------------+
+|           10|
+|           10|
++-------------+
+(2 rows)
+>>
+* modify tbl_alttbl37 to btree \g
+<<
+(2 rows)
+>>
+* insert into tbl_alttbl37 values(2) \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 13:26:13 2004)
+
+>>
+* insert into tbl_alttbl37 values(9) \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1 \g
+<<
+
++-------------+
+|col10        |
++-------------+
+|            9|
+|           10|
+|           10|
++-------------+
+(3 rows)
+>>
+* update tbl_alttbl37 set col10=0 where col10=9 \g
+<<
+E_US1905 Check integrity constraint '"c1"'
+    on table '"tbl_alttbl37"' was violated.
+    (Thu Jun 17 15:30:25 2004)
+
+>>
+* update tbl_alttbl37 set col10=10 where col10=9 \g
+<<
+(1 row)
+>>
+* select * from tbl_alttbl37 order by 1\g
+<<
+
++-------------+
+|col10        |
++-------------+
+|           10|
+|           10|
+|           10|
++-------------+
+(3 rows)
+>>
+* drop table tbl_alttbl37 \g
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Thu Jun 17 16:10:08 2004

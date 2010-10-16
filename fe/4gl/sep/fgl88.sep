@@ -1,0 +1,3566 @@
+/*
+	Test Name: pka19.sep
+	Time: Tue Apr 19 17:49:08 1994
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : pka19
+	Module  : 4gl
+	Filename: pka19.sep
+	Purpose	: To test FILE IO in 4gl - running with GO
+	Input Files  : pka19.app, pka19.osq, pka19.out, pka19a.out
+	Output Files : pka19b.out
+	Database     : SEPPARAMDB
+	Tables       : none
+	Port Note    : This feature is currently only supported to run
+		       locally.
+	Synopsis     : This is a syntax and functional test of file IO.  The 
+test includes use of the procedures OPENFILE, CLOSEFILE, INQUIREFILE, 
+FLUSHFILE, POSITIONFILE, WRITEFILE, READFILE with a combination of options
+for text, binary and stream files.  The application consists of a 4gl procedure
+with several local procedures for each file type.  After the application is
+run, the result file is typed out and the results are verified.  The test
+results are captured using file IO (ie. all messages and results are appended
+to a text file during the run of the application, and the specific procedure
+name being run is listed in the left margin for easier debugging).
+================================================================================
+	NOTE: When bug 62639 is fixed, this test will need a new results
+	      canon.  Inquirefile is returning inconsistent results for 
+	      binary and stream files (affects values in procedures binary5
+	      and stream3).
+
+	      This test will intentionally abort if run on VMS.
+	      When bug 62649 is fixed (problem rewinding text files), the 
+	      ".if (VMS)..." section should be removed.
+================================================================================
+ 	History: 19-apr-1994	(brenda)	Created
+		 22-apr-1994	(brenda)        Added note regarding VMS bug
+						and .if test for VMS to
+						abort.
+                  06-Jan-1995   changed deleter to delobj and edit into
+                                correct format.                 (QA)
+          11-May-1995	(ciodi01)	Modified
+		1. Bug 62639 is fixed. Results canon is up-to-date.
+		2. Due to the fix for bug 62639, error E_AR015A is displayed
+		   when INQUIREFILE is called for a binary file whose recordsize
+		   has not been specified yet. The error states that the record
+		   length has not been specified, so the absolute record # & 
+		   offset cannot be determined.  Also, if a POSITIONFILE is
+		   performed first, the INQUIREFILE returns the error, the
+		   correct record #, and offset = 0. Apparently the physical
+		   positioning in the file is not performed until the next
+		   READ/WRITE implicitly gives the recordsize.  
+		   File pka19.osq has been modified to verify that the expected
+		   error occurs when recordsize is not specified in the OPENFILE
+		   statement.  To do this, procedures binary1f - binary5f have
+		   been added; procedures binary1-5 now supply the correct
+		   record sizes.
+          06-Dec-1995	(pathi01)
+		These are the sep tests whose names have been changed for fe,
+		be, embed and fips.
+	  11-Apr-1996   (clate01)
+			Modified canons for Windows NT
+          28-Aug-1996	(clate01)
+			cleanup the unnecessary diffs
+	  15-Oct-1998	(kinte01)
+			Bug 62649 has been corrected so this test case can
+			be run on VMS
+	24-Nov-2001	(rogch01)
+		Removed NT canons to allow test to run clean in 24 lines.
+          26-AUG-2003	(Sinra04) Added alternate canon for VMS for form diffs.
+				  Removed extra copyright canons with different
+				  years.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -application pka19 
+<<
+~
+>>
+? fill pka19.app 
+!!
+COPYAPP	6	5	1994_04_19 20:33:48 GMT  
+OC_APPL:	0	pka19	4gl test of File IO	
+	/pv9/oping11/ingtest/fe/4gl/sep/brenda		0		1	0	3		pka19		SQL			0
+CUC_ADEPEND:
+	DUMMY		0	0		0
+OC_OSLPROC:	1	pka19		
+	pka19.osq	II01pka19	0	none	0	0	3							20
+CUC_AODEPEND:
+!!
+? fill pka19.osq 
+!!
+/* 4GL test of FILE IO                                             4/94
+**
+** NOTE: This feature is only supported to run locally
+**
+** files: pka19.out  -- used for main results (fill)
+**        pka19a.out -- used for text testing (fill)
+**        pka19b.out -- used for binary testing
+**	  pka19c.out -- used for stream testing
+**
+*/
+
+procedure pka19 (
+	procname = varchar(10) not null,
+	status = integer not null,
+	fhandle = integer not null,
+	ftype = char(10) not null,
+	fmode = char(10) not null,
+	filename = varchar(20) not null, 
+	delim = char(1) not null,
+	recsize = integer not null,
+	basvar = char(7) not null,
+	recnum = integer not null,
+	offset = integer not null,
+	disp = char(10) not null,
+	vcol = varchar(50) not null,
+	charcol = char(20) not null,
+	deccol = decimal(5,2) not null,
+	datecol = date not null,
+	mcol = money not null,
+	icol = integer not null,
+	fcol = float4 not null,
+	rsize = integer,
+	text_var = varchar(300) not null) =
+declare
+	reset_values = procedure,
+	addtext = procedure,
+	text1 = procedure,
+	text2 = procedure,
+	text3 = procedure,
+	text4 = procedure,
+	text5 = procedure,
+	text6 = procedure,
+	binary1f = procedure,
+	binary2f = procedure,
+	binary3f = procedure,
+	binary4f = procedure,
+	binary5f = procedure,
+	binary1 = procedure,
+	binary2 = procedure,
+	binary3 = procedure,
+	binary4 = procedure,
+	binary5 = procedure,
+	stream1 = procedure,
+	stream2 = procedure,
+	stream3 = procedure,
+	stream4 = procedure
+{
+	callproc reset_values;
+	status = callproc openfile (filename = 'pka19.out', 
+		filetype = 'text',
+		filemode = 'append',
+		delimiter = '^',
+		handle = 1);
+	
+	if status != 0 then
+		message 'failed to open main results file'; sleep 2;
+	endif;
+
+	callproc text1;
+	callproc text2;
+	callproc text3;
+	callproc text4;
+	callproc text5;
+	callproc text6;
+	callproc binary1f;
+	callproc binary2f;
+	callproc binary3f;     
+	callproc binary4f;
+	callproc binary5f;  
+	callproc binary1;
+	callproc binary2;
+	callproc binary3;     
+	callproc binary4;
+	callproc binary5;  
+        callproc stream1;   
+	callproc stream2; 
+	callproc stream3;  
+	callproc stream4;
+
+	procname = 'close';
+	callproc addtext (buffer =
+		'closing results file (pka19.out), disp = keep' +
+		', should flush by default');
+	status = callproc closefile (handle = 1, disposition = 'keep'); 
+	if status != 0 then
+		message 'failed to close main results file';
+		sleep 2;
+	endif;
+
+	return;
+}
+
+procedure text1 () =
+{
+	procname = 'text1';
+	callproc reset_values;
+
+	callproc addtext (buffer =
+		'opening file (pka19a.out) w/handle and filefile' +
+		', testing defaults');
+	status = callproc openfile (filename = 'pka19a.out',
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+	status = callproc inquirefile (handle = fhandle,
+		filetype = byref(ftype),
+		filemode = byref(fmode),
+		filename = byref(filename));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename));
+	callproc addtext (buffer =
+		'closing file (pka19a.out), default disposition should ' +
+		'be keep');
+	status = callproc closefile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure text2 ()=
+{
+	procname = 'text2';
+	callproc reset_values;
+ 	ftype = 'text';
+	fmode = 'append';
+	delim = '	';          /* pressed tab key */
+        disp = 'keep';
+        vcol = 'one';
+	charcol = 'two';
+
+	callproc addtext (buffer =
+		'opening text file (pka19a.out) in append mode...');
+	status = callproc openfile (filename = 'pka19a.out',
+		filetype = ftype,
+		filemode = fmode,
+		delimiter = delim,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+		filetype = byref(ftype),
+		filemode = byref(fmode),
+		filename = byref(filename));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename));
+	callproc addtext (buffer =
+		'about to do 3 writefiles in a row...');
+        status = callproc writefile (handle = fhandle,
+		:vcol, :charcol, 'row1');		
+	callproc addtext (buffer =
+		'status of first writefile = ' + varchar(status));
+        status = callproc writefile (handle = fhandle,
+		:vcol, :charcol, 'row2');		
+	callproc addtext (buffer =
+		'status of second writefile = ' + varchar(status));
+        status = callproc writefile (handle = fhandle,
+		:vcol, :charcol, 'row3');		
+        callproc addtext (buffer =
+		'status of third writefile = ' + varchar(status));
+	status = callproc flushfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'closing file (pka19a.out) with disposition = keep');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}	
+
+procedure text3 ()=
+{
+	procname = 'text3';
+	callproc reset_values;
+        vcol = 'value1';
+	charcol = 'value2';
+
+	callproc addtext (buffer =
+		'opening text file (pka19b.out) in create mode...');
+	status = callproc openfile (filename = 'pka19b.out',
+		filetype = 'text',
+		filemode = 'create',
+		handle = 2);
+        callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = 2,
+		filetype = byref(ftype),
+		filemode = byref(fmode),
+		filename = byref(filename));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename));
+	callproc addtext (buffer =
+		'about to do 2 writefiles in a row...');
+        status = callproc writefile (handle = 2,
+		:vcol, :charcol, 'first row');		
+        callproc addtext (buffer =
+		'status of first writefile = ' + varchar(status));
+        status = callproc writefile (handle = 2,
+		:vcol, :charcol, 'second row');		
+        callproc addtext (buffer =
+		'status of second writefile = ' + varchar(status));
+	status = callproc flushfile (handle = 2);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = delete');
+	status = callproc closefile (handle = 2, disposition = 'delete');
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}	
+
+procedure text4 ()=
+{
+	procname = 'text4';
+	callproc reset_values;
+ 	ftype = 'text';
+	fmode = 'create';
+        delim = X'09';                /* hex delimiter - tab */
+        disp = 'delete';
+        filename = 'pka19b.out';
+        vcol = 'one';
+	charcol = 'two';
+
+	callproc addtext (buffer =
+		'opening text file (pka19b.out) in create mode...');
+	status = callproc openfile (filename = filename,
+		filetype = ftype,
+		filemode = fmode,
+		delimiter = delim,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+		filetype = byref(ftype),
+		filemode = byref(fmode),
+		filename = byref(filename));
+	callproc addtext (buffer =
+		'inquirefile without a status: ' +  
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename));
+        status = callproc writefile (handle = fhandle,
+		:vcol, :charcol, 'three');		
+        callproc addtext (buffer =
+		'status of writefile = ' + varchar(status));
+	status = callproc flushfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = delete');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}	
+
+procedure text5 ()=
+{
+	procname = 'text5';
+        callproc reset_values;
+ 	ftype = 'text';
+	fmode = 'read';
+        disp = 'keep';
+	delim = '	';          /* pressed tab key */
+
+	callproc addtext (buffer =
+		'opening a text file (pka19a.out) in read mode...');
+	status = callproc openfile (filename = 'pka19a.out',
+		filetype = ftype,
+		filemode = fmode,
+		delimiter = delim,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+		filetype = byref(ftype),
+		filemode = byref(fmode),
+		filename = byref(filename));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename));
+	status = callproc rewindfile (handle = fhandle);
+        callproc addtext (buffer =
+		'status of rewindfile = ' + varchar(status));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol));
+	callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + vcol + ', charcol = ' + charcol);
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol));
+	callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + vcol + ', charcol = ' + charcol);
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol));
+	callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+	        ', vcol = ' + vcol + ', charcol = ' + charcol);
+	callproc addtext (buffer =
+		'closing file (pka19a.out) with disposition = keep');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}	
+
+procedure text6 ()=
+{
+	procname = 'text6';
+	callproc reset_values;
+        disp = 'keep';
+        delim = '	';              /* pressed tab key */
+        filename = 'pka19a.out';
+
+	callproc addtext (buffer =
+		'opening text file (pka19a.out) in read mode...');
+	status = callproc openfile (filename = filename,
+		filetype = 'text',
+		filemode = 'read',
+		delimiter = delim,
+		handle = 2);
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = 2,
+		filetype = byref(ftype),
+		filemode = byref(fmode),
+		filename = byref(filename));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename));
+	status = callproc rewindfile (handle = 2);
+        callproc addtext (buffer =
+		'status of rewindfile = ' + varchar(status));
+	status = callproc readfile (handle = 2,
+		byref(vcol), byref(charcol));
+	callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + vcol + ', charcol = ' + charcol);
+	status = callproc rewindfile (handle = 2);
+        callproc addtext (buffer =
+		'status of rewindfile = ' + varchar(status) +
+                ', about to read same row again');
+	status = callproc readfile (handle = 2,
+		byref(vcol), byref(charcol));
+	callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + vcol + ', charcol = ' + charcol);
+	callproc addtext (buffer =
+		'closing file (pka19a.out) with disposition = keep');
+	status = callproc closefile (handle = 2, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}	
+
+procedure binary1f ()=
+{
+	procname = 'binary1f';
+	callproc reset_values;
+        vcol = 'first';
+	charcol = 'row1';
+        deccol = 1.11;
+	datecol = '1-apr-1994';
+	mcol = 100;
+	icol = 1;
+	fcol = 11.11;
+ 
+	callproc addtext (buffer =
+		'opening binary file (pka19b.out) in create mode...');
+	status = callproc openfile (filename = 'pka19b.out',
+		filetype = 'binary',
+		filemode = 'create',
+		handle = 3);
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = 3,
+		filetype = byref(ftype),
+		filemode = byref(fmode),
+		filename = byref(filename),
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'about to do 2 writefiles in a row...');
+        status = callproc writefile (handle = 3,
+		:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of first writefile = ' + varchar(status));
+        status = callproc writefile (handle = 3,
+		:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of second writefile = ' + varchar(status));
+	status = callproc flushfile (handle = 3);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'closing file (pka19b.out), the default is to keep');
+	status = callproc closefile (handle = 3);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure binary2f ()=
+{
+	procname = 'binary2f';
+	callproc reset_values;
+        filename = 'pka19b.out';
+	ftype = 'binary';
+	fmode = 'append';
+	disp = 'keep';
+        vcol = 'third';
+        charcol = 'row3';
+        deccol = 3.33;
+        datecol = '3-apr-1994';
+        mcol = 300;
+        icol = 3;
+        fcol = 33.33;
+
+	callproc addtext (buffer =
+		'opening binary file (pka19b.out) in append mode...');
+	status = callproc openfile (filename = filename,
+		filetype = ftype,
+		filemode = fmode,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                filetype = byref(ftype),
+                filemode = byref(fmode),
+                filename = byref(filename),
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'about to do 2 writefiles in a row...');
+        status = callproc writefile (handle = fhandle,
+                :vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of first writefile = ' + varchar(status));
+        status = callproc writefile (handle = fhandle,
+                :vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of second writefile = ' + varchar(status));
+	status = callproc flushfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = keep');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure binary3f ()=
+{
+	procname = 'binary3f';
+	callproc reset_values;
+	ftype = 'binary';
+	fmode = 'update';
+	basvar = 'start';
+	disp = 'keep';
+
+	callproc addtext (buffer =
+		'opening binary file (pka19b.out) in update mode...');
+	status = callproc openfile (filename = 'pka19b.out',
+		filetype = ftype,
+		filemode = fmode,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                filetype = byref(ftype),
+                filemode = byref(fmode),
+                filename = byref(filename),
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+        callproc addtext (buffer =
+		'positioning file to record 2 from start, then inquire ' +
+		'for record and offset');
+	status = callproc positionfile (handle = fhandle,
+		record = 2, base = basvar);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'overwriting record 2, then inquire again');
+	status = writefile(handle = fhandle,
+			:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+	callproc addtext (buffer = 'status of writefile = ' + varchar(status));
+	status = callproc inquirefile (handle = fhandle,
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer = ' positioning file back to record 2 from start '+
+		', then read (verify that rec2 was overwritten) and inquire.');
+	status = callproc positionfile (handle = fhandle,
+		record = 2, base = basvar);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) + 
+		', vcol = ' + trim(vcol) +  
+		', charcol = ' + trim(charcol) +  
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) + 
+		', icol = ' + trim(varchar(icol)) + 
+		', fcol = ' + trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+        callproc addtext (buffer = ' closing file pka19b.out with disposition = keep-
+'
+			+ '.  Then reopen pka19b.out in update mode.');
+	status = closefile (handle = fhandle, disposition = 'keep');
+	callproc addtext (buffer = ' status of closefile = ' + varchar(status));
+	status = callproc openfile (filename = 'pka19b.out',
+		filetype = ftype,
+		filemode = fmode,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+       status = callproc inquirefile (handle = fhandle,
+	       filetype = byref(ftype),
+	       filemode = byref(fmode),
+	       filename = byref(filename),
+	       record = byref(recnum),
+	       offset = byref(offset));
+       callproc addtext (buffer =
+	       'status of inquirefile = ' + trim(varchar(status)) +
+	       ', filetype = ' + trim(ftype) +
+	       ', filemode = ' + trim(fmode) +
+	       ', filename = ' + trim(filename) +
+	       ', record = ' + trim(varchar(recnum)) +
+	       ', offset = ' + trim(varchar(offset)));
+       status = callproc positionfile (handle = fhandle,
+	       record = 2, base = basvar);
+       callproc addtext (buffer =
+	       'status of positionfile = ' + varchar(status));
+       status = callproc inquirefile (handle = fhandle,
+       		record = byref(recnum),
+		offset = byref(offset));
+       callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+       status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+		byref(datecol), byref(mcol), byref(icol),
+		byref(fcol));
+	callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + trim(vcol) +
+		', charcol = ' + trim(charcol) +
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) +
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+	status = callproc inquirefile (handle = fhandle,
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+ 	callproc addtext (buffer =
+		'positioning to begining of record just read' +
+		', inquire then update data');
+	status = callproc positionfile (handle = fhandle,
+		offset = -1, base = 'current');
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+	status = callproc inquirefile (handle = fhandle,
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+
+	vcol = 'new02';
+	charcol = 'row2';
+	deccol = 2.22;
+	datecol = '2-apr-1994';
+	mcol = 200;
+	icol = 2;
+	fcol = 22.22;
+
+	status = callproc writefile (handle = fhandle,
+		:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+	callproc addtext (buffer =
+		'status of writefile = ' + varchar(status) +
+		', rewinding file');
+        status = callproc rewindfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of rewindfile = ' + varchar(status) +
+		', inquire then update data');
+	status = callproc inquirefile (handle = fhandle,
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	status = callproc writefile (handle = fhandle,
+		:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of writefile = ' + varchar(status));
+	status = callproc flushfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	status = callproc positionfile (handle = fhandle, offset = 0);
+        callproc addtext (buffer =
+                'status of positionfile = ' + varchar(status));
+        status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) + 
+		', vcol = ' + trim(vcol) +  
+		', charcol = ' + trim(charcol) +  
+		', deccol = ' + trim(varchar(deccol)) + 
+		', datecol = ' + trim(varchar(datecol)) + 
+		', mcol = ' + trim(varchar(mcol)) + 
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = keep');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure binary4f ()=
+{
+	procname = 'binary4f';
+	callproc reset_values;
+
+	callproc addtext (buffer =
+		'opening a binary file (pka19b.out) in read mode w/recsize...');
+	status = callproc openfile (filename = 'pka19b.out',
+		filetype = 'binary',
+		filemode = 'read',
+		recordsize = 80,
+		handle = 3);
+        callproc addtext (buffer =
+	        'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = 3,
+                filetype = byref(ftype),
+                filemode = byref(fmode),
+                filename = byref(filename),
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+                ', filetype = ' + trim(ftype) +
+                ', filemode = ' + trim(fmode) +
+                ', filename = ' + trim(filename) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = keep');
+	status = callproc closefile (handle = 3, disposition = 'keep');
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure binary5f ()=
+{
+	procname = 'binary5f';
+	callproc reset_values;
+	filename = 'pka19b.out';
+	ftype = 'binary';
+	fmode = 'read';
+	basvar = 'end';
+	disp = 'keep';
+
+	callproc addtext (buffer =
+		'opening a binary file (pka19b.out) in read mode...');
+	status = callproc openfile (filename = filename,
+		filetype = ftype,
+		filemode = fmode,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'about to position file to end w/rec -4, then inquire');
+	status = callproc positionfile (handle = fhandle,
+		record = -4, base = basvar);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'about to position file to start w/rec 4, then inquire');
+	status = callproc positionfile (handle = fhandle,
+		record = 4, base = 'start');
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'about to position file to offset 0');
+	status = callproc positionfile (handle = fhandle,
+		offset = 0);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status) +
+		', about to inquire, then readfile');
+	status = callproc inquirefile (handle = fhandle,
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + trim(vcol) +
+		', charcol = ' + trim(charcol) +
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) +
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + trim(vcol) +
+		', charcol = ' + trim(charcol) +
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) +
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + trim(vcol) +
+		', charcol = ' + trim(charcol) +
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) +
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + trim(vcol) +
+		', charcol = ' + trim(charcol) +
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) +
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = keep');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure binary1 ()=
+{
+	procname = 'binary1';
+	callproc reset_values;
+        vcol = 'first';
+	charcol = 'row1';
+        deccol = 1.11;
+	datecol = '1-apr-1994';
+	mcol = 100;
+	icol = 1;
+	fcol = 11.11;
+ 
+	callproc addtext (buffer =
+		'opening binary file (pka19b.out) in create mode...');
+	status = callproc openfile (filename = 'pka19b.out',
+		filetype = 'binary',
+		filemode = 'create',
+		recordsize = 103,
+		handle = 3);
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = 3,
+		filetype = byref(ftype),
+		filemode = byref(fmode),
+		filename = byref(filename),
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'about to do 2 writefiles in a row...');
+        status = callproc writefile (handle = 3,
+		:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of first writefile = ' + varchar(status));
+        status = callproc writefile (handle = 3,
+		:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of second writefile = ' + varchar(status));
+	status = callproc flushfile (handle = 3);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'closing file (pka19b.out), the default is to keep');
+	status = callproc closefile (handle = 3);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure binary2 ()=
+{
+	procname = 'binary2';
+	callproc reset_values;
+        filename = 'pka19b.out';
+	ftype = 'binary';
+	fmode = 'append';
+	disp = 'keep';
+        vcol = 'third';
+        charcol = 'row3';
+        deccol = 3.33;
+        datecol = '3-apr-1994';
+        mcol = 300;
+        icol = 3;
+        fcol = 33.33;
+	rsize = 103;
+
+	callproc addtext (buffer =
+		'opening binary file (pka19b.out) in append mode...');
+	status = callproc openfile (filename = filename,
+		filetype = ftype,
+		filemode = fmode,
+		recordsize = rsize,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                filetype = byref(ftype),
+                filemode = byref(fmode),
+                filename = byref(filename),
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'about to do 2 writefiles in a row...');
+        status = callproc writefile (handle = fhandle,
+                :vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of first writefile = ' + varchar(status));
+        status = callproc writefile (handle = fhandle,
+                :vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of second writefile = ' + varchar(status));
+	status = callproc flushfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = keep');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure binary3 ()=
+{
+	procname = 'binary3';
+	callproc reset_values;
+	ftype = 'binary';
+	fmode = 'update';
+	basvar = 'start';
+	disp = 'keep';
+	rsize = 103;
+
+	callproc addtext (buffer =
+		'opening binary file (pka19b.out) in update mode...');
+	status = callproc openfile (filename = 'pka19b.out',
+		filetype = ftype,
+		filemode = fmode,
+		recordsize = rsize,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                filetype = byref(ftype),
+                filemode = byref(fmode),
+                filename = byref(filename),
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+		', filename = ' + trim(filename) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+        callproc addtext (buffer =
+		'positioning file to record 2 from start, then inquire ' +
+		'for record and offset');
+	status = callproc positionfile (handle = fhandle,
+		record = 2, base = basvar);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'overwriting record 2, then inquire again');
+	status = writefile(handle = fhandle,
+			:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+	callproc addtext (buffer = 'status of writefile = ' + varchar(status));
+	status = callproc inquirefile (handle = fhandle,
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer = ' positioning file back to record 2 from start '+
+		', then read (verify that rec2 was overwritten) and inquire.');
+	status = callproc positionfile (handle = fhandle,
+		record = 2, base = basvar);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) + 
+		', vcol = ' + trim(vcol) +  
+		', charcol = ' + trim(charcol) +  
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) + 
+		', icol = ' + trim(varchar(icol)) + 
+		', fcol = ' + trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+        callproc addtext (buffer = ' closing file pka19b.out with disposition = keep-
+'
+			+ '.  Then reopen pka19b.out in update mode.');
+	status = closefile (handle = fhandle, disposition = 'keep');
+	callproc addtext (buffer = ' status of closefile = ' + varchar(status));
+	status = callproc openfile (filename = 'pka19b.out',
+		filetype = ftype,
+		filemode = fmode,
+		recordsize = 103,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+       status = callproc inquirefile (handle = fhandle,
+	       filetype = byref(ftype),
+	       filemode = byref(fmode),
+	       filename = byref(filename),
+	       record = byref(recnum),
+	       offset = byref(offset));
+       callproc addtext (buffer =
+	       'status of inquirefile = ' + trim(varchar(status)) +
+	       ', filetype = ' + trim(ftype) +
+	       ', filemode = ' + trim(fmode) +
+	       ', filename = ' + trim(filename) +
+	       ', record = ' + trim(varchar(recnum)) +
+	       ', offset = ' + trim(varchar(offset)));
+       status = callproc positionfile (handle = fhandle,
+	       record = 2, base = basvar);
+       callproc addtext (buffer =
+	       'status of positionfile = ' + varchar(status));
+       status = callproc inquirefile (handle = fhandle,
+       		record = byref(recnum),
+		offset = byref(offset));
+       callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+       status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+		byref(datecol), byref(mcol), byref(icol),
+		byref(fcol));
+	callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + trim(vcol) +
+		', charcol = ' + trim(charcol) +
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) +
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+	status = callproc inquirefile (handle = fhandle,
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+ 	callproc addtext (buffer =
+		'positioning to begining of record just read' +
+		', inquire then update data');
+	status = callproc positionfile (handle = fhandle,
+		offset = -1, base = 'current');
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+	status = callproc inquirefile (handle = fhandle,
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+
+	vcol = 'new02';
+	charcol = 'row2';
+	deccol = 2.22;
+	datecol = '2-apr-1994';
+	mcol = 200;
+	icol = 2;
+	fcol = 22.22;
+
+	status = callproc writefile (handle = fhandle,
+		:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+	callproc addtext (buffer =
+		'status of writefile = ' + varchar(status) +
+		', rewinding file');
+        status = callproc rewindfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of rewindfile = ' + varchar(status) +
+		', inquire then update data');
+	status = callproc inquirefile (handle = fhandle,
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	status = callproc writefile (handle = fhandle,
+		:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of writefile = ' + varchar(status));
+	status = callproc flushfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	status = callproc positionfile (handle = fhandle, offset = 0);
+        callproc addtext (buffer =
+                'status of positionfile = ' + varchar(status));
+        status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) + 
+		', vcol = ' + trim(vcol) +  
+		', charcol = ' + trim(charcol) +  
+		', deccol = ' + trim(varchar(deccol)) + 
+		', datecol = ' + trim(varchar(datecol)) + 
+		', mcol = ' + trim(varchar(mcol)) + 
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = keep');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure binary4 ()=
+{
+	procname = 'binary4';
+	callproc reset_values;
+
+	callproc addtext (buffer =
+		'opening a binary file (pka19b.out) in read mode w/recsize...');
+	status = callproc openfile (filename = 'pka19b.out',
+		filetype = 'binary',
+		filemode = 'read',
+		recordsize = 103,
+		handle = 3);
+        callproc addtext (buffer =
+	        'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = 3,
+                filetype = byref(ftype),
+                filemode = byref(fmode),
+                filename = byref(filename),
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+                ', filetype = ' + trim(ftype) +
+                ', filemode = ' + trim(fmode) +
+                ', filename = ' + trim(filename) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = keep');
+	status = callproc closefile (handle = 3, disposition = 'keep');
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure binary5 ()=
+{
+	procname = 'binary5';
+	callproc reset_values;
+	filename = 'pka19b.out';
+	ftype = 'binary';
+	fmode = 'read';
+	basvar = 'end';
+	disp = 'keep';
+	rsize = 103;
+
+	callproc addtext (buffer =
+		'opening a binary file (pka19b.out) in read mode...');
+	status = callproc openfile (filename = filename,
+		filetype = ftype,
+		filemode = fmode,
+		recordsize = rsize,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'about to position file to end w/rec -4, then inquire');
+	status = callproc positionfile (handle = fhandle,
+		record = -4, base = basvar);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'about to position file to start w/rec 4, then inquire');
+	status = callproc positionfile (handle = fhandle,
+		record = 4, base = 'start');
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'about to position file to offset 0');
+	status = callproc positionfile (handle = fhandle,
+		offset = 0);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status) +
+		', about to inquire, then readfile');
+	status = callproc inquirefile (handle = fhandle,
+		record = byref(recnum),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + trim(vcol) +
+		', charcol = ' + trim(charcol) +
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) +
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + trim(vcol) +
+		', charcol = ' + trim(charcol) +
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) +
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + trim(vcol) +
+		', charcol = ' + trim(charcol) +
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) +
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+		', vcol = ' + trim(vcol) +
+		', charcol = ' + trim(charcol) +
+		', deccol = ' + trim(varchar(deccol)) +
+		', datecol = ' + trim(varchar(datecol)) +
+		', mcol = ' + trim(varchar(mcol)) +
+		', icol = ' + trim(varchar(icol)) +
+		', fcol = ' + trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle,
+                record = byref(recnum),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', record = ' + trim(varchar(recnum)) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = keep');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure stream1 ()=
+{
+	procname = 'stream1';
+	callproc reset_values;
+        vcol = 'first row of stream data';
+	charcol = 'aaa';
+        deccol = 9.99;
+	datecol = '09-jun-1993';
+	mcol = 999.99;
+	icol = 99;
+	fcol = 11.88;
+	text_var = 'writing data to a stream file';
+ 
+	callproc addtext (buffer =
+		'opening a stream file (pka19c.out) in create mode...');
+	status = callproc openfile (filename = 'pka19c.out',
+		filetype = 'stream',
+		filemode = 'create',
+		handle = 4);
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = 4,
+		filetype = byref(ftype),
+		filemode = byref(fmode),
+		filename = byref(filename),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+	        ', filename = ' + trim(filename) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'about to do 2 writefiles in a row...');
+        status = callproc writefile (handle = 4,
+		:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of first writefile = ' + varchar(status));
+        status = callproc writefile (handle = 4, :text_var);
+        callproc addtext (buffer =
+		'status of second writefile = ' + varchar(status));
+	status = callproc flushfile (handle = 4);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'closing file (pka19c.out) with disposition = keep');
+	status = callproc closefile (handle = 4, disposition = 'keep');
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure stream2 ()=
+{
+	procname = 'stream2';
+	callproc reset_values;
+	filename = 'pka19c.out';
+	ftype = 'stream';
+	fmode = 'append';
+	disp = 'keep';
+        vcol = 'Mary Jones';
+	charcol = '123 Appleville Lane';
+        deccol = 123.45;
+	datecol = '14-feb-1994';
+	mcol = 500000;
+	icol = 555;
+	fcol = 66.66;
+        text_var = 'The stream files are binary in nature.  Internally, ' +
+		   'they are opened with SI_RACC attribute.  Data of any ' +
+	           'type may be scattered in such files and users are ' +
+		   'responsible to read the data the same way it was ' +
+	           'written.  Here is how a stream file will look after ' +
+		   'a few writes.'; 
+
+	callproc addtext (buffer =
+		'opening a stream file (pka19c.out) in append mode...');
+	status = callproc openfile (filename = filename,
+		filetype = ftype,
+		filemode = fmode,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+		filetype = byref(ftype),
+		filemode = byref(fmode),
+		filename = byref(filename),
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+	        ', filename = ' + trim(filename) +
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'about to do a writefile, flush, writefile, flush...');
+        status = callproc writefile (handle = fhandle,
+		:vcol, :charcol, :deccol, :datecol, :mcol, :icol, :fcol);
+        callproc addtext (buffer =
+		'status of first writefile = ' + varchar(status));
+	status = callproc flushfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+        status = callproc writefile (handle = fhandle, :text_var);
+        callproc addtext (buffer =
+		'status of second writefile (large text) = ' + varchar(status));
+	status = callproc flushfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'closing file (pka19c.out) with disposition = keep');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure stream3 () =
+{
+	procname = 'stream3';
+	callproc reset_values;
+	ftype = 'stream';
+	fmode = 'update';
+	basvar = 'start';
+	disp = 'keep';
+
+	callproc addtext (buffer =
+		'opening a stream file (pka19c.out) in update mode...');
+	status = callproc openfile (filename = 'pka19c.out',
+		filetype = ftype,
+		filemode = fmode,
+		handle = byref(fhandle));
+	callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                filetype = byref(ftype),
+                filemode = byref(fmode),
+                filename = byref(filename),
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+	        ', filetype = ' + trim(ftype) + 
+                ', filemode = ' + trim(fmode) + 
+	        ', filename = ' + trim(filename) +
+		', offset = ' + trim(varchar(offset)));
+        callproc addtext (buffer =
+		'positioning file to offset 22 from start, then inquire');
+	status = callproc positionfile (handle = fhandle,
+		offset = 22, base = basvar);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+		offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'positioning file to offset -10 from end' +
+		' then inquire');
+	status = callproc positionfile (handle = fhandle,
+		offset = -10, base = 'end');
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+		offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'positioning file to offset 0 from current' +
+		' then inquire');
+        status = callproc positionfile (handle = fhandle,
+		offset = 0, base = 'current');
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+	status = callproc inquirefile (handle = fhandle,
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+                ', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'rewinding file');
+	status = callproc rewindfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of rewindfile = ' + varchar(status) +
+		', inquire then read file');
+	status = callproc inquirefile (handle = fhandle,
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+                ', offset = ' + trim(varchar(offset)));
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) + 
+		', values = ' + trim(vcol) + ' ' + 
+		trim(charcol) + ' ' + 
+		trim(varchar(deccol)) + ' ' + 
+		trim(varchar(datecol)) + ' ' +
+		trim(varchar(mcol)) + ' ' + 
+		trim(varchar(icol)) + ' ' + 
+		trim(varchar(fcol)));
+	status = callproc inquirefile (handle = fhandle,
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+                ', offset = ' + trim(varchar(offset)));     /* offset = 103 */
+	callproc addtext (buffer =
+		'reading next data item');       
+	status = callproc readfile (handle = fhandle, byref(text_var));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) + 
+		', value = ' + text_var);
+	callproc addtext (buffer =
+		'positioning to start of text just read and update it');
+	status = positionfile (handle = fhandle,
+		base = 'start', offset = 103);
+	status = callproc inquirefile (handle = fhandle,
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+                ', offset = ' + trim(varchar(offset)));     /* offset = 103 */
+	text_var = 'This is a new string to replace the old string'; 
+	status = callproc writefile (handle = fhandle, :text_var);
+	callproc addtext (buffer =
+		'status of writefile = ' + varchar(status) +
+		', flushing file');
+	status = callproc flushfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of flushfile = ' + varchar(status) +
+		', pos to beg of data updated and read');
+	status = positionfile (handle = fhandle,
+		base = 'start', offset = 103);
+	status = callproc inquirefile (handle = fhandle,
+		offset = byref(offset));
+	callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) +
+                ', offset = ' + trim(varchar(offset)));     /* offset = 103 */
+	status = callproc readfile (handle = fhandle, 
+		byref(text_var));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) +
+	        ', value = ' + text_var);
+	callproc addtext (buffer =
+		'closing file (pka19b.out) with disposition = keep');
+	status = callproc closefile (handle = fhandle, disposition = disp);
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure stream4 ()=
+{
+	procname = 'stream4';
+	callproc reset_values;
+	filename = 'pka19c.out';
+	ftype = 'stream';
+	fmode = 'read';
+	basvar = 'end';
+
+	callproc addtext (buffer =
+		'opening a stream file (pka19c.out) in read mode...');
+	status = callproc openfile (filename = filename,
+		filetype = ftype,
+		filemode = fmode,
+		handle = byref(fhandle));
+        callproc addtext (buffer =
+		'status of openfile = ' + varchar(status));
+	callproc addtext (buffer =
+		'positioning file to end, offset = 0, then inquire');
+	status = callproc positionfile (handle = fhandle, 
+		offset = 0, base = basvar);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'rewinding file');
+	status = callproc rewindfile (handle = fhandle);
+	callproc addtext (buffer =
+		'status of rewindfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle,
+                offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'reading file');
+	status = callproc readfile (handle = fhandle,
+		byref(vcol), byref(charcol), byref(deccol),
+                byref(datecol), byref(mcol), byref(icol), 
+		byref(fcol));
+        callproc addtext (buffer =
+		'status of readfile = ' + varchar(status) + 
+		', values = ' + trim(vcol) + ' ' + 
+		trim(charcol) + ' ' +
+		trim(varchar(deccol)) + ' ' + 
+		trim(varchar(datecol)) + ' ' +
+		trim(varchar(mcol)) + ' ' + 
+		trim(varchar(icol)) + ' ' +
+		trim(varchar(fcol)));
+        status = callproc inquirefile (handle = fhandle, 
+		offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'positioning file without a base using offset = 10' +
+		', then inquire');
+	status = callproc positionfile (handle = fhandle, offset = 10);
+	callproc addtext (buffer =
+		'status of positionfile = ' + varchar(status));
+        status = callproc inquirefile (handle = fhandle, 
+		offset = byref(offset));
+        callproc addtext (buffer =
+		'status of inquirefile = ' + trim(varchar(status)) + 
+		', offset = ' + trim(varchar(offset)));
+	callproc addtext (buffer =
+		'closing file (pka19c.out), disposition = delete');
+	status = callproc closefile (handle = fhandle, disposition = 'delete');
+	callproc addtext (buffer =
+		'status of closefile = ' + varchar(status));
+	return;
+}
+
+procedure addtext (buffer = varchar(256) not null) =
+{
+	callproc writefile (handle = 1, :procname, ': ', :buffer);
+	return;
+}
+
+procedure reset_values () =
+{
+	status = 1; 
+	ftype = '';
+	fmode = '';
+	filename = '';
+	delim = '';
+	recsize = 0;
+	basvar = '';
+	recnum = 0;
+	offset = 0;
+	disp = '';
+	vcol = '';
+	charcol = '';
+	deccol = 0.0;
+	datecol = '';
+	mcol = 0.0;
+	icol = 0;
+	fcol = 0.0;
+        text_var = '';
+
+	return;
+}
+!!
+? fill pka19.out 
+!!
+!!
+? fill pka19a.out 
+!!
+!!
+? copyapp in -a -r SEPPARAMDB pka19.app 
+<<
+INGRES COPYAPP Copyright (c) 1984, 1993 Ingres Corporation
+Copied Application `pka19' to the database.
+Copied Procedure `pka19' to the database.
+>>
+? abf SEPPARAMDB pka19 
+<<
+~
+>>
+^^ `CR'`ESC'
+<<
+~
+>>
+^^ go`CR'
+<< IF (NT_GENERIC)
+
+%% MENU RESPONSE: Go
+%% MENU:   Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "Go"
+
+%% 
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pka19.osq' . . .                                                   ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pka19.osq' . . .                                                   ||
+||Compilation succeeded, with warnings.                                         ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%%     
+%% Fetching 'pka19' from the database ...
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+>>
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "Go"
+
+%% 
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pka19.osq' . . .                                                   ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pka19.osq' . . .                                                   ||
+||Compilation succeeded, with warnings.                                         ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                         
+%%     
+%% Fetching 'pka19' from the database ...
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+>>
+<< IF (VMS) 
+
+%% MENU RESPONSE: Go
+%% MENU:   Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "Go"
+
+%% 
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pka19.osq' . . .                                                   ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pka19'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing procedure 'pka19' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pka19.osq' . . .                                                   ||
+||Compilation succeeded, with warnings.                                         ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                       
+%%     
+%% Fetching 'pka19' from the database ...
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+>>
+^^ h`CR'`CR'`CR'`CR'`CR'`CR'`CR'`CR'`CR'`CR'
+<< IF (NT_GENERIC)
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has not been provided yet. 
+
+%% This prevents the Offset or Recordnum value that is returned from being   
+
+%% calculated as an absolute value from the beginning of the file. The record
+
+%% length can be specified by the recordsize parameter of the OpenFile       
+
+%% statement or implicity via a ReadFile or WriteFile request. (E_AR015A)    
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: pka19                            Default Start: pka19                   |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_pka19                   |4GL Procedure|                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has not been provided yet. 
+
+%% This prevents the Offset or Recordnum value that is returned from being   
+
+%% calculated as an absolute value from the beginning of the file. The record
+
+%% length can be specified by the recordsize parameter of the OpenFile       
+
+%% statement or implicity via a ReadFile or WriteFile request. (E_AR015A)    
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+                     ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: pka19                            Default Start: pka19                   |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_pka19                   |4GL Procedure|                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+>>
+<< IF (VMS) 
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has not been provided yet. 
+
+%% This prevents the Offset or Recordnum value that is returned from being   
+
+%% calculated as an absolute value from the beginning of the file. The record
+
+%% length can be specified by the recordsize parameter of the OpenFile       
+
+%% statement or implicity via a ReadFile or WriteFile request. (E_AR015A)    
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% The record length for Binary file 'pka19b.out' has ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+       ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: pka19                            Default Start: pka19                   |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_pka19                   |4GL Procedure|                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+>>
+^^ `ESC'End`CR'
+<<
+~
+>>
+? exists pka19a.out 
+<<
+file was found
+>>
+? type pka19a.out 
+<<
+one	two                 	row1	
+one	two                 	row2	
+one	two                 	row3	
+>>
+? exists pka19b.out 
+<<
+file was found
+>>
+? exists pka19c.out 
+<<
+file was not found
+>>
+? exists pka19.out 
+<<
+file was found
+>>
+? type pka19.out 
+<<
+text1^: ^opening file (pka19a.out) w/handle and filefile, testing defaults^
+text1^: ^status of openfile = 0^
+text1^: ^status of inquirefile = 0, filetype = text, filemode = read, filename = pka-
+19a.out^
+text1^: ^closing file (pka19a.out), default disposition should be keep^
+text1^: ^status of closefile = 0^
+text2^: ^opening text file (pka19a.out) in append mode...^
+text2^: ^status of openfile = 0^
+text2^: ^status of inquirefile = 0, filetype = text, filemode = append, filename = p-
+ka19a.out^
+text2^: ^about to do 3 writefiles in a row...^
+text2^: ^status of first writefile = 0^
+text2^: ^status of second writefile = 0^
+text2^: ^status of third writefile = 0^
+text2^: ^status of flushfile = 0^
+text2^: ^closing file (pka19a.out) with disposition = keep^
+text2^: ^status of closefile = 0^
+text3^: ^opening text file (pka19b.out) in create mode...^
+text3^: ^status of openfile = 0^
+text3^: ^status of inquirefile = 0, filetype = text, filemode = create, filename = p-
+ka19b.out^
+text3^: ^about to do 2 writefiles in a row...^
+text3^: ^status of first writefile = 0^
+text3^: ^status of second writefile = 0^
+text3^: ^status of flushfile = 0^
+text3^: ^closing file (pka19b.out) with disposition = delete^
+text3^: ^status of closefile = 0^
+text4^: ^opening text file (pka19b.out) in create mode...^
+text4^: ^status of openfile = 0^
+text4^: ^inquirefile without a status: , filetype = text, filemode = create, filenam-
+e = pka19b.out^
+text4^: ^status of writefile = 0^
+text4^: ^status of flushfile = 0^
+text4^: ^closing file (pka19b.out) with disposition = delete^
+text4^: ^status of closefile = 0^
+text5^: ^opening a text file (pka19a.out) in read mode...^
+text5^: ^status of openfile = 0^
+text5^: ^status of inquirefile = 0, filetype = text, filemode = read, filename = pka-
+19a.out^
+text5^: ^status of rewindfile = 0^
+text5^: ^status of readfile = 0, vcol = one, charcol = two^
+text5^: ^status of readfile = 0, vcol = one, charcol = two^
+text5^: ^status of readfile = 0, vcol = one, charcol = two^
+text5^: ^closing file (pka19a.out) with disposition = keep^
+text5^: ^status of closefile = 0^
+text6^: ^opening text file (pka19a.out) in read mode...^
+text6^: ^status of openfile = 0^
+text6^: ^status of inquirefile = 0, filetype = text, filemode = read, filename = pka-
+19a.out^
+text6^: ^status of rewindfile = 0^
+text6^: ^status of readfile = 0, vcol = one, charcol = two^
+text6^: ^status of rewindfile = 0, about to read same row again^
+text6^: ^status of readfile = 0, vcol = one, charcol = two^
+text6^: ^closing file (pka19a.out) with disposition = keep^
+text6^: ^status of closefile = 0^
+binary1f^: ^opening binary file (pka19b.out) in create mode...^
+binary1f^: ^status of openfile = 0^
+binary1f^: ^status of inquirefile = 0, filetype = binary, filemode = create, filenam-
+e = pka19b.out, record = 1, offset = 0^
+binary1f^: ^about to do 2 writefiles in a row...^
+binary1f^: ^status of first writefile = 0^
+binary1f^: ^status of second writefile = 0^
+binary1f^: ^status of flushfile = 0^
+binary1f^: ^closing file (pka19b.out), the default is to keep^
+binary1f^: ^status of closefile = 0^
+binary2f^: ^opening binary file (pka19b.out) in append mode...^
+binary2f^: ^status of openfile = 0^
+binary2f^: ^status of inquirefile = 0, filetype = binary, filemode = append, filenam-
+e = pka19b.out, record = 1, offset = 206^
+binary2f^: ^about to do 2 writefiles in a row...^
+binary2f^: ^status of first writefile = 0^
+binary2f^: ^status of second writefile = 0^
+binary2f^: ^status of flushfile = 0^
+binary2f^: ^closing file (pka19b.out) with disposition = keep^
+binary2f^: ^status of closefile = 0^
+binary3f^: ^opening binary file (pka19b.out) in update mode...^
+binary3f^: ^status of openfile = 0^
+binary3f^: ^status of inquirefile = 0, filetype = binary, filemode = update, filenam-
+e = pka19b.out, record = 1, offset = 0^
+binary3f^: ^positioning file to record 2 from start, then inquire for record and off-
+set^
+binary3f^: ^status of positionfile = 0^
+binary3f^: ^status of inquirefile = 0, record = 2, offset = 0^
+binary3f^: ^overwriting record 2, then inquire again^
+binary3f^: ^status of writefile = 0^
+binary3f^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3f^: ^ positioning file back to record 2 from start , then read (verify that r-
+ec2 was overwritten) and inquire.^
+binary3f^: ^status of positionfile = 0^
+binary3f^: ^status of readfile = 0, vcol = , charcol = , deccol = 0.00, datecol = , -
+mcol =                $0.00, icol = 0, fcol = 0.000^
+binary3f^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3f^: ^ closing file pka19b.out with disposition = keep.  Then reopen pka19b.ou-
+t in update mode.^
+binary3f^: ^ status of closefile = 0^
+binary3f^: ^status of openfile = 0^
+binary3f^: ^status of inquirefile = 0, filetype = binary, filemode = update, filenam-
+e = pka19b.out, record = 1, offset = 0^
+binary3f^: ^status of positionfile = 0^
+binary3f^: ^status of inquirefile = 0, record = 2, offset = 0^
+binary3f^: ^status of readfile = 0, vcol = , charcol = , deccol = 0.00, datecol = , -
+mcol =                $0.00, icol = 0, fcol = 0.000^
+binary3f^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3f^: ^positioning to begining of record just read, inquire then update data^
+binary3f^: ^status of positionfile = 0^
+binary3f^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary3f^: ^status of writefile = 0, rewinding file^
+binary3f^: ^status of rewindfile = 0, inquire then update data^
+binary3f^: ^status of inquirefile = 0, record = 1, offset = 0^
+binary3f^: ^status of writefile = 0^
+binary3f^: ^status of flushfile = 0^
+binary3f^: ^status of positionfile = 0^
+binary3f^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, dat-
+ecol = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary3f^: ^closing file (pka19b.out) with disposition = keep^
+binary3f^: ^status of closefile = 0^
+binary4f^: ^opening a binary file (pka19b.out) in read mode w/recsize...^
+binary4f^: ^status of openfile = 0^
+binary4f^: ^status of inquirefile = 0, filetype = binary, filemode = read, filename -
+= pka19b.out, record = 1, offset = 0^
+binary4f^: ^closing file (pka19b.out) with disposition = keep^
+binary4f^: ^status of closefile = 0^
+binary5f^: ^opening a binary file (pka19b.out) in read mode...^
+binary5f^: ^status of openfile = 0^
+binary5f^: ^about to position file to end w/rec -4, then inquire^
+binary5f^: ^status of positionfile = 0^
+binary5f^: ^status of inquirefile = 0, record = -4, offset = 0^
+binary5f^: ^about to position file to start w/rec 4, then inquire^
+binary5f^: ^status of positionfile = 0^
+binary5f^: ^status of inquirefile = 0, record = 4, offset = 0^
+binary5f^: ^about to position file to offset 0^
+binary5f^: ^status of positionfile = 0, about to inquire, then readfile^
+binary5f^: ^status of inquirefile = 0, record = 0, offset = 0^
+binary5f^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, dat-
+ecol = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary5f^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary5f^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, dat-
+ecol = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary5f^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary5f^: ^status of readfile = 0, vcol = third, charcol = row3, deccol = 3.33, dat-
+ecol = 03-apr-1994, mcol =              $300.00, icol = 3, fcol = 33.330^
+binary5f^: ^status of inquirefile = 0, record = 4, offset = 309^
+binary5f^: ^status of readfile = 0, vcol = third, charcol = row3, deccol = 3.33, dat-
+ecol = 03-apr-1994, mcol =              $300.00, icol = 3, fcol = 33.330^
+binary5f^: ^status of inquirefile = 0, record = 5, offset = 412^
+binary5f^: ^closing file (pka19b.out) with disposition = keep^
+binary5f^: ^status of closefile = 0^
+binary1^: ^opening binary file (pka19b.out) in create mode...^
+binary1^: ^status of openfile = 0^
+binary1^: ^status of inquirefile = 0, filetype = binary, filemode = create, filename-
+ = pka19b.out, record = 1, offset = 0^
+binary1^: ^about to do 2 writefiles in a row...^
+binary1^: ^status of first writefile = 0^
+binary1^: ^status of second writefile = 0^
+binary1^: ^status of flushfile = 0^
+binary1^: ^closing file (pka19b.out), the default is to keep^
+binary1^: ^status of closefile = 0^
+binary2^: ^opening binary file (pka19b.out) in append mode...^
+binary2^: ^status of openfile = 0^
+binary2^: ^status of inquirefile = 0, filetype = binary, filemode = append, filename-
+ = pka19b.out, record = 3, offset = 206^
+binary2^: ^about to do 2 writefiles in a row...^
+binary2^: ^status of first writefile = 0^
+binary2^: ^status of second writefile = 0^
+binary2^: ^status of flushfile = 0^
+binary2^: ^closing file (pka19b.out) with disposition = keep^
+binary2^: ^status of closefile = 0^
+binary3^: ^opening binary file (pka19b.out) in update mode...^
+binary3^: ^status of openfile = 0^
+binary3^: ^status of inquirefile = 0, filetype = binary, filemode = update, filename-
+ = pka19b.out, record = 1, offset = 0^
+binary3^: ^positioning file to record 2 from start, then inquire for record and offs-
+et^
+binary3^: ^status of positionfile = 0^
+binary3^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary3^: ^overwriting record 2, then inquire again^
+binary3^: ^status of writefile = 0^
+binary3^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3^: ^ positioning file back to record 2 from start , then read (verify that re-
+c2 was overwritten) and inquire.^
+binary3^: ^status of positionfile = 0^
+binary3^: ^status of readfile = 0, vcol = , charcol = , deccol = 0.00, datecol = , m-
+col =                $0.00, icol = 0, fcol = 0.000^
+binary3^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3^: ^ closing file pka19b.out with disposition = keep.  Then reopen pka19b.out-
+ in update mode.^
+binary3^: ^ status of closefile = 0^
+binary3^: ^status of openfile = 0^
+binary3^: ^status of inquirefile = 0, filetype = binary, filemode = update, filename-
+ = pka19b.out, record = 1, offset = 0^
+binary3^: ^status of positionfile = 0^
+binary3^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary3^: ^status of readfile = 0, vcol = , charcol = , deccol = 0.00, datecol = , m-
+col =                $0.00, icol = 0, fcol = 0.000^
+binary3^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3^: ^positioning to begining of record just read, inquire then update data^
+binary3^: ^status of positionfile = 0^
+binary3^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary3^: ^status of writefile = 0, rewinding file^
+binary3^: ^status of rewindfile = 0, inquire then update data^
+binary3^: ^status of inquirefile = 0, record = 1, offset = 0^
+binary3^: ^status of writefile = 0^
+binary3^: ^status of flushfile = 0^
+binary3^: ^status of positionfile = 0^
+binary3^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, date-
+col = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary3^: ^closing file (pka19b.out) with disposition = keep^
+binary3^: ^status of closefile = 0^
+binary4^: ^opening a binary file (pka19b.out) in read mode w/recsize...^
+binary4^: ^status of openfile = 0^
+binary4^: ^status of inquirefile = 0, filetype = binary, filemode = read, filename =-
+ pka19b.out, record = 1, offset = 0^
+binary4^: ^closing file (pka19b.out) with disposition = keep^
+binary4^: ^status of closefile = 0^
+binary5^: ^opening a binary file (pka19b.out) in read mode...^
+binary5^: ^status of openfile = 0^
+binary5^: ^about to position file to end w/rec -4, then inquire^
+binary5^: ^status of positionfile = 0^
+binary5^: ^status of inquirefile = 0, record = 1, offset = 0^
+binary5^: ^about to position file to start w/rec 4, then inquire^
+binary5^: ^status of positionfile = 0^
+binary5^: ^status of inquirefile = 0, record = 4, offset = 309^
+binary5^: ^about to position file to offset 0^
+binary5^: ^status of positionfile = 0, about to inquire, then readfile^
+binary5^: ^status of inquirefile = 0, record = 1, offset = 0^
+binary5^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, date-
+col = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary5^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary5^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, date-
+col = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary5^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary5^: ^status of readfile = 0, vcol = third, charcol = row3, deccol = 3.33, date-
+col = 03-apr-1994, mcol =              $300.00, icol = 3, fcol = 33.330^
+binary5^: ^status of inquirefile = 0, record = 4, offset = 309^
+binary5^: ^status of readfile = 0, vcol = third, charcol = row3, deccol = 3.33, date-
+col = 03-apr-1994, mcol =              $300.00, icol = 3, fcol = 33.330^
+binary5^: ^status of inquirefile = 0, record = 5, offset = 412^
+binary5^: ^closing file (pka19b.out) with disposition = keep^
+binary5^: ^status of closefile = 0^
+stream1^: ^opening a stream file (pka19c.out) in create mode...^
+stream1^: ^status of openfile = 0^
+stream1^: ^status of inquirefile = 0, filetype = stream, filemode = create, filename-
+ = pka19c.out, offset = 0^
+stream1^: ^about to do 2 writefiles in a row...^
+stream1^: ^status of first writefile = 0^
+stream1^: ^status of second writefile = 0^
+stream1^: ^status of flushfile = 0^
+stream1^: ^closing file (pka19c.out) with disposition = keep^
+stream1^: ^status of closefile = 0^
+stream2^: ^opening a stream file (pka19c.out) in append mode...^
+stream2^: ^status of openfile = 0^
+stream2^: ^status of inquirefile = 0, filetype = stream, filemode = append, filename-
+ = pka19c.out, offset = 405^
+stream2^: ^about to do a writefile, flush, writefile, flush...^
+stream2^: ^status of first writefile = 0^
+stream2^: ^status of flushfile = 0^
+stream2^: ^status of second writefile (large text) = 0^
+stream2^: ^status of flushfile = 0^
+stream2^: ^closing file (pka19c.out) with disposition = keep^
+stream2^: ^status of closefile = 0^
+stream3^: ^opening a stream file (pka19c.out) in update mode...^
+stream3^: ^status of openfile = 0^
+stream3^: ^status of inquirefile = 0, filetype = stream, filemode = update, filename-
+ = pka19c.out, offset = 0^
+stream3^: ^positioning file to offset 22 from start, then inquire^
+stream3^: ^status of positionfile = 0^
+stream3^: ^status of inquirefile = 0, offset = 22^
+stream3^: ^positioning file to offset -10 from end then inquire^
+stream3^: ^status of positionfile = 0^
+stream3^: ^status of inquirefile = 0, offset = 800^
+stream3^: ^positioning file to offset 0 from current then inquire^
+stream3^: ^status of positionfile = 0^
+stream3^: ^status of inquirefile = 0, offset = 800^
+stream3^: ^rewinding file^
+stream3^: ^status of rewindfile = 0, inquire then read file^
+stream3^: ^status of inquirefile = 0, offset = 0^
+stream3^: ^status of readfile = 0, values = first row of stream data aaa 9.99 09-jun-
+-1993              $999.99 99 11.880^
+stream3^: ^status of inquirefile = 0, offset = 103^
+stream3^: ^reading next data item^
+stream3^: ^status of readfile = 0, value = writing data to a stream file^
+stream3^: ^positioning to start of text just read and update it^
+stream3^: ^status of inquirefile = 0, offset = 103^
+stream3^: ^status of writefile = 0, flushing file^
+stream3^: ^status of flushfile = 0, pos to beg of data updated and read^
+stream3^: ^status of inquirefile = 0, offset = 103^
+stream3^: ^status of readfile = 0, value = This is a new string to replace the old s-
+tring^
+stream3^: ^closing file (pka19b.out) with disposition = keep^
+stream3^: ^status of closefile = 0^
+stream4^: ^opening a stream file (pka19c.out) in read mode...^
+stream4^: ^status of openfile = 0^
+stream4^: ^positioning file to end, offset = 0, then inquire^
+stream4^: ^status of positionfile = 0^
+stream4^: ^status of inquirefile = 0, offset = 810^
+stream4^: ^rewinding file^
+stream4^: ^status of rewindfile = 0^
+stream4^: ^status of inquirefile = 0, offset = 0^
+stream4^: ^reading file^
+stream4^: ^status of readfile = 0, values = first row of stream data aaa 9.99 09-jun-
+-1993              $999.99 99 11.880^
+stream4^: ^status of inquirefile = 0, offset = 103^
+stream4^: ^positioning file without a base using offset = 10, then inquire^
+stream4^: ^status of positionfile = 0^
+stream4^: ^status of inquirefile = 0, offset = 10^
+stream4^: ^closing file (pka19c.out), disposition = delete^
+stream4^: ^status of closefile = 0^
+close^: ^closing results file (pka19.out), disp = keep, should flush by default^
+>>
+<<
+text1^: ^opening file (pka19a.out) w/handle and filefile, testing defaults^
+text1^: ^status of openfile = 0^
+text1^: ^status of inquirefile = 0, filetype = text, filemode = read, filename = pka-
+19a.out^
+text1^: ^closing file (pka19a.out), default disposition should be keep^
+text1^: ^status of closefile = 0^
+text2^: ^opening text file (pka19a.out) in append mode...^
+text2^: ^status of openfile = 0^
+text2^: ^status of inquirefile = 0, filetype = text, filemode = append, filename = p-
+ka19a.out^
+text2^: ^about to do 3 writefiles in a row...^
+text2^: ^status of first writefile = 0^
+text2^: ^status of second writefile = 0^
+text2^: ^status of third writefile = 0^
+text2^: ^status of flushfile = 0^
+text2^: ^closing file (pka19a.out) with disposition = keep^
+text2^: ^status of closefile = 0^
+text3^: ^opening text file (pka19b.out) in create mode...^
+text3^: ^status of openfile = 0^
+text3^: ^status of inquirefile = 0, filetype = text, filemode = create, filename = p-
+ka19b.out^
+text3^: ^about to do 2 writefiles in a row...^
+text3^: ^status of first writefile = 0^
+text3^: ^status of second writefile = 0^
+text3^: ^status of flushfile = 0^
+text3^: ^closing file (pka19b.out) with disposition = delete^
+text3^: ^status of closefile = 0^
+text4^: ^opening text file (pka19b.out) in create mode...^
+text4^: ^status of openfile = 0^
+text4^: ^inquirefile without a status: , filetype = text, filemode = create, filenam-
+e = pka19b.out^
+text4^: ^status of writefile = 0^
+text4^: ^status of flushfile = 0^
+text4^: ^closing file (pka19b.out) with disposition = delete^
+text4^: ^status of closefile = 0^
+text5^: ^opening a text file (pka19a.out) in read mode...^
+text5^: ^status of openfile = 0^
+text5^: ^status of inquirefile = 0, filetype = text, filemode = read, filename = pka-
+19a.out^
+text5^: ^status of rewindfile = 0^
+text5^: ^status of readfile = 0, vcol = one, charcol = two^
+text5^: ^status of readfile = 0, vcol = one, charcol = two^
+text5^: ^status of readfile = 0, vcol = one, charcol = two^
+text5^: ^closing file (pka19a.out) with disposition = keep^
+text5^: ^status of closefile = 0^
+text6^: ^opening text file (pka19a.out) in read mode...^
+text6^: ^status of openfile = 0^
+text6^: ^status of inquirefile = 0, filetype = text, filemode = read, filename = pka-
+19a.out^
+text6^: ^status of rewindfile = 0^
+text6^: ^status of readfile = 0, vcol = one, charcol = two^
+text6^: ^status of rewindfile = 0, about to read same row again^
+text6^: ^status of readfile = 0, vcol = one, charcol = two^
+text6^: ^closing file (pka19a.out) with disposition = keep^
+text6^: ^status of closefile = 0^
+binary1f^: ^opening binary file (pka19b.out) in create mode...^
+binary1f^: ^status of openfile = 0^
+binary1f^: ^status of inquirefile = 0, filetype = binary, filemode = create, filenam-
+e = pka19b.out, record = 1, offset = 0^
+binary1f^: ^about to do 2 writefiles in a row...^
+binary1f^: ^status of first writefile = 0^
+binary1f^: ^status of second writefile = 0^
+binary1f^: ^status of flushfile = 0^
+binary1f^: ^closing file (pka19b.out), the default is to keep^
+binary1f^: ^status of closefile = 0^
+binary2f^: ^opening binary file (pka19b.out) in append mode...^
+binary2f^: ^status of openfile = 0^
+binary2f^: ^status of inquirefile = 0, filetype = binary, filemode = append, filenam-
+e = pka19b.out, record = 1, offset = 0^
+binary2f^: ^about to do 2 writefiles in a row...^
+binary2f^: ^status of first writefile = 0^
+binary2f^: ^status of second writefile = 0^
+binary2f^: ^status of flushfile = 0^
+binary2f^: ^closing file (pka19b.out) with disposition = keep^
+binary2f^: ^status of closefile = 0^
+binary3f^: ^opening binary file (pka19b.out) in update mode...^
+binary3f^: ^status of openfile = 0^
+binary3f^: ^status of inquirefile = 0, filetype = binary, filemode = update, filenam-
+e = pka19b.out, record = 1, offset = 0^
+binary3f^: ^positioning file to record 2 from start, then inquire for record and off-
+set^
+binary3f^: ^status of positionfile = 0^
+binary3f^: ^status of inquirefile = 0, record = 2, offset = 0^
+binary3f^: ^overwriting record 2, then inquire again^
+binary3f^: ^status of writefile = 0^
+binary3f^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3f^: ^ positioning file back to record 2 from start , then read (verify that r-
+ec2 was overwritten) and inquire.^
+binary3f^: ^status of positionfile = 0^
+binary3f^: ^status of readfile = 0, vcol = , charcol = , deccol = 0.00, datecol = , -
+mcol =                $0.00, icol = 0, fcol = 0.000^
+binary3f^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3f^: ^ closing file pka19b.out with disposition = keep.  Then reopen pka19b.ou-
+t in update mode.^
+binary3f^: ^ status of closefile = 0^
+binary3f^: ^status of openfile = 0^
+binary3f^: ^status of inquirefile = 0, filetype = binary, filemode = update, filenam-
+e = pka19b.out, record = 1, offset = 0^
+binary3f^: ^status of positionfile = 0^
+binary3f^: ^status of inquirefile = 0, record = 2, offset = 0^
+binary3f^: ^status of readfile = 0, vcol = , charcol = , deccol = 0.00, datecol = , -
+mcol =                $0.00, icol = 0, fcol = 0.000^
+binary3f^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3f^: ^positioning to begining of record just read, inquire then update data^
+binary3f^: ^status of positionfile = 0^
+binary3f^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary3f^: ^status of writefile = 0, rewinding file^
+binary3f^: ^status of rewindfile = 0, inquire then update data^
+binary3f^: ^status of inquirefile = 0, record = 1, offset = 0^
+binary3f^: ^status of writefile = 0^
+binary3f^: ^status of flushfile = 0^
+binary3f^: ^status of positionfile = 0^
+binary3f^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, dat-
+ecol = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary3f^: ^closing file (pka19b.out) with disposition = keep^
+binary3f^: ^status of closefile = 0^
+binary4f^: ^opening a binary file (pka19b.out) in read mode w/recsize...^
+binary4f^: ^status of openfile = 0^
+binary4f^: ^status of inquirefile = 0, filetype = binary, filemode = read, filename -
+= pka19b.out, record = 1, offset = 0^
+binary4f^: ^closing file (pka19b.out) with disposition = keep^
+binary4f^: ^status of closefile = 0^
+binary5f^: ^opening a binary file (pka19b.out) in read mode...^
+binary5f^: ^status of openfile = 0^
+binary5f^: ^about to position file to end w/rec -4, then inquire^
+binary5f^: ^status of positionfile = 0^
+binary5f^: ^status of inquirefile = 0, record = -4, offset = 0^
+binary5f^: ^about to position file to start w/rec 4, then inquire^
+binary5f^: ^status of positionfile = 0^
+binary5f^: ^status of inquirefile = 0, record = 4, offset = 0^
+binary5f^: ^about to position file to offset 0^
+binary5f^: ^status of positionfile = 0, about to inquire, then readfile^
+binary5f^: ^status of inquirefile = 0, record = 0, offset = 0^
+binary5f^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, dat-
+ecol = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary5f^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary5f^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, dat-
+ecol = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary5f^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary5f^: ^status of readfile = 0, vcol = third, charcol = row3, deccol = 3.33, dat-
+ecol = 03-apr-1994, mcol =              $300.00, icol = 3, fcol = 33.330^
+binary5f^: ^status of inquirefile = 0, record = 4, offset = 309^
+binary5f^: ^status of readfile = 0, vcol = third, charcol = row3, deccol = 3.33, dat-
+ecol = 03-apr-1994, mcol =              $300.00, icol = 3, fcol = 33.330^
+binary5f^: ^status of inquirefile = 0, record = 5, offset = 412^
+binary5f^: ^closing file (pka19b.out) with disposition = keep^
+binary5f^: ^status of closefile = 0^
+binary1^: ^opening binary file (pka19b.out) in create mode...^
+binary1^: ^status of openfile = 0^
+binary1^: ^status of inquirefile = 0, filetype = binary, filemode = create, filename-
+ = pka19b.out, record = 1, offset = 0^
+binary1^: ^about to do 2 writefiles in a row...^
+binary1^: ^status of first writefile = 0^
+binary1^: ^status of second writefile = 0^
+binary1^: ^status of flushfile = 0^
+binary1^: ^closing file (pka19b.out), the default is to keep^
+binary1^: ^status of closefile = 0^
+binary2^: ^opening binary file (pka19b.out) in append mode...^
+binary2^: ^status of openfile = 0^
+binary2^: ^status of inquirefile = 0, filetype = binary, filemode = append, filename-
+ = pka19b.out, record = 1, offset = 0^
+binary2^: ^about to do 2 writefiles in a row...^
+binary2^: ^status of first writefile = 0^
+binary2^: ^status of second writefile = 0^
+binary2^: ^status of flushfile = 0^
+binary2^: ^closing file (pka19b.out) with disposition = keep^
+binary2^: ^status of closefile = 0^
+binary3^: ^opening binary file (pka19b.out) in update mode...^
+binary3^: ^status of openfile = 0^
+binary3^: ^status of inquirefile = 0, filetype = binary, filemode = update, filename-
+ = pka19b.out, record = 1, offset = 0^
+binary3^: ^positioning file to record 2 from start, then inquire for record and offs-
+et^
+binary3^: ^status of positionfile = 0^
+binary3^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary3^: ^overwriting record 2, then inquire again^
+binary3^: ^status of writefile = 0^
+binary3^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3^: ^ positioning file back to record 2 from start , then read (verify that re-
+c2 was overwritten) and inquire.^
+binary3^: ^status of positionfile = 0^
+binary3^: ^status of readfile = 0, vcol = , charcol = , deccol = 0.00, datecol = , m-
+col =                $0.00, icol = 0, fcol = 0.000^
+binary3^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3^: ^ closing file pka19b.out with disposition = keep.  Then reopen pka19b.out-
+ in update mode.^
+binary3^: ^ status of closefile = 0^
+binary3^: ^status of openfile = 0^
+binary3^: ^status of inquirefile = 0, filetype = binary, filemode = update, filename-
+ = pka19b.out, record = 1, offset = 0^
+binary3^: ^status of positionfile = 0^
+binary3^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary3^: ^status of readfile = 0, vcol = , charcol = , deccol = 0.00, datecol = , m-
+col =                $0.00, icol = 0, fcol = 0.000^
+binary3^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary3^: ^positioning to begining of record just read, inquire then update data^
+binary3^: ^status of positionfile = 0^
+binary3^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary3^: ^status of writefile = 0, rewinding file^
+binary3^: ^status of rewindfile = 0, inquire then update data^
+binary3^: ^status of inquirefile = 0, record = 1, offset = 0^
+binary3^: ^status of writefile = 0^
+binary3^: ^status of flushfile = 0^
+binary3^: ^status of positionfile = 0^
+binary3^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, date-
+col = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary3^: ^closing file (pka19b.out) with disposition = keep^
+binary3^: ^status of closefile = 0^
+binary4^: ^opening a binary file (pka19b.out) in read mode w/recsize...^
+binary4^: ^status of openfile = 0^
+binary4^: ^status of inquirefile = 0, filetype = binary, filemode = read, filename =-
+ pka19b.out, record = 1, offset = 0^
+binary4^: ^closing file (pka19b.out) with disposition = keep^
+binary4^: ^status of closefile = 0^
+binary5^: ^opening a binary file (pka19b.out) in read mode...^
+binary5^: ^status of openfile = 0^
+binary5^: ^about to position file to end w/rec -4, then inquire^
+binary5^: ^status of positionfile = 0^
+binary5^: ^status of inquirefile = 0, record = 1, offset = 0^
+binary5^: ^about to position file to start w/rec 4, then inquire^
+binary5^: ^status of positionfile = 0^
+binary5^: ^status of inquirefile = 0, record = 4, offset = 309^
+binary5^: ^about to position file to offset 0^
+binary5^: ^status of positionfile = 0, about to inquire, then readfile^
+binary5^: ^status of inquirefile = 0, record = 1, offset = 0^
+binary5^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, date-
+col = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary5^: ^status of inquirefile = 0, record = 2, offset = 103^
+binary5^: ^status of readfile = 0, vcol = new02, charcol = row2, deccol = 2.22, date-
+col = 02-apr-1994, mcol =              $200.00, icol = 2, fcol = 22.220^
+binary5^: ^status of inquirefile = 0, record = 3, offset = 206^
+binary5^: ^status of readfile = 0, vcol = third, charcol = row3, deccol = 3.33, date-
+col = 03-apr-1994, mcol =              $300.00, icol = 3, fcol = 33.330^
+binary5^: ^status of inquirefile = 0, record = 4, offset = 309^
+binary5^: ^status of readfile = 0, vcol = third, charcol = row3, deccol = 3.33, date-
+col = 03-apr-1994, mcol =              $300.00, icol = 3, fcol = 33.330^
+binary5^: ^status of inquirefile = 0, record = 5, offset = 412^
+binary5^: ^closing file (pka19b.out) with disposition = keep^
+binary5^: ^status of closefile = 0^
+stream1^: ^opening a stream file (pka19c.out) in create mode...^
+stream1^: ^status of openfile = 0^
+stream1^: ^status of inquirefile = 0, filetype = stream, filemode = create, filename-
+ = pka19c.out, offset = 0^
+stream1^: ^about to do 2 writefiles in a row...^
+stream1^: ^status of first writefile = 0^
+stream1^: ^status of second writefile = 0^
+stream1^: ^status of flushfile = 0^
+stream1^: ^closing file (pka19c.out) with disposition = keep^
+stream1^: ^status of closefile = 0^
+stream2^: ^opening a stream file (pka19c.out) in append mode...^
+stream2^: ^status of openfile = 0^
+stream2^: ^status of inquirefile = 0, filetype = stream, filemode = append, filename-
+ = pka19c.out, offset = 0^
+stream2^: ^about to do a writefile, flush, writefile, flush...^
+stream2^: ^status of first writefile = 0^
+stream2^: ^status of flushfile = 0^
+stream2^: ^status of second writefile (large text) = 0^
+stream2^: ^status of flushfile = 0^
+stream2^: ^closing file (pka19c.out) with disposition = keep^
+stream2^: ^status of closefile = 0^
+stream3^: ^opening a stream file (pka19c.out) in update mode...^
+stream3^: ^status of openfile = 0^
+stream3^: ^status of inquirefile = 0, filetype = stream, filemode = update, filename-
+ = pka19c.out, offset = 0^
+stream3^: ^positioning file to offset 22 from start, then inquire^
+stream3^: ^status of positionfile = 0^
+stream3^: ^status of inquirefile = 0, offset = 22^
+stream3^: ^positioning file to offset -10 from end then inquire^
+stream3^: ^status of positionfile = 0^
+stream3^: ^status of inquirefile = 0, offset = 800^
+stream3^: ^positioning file to offset 0 from current then inquire^
+stream3^: ^status of positionfile = 0^
+stream3^: ^status of inquirefile = 0, offset = 800^
+stream3^: ^rewinding file^
+stream3^: ^status of rewindfile = 0, inquire then read file^
+stream3^: ^status of inquirefile = 0, offset = 0^
+stream3^: ^status of readfile = 0, values = first row of stream data aaa 9.99 09-jun-
+-1993              $999.99 99 11.880^
+stream3^: ^status of inquirefile = 0, offset = 103^
+stream3^: ^reading next data item^
+stream3^: ^status of readfile = 0, value = writing data to a stream file^
+stream3^: ^positioning to start of text just read and update it^
+stream3^: ^status of inquirefile = 0, offset = 103^
+stream3^: ^status of writefile = 0, flushing file^
+stream3^: ^status of flushfile = 0, pos to beg of data updated and read^
+stream3^: ^status of inquirefile = 0, offset = 103^
+stream3^: ^status of readfile = 0, value = This is a new string to replace the old s-
+tring^
+stream3^: ^closing file (pka19b.out) with disposition = keep^
+stream3^: ^status of closefile = 0^
+stream4^: ^opening a stream file (pka19c.out) in read mode...^
+stream4^: ^status of openfile = 0^
+stream4^: ^positioning file to end, offset = 0, then inquire^
+stream4^: ^status of positionfile = 0^
+stream4^: ^status of inquirefile = 0, offset = 810^
+stream4^: ^rewinding file^
+stream4^: ^status of rewindfile = 0^
+stream4^: ^status of inquirefile = 0, offset = 0^
+stream4^: ^reading file^
+stream4^: ^status of readfile = 0, values = first row of stream data aaa 9.99 09-jun-
+-1993              $999.99 99 11.880^
+stream4^: ^status of inquirefile = 0, offset = 103^
+stream4^: ^positioning file without a base using offset = 10, then inquire^
+stream4^: ^status of positionfile = 0^
+stream4^: ^status of inquirefile = 0, offset = 10^
+stream4^: ^closing file (pka19c.out), disposition = delete^
+stream4^: ^status of closefile = 0^
+close^: ^closing results file (pka19.out), disp = keep, should flush by default^
+>>
+? delete pka19b.out 
+<<
+~
+>>
+? delobj SEPPARAMDB -application pka19 
+<<
+~
+>>
+
+
+Ending at: TUE AUG 26 15:40:59 2003

@@ -1,0 +1,417 @@
+/*
+Copyright (c) 2004 Ingres Corporation
+
+
+	Test Name: alttbl45.sep
+	Time: Fri Jan 17 00:36:08 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : alttbl45
+	Module  : be/alttbl
+	Filename: alttbl45.sep
+	Purpose	: To test bugs number 79096, 79078, and 80128.
+	Input Files  : none
+	Output Files : none	
+	Database     : alttbldb
+	Tables       : t
+	Synopsis     : 1. alter table drop nonprimarykeyed columns should not
+			  affect primary key constraint
+                       2. so far, primary key constraint is invalid for new 
+			  added columns
+                       3. testing bug 80128. (User should be able to drop
+		       new added primary key constraint after alter table..
+		       drop column ) 
+
+ History: 17-Jan-1997	(wanya01)	Created 
+          25-Mar-1997	(wanya01)
+          27-May-1997	(wanya01) modify canon for help table
+           7-Jan-1999	(hanch04) Replace table version with TBL_VER
+	  19-Mar-1999	(vande02) Hard-coded VPG_SZ to 8K and removed
+				  TBL_VER (grammar.lex masks table vers)
+          19-Apr-2000	(vande02) Replacing main canon due to enhancement to
+			alter table functionality which allows the addition
+			of non-null, with default columns. The new error message
+			is correct.  See StarTrack Issue #8581654.
+	  10-Jun-2004	(shafa01) Replaced all huge canons and added a single
+                        canon per transaction. Removed /p from every SQL
+			command. Added missing test information in the header
+			section above. Also added "order by" for the select
+			statements.
+           6-Dec-2004	(shafa01) Updating canon with new version of the
+                        error message. As per development this change to the
+                        message was intentional, and was introduced with change 
+                        473284 to address bug 113438. See issue 13830125 for 
+                        further details.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+/* 	
+	see bug 79096, primary key constraint is invalid
+	for new added columns also see  79078  
+*/
+* set autocommit on \g
+<<
+>>
+* drop table t \g
+<<
+~
+>>
+* create table t (col1 int, col2 int ) with page_size = 8192 \g
+<<
+>>
+* insert into t values(1,1) \g
+<<
+(1 row)
+>>
+* insert into t values(2,2) \g
+<<
+(1 row)
+>>
+* alter table t add column col3 int not null primary key(col3) \g
+<<
+E_US0F11 ALTER TABLE: Invalid combination of attribute qualifiers
+    specified.  
+     ADD COLUMN does not support 'with system_maintained', or 'not null'  
+     without an accompanying 'with default' (with no explicit default  
+     value).
+    (Mon Dec  6 23:04:51 2004)
+
+>>
+* drop table t \g
+<<
+>>
+/* 
+	drop nonprimary-keyed column should
+	not affect primary key's function 
+*/
+* create table t (col1 int not null, col2 int, col3 int not null ) with
+<<
+>>
+* page_size= 4096 \g
+<<
+>>
+* insert into t values(1,1,1) \g
+<<
+(1 row)
+>>
+* alter table t add constraint c1 primary key(col1,col3) \g
+<<
+>>
+* alter table t drop column col2 restrict \g
+<<
+>>
+* insert into t values(2,2) \g
+<<
+(1 row)
+>>
+* insert into t values(2,2) \g
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Thu Jun 10 10:19:59 2004)
+
+>>
+* update t set col1=1,col3=1 where col1=2 \g
+<<
+E_US1195 Duplicate key on UPDATE detected.
+    (Thu Jun 10 10:20:06 2004)
+
+>>
+* modify t to heap \g
+<<
+(2 rows)
+>>
+* insert into t values(3,3) \g
+<<
+(1 row)
+>>
+* insert into t values(3,3) \g
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Thu Jun 10 10:20:11 2004)
+
+>>
+* update t set col1=1,col3=1 where col1=3 \g
+<<
+E_US1195 Duplicate key on UPDATE detected.
+    (Thu Jun 10 10:20:12 2004)
+
+>>
+* select * from t order by 1,2\g
+<<
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            1|            1|
+|            2|            2|
+|            3|            3|
++-------------+-------------+
+(3 rows)
+>>
+* drop table t \g
+<<
+>>
+/* 
+	These SQL queries test bug 80128 
+*/
+* create table t (col1 int not null, col2 int not null, col3 int not null )
+<<
+>>
+* with page_size= 4096 \g 
+<<
+>>
+* insert into t values(1,1,1) \g
+<<
+(1 row)
+>>
+* alter table t add constraint c1 primary key(col1,col2) \g
+<<
+>>
+* alter table t drop column col2 restrict \g 
+<<
+E_QE016B ALTER TABLE DROP COLUMN RESTRICT:  restricted destruction of base
+    table column cannot proceed as it  has one or more dependent objects
+    which would become abandoned.
+    (Thu Jun 10 10:20:17 2004)
+
+>>
+* alter table t drop column col2 cascade \g
+<<
+>>
+* insert into t values(2,2) \g
+<<
+(1 row)
+>>
+* alter table t add constraint c2 primary key(col3) \g
+<<
+>>
+* insert into t values(3,3) \g
+<<
+(1 row)
+>>
+* insert into t values(4,3) \g
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Thu Jun 10 10:20:24 2004)
+
+>>
+* modify t to heap \g
+<<
+(3 rows)
+>>
+* insert into t values(3,3) \g
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Thu Jun 10 10:20:28 2004)
+
+>>
+* help table t \g
+<<
+Name:                 t
+Owner:                testenv
+Created:              10-jun-2004 10:20:15     
+Location:             ii_database
+Type:                 user table
+Version:              II3.0
+Page size:            4096
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 8
+Row width:            8
+Number of rows:       3
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          yes
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             integer         4   no      no       
+col3                             integer         4   no      no       
+
+Secondary indexes:
+Index Name                       Structure  Keyed On
+"$c2"                            btree      col3
+
+
+
+>>
+* select * from iiconstraints order by 1\g
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------------------+-------------+----------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+---------------------------------------------------+------+
+|constraint_name                 |schema_name                     |table_name       -
+               |constr|create_date              |text_sequence|text_segment         -
+                                                                                    -
+                                                                                    -
+                                                   |system|
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------------------+-------------+----------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+---------------------------------------------------+------+
+|c2                              |testenv                         |t                -
+               |P     |2004_06_10 15:20:22 GMT  |            1| PRIMARY KEY(col3)   -
+                                                                                    -
+                                                                                    -
+                                                   |U     |
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------------------+-------------+----------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+---------------------------------------------------+------+
+(1 row)
+>>
+* alter table t drop constraint c2 restrict \g
+<<
+>>
+* alter table t drop constraint c2 cascade \g
+<<
+E_PS048A ALTER TABLE DROP CONSTRAINT: constraint 'c2' does not exist 
+    in schema 'testenv'.
+    (Thu Jun 10 10:20:45 2004)
+
+>>
+* drop table t\g
+<<
+>>
+/* 
+	These SQL queries als test bug 80128 
+*/
+* create table t (col1 int not null, col2 int not null, 
+<<
+>>
+* constraint c2 primary key(col1))
+<<
+>>
+* with page_size= 4096 \g
+<<
+>>
+* insert into t values(1,1) \g
+<<
+(1 row)
+>>
+* alter table t drop column col1 restrict \g
+<<
+E_QE016B ALTER TABLE DROP COLUMN RESTRICT:  restricted destruction of base
+    table column cannot proceed as it  has one or more dependent objects
+    which would become abandoned.
+    (Thu Jun 10 10:20:49 2004)
+
+>>
+* alter table t drop column col1 cascade \g
+<<
+>>
+* alter table t add constraint c1 primary key(col2) \g
+<<
+>>
+* select * from iiconstraints order by 1\g
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------------------+-------------+----------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+---------------------------------------------------+------+
+|constraint_name                 |schema_name                     |table_name       -
+               |constr|create_date              |text_sequence|text_segment         -
+                                                                                    -
+                                                                                    -
+                                                   |system|
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------------------+-------------+----------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+---------------------------------------------------+------+
+|c1                              |testenv                         |t                -
+               |P     |2004_06_10 15:20:51 GMT  |            1| PRIMARY KEY(col2)   -
+                                                                                    -
+                                                                                    -
+                                                   |U     |
++--------------------------------+--------------------------------+------------------
+---------------+------+-------------------------+-------------+----------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+---------------------------------------------------+------+
+(1 row)
+>>
+* help table t \g
+<<
+Name:                 t
+Owner:                testenv
+Created:              10-jun-2004 10:20:47     
+Location:             ii_database
+Type:                 user table
+Version:              II3.0
+Page size:            4096
+Cache priority:       0
+Alter table version:  1
+Alter table totwidth: 8
+Row width:            4
+Number of rows:       1
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          yes
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col2                             integer         4   no      no       
+
+Secondary indexes:
+Index Name                       Structure  Keyed On
+"$c1"                            btree      col2
+
+
+
+>>
+* alter table t drop constraint c1 restrict \g
+<<
+>>
+* select * from t order by 1\g
+<<
+
++-------------+
+|col2         |
++-------------+
+|            1|
++-------------+
+(1 row)
+>>
+* alter table t add constraint c2 check(col2>0)\g
+<<
+>>
+* alter table t drop constraint c2 restrict \g
+<<
+>>
+* drop table t\g
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: Mon Dec  6 23:05:16 2004

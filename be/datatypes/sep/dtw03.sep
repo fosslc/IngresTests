@@ -1,0 +1,874 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+        Test Name    : dtw03.sep (formerly fia04)
+        User Name    : testenv
+        Module       : be/datatypes
+        Purpose      : Conversion Function test cases 
+        Input Files  : none
+        Output Files : none
+        Database     : datatypedb
+        Tables       : 
+        Synopsis     : 1. Test type conversion functions.  Use ASCII(), C(),
+			  CHAR(), TEXT(), VCHAR(), VARCHAR(), INT1(), INT2(),
+			  INT4(), FLOAT4(), FLOAT8(), and MONEY() on DECIMAL
+			  values.
+		       2. Test for proper overflow generation on all of these
+			  converions.
+			  NOTE: Exceptions (ouch!) to this are FLOAT4() and
+			  FLOAT8() which cannot overflow from a decimal
+			  parameter.  Also ASCII(), C(), CHAR(), TEXT(), and
+			  VARCHAR()  do not generate overflow.
+		       3. Test illegal conversion of DECIMAL to date.
+		       4. Test DECIMAL() conversion function in all of its
+			  forms.  This is a lot of work.  Test all valid input
+			  types: I1, I2, I4, F4, F8, MONEY, DECIMAL, C, CHAR,
+			  TEXT, and VARCHAR using no precision no scale,
+			  precision but no scale, and both precision and scale.
+			  Make sure appropriate defaults are supplied by INGRES.
+			  Make sure DECIMAL overflow is properly detected and
+			  reproted for each conversion.  Make sure precision
+			  and scale are not defaultable for string types
+			  (genertes an error message).  Make sure empty or white
+			  paced string converts to 0.
+		       5. Repeat a subset of the above tests using the DECMIAL()
+			  conversion functions synonyms: NUMERIC() and DEC().
+		       6. Test illegal uses of DECIMAL() conversion fucntion
+			  using non-literals to specify precision and/or scale;
+			  test precision out of range; test scale out of range;
+			  test alphabetic string as first parameter.
+
+        History :   	Created   Author: John Black
+	  07-aug-1992	Modified to sep format by John B. Park
+          10-Jan-1994	(jpark)   updated canons.
+           1-Nov-2006	(vande02) Updated expected E_US0B5B or E_US0B5C messages
+                                  from invalid syntax with the date data type.
+                                  Added Copyright and aligned history.
+           5-Jun-2007	(vande02) Changed two select queries to use the new
+				  maximum(39)+1 precision to get the expected
+				  error E_PS0C82.  E_PS0C82 messages should say
+				  precision must be 'between 1 and 39'.  Made
+				  header corrections, copied embedded comments
+				  to the Synopsis.
+
+				  This new max precision of 39 for decimals is
+				  as of Ingres 2006 Release 3.
+
+           2-Jul-2007   (vande02) E_PS0C82 messages have been corrected to say
+                                  precision must be 'between 1 and 39'. Removing
+				  comment about issue 118792.
+          16-Oct-2008	(kiria01) SIR121012
+				  Update canons for constant folding that means
+				  expressions supported and some messages re-worded.
+*/
+? sql -s SEPPARAMDB 
+/*
+** Conversion Fucntions test cases 
+*/
+<<
+>>
+* set autocommit on; \g
+<<
+>>
+* select ascii  (12345.12345); \g
+/*
+** 1. Test type conversion functions.  Use ASCII(), C(), CHAR(), TEXT(), 
+**    VCHAR(), VARCHAR(), INT1(), INT2(), INT4(), FLOAT4(), FLOAT8(), 
+**    and MONEY() on DECIMAL values. 
+*/
+<<
+
++------------+
+|col1        |
++------------+
+|12345.12345 |
++------------+
+(1 row)
+>>
+* select c (12345.12345);  \g
+<<
+
++------------+
+|col1        |
++------------+
+|12345.12345 |
++------------+
+(1 row)
+>>
+* select char (12345.12345);  \g
+<<
+
++------------+
+|col1        |
++------------+
+|12345.12345 |
++------------+
+(1 row)
+>>
+* select text (12345.12345);  \g
+<<
+
++------------+
+|col1        |
++------------+
+|12345.12345 |
++------------+
+(1 row)
+>>
+* select vchar (12345.12345);  \g
+<<
+
++------------+
+|col1        |
++------------+
+|12345.12345 |
++------------+
+(1 row)
+>>
+* select varchar(12345.12345);  \g
+<<
+
++------------+
+|col1        |
++------------+
+|12345.12345 |
++------------+
+(1 row)
+>>
+* select int1 (126.12345);  \g
+<<
++------+
+|col1  |
++------+
+|   126|
++------+
+(1 row)
+>>
+* select int2 (12345.12345);  \g
+<<
++------+
+|col1  |
++------+
+| 12345|
++------+
+(1 row)
+>>
+* select int4 (2147483647.12345);  \g
+<<
++-------------+
+|col1         |
++-------------+
+|   2147483647|
++-------------+
+(1 row)
+>>
+* select float4 (12345.12345);  \g
+<<
++-----------+
+|col1       |
++-----------+
+|  12345.123|
++-----------+
+(1 row)
+>>
+* select float4 (-12345.0);  \g
+<<
++-----------+
+|col1       |
++-----------+
+| -12345.000|
++-----------+
+(1 row)
+>>
+* select float8 (123456789.123456);  \g
+<<
+
++-----------+
+|col1       |
++-----------+
+| 1.235e+008|
++-----------+
+(1 row)
+>>
+* select float8 (-1234567890.0);  \g
+<<
+
++-----------+
+|col1       |
++-----------+
+|-1.235e+009|
++-----------+
+(1 row)
+>>
+* select money (99999999999999.99);  \g
+<<
+E_US1131 exceeded the maximum money value allowed.
+    (Mon Jan 10 11:50:12 1994)
+
+>>
+* select int1   (128.0); \g
+/*
+** 2. Test for proper overflow generation on all of these converions. 
+** 
+** NOTE: Exceptions (ouch!) to this are FLOAT4() and FLOAT8() which  
+**       cannot overflow from a decimal parameter.  Also ASCII(), C(), 
+**       CHAR(), TEXT(), and VARCHAR()  do not generate overflow. 
+*/
+<<
+E_US1068 Integer overflow detected in query.
+    (Mon Jan 10 11:50:13 1994)
+
+>>
+* select int2 (32768.0);  \g
+<<
+E_US1068 Integer overflow detected in query.
+    (Mon Jan 10 11:50:15 1994)
+
+>>
+* select int4 (2147483648.0);  \g
+<<
+E_US1068 Integer overflow detected in query.
+    (Mon Jan 10 11:50:17 1994)
+
+>>
+* select money (100000000000000.00);  \g
+<<
+E_US1131 exceeded the maximum money value allowed.
+    ( 5-AUG-1992 11:04:14)
+>>
+* select date(decimal(int4(10),10,2); \g
+/*
+** 3. Test illegal conversion of DECIMAL to date 
+*/
+<<
+E_US09C5 line 1, Syntax error on 'EOF'.  The correct syntax is: 
+    SELECT [ALL|DISTINCT] target_list 
+      FROM table(s) 
+      [WHERE search_cond] 
+      [GROUP BY col(s)] 
+      [HAVING search_cond] 
+ [UNION subselect] 
+ [ORDER BY col(s)]
+    ( 5-AUG-1992 11:04:14)
+>>
+* select decimal(int1(10)),  	ii_dv_desc(decimal(int1(10))); \g
+/*
+** 4. Test DECIMAL() conversion function in all of its froms.  This is 
+**    a lot of work.  Test all valid input types: I1, I2, I4, F4, F8, 
+**    MONEY, DECIMAL, C, CHAR, TEXT, and VARCHAR using no precision no 
+**    scale, precision but no scale, and both precision and scale. 
+**    Make sure appropriate defaults are supplied by INGRES.  Make sure 
+**    DECIMAL overflow is properly detected and reproted for each  
+**    conversion.  Make sure precision and scale are not defaultable 
+**    for string types (genertes an error message).  Make sure empty or 
+**    whitespaced string converts to 0. 
+*/
+<<
++------+------------------------------+
+|col1  |col2                          |
++------+------------------------------+
+|    10|decimal(5, 0)                 |
++------+------------------------------+
+(1 row)
+>>
+* select decimal(int1(10),10),  	ii_dv_desc(decimal(int1(10),10)); \g
+<<
++-----------+------------------------------+
+|col1       |col2                          |
++-----------+------------------------------+
+|         10|decimal(10, 0)                |
++-----------+------------------------------+
+(1 row)
+>>
+* select decimal(int1(10),10,2),  	ii_dv_desc(decimal(int1(10),10,2)); \g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|       10.00|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(int1(10),1,0),  	ii_dv_desc(decimal(int1(10),1,0)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:20 1994)
+
+>>
+* select decimal(int1(10),10,10), 	ii_dv_desc(decimal(int1(10),10,10)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:22 1994)
+
+>>
+* select decimal(int2(10)), 	ii_dv_desc(decimal(int2(10))); \g
+<<
++------+------------------------------+
+|col1  |col2                          |
++------+------------------------------+
+|    10|decimal(5, 0)                 |
++------+------------------------------+
+(1 row)
+>>
+* select decimal(int2(10),10),  	ii_dv_desc(decimal(int2(10),10)); \g
+<<
++-----------+------------------------------+
+|col1       |col2                          |
++-----------+------------------------------+
+|         10|decimal(10, 0)                |
++-----------+------------------------------+
+(1 row)
+>>
+* select decimal(int2(10),10,2),  	ii_dv_desc(decimal(int2(10),10,2)); \g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|       10.00|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(int2(10),1,0),  	ii_dv_desc(decimal(int2(10),1,0)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:24 1994)
+
+>>
+* select decimal(int2(10),10,10), 	ii_dv_desc(decimal(int2(10),10,10)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:26 1994)
+
+>>
+* select decimal(int4(10)), 	ii_dv_desc(decimal(int4(10))); \g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|          10|decimal(11, 0)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(int4(10),10),  	ii_dv_desc(decimal(int4(10),10)); \g
+<<
++-----------+------------------------------+
+|col1       |col2                          |
++-----------+------------------------------+
+|         10|decimal(10, 0)                |
++-----------+------------------------------+
+(1 row)
+>>
+* select decimal(int4(10),10,2),  	ii_dv_desc(decimal(int4(10),10,2)); \g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|       10.00|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(int4(10),1,0),  	ii_dv_desc(decimal(int4(10),1,0)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:28 1994)
+
+>>
+* select decimal(int4(10),10,10), 	ii_dv_desc(decimal(int4(10),10,10)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:30 1994)
+
+>>
+* select decimal(float4(1234.10)), 	ii_dv_desc(decimal(float4(1234.10))); \g
+<<
++----------------+------------------------------+
+|col1            |col2                          |
++----------------+------------------------------+
+|            1234|decimal(15, 0)                |
++----------------+------------------------------+
+(1 row)
+>>
+* select decimal(float4(1234.10),10), ii_dv_desc(decimal(float4(1234.10),10));\g
+<<
++-----------+------------------------------+
+|col1       |col2                          |
++-----------+------------------------------+
+|       1234|decimal(10, 0)                |
++-----------+------------------------------+
+(1 row)
+>>
+* select decimal(float4(1234.10),10,2), ii_dv_desc(decimal(float4(1234.10),10,2));\g
+<<
+
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|     1234.09|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(float4(1234.10),3,0), ii_dv_desc(decimal(float4(1234.10),3,0));\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:36 1994)
+
+>>
+* select decimal(float4(1234.10),10,7), ii_dv_desc(decimal(float4(1234.10),10,7));\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:37 1994)
+
+>>
+* select decimal(float8(1234.10)), 	ii_dv_desc(decimal(float8(1234.10))); \g
+<<
++----------------+------------------------------+
+|col1            |col2                          |
++----------------+------------------------------+
+|            1234|decimal(15, 0)                |
++----------------+------------------------------+
+(1 row)
+>>
+* select decimal(float8(1234.10),10), ii_dv_desc(decimal(float8(1234.10),10));\g
+<<
++-----------+------------------------------+
+|col1       |col2                          |
++-----------+------------------------------+
+|       1234|decimal(10, 0)                |
++-----------+------------------------------+
+(1 row)
+>>
+* select decimal(float8(1234.10),10,2), ii_dv_desc(decimal(float8(1234.10),10,2));\g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|     1234.10|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(float8(1234.10),3,0), ii_dv_desc(decimal(float8(1234.10),3,0));\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:40 1994)
+
+>>
+* select decimal(float8(1234.10),10,7), ii_dv_desc(decimal(float8(1234.10),10,7));\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:41 1994)
+
+>>
+* select decimal(1234.10), 	ii_dv_desc(decimal(1234.10)); \g
+<<
++----------------+------------------------------+
+|col1            |col2                          |
++----------------+------------------------------+
+|            1234|decimal(15, 0)                |
++----------------+------------------------------+
+(1 row)
+>>
+* select decimal(1234.10,10),  	ii_dv_desc(decimal(1234.10,10)); \g
+<<
++-----------+------------------------------+
+|col1       |col2                          |
++-----------+------------------------------+
+|       1234|decimal(10, 0)                |
++-----------+------------------------------+
+(1 row)
+>>
+* select decimal(1234.10,10,2),  	ii_dv_desc(decimal(1234.10,10,2)); \g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|     1234.10|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(1234.10,3,0),  	ii_dv_desc(decimal(1234.10,3,0)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:45 1994)
+
+>>
+* select decimal(1234.10,10,7), 	ii_dv_desc(decimal(1234.10,10,7)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:46 1994)
+
+>>
+* select decimal(money(1234.10)), 	ii_dv_desc(decimal(money(1234.10))); \g
+<<
++----------------+------------------------------+
+|col1            |col2                          |
++----------------+------------------------------+
+|            1234|decimal(15, 0)                |
++----------------+------------------------------+
+(1 row)
+>>
+* select decimal(money(1234.10),10), ii_dv_desc(decimal(money(1234.10),10)); \g
+<<
++-----------+------------------------------+
+|col1       |col2                          |
++-----------+------------------------------+
+|       1234|decimal(10, 0)                |
++-----------+------------------------------+
+(1 row)
+>>
+* select decimal(money(1234.10),10,2), ii_dv_desc(decimal(money(1234.10),10,2));\g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|     1234.10|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(money(1234.10),3,0), ii_dv_desc(decimal(money(1234.10),3,0));\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:49 1994)
+
+>>
+* select decimal(money(1234.10),10,7), ii_dv_desc(decimal(money(1234.10),10,7));\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:51 1994)
+
+>>
+* select decimal(varchar(1234.10)), ii_dv_desc(decimal(varchar(1234.10))); \g
+<<
+E_PS0C80 No default values are provided for the decimal() conversion
+    function when a value with datatype `varchar' is given as the first
+    parameter.  Explicitly specify precision and scale.
+    ( 5-AUG-1992 11:04:22)
+>>
+* select decimal(varchar(1234.10),10), ii_dv_desc(decimal(varchar(1234.10),10));\g
+<<
+E_PS0C80 No default values are provided for the decimal() conversion
+    function when a value with datatype `varchar' is given as the first
+    parameter.  Explicitly specify precision and scale.
+    ( 5-AUG-1992 11:04:22)
+>>
+* select decimal(varchar(1234.10),10,2), ii_dv_desc(decimal(varchar(1234.10),10,2));-
+\g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|     1234.10|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(varchar(1234.10),3,0), ii_dv_desc(decimal(varchar(1234.10),3,0));\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:53 1994)
+
+>>
+* select decimal(varchar(1234.10),10,7), ii_dv_desc(decimal(varchar(1234.10),10,7)) -
+; \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:54 1994)
+
+>>
+* select decimal(char(1234.10)), 	ii_dv_desc(decimal(char(1234.10))); \g
+<<
+E_PS0C80 No default values are provided for the decimal() conversion
+    function when a value with datatype `char' is given as the first parameter. 
+    Explicitly specify precision and scale.
+    ( 5-AUG-1992 11:04:23)
+>>
+* select decimal(char(1234.10),10),  ii_dv_desc(decimal(char(1234.10),10)); \g
+<<
+E_PS0C80 No default values are provided for the decimal() conversion
+    function when a value with datatype `char' is given as the first parameter. 
+    Explicitly specify precision and scale.
+    ( 5-AUG-1992 11:04:23)
+>>
+* select decimal(char(1234.10),10,2), ii_dv_desc(decimal(char(1234.10),10,2));\g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|     1234.10|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(char(1234.10),3,0),  ii_dv_desc(decimal(char(1234.10),3,0)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:56 1994)
+
+>>
+* select decimal(char(1234.10),10,7), ii_dv_desc(decimal(char(1234.10),10,7));\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:50:58 1994)
+
+>>
+* select decimal(text(1234.10)), 	ii_dv_desc(decimal(text(1234.10))); \g
+<<
+E_PS0C80 No default values are provided for the decimal() conversion
+    function when a value with datatype `text' is given as the first parameter. 
+    Explicitly specify precision and scale.
+    ( 5-AUG-1992 11:04:24)
+>>
+* select decimal(text(1234.10),10),  	ii_dv_desc(decimal(text(1234.10),10));\g
+<<
+E_PS0C80 No default values are provided for the decimal() conversion
+    function when a value with datatype `text' is given as the first parameter. 
+    Explicitly specify precision and scale.
+    ( 5-AUG-1992 11:04:24)
+>>
+* select decimal(text(1234.10),10,2), ii_dv_desc(decimal(text(1234.10),10,2));\g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|     1234.10|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(text(1234.10),3,0),  ii_dv_desc(decimal(text(1234.10),3,0)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:51:00 1994)
+
+>>
+* select decimal(text(1234.10),10,7), ii_dv_desc(decimal(text(1234.10),10,7));\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:51:01 1994)
+
+>>
+* select decimal(c(1234.10)), 	ii_dv_desc(decimal(c(1234.10))); \g
+<<
+E_PS0C80 No default values are provided for the decimal() conversion
+    function when a value with datatype `c' is given as the first parameter. 
+    Explicitly specify precision and scale.
+    ( 5-AUG-1992 11:04:25)
+>>
+* select decimal(c(1234.10),10),  	ii_dv_desc(decimal(c(1234.10),10)); \g
+<<
+E_PS0C80 No default values are provided for the decimal() conversion
+    function when a value with datatype `c' is given as the first parameter. 
+    Explicitly specify precision and scale.
+    ( 5-AUG-1992 11:04:26)
+>>
+* select decimal(c(1234.10),10,2),  	ii_dv_desc(decimal(c(1234.10),10,2)); \g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|     1234.10|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(c(1234.10),3,0),  	ii_dv_desc(decimal(c(1234.10),3,0)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:51:04 1994)
+
+>>
+* select decimal(c(1234.10),10,7), 	ii_dv_desc(decimal(c(1234.10),10,7)); \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:51:05 1994)
+
+>>
+* select decimal('',10,2), ii_dv_desc(decimal('',10,2)); \g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|        0.00|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal(' ',10,2), ii_dv_desc(decimal(' ',10,2));  \g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|        0.00|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select decimal('abc',10,2); \g
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    ( 5-AUG-1992 11:04:27)
+>>
+* select decimal(date('now'),10,2);  \g
+<<
+E_US0B5C line 1, Function 'decimal' is not defined for arguments of type
+    'ingresdate' and 'integer'. Explicitly convert its arguments to the
+    desired type(s).
+    (Wed Nov  1 15:37:42 2006)
+
+>>
+* select dec(10), ii_dv_desc(dec(10)); \g
+/*
+** 5. Repeat a subset of the above tests using the DECMIAL() conversion 
+**    functions synonyms: NUMERIC() and DEC(). 
+*/
+<<
++------+------------------------------+
+|col1  |col2                          |
++------+------------------------------+
+|    10|decimal(5, 0)                 |
++------+------------------------------+
+(1 row)
+>>
+* select dec(10,2), ii_dv_desc(dec(10,2));  \g
+<<
++---+------------------------------+
+|col|col2                          |
++---+------------------------------+
+| 10|decimal(2, 0)                 |
++---+------------------------------+
+(1 row)
+>>
+* select dec(10,10,2), ii_dv_desc(dec(10,10,2));  \g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|       10.00|decimal(10, 2)                |
++------------+------------------------------+
+(1 row)
+>>
+* select numeric(999999), ii_dv_desc(numeric(999999));  \g
+<<
++------------+------------------------------+
+|col1        |col2                          |
++------------+------------------------------+
+|      999999|decimal(11, 0)                |
++------------+------------------------------+
+(1 row)
+>>
+* select numeric(9999999,10), ii_dv_desc(numeric(9999999,10));  \g
+<<
++-----------+------------------------------+
+|col1       |col2                          |
++-----------+------------------------------+
+|    9999999|decimal(10, 0)                |
++-----------+------------------------------+
+(1 row)
+>>
+* select numeric(99999999,15,2), ii_dv_desc(numeric(99999999,15,2));  \g
+<<
++-----------------+------------------------------+
+|col1             |col2                          |
++-----------------+------------------------------+
+|      99999999.00|decimal(15, 2)                |
++-----------------+------------------------------+
+(1 row)
+>>
+* select decimal(10, 4+4, 2); \g
+/*
+** 6. Test uses of DECIMAL() conversion function using constant
+**    expressions to specify precision and/or scale
+*/
+<<
+
++----------+
+|col1      |
++----------+
+|     10.00|
++----------+
+(1 row)
+>>
+* select decimal(10, 4, 2-1);  \g
+<<
+
++------+
+|col1  |
++------+
+|  10.0|
++------+
+(1 row)
+>>
+* select decimal(10, 4*1);  \g
+<<
+
++-----+
+|col1 |
++-----+
+|   10|
++-----+
+(1 row)
+>>
+* select decimal(10, reltid) from iirelation where relid = 'iirelation';  \g
+/*
+** 7. Test illegal uses of DECIMAL() conversion function. Test non-constant
+**    scale and precision; Test precision out of range; test scale out of
+**    range; test alphabetic string as first parameter. 
+*/
+<<
+E_PS0C81 The second and third arguments to the decimal() conversion
+    function must be constants.  Column names or host variables, etc. are not
+    allowed.
+    (Thu Oct 16 16:21:20 2008)
+
+>>
+* select decimal(10, 10, reltid) from iirelation where relid = 'iirelation';  \g
+<<
+E_PS0C81 The second and third arguments to the decimal() conversion
+    function must be constants.  Column names or host variables, etc. are not
+    allowed.
+    (Thu Oct 16 16:21:21 2008)
+
+>>
+* select decimal(10,40); \g
+<<
+E_PS0C82 Precision specified in decimal() conversion function was invalid.
+     Precision must be a constant between 1 and 39, inclusive.
+    (Thu Oct 16 16:21:22 2008)
+
+>>
+* select decimal(10,0);  \g
+<<
+E_PS0C82 Precision specified in decimal() conversion function was invalid.
+     Precision must be a constant between 1 and 39, inclusive.
+    (Thu Oct 16 16:21:24 2008)
+
+>>
+* select decimal(10,40,0);  \g
+<<
+E_PS0C82 Precision specified in decimal() conversion function was invalid.
+     Precision must be a constant between 1 and 39, inclusive.
+    (Thu Oct 16 16:21:26 2008)
+
+>>
+* select decimal(10,0,0);  \g
+<<
+E_PS0C82 Precision specified in decimal() conversion function was invalid.
+     Precision must be a constant between 1 and 39, inclusive.
+    (Thu Oct 16 16:21:35 2008)
+
+>>
+* select decimal(10,20,21);  \g
+<<
+E_PS0C83 Scale specified in decimal() conversion function was invalid. 
+    Scale must be a constant between 0 and `precision' (in this case 20),
+    inclusive.
+    (Thu Oct 16 16:21:42 2008)
+
+>>
+* select decimal(10,20,-1);  \g
+<<
+E_PS0C83 Scale specified in decimal() conversion function was invalid. 
+    Scale must be a constant between 0 and `precision' (in this case 20),
+    inclusive.
+    (Thu Oct 16 16:21:45 2008)
+
+>>
+* \q
+<<
+>>
+
+
+Ending at: Thu Oct 16 16:21:48 2008

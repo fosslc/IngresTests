@@ -1,0 +1,412 @@
+/*
+	Test Name: alttbl25.sep
+	Time: Sat Jan 11 05:35:49 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :
+	Output Files :
+	Database     :
+	Tables       :
+	Synopsis     : testing bug b79875
+ History: 11-Jan-1997	(wanya01)	Created
+          27-May-1997	(wanya01) modify canon for help table
+	03/23/99      (kamra01)  Modified the page_size to 4K instead of vpg_sz	 
+        30-Jul-2007   (kibro01) Changed DM00A7 message (b118799)
+*/
+? fill alttbl25.sql 
+!!
+/* testing drop column when column is a primary or secondary index key */
+
+set autocommit on \p\g
+drop table t \p\g
+create table t(col1 int, col2 int not null, col3 int, primary key(col2)) with
+page_size = 4096 \p\g
+insert into t values(1,2,3) \p\g
+insert into t values (2,3,4) \p\g
+alter table t drop column col2 cascade \p\g
+help table t \p\g
+
+drop table t \p\g
+create table t(col1 int, col2 int not null, col3 int not null, primary key(col2,col3-
+) )    with page_size = 4096 \p\g
+insert into t values(0,0,0) \p\g
+insert into t values(1,1,1) \p\g
+alter table t drop column col2 restrict \p\g
+alter table t drop column col2 cascade \p\g
+select * from t \p\g
+drop table t \p\g
+
+create table t(col1 int, col2 int) with page_size = 4096 \p\g
+create index id on t(col2) with page_size = 4096 \p\g
+insert into t values (1,2) \p\g
+insert into t values (2,3) \p\g
+alter table t drop column col2 restrict \p\g     
+alter table t drop column col2 cascade \p\g
+select * from t \p\g
+help table t \p\g
+drop table t \p\g
+ 
+create table t(col1 int, col2 int) with page_size = 4096 \p\g
+create index id on t(col2) \p\g
+create index id2 on t(col2) \p\g
+insert into t values (1,2) \p\g
+insert into t values (2,3) \p\g
+alter table t drop column col2 restrict \p\g     
+alter table t drop column col2 cascade \p\g
+select * from t \p\g
+help table t \p\g
+drop table t \p\g
+
+
+create table t(col1 int, col2 int, col3 int) with page_size =4096 \p\g
+create index id on t(col2, col3) \p\g
+insert into t values (1,2,3) \p\g
+insert into t values (2,3,4) \p\g
+alter table t drop column col2 restrict \p\g
+alter table t drop column col2 cascade \p\g
+help table t \p\g
+select * from t \p\g
+drop table t \p\g
+
+create table t(col1 int, col2 int, col3 int) with page_size =4096 \p\g
+create index id1 on t(col2, col3) \p\g
+create index id2 on t(col2, col3) \p\g
+insert into t values (1,2,3) \p\g
+insert into t values (2,3,4) \p\g
+alter table t drop column col2 restrict \p\g
+alter table t drop column col2 cascade \p\g
+help table t \p\g
+select * from t \p\g
+drop table t \p\g
+
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i alttbl25.sql 
+<<
+/* SQL Startup File */
+ /* testing drop column when column is a primary or secondary index key */
+
+set autocommit on 
+drop table t 
+E_US0AC1 DROP: 't' does not exist or is not owned by you.
+    (Tue May 27 14:01:03 1997)
+
+create table t(col1 int, col2 int not null, col3 int, primary key(col2)) with
+page_size = 4096 
+insert into t values(1,2,3) 
+(1 row)
+insert into t values (2,3,4) 
+(1 row)
+alter table t drop column col2 cascade 
+help table t 
+Name:                 t
+Owner:                testenv
+Created:              27-may-1997 14:01:05     
+Location:             ii_database
+Type:                 user table
+Version:              OI2.0
+Page size:            4096
+Cache priority:       0
+Alter table version:  1
+Alter table totwidth: 14
+Row width:            10
+Number of rows:       2
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             integer         4  yes    null       
+col3                             integer         4  yes    null       
+
+Secondary indexes:    none
+
+
+
+
+drop table t 
+create table t(col1 int, col2 int not null, col3 int not null, primary key(col2,col3-
+) )    with page_size = 4096 
+insert into t values(0,0,0) 
+(1 row)
+insert into t values(1,1,1) 
+(1 row)
+alter table t drop column col2 restrict 
+E_QE016B ALTER TABLE DROP COLUMN RESTRICT:  restricted destruction of base
+    table column cannot proceed as it  has one or more dependent objects
+    which would become abandoned.
+    (Tue May 27 14:01:21 1997)
+
+alter table t drop column col2 cascade 
+select * from t 
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            0|            0|
+|            1|            1|
++-------------+-------------+
+(2 rows)
+drop table t 
+
+create table t(col1 int, col2 int) with page_size = 4096 
+create index id on t(col2) with page_size = 4096 
+(0 rows)
+insert into t values (1,2) 
+(1 row)
+insert into t values (2,3) 
+(1 row)
+alter table t drop column col2 restrict 
+E_DM00A7 Column col2 in table t cannot be dropped or altered as it 
+     is included in a secondary index of this base table
+    (Tue May 27 14:01:24 1997)
+
+     
+alter table t drop column col2 cascade 
+select * from t 
+
++-------------+
+|col1         |
++-------------+
+|            1|
+|            2|
++-------------+
+(2 rows)
+help table t 
+Name:                 t
+Owner:                testenv
+Created:              27-may-1997 14:01:22     
+Location:             ii_database
+Type:                 user table
+Version:              OI2.0
+Page size:            4096
+Cache priority:       0
+Alter table version:  1
+Alter table totwidth: 10
+Row width:            5
+Number of rows:       2
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             integer         4  yes    null       
+
+Secondary indexes:    none
+
+
+
+drop table t 
+ 
+create table t(col1 int, col2 int) with page_size = 4096 
+create index id on t(col2) 
+(0 rows)
+create index id2 on t(col2) 
+(0 rows)
+insert into t values (1,2) 
+(1 row)
+insert into t values (2,3) 
+(1 row)
+alter table t drop column col2 restrict 
+E_DM00A7 Column col2 in table t cannot be dropped or altered as it 
+     is included in a secondary index of this base table
+    (Tue May 27 14:01:27 1997)
+
+     
+alter table t drop column col2 cascade 
+select * from t 
+
++-------------+
+|col1         |
++-------------+
+|            1|
+|            2|
++-------------+
+(2 rows)
+help table t 
+Name:                 t
+Owner:                testenv
+Created:              27-may-1997 14:01:25     
+Location:             ii_database
+Type:                 user table
+Version:              OI2.0
+Page size:            4096
+Cache priority:       0
+Alter table version:  1
+Alter table totwidth: 10
+Row width:            5
+Number of rows:       2
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             integer         4  yes    null       
+
+Secondary indexes:    none
+
+
+
+drop table t 
+
+
+create table t(col1 int, col2 int, col3 int) with page_size =4096 
+create index id on t(col2, col3) 
+(0 rows)
+insert into t values (1,2,3) 
+(1 row)
+insert into t values (2,3,4) 
+(1 row)
+alter table t drop column col2 restrict 
+E_DM00A7 Column col2 in table t cannot be dropped or altered as it 
+     is included in a secondary index of this base table
+    (Tue May 27 14:01:30 1997)
+
+alter table t drop column col2 cascade 
+help table t 
+Name:                 t
+Owner:                testenv
+Created:              27-may-1997 14:01:28     
+Location:             ii_database
+Type:                 user table
+Version:              OI2.0
+Page size:            4096
+Cache priority:       0
+Alter table version:  1
+Alter table totwidth: 15
+Row width:            10
+Number of rows:       2
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             integer         4  yes    null       
+col3                             integer         4  yes    null       
+
+Secondary indexes:    none
+
+
+
+select * from t 
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            1|            3|
+|            2|            4|
++-------------+-------------+
+(2 rows)
+drop table t 
+
+create table t(col1 int, col2 int, col3 int) with page_size =4096 
+create index id1 on t(col2, col3) 
+(0 rows)
+create index id2 on t(col2, col3) 
+(0 rows)
+insert into t values (1,2,3) 
+(1 row)
+insert into t values (2,3,4) 
+(1 row)
+alter table t drop column col2 restrict 
+E_DM00A7 Column col2 in table t cannot be dropped or altered as it 
+     is included in a secondary index of this base table
+    (Tue May 27 14:01:34 1997)
+
+alter table t drop column col2 cascade 
+help table t 
+Name:                 t
+Owner:                testenv
+Created:              27-may-1997 14:01:32     
+Location:             ii_database
+Type:                 user table
+Version:              OI2.0
+Page size:            4096
+Cache priority:       0
+Alter table version:  1
+Alter table totwidth: 15
+Row width:            10
+Number of rows:       2
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             integer         4  yes    null       
+col3                             integer         4  yes    null       
+
+Secondary indexes:    none
+
+
+
+select * from t 
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            1|            3|
+|            2|            4|
++-------------+-------------+
+(2 rows)
+drop table t 
+>>
+* \q 
+<<
+
+>>
+
+
+Ending at: Tue May 27 14:11:44 1997

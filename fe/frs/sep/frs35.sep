@@ -1,0 +1,1396 @@
+/*
+	Test Name: jla09.sep
+	Time: Thu Oct 21 16:31:18 1993
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : jla09.sep
+	Module  : frs
+	Filename: jla09.sep
+	Purpose	: To test the use of Dynamic Menus within FRS.
+	Input Files  :
+	Output Files : jla09.sc, jla09.frm
+	Database     : SEPPARAMDB
+	Tables       : none
+	Synopsis     : Test the ability to rename, enable, and disable
+		       menuitems for an active display loop at runtime.
+
+ History: 21-Oct-1993	(jbryson)	Created
+          18-Jan-1996	(parmi04)  Added an alternate canon for NT_GENERIC.
+          11-Apr-1996	(clate01)
+		Modified canons to work with Windows NT
+           3-Sep-1996	(Author)
+          12-Mar-1997	(Author)
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delete jla09.o 
+<<
+~
+>>
+? delete jla09.obj 
+<<
+~
+>>
+? delete jla09.c 
+<<
+~
+>>
+? delete jla09.exe 
+<<
+~
+>>
+? delobj SEPPARAMDB -form jla09 
+<<
+~
+>>
+? fill jla09.frm 
+!!
+COPYFORM:	6.4	1993_10_04 22:21:13 GMT  
+FORM:	jla09		
+	80	23	0	0	1	0	1	9	0	0	0	0	0	0	0	1
+FIELD:
+	0	simplefield	-21	8	0	5	1	19	4	6	5	0	14	simple field:	0	0	0	0	0	0	0		c5			0	0
+TRIM:
+	6	2	This is for Dynamic Menu Test.	0	0	0	0
+!!
+? copyform -i SEPPARAMDB jla09.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+Copied form 'jla09' to database.
+Encoding forms into database . . .
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+Copied form 'jla09' to database.
+Encoding forms into database . . .
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+Copied form 'jla09' to database.
+Encoding forms into database . . .
+>>
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+Copied form 'jla09' to database.
+Encoding forms into database . . .
+>>
+? fill jla09.sc 
+!!
+EXEC SQL INCLUDE SQLCA;
+
+int main(argc,argv)
+int  argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char *argv[];
+EXEC SQL END DECLARE SECTION;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+   char  msgbuf[200];
+   int   ivar;
+   int   counter=0;
+   char  menuname[20],
+	 newname[20];
+EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   /* Start up INGRES and the INGRES/FORMS system */
+   EXEC SQL CONNECT :argv[1];
+
+   EXEC FRS FORMS;
+
+   sprintf(menuname,"Menu%d",counter++);
+
+   EXEC FRS MESSAGE 'Initializing Form...';
+   EXEC FRS FORMINIT jla09;
+
+   EXEC FRS DISPLAY jla09 UPDATE;
+
+   EXEC FRS INITIALIZE;
+
+   EXEC FRS ACTIVATE MENUITEM 'Rename';
+   EXEC FRS BEGIN;
+      sprintf(newname,"Menu%d",counter++);
+      sprintf(msgbuf,"renaming menu '%s' to '%s'...",menuname,newname);
+      EXEC FRS MESSAGE :msgbuf;
+      EXEC FRS SLEEP 2;
+      EXEC FRS SET_FRS MENU jla09 (RENAME(:menuname) = :newname);
+      strcpy(menuname,newname);
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM :menuname;
+   EXEC FRS BEGIN;
+      sprintf(msgbuf,"Hello from '%s'",menuname);
+      EXEC FRS MESSAGE :msgbuf;
+      EXEC FRS SLEEP 2;
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Menu_ON';
+   EXEC FRS BEGIN;
+      EXEC FRS SET_FRS MENU jla09 (ACTIVE(:menuname) = ON);
+      EXEC FRS INQUIRE_FRS MENU jla09 (:ivar = ACTIVE(:menuname));
+      sprintf(msgbuf,"Menu '%s' is ON: %d",menuname,ivar);
+      EXEC FRS MESSAGE :msgbuf;
+      EXEC FRS SLEEP 2;
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Menu_OFF';
+   EXEC FRS BEGIN;
+      EXEC FRS SET_FRS MENU jla09 (ACTIVE(:menuname) = OFF);
+      EXEC FRS INQUIRE_FRS MENU jla09 (:ivar = ACTIVE(:menuname));
+      sprintf(msgbuf,"Menu '%s' is OFF: %d",menuname,ivar);
+      EXEC FRS MESSAGE :msgbuf;
+      EXEC FRS SLEEP 2;
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Menu_Toggle';
+   EXEC FRS BEGIN;
+      EXEC FRS INQUIRE_FRS MENU '' (:ivar = ACTIVE(:menuname));
+      if(ivar)
+	 ivar = 0;
+      else
+	 ivar = 1;
+
+      EXEC FRS SET_FRS MENU '' (ACTIVE(:menuname) = :ivar);
+      EXEC FRS INQUIRE_FRS MENU '' (:ivar = ACTIVE(:menuname));
+      sprintf(msgbuf,"Menu '%s' is: %d",menuname,ivar);
+      EXEC FRS MESSAGE :msgbuf;
+      EXEC FRS SLEEP 2;
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Errors';
+   EXEC FRS BEGIN;
+      EXEC FRS MESSAGE 'Renaming non-existant menuitem';
+      EXEC FRS SLEEP 2;
+      EXEC FRS SET_FRS MENU jla09 (RENAME(foo) = foo2);
+
+      EXEC FRS MESSAGE 'Disabling non-existant menuitem';
+      EXEC FRS SLEEP 2;
+      EXEC FRS SET_FRS MENU jla09 (ACTIVE(foo) = 0);
+
+      EXEC FRS MESSAGE 'Enabling non-existant menuitem';
+      EXEC FRS SLEEP 2;
+      EXEC FRS SET_FRS MENU jla09 (ACTIVE(foo) = 1);
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'All_OFF';
+   EXEC FRS BEGIN;
+      EXEC FRS SET_FRS MENU '' (ACTIVE('Rename')      = OFF);
+      EXEC FRS SET_FRS MENU '' (ACTIVE(:menuname)     = OFF);
+      EXEC FRS SET_FRS MENU '' (ACTIVE('Menu_ON')     = OFF);
+      EXEC FRS SET_FRS MENU '' (ACTIVE('Menu_OFF')    = OFF);
+      EXEC FRS SET_FRS MENU '' (ACTIVE('Menu_Toggle') = OFF);
+      EXEC FRS SET_FRS MENU '' (ACTIVE('Errors')      = OFF);
+      EXEC FRS SET_FRS MENU '' (ACTIVE('All_OFF')     = OFF);
+
+      EXEC FRS SET_FRS MENU '' (ACTIVE('Exit')        = OFF);
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Exit';
+   EXEC FRS BEGIN;
+      EXEC FRS MESSAGE 'Exiting.........';
+      EXEC FRS SLEEP 2;
+      EXEC FRS BREAKDISPLAY;
+   EXEC FRS END;
+
+   EXEC FRS FINALIZE;
+
+   /* Terminate the FORMS and INGRES */
+   EXEC FRS ENDFORMS;
+   EXEC SQL DISCONNECT;
+
+   exit(0);
+} /* Main Program */
+!!
+? esqlc jla09.sc 
+<< if (UNIX||NT_GENERIC)
+ESQL jla09.sc:
+>>
+<< if (VMS)
+>>
+? sepcc jla09 
+<<
+>>
+<< IF (NT_GENERIC) 
+jla09.c
+>>
+? seplnk jla09 
+<<
+>>
+<< IF (NT_GENERIC) 
+   Creating library jla09.lib and object jla09.exp ...
+>>
+<<
+Microsoft (R) 32-Bit Executable Linker Version 2.50.4245
+Copyright (C) Microsoft Corp 1992-94. All rights reserved.
+
+-debug:none 
+-out:jla09.exe 
+jla09.obj 
+e:\qa\ingres\lib\ingres.lib 
+msvcrt.lib 
+kernel32.lib 
+user32.lib 
+advapi32.lib 
+>>
+? ferun jla09.exe SEPPARAMDB 
+<<
+
+%%     
+%% Initializing Form...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu0  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+>>
+<< IF (NT_GENERIC) 
+
+%%     
+%% Initializing Form...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu0  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+>>
+^^ `ESC'
+<<
+
+%% MENU KEY selected
+>>
+^^ Rename`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Rename
+%% MENU:   Rename  Menu0  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Rename"
+
+%% renaming menu 'Menu0' to 'Menu1'...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu1  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Rename
+%% MENU:   Rename  Menu0  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Rename"
+
+%% renaming menu 'Menu0' to 'Menu1'...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu1  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Menu_OFF`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Menu_OFF
+%% MENU:   Rename  Menu1  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Menu_OFF"
+
+%% Menu 'Menu1' is OFF: 0
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Menu_OFF
+%% MENU:   Rename  Menu1  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Menu_OFF"
+
+%% Menu 'Menu1' is OFF: 0
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Menu_OFF`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Menu_OFF
+%% MENU:   Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Menu_OFF"
+
+%% Menu 'Menu1' is OFF: 0
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Menu_OFF
+%% MENU:   Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Menu_OFF"
+
+%% Menu 'Menu1' is OFF: 0
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Rename`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Rename
+%% MENU:   Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Rename"
+
+%% renaming menu 'Menu1' to 'Menu2'...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Rename
+%% MENU:   Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Rename"
+
+%% renaming menu 'Menu1' to 'Menu2'...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Menu_ON`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Menu_ON
+%% MENU:   Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Menu_ON"
+
+%% Menu 'Menu2' is ON: 1
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Menu_ON
+%% MENU:   Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Menu_ON"
+
+%% Menu 'Menu2' is ON: 1
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Menu_ON`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Menu_ON
+%% MENU:   Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Menu_ON"
+
+%% Menu 'Menu2' is ON: 1
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Menu_ON
+%% MENU:   Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Menu_ON"
+
+%% Menu 'Menu2' is ON: 1
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Menu2`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Menu2
+%% MENU:   Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Menu2"
+
+%% Hello from 'Menu2'
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Menu2
+%% MENU:   Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Menu2"
+
+%% Hello from 'Menu2'
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Menu_To`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Menu_Toggle
+%% MENU:   Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "Menu_Toggle"
+
+%% Menu 'Menu2' is: 0
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Menu_Toggle
+%% MENU:   Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "Menu_Toggle"
+
+%% Menu 'Menu2' is: 0
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Menu_To`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Menu_Toggle
+%% MENU:   Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Menu_Toggle"
+
+%% Menu 'Menu2' is: 1
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Menu_Toggle
+%% MENU:   Rename  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  Exit
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Menu_Toggle"
+
+%% Menu 'Menu2' is: 1
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Errors`CR'h`CR'h`CR'h`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Errors
+%% MENU:   Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "Errors"
+
+%% Renaming non-existant menuitem
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. (E_FI1FF5)                
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% Disabling non-existant menuitem
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. (E_FI1FF5)                
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% Enabling non-existant menuitem
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. (E_FI1FF5)                
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Errors
+%% MENU:   Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "Errors"
+
+%% Renaming non-existant menuitem
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. (E_FI1FF5)                
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% Disabling non-existant menuitem
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. (E_FI1FF5)                
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% Enabling non-existant menuitem
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Menuitem 'foo' does not exist for form 'jla09'. (E_FI1FF5)                
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ All_OFF`CR'`ESC'
+<<
+
+%% MENU RESPONSE: All_OFF
+%% MENU:   Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "All_OFF"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: All_OFF
+%% MENU:   Rename  Menu2  Menu_ON  Menu_OFF  Menu_Toggle  Errors  All_OFF  >
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "All_OFF"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|      This is for Dynamic Menu Test.                                            |
+|                                                                                |
+|      simple field: _                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+? delobj SEPPARAMDB -form jla09 
+<<
+INGRES DELOBJ Copyright (c) 1985, 1993 Ingres Corporation
+Deleting form jla09 with owner testenv from database...
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jla09 with owner testenv from database...
+
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jla09 with owner testenv from database...
+
+>>
+<<
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jla09 with owner testenv from database...
+
+>>
+? delete jla09.o 
+<<
+~
+>>
+? delete jla09.obj 
+<<
+~
+>>
+? delete jla09.c 
+<<
+~
+>>
+? delete jla09.exe 
+<<
+~
+>>
+
+
+Ending at: Wed Mar 12 09:07:16 1997

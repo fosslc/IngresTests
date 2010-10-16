@@ -1,0 +1,206 @@
+/*
+	Test Name: efa36.sep
+	Time: Thu Mar 25 15:22:22 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename: efa36.sep
+	Purpose	: Test variables scope.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     : Create a dbproc with the local variable "foo" and
+		       has a parameter called "bar". Pass a global variable 
+		       "foo" as the byref parameter for "bar". Change both 
+		       variables and check that the correct variable is 
+		       exported out of the dbproc. Also test nested dbproc.
+
+		 History: 25-Mar-1993	(malee)	Created
+	  		  7-MAR-1997    (vissu01) Modified for NT
+*/
+? fill efa36.sc 
+!!
+exec sql include sqlca;
+
+exec sql begin declare section;
+  int  foo, bar;
+exec sql end declare section;
+
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever not found call sqlprint;
+exec sql whenever sqlwarning call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+main(argc, argv)
+exec sql begin declare section;
+  int  argc;
+  char **argv;
+exec sql end declare section;
+{
+	exec sql connect :argv[1];
+	efa36();
+	exec sql disconnect;
+
+} /* main */
+
+efa36()
+{
+        /**********/
+        /* test 1 */
+	/**********/
+
+	printf ("\ntest 1 - scope of variables\n\n");
+
+	exec sql drop procedure efa36_1;
+
+	exec sql create procedure efa36_1 (bar	i4 not null with default) as
+	declare
+		foo  i4 not null with default;
+	begin
+		message 'in efa36_1';
+		foo = 5000;
+		message :foo 'value of local foo';
+		message :bar 'value of bar before the reassignment';
+		bar = 78900;
+		message :bar 'value of bar after the reassignment';
+	end;
+
+	foo = 1456;
+	printf ("passing foo integer = %d\n",foo);
+
+	exec sql execute procedure efa36_1 (bar = byref(:foo));
+
+	printf ("\n");
+	printf ("returned foo        = %d\n",foo);
+	printf ("returned bar        = %d\n",bar);
+
+	exec sql commit;
+
+        /**********/
+        /* test 2 */
+	/**********/
+
+	printf ("\n------------------------------------------------------\n\n");
+	printf ("\ntest 2 - scope of variables in a nested dbproc\n\n");
+
+	exec sql drop procedure efa36_2;
+
+	exec sql create procedure efa36_2 (bar	i4 not null with default) as
+	declare
+		foo  i4 not null with default;
+	begin
+		message 'in efa36_2';
+		foo = 2000;
+		message :foo 'value of local foo';
+		message :bar 'value of bar before the reassignment';
+		bar = 10;
+		message :bar 'value of bar after the reassignment';
+
+	        execute procedure efa36_1 (bar = byref(:foo));
+		message 'after executing efa36_1';
+		message :foo 'value of local foo';
+		message :bar 'value of bar';
+	end;
+
+	foo = 100;
+	printf ("passing foo integer = %d\n",foo);
+
+	exec sql execute procedure efa36_2 (bar = byref(:foo));
+
+	printf ("\n");
+	printf ("returned foo        = %d\n",foo);
+	printf ("returned bar        = %d\n",bar);
+
+	exec sql commit;
+
+} /* efa36() */
+!!
+? sepesqlc efa36.sc 
+<<
+ESQL efa36.sc:
+>>
+? sepcc efa36.c 
+<<
+>>
+<<
+efa36.c
+>>
+? seplnk efa36 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* drop procedure efa36_1\g
+<<
+~
+>>
+* drop procedure efa36_2\g
+<<
+~
+>>
+* \q
+<<
+>>
+? run efa36.exe SEPPARAMDB 
+<<
+
+test 1 - scope of variables
+
+E_US0965 Procedure 'efa36_1' not found.
+    (Mon May  3 15:51:07 1993)
+passing foo integer = 1456
+MESSAGE 0: in efa36_1
+MESSAGE 5000: value of local foo
+MESSAGE 1456: value of bar before the reassignment
+MESSAGE 78900: value of bar after the reassignment
+
+returned foo        = 78900
+returned bar        = 0
+
+------------------------------------------------------
+
+
+test 2 - scope of variables in a nested dbproc
+
+E_US0965 Procedure 'efa36_2' not found.
+    (Mon May  3 15:51:08 1993)
+passing foo integer = 100
+MESSAGE 0: in efa36_2
+MESSAGE 2000: value of local foo
+MESSAGE 100: value of bar before the reassignment
+MESSAGE 10: value of bar after the reassignment
+MESSAGE 0: in efa36_1
+MESSAGE 5000: value of local foo
+MESSAGE 2000: value of bar before the reassignment
+MESSAGE 78900: value of bar after the reassignment
+MESSAGE 0: after executing efa36_1
+MESSAGE 78900: value of local foo
+MESSAGE 10: value of bar
+
+returned foo        = 10
+returned bar        = 0
+>>
+? delete efa36.c 
+<<
+~
+>>
+? delete efa36.o 
+<<
+~
+>>
+? delete efa36.obj 
+<<
+~
+>>
+? delete efa36.exe 
+<<
+~
+>>
+
+
+Ending at: Mon May  3 15:51:13 1993

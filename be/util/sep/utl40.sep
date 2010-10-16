@@ -1,0 +1,382 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: utl40.sep
+	Time: Tue Oct 16 12:53:08 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl40.sep
+	Module  : be/util
+	Filename: utl40.sep
+	Purpose	: To test new xml utilities(genxml, xmlimport), first available
+                  with Ingres 2.6/0106 and later releases.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : utl40_table, result, count
+	Synopsis     : Test genxml and xmlimport -u flag with a 32K column 
+                       table. And test genxml/xmlimport against the entire
+                       database with reserved words as the table names and 
+                       indexes, then test against a specific reserved word
+                       table. 
+
+ History: 12-Dec-2001	(wu$ca01)	Created
+          26-Apr-2002	(wu$ca01) Canonized the genxml/xmlimport output.
+           8-May-2003	(wu$ca01) Updated test due to new behavior('nl=d1' to
+                        'nl=d0nl').
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+          12-Jun-2006   (hanal04) create table statements are terminated
+                        with a GO statement not a semi-colon after change
+                        for bug 116045.
+           2-Oct-2008   (vande02) Added conditional statements to allow test to
+                                  run in UTF8. The max length for character data
+                                  types for UTF8 columns is 16000 not 32000.
+                                  Removed 'p' syntax, fixed up canons, put
+                                  fill file contents in-line with SQL.
+*/
+? sql -s -uingres SEPPARAMDB 
+<<
+
+>>
+* drop table utl40_table\g
+<<
+~
+>>
+.if ING_CHARSET = "UTF8"
+* create table utl40_table(c1 varchar(16000))\g
+<<
+>>
+.else
+* create table utl40_table(c1 varchar(32000))\g
+<<
+>>
+.endif 
+* insert into utl40_table values('abcdefg')\g
+<<
+(1 row)
+>>
+* insert into utl40_table values('hijklmn')\g
+<<
+(1 row)
+>>
+* select varchar(c1, 30) from utl40_table order by c1\g
+<<
++------------------------------+
+|col1                          |
++------------------------------+
+|abcdefg                       |
+|hijklmn                       |
++------------------------------+
+(2 rows)
+>>
+* \q
+<<
+
+>>
+? genxml SEPPARAMDB -uingres utl40_table 
+<<
+INGRES Genxml Copyright 2001 Ingres Corporation
+Unload directory is '/home/install/CW/wuca01/xml'.
+Reload directory is '/home/install/CW/wuca01/xml'.
+There is one table owned by user 'ingres'.
+>>
+? sql -s -uingres SEPPARAMDB 
+<<
+
+>>
+* drop table utl40_table\g
+<<
+>>
+* \q
+<<
+
+>>
+? xmlimport SEPPARAMDB -uingres xmlout.xml 
+<< IF (ING_CHARSET == "UTF8") 
+INGRES Impxml Copyright 2008 Ingres Corporation
+Unload directory is '/tmp/79db'.
+Reload directory is '/tmp/79db'.
+INGRES TERMINAL MONITOR Copyright 2008 Ingres Corporation
+/* SQL Startup File */
+create table utl40_table(
+	c1 varchar(16000)
+)
+with duplicates,
+nojournaling,
+	page_size = 16384,
+location = (ii_database)
+modify utl40_table to heap
+with page_size = 16384
+(0 rows)
+copy utl40_table(
+	c1= varchar(0)nl with null(']^NULL^['),
+	nl= d0nl)
+from '/tmp/79db/utl40_table.ingres'
+with row_estimate = 2
+(2 rows)
+>>
+<<
+INGRES Impxml Copyright 2001 Ingres Corporation
+Unload directory is '/tmp/7f7'.
+Reload directory is '/tmp/7f7'.
+INGRES TERMINAL MONITOR Copyright 2001 Ingres Corporation
+/* SQL Startup File */
+create table utl40_table(
+	c1 varchar(32000)
+)
+with duplicates,
+nojournaling,
+	page_size = 32768,
+location = (ii_database)
+modify utl40_table to heap
+with page_size = 32768
+(0 rows)
+copy utl40_table(
+	c1= varchar(0)nl with null(']^NULL^['),
+	nl= d0nl)
+from '/tmp/7f7/utl40_table.ing'
+with row_estimate = 2
+(2 rows)
+>>
+? sql -s -uingres SEPPARAMDB 
+<<
+
+>>
+* select varchar(c1, 30) from utl40_table order by c1\g
+<<
++------------------------------+
+|col1                          |
++------------------------------+
+|abcdefg                       |
+|hijklmn                       |
++------------------------------+
+(2 rows)
+>>
+* \q
+<<
+
+>>
+? sql -s -uingres SEPPARAMDB 
+<<
+
+>>
+* drop table utl40_table, result, count\g
+<<
+~
+>>
+* create table result(col1 text(40))\g
+<<
+>>
+* insert into result values('Testing xml with reserved words as names')\g
+<<
+(1 row)
+>>
+* create index leave on result(col1)\g
+<<
+(1 row)
+>>
+* create table count(col1 smallint)\g
+<<
+>>
+* insert into count values(99)\g
+<<
+(1 row)
+>>
+* select * from result\g
+<<
++----------------------------------------+
+|col1                                    |
++----------------------------------------+
+|Testing xml with reserved words as names|
++----------------------------------------+
+(1 row)
+>>
+* select col1 from leave\g
+<<
++----------------------------------------+
+|col1                                    |
++----------------------------------------+
+|Testing xml with reserved words as names|
++----------------------------------------+
+(1 row)
+>>
+* select * from count\g
+<<
++------+
+|col1  |
++------+
+|    99|
++------+
+(1 row)
+>>
+* \q
+<<
+
+>>
+? genxml SEPPARAMDB -uingres 
+<<
+INGRES Genxml Copyright 2001 Ingres Corporation
+Unload directory is '/home/install/CW/wuca01/xml'.
+Reload directory is '/home/install/CW/wuca01/xml'.
+There are 2 tables owned by user 'ingres'.
+>>
+? sql -s -uingres SEPPARAMDB 
+<<
+
+>>
+* drop table result\g
+<<
+>>
+* drop table count\g
+<<
+>>
+* \q
+<<
+
+>>
+? xmlimport SEPPARAMDB -uingres xmlout.xml 
+<<
+INGRES Impxml Copyright 2001 Ingres Corporation
+Unload directory is '/tmp/804'.
+Reload directory is '/tmp/804'.
+INGRES TERMINAL MONITOR Copyright 2001 Ingres Corporation
+/* SQL Startup File */
+create table result(
+	col1 text(40)
+)
+with duplicates,
+nojournaling,
+location = (ii_database)
+modify result to heap
+(0 rows)
+copy result(
+	col1= varchar(0)nl with null(']^NULL^['),
+	nl= d0nl)
+from '/tmp/804/result.ing'
+with row_estimate = 1
+(1 row)
+create table "count"(
+	col1 smallint
+)
+with duplicates,
+nojournaling,
+location = (ii_database)
+modify "count" to heap
+(0 rows)
+copy "count"(
+	col1= c0nl with null(']^NULL^['),
+	nl= d0nl)
+from '/tmp/804/count.ing'
+with row_estimate = 1
+(1 row)
+create index leave on result (
+	col1)
+with structure = isam,
+	nocompression,
+	key = (col1)
+(1 row)
+>>
+? sql -s -uingres SEPPARAMDB 
+<<
+
+>>
+* select * from result\g
+<<
++----------------------------------------+
+|col1                                    |
++----------------------------------------+
+|Testing xml with reserved words as names|
++----------------------------------------+
+(1 row)
+>>
+* select col1 from leave\g
+<<
++----------------------------------------+
+|col1                                    |
++----------------------------------------+
+|Testing xml with reserved words as names|
++----------------------------------------+
+(1 row)
+>>
+* select * from count\g
+<<
++------+
+|col1  |
++------+
+|    99|
++------+
+(1 row)
+>>
+* \q
+<<
+
+>>
+? genxml SEPPARAMDB -uingres count 
+<<
+INGRES Genxml Copyright 2001 Ingres Corporation
+Unload directory is '/home/install/CW/wuca01/xml'.
+Reload directory is '/home/install/CW/wuca01/xml'.
+There is one table owned by user 'ingres'.
+>>
+? sql -s -uingres SEPPARAMDB 
+<<
+
+>>
+* drop table count\g
+<<
+>>
+* \q
+<<
+
+>>
+? xmlimport SEPPARAMDB -uingres xmlout.xml 
+<<
+INGRES Impxml Copyright 2001 Ingres Corporation
+Unload directory is '/tmp/80f'.
+Reload directory is '/tmp/80f'.
+INGRES TERMINAL MONITOR Copyright 2001 Ingres Corporation
+/* SQL Startup File */
+create table "count"(
+	col1 smallint
+)
+with duplicates,
+nojournaling,
+location = (ii_database)
+modify "count" to heap
+(0 rows)
+copy "count"(
+	col1= c0nl with null(']^NULL^['),
+	nl= d0nl)
+from '/tmp/80f/count.ing'
+with row_estimate = 1
+(1 row)
+>>
+? sql -s -uingres SEPPARAMDB 
+<<
+
+>>
+* select * from count\g
+<<
++------+
+|col1  |
++------+
+|    99|
++------+
+(1 row)
+>>
+* \q
+<<
+
+>>
+? delete ingres.dtd 
+<<
+file was deleted
+>>
+? delete xmlout.xml 
+<<
+file was deleted
+>>
+
+
+Ending at: Wed Oct  1 19:42:14 2008

@@ -1,0 +1,443 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name: msfn034.sep
+	Time: Mon May 22 16:03:00 2000
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :
+	Output Files :
+	Database     :
+	Tables       :
+	Synopsis     : Test parallel CREATE INDEX
+
+	History:
+	  22-May-2000	(ngutr03) Created.
+          10-Jul-2000	(sarjo01) Cleanup.
+          03-Nov-2005	(sinna02) Added alternate blank canon for esqlc to
+				  avoid diff on VMS. Added Copyright message.  
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+          08-May-2007	(vande02) Added cleanup of index.o, do not ignore result
+				  of the SQL connection, header corrections.
+*/
+? sql -s SEPPARAMDB
+<<
+
+>>
+* drop table tbl\g
+<<
+~
+>>
+* drop table t1\g
+<<
+~
+>>
+* drop table test\g
+<<
+~
+>>
+* \q
+<<
+
+>>
+? fill index.sc 
+!!
+#include <stdio.h>
+exec sql include sqlca;
+
+void displayError();
+void fillBlank(char []);
+
+void displayError()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char szBuffer[150];
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL INQUIRE_INGRES( :szBuffer = ERRORTEXT );
+
+	printf("\nSQL Error:\n	   %s\n", szBuffer );
+}
+
+void fillBlank(char szStr[])
+{
+	int i, numSpace;
+		
+	numSpace =  30 - strlen(szStr);
+	for(i = 1; i < numSpace; i++ )
+		strcat(szStr, " ");
+	strcat(szStr, "|");       
+}
+
+
+main(argc, argv)
+int argc;
+char *argv[];
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+		char* dbname = argv[1];
+		int numRows = atoi( argv[2] );
+		int i;
+		int rowCount;
+	EXEC SQL END DECLARE SECTION;
+	char szBuffer[100];
+	char* szBorder = "+----------------------------+";
+
+	EXEC SQL WHENEVER SQLERROR CALL displayError;
+
+	EXEC SQL connect :dbname;
+
+	EXEC SQL drop table tbl;
+	printf("\nCreating table tbl(col1 int, col2 int)...\n");
+	EXEC SQL create table tbl(col1 int, col2 int);
+	printf("Now inserting %d %s into table '%s'\n\n", numRows, (numRows > 0 ) ? "rows" -
+: "row", "tbl");
+	printf("Wait...\n");
+	for ( i = 0; i < numRows; i++ )
+	{
+		EXEC SQL insert into tbl values ( :i, :i + 1 );
+	}
+	EXEC SQL commit;
+	printf("Creating index I1, I2 on table '%s'...\n", "tbl");
+	EXEC SQL create index (i1 on tbl(col1)), (i2 on tbl(col2));
+	EXEC SQL commit;
+	printf("\nMake sure that the number of rows of the base table are the same with the-
+ number of rows of I1 & I2\n\n");
+	printf( "%s\n", szBorder );
+	printf("| Table name   | Rows        |\n");
+	printf( "%s\n", szBorder );
+	EXEC SQL select count(*) into :rowCount from tbl;
+	sprintf(szBuffer, "| tbl          | %d", rowCount);
+	fillBlank( szBuffer );
+	printf("%s\n", szBuffer );
+	/* verify if indexes are created successfully */ 
+	EXEC SQL select count(*) into :rowCount from i1;
+	sprintf(szBuffer, "| i1           | %d", rowCount);
+	fillBlank( szBuffer );
+	printf("%s\n", szBuffer );
+	EXEC SQL select count(*) into :rowCount from i2;
+	sprintf(szBuffer, "| i2           | %d", rowCount);
+	fillBlank( szBuffer );
+	printf("%s\n", szBuffer );
+	printf( "%s\n", szBorder );
+											EXEC SQL drop table tbl;
+
+	EXEC SQL disconnect;
+
+}
+
+!!
+? esqlc index.sc 
+<<
+ESQL index.sc:
+>>
+<<
+>>
+? sepcc index.c 
+<<
+>>
+<< IF (NT_GENERIC||VMS) 
+index.c
+>>
+? seplnk index 
+<<
+>>
+? run index.exe SEPPARAMDB 0 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:05:51 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 0 row into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 0           |
+| i1           | 0           |
+| i2           | 0           |
++----------------------------+
+>>
+? run index.exe SEPPARAMDB 1 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:06:14 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 1 rows into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 1           |
+| i1           | 1           |
+| i2           | 1           |
++----------------------------+
+>>
+? run index.exe SEPPARAMDB 4999 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:06:59 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 4999 rows into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 4999        |
+| i1           | 4999        |
+| i2           | 4999        |
++----------------------------+
+>>
+? run index.exe SEPPARAMDB 5000 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:07:38 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 5000 rows into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 5000        |
+| i1           | 5000        |
+| i2           | 5000        |
++----------------------------+
+>>
+? run index.exe SEPPARAMDB 5001 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:08:16 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 5001 rows into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 5001        |
+| i1           | 5001        |
+| i2           | 5001        |
++----------------------------+
+>>
+? run index.exe SEPPARAMDB 9999 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:08:54 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 9999 rows into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 9999        |
+| i1           | 9999        |
+| i2           | 9999        |
++----------------------------+
+>>
+? run index.exe SEPPARAMDB 10000 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:09:46 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 10000 rows into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 10000       |
+| i1           | 10000       |
+| i2           | 10000       |
++----------------------------+
+>>
+? run index.exe SEPPARAMDB 10001 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:10:50 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 10001 rows into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 10001       |
+| i1           | 10001       |
+| i2           | 10001       |
++----------------------------+
+>>
+? run index.exe SEPPARAMDB 14999 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:11:43 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 14999 rows into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 14999       |
+| i1           | 14999       |
+| i2           | 14999       |
++----------------------------+
+>>
+? run index.exe SEPPARAMDB 15000 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:12:49 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 15000 rows into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 15000       |
+| i1           | 15000       |
+| i2           | 15000       |
++----------------------------+
+>>
+? run index.exe SEPPARAMDB 15001 
+<<
+
+SQL Error:
+	   E_US0AC1 DROP: 'tbl' does not exist or is not owned by you.
+    (Mon May 22 16:14:26 2000)
+
+
+Creating table tbl(col1 int, col2 int)...
+Now inserting 15001 rows into table 'tbl'
+
+Wait...
+Creating index I1, I2 on table 'tbl'...
+
+Make sure that the number of rows of the base table are the same with the number of -
+rows of I1 & I2
+
++----------------------------+
+| Table name   | Rows        |
++----------------------------+
+| tbl          | 15001       |
+| i1           | 15001       |
+| i2           | 15001       |
++----------------------------+
+>>
+? delete index.c 
+<<
+~
+>>
+? delete index.obj 
+<<
+~
+>>
+? delete index.exe 
+<<
+~
+>>
+? delete index.o
+<<
+~
+>>
+
+
+Ending at: Mon May 22 16:16:47 2000

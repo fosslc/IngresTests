@@ -1,0 +1,830 @@
+/*
+	Test Name: oda39.sep
+	Time: 17-SEP-1990 12:55:14
+	User Name: saundra
+ 
+	Test ID : oda39
+	Module  : abf
+	Filename: oda39.sep
+	Purpose	: in-depth test to call database procedure from library host
+		  language procedures passing parameters
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : table903
+	Synopsis     : given an application with one of each host language
+		       procedures, all created as library procedures, each
+		       procedure will call an SQL procedure passing parameters
+		       to it to insert values to a table, each inserted row
+		       will be printed to a form
+	Port Note    : Change source path in files app902.app and link903.opt
+
+	History	: 17-SEP-1990	Created				Author: saundra
+                 23-Nov-1993    (jpark)
+                        moved over to sep directory.  
+                        currently only a vms only test.
+                  27-May-1994   (scotts)
+                        Took out references to 3GL Pascal, Basic and PL/I
+                        procedures because they are now retired for the 
+                        OpenINGRES product. Regenerated the app902 
+                        application because these three procedures are 
+                        no longer to be included.
+                  NOTE: BECAUSE OF BUG #57253, THE TEST WILL DIFF WHEN THE 
+                        APP902 APPLICATION IS EXECUTED BECAUSE LIBRARY 
+                        PROCEDURES ARE NOT HANDLED CORRECTLY BY ABF.
+                        THE 'GO' CANON WILL NEED TO BE CAPTURED WHEN THE 
+                        BUG IS FIXED.                     
+          15-Dec-1994	(motje01) take conditinal canons
+          10-Apr-1996	(clate01) take conditional canon for NT abort.
+          17-Oct-1998   (kinte01) update link option file with new location
+                        of objects - ING_TST:[OUTPUT.FE.LOCAL.ABF]
+			update copyrights & go canon
+          14-NOV-2003	(syeto01) There was an incomplete vms Canon. So, 
+                        recanonized vms specific canon. Also modified 
+                        the path for cproc903.obj, cblproc903.obj and 
+                        fortran903.obj file to new direction 
+                        TST_ROOT_OUTPUT:[FE.LOCAL.ABF]
+                        Removed extra canon for same command.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+.if (NT_GENERIC) 
+echo This test cannot be run on NT as Fortran compiler is not supported
+exit
+.else 
+.if (VMS) 
+? delobj SEPPARAMDB -form blank table903form 
+<<
+~
+>>
+? delobj SEPPARAMDB -application app902 
+<<
+~
+>>
+? fill top903.osq 
+!!
+'C' = { callproc cproc903; }
+
+'FORTRAN' = { callproc fortran903; }
+
+'COBOL' = { callproc cblproc903; }
+
+'Quit' = { clear screen;
+           message 'Bye! Have a Nice Day. Come again.';
+           sleep 3;
+           exit;
+         }
+!!
+? fill cproc903.sc 
+!!
+cproc903 ()
+{
+   exec sql begin declare section;
+      char col1[10];
+      int col2;
+      float col3;
+   exec sql end declare section;
+
+   exec sql include sqlca;
+
+   exec sql whenever sqlerror continue;
+
+   exec frs forminit table903form;
+   exec frs display table903form update;
+
+   exec frs initialize;
+
+   exec frs activate menuitem 'AddRow';
+   exec frs begin;
+      exec frs message 'Adding new row to table....';
+      exec frs sleep 2;
+      exec sql execute procedure dbproc903 (col1 = 'column1', col2 = 10,
+          col3 = 1.111);
+      exec sql declare cursor1 cursor for
+         select col1, col2, col3 from table903;
+      exec sql open cursor1;
+      exec sql whenever not found goto cursor1_done;
+
+      /* loop indefinitely */
+      while (1)
+      {
+         exec sql fetch cursor1 into :col1, :col2, :col3;
+         exec frs insertrow table903form tblfld903 (col1 = :col1, col2 = :col2,
+             col3 = :col3);
+      }
+   cursor1_done:
+      exec sql close cursor1;
+   exec frs end;
+
+   exec frs activate menuitem 'End';
+   exec frs begin;
+      exec frs breakdisplay;
+   exec frs end;
+
+   return;
+} 
+!!
+? fill cblproc903.scb 
+!!
+identification division.
+program-id. cblproc903.
+environment division.
+data division.
+working-storage section.
+
+exec sql include sqlca end-exec.
+exec sql begin declare section end-exec.
+   01  col1     pic x(10).
+   01  col2     pic s9(4) usage display.
+   01  col3     pic s9(4) usage display.
+exec sql end declare section end-exec.
+
+procedure division.
+sbegin.
+   exec sql whenever sqlerror continue end-exec.
+   exec frs forminit table903form end-exec.
+   exec frs display table903form update end-exec
+   exec frs initialize end-exec
+
+   exec frs activate menuitem 'AddRow' end-exec
+   exec frs begin end-exec
+      exec frs message 'Adding new row to table....' end-exec.
+      exec frs sleep 2 end-exec.
+      exec sql execute procedure dbproc903 (col1 = 'column4', col2 = 40,
+          col3 = 4.444) end-exec.
+      exec sql declare cursor1 cursor for
+         select col1, col2, col3 from table903 end-exec.
+      exec sql open cursor1 end-exec.
+*     LOOP INDEFINITELY.
+      perform until sqlcode not = 0
+         exec sql fetch cursor1 into :col1, :col2, :col3 end-exec
+         exec frs insertrow table903form tblfld903 (col1 = :col1, col2 = :col2,
+             col3 = :col3) end-exec
+      end-perform.
+
+      exec sql whenever sqlerror continue end-exec.
+      exec sql close cursor1 end-exec.
+   exec frs end end-exec
+
+   exec frs activate menuitem 'End' end-exec
+   exec frs begin end-exec
+      exec frs breakdisplay end-exec.
+   exec frs end end-exec
+
+         continue.
+!!
+? fill fortran903.sf 
+!!
+      subroutine fortran903
+      exec sql begin declare section
+         character*512  errbuf
+         character*10   col1
+         integer        col2
+         real           col3
+      exec sql end declare section
+
+      exec sql include sqlca
+      exec sql whenever sqlerror continue
+      exec frs forminit table903form
+      exec frs display table903form update
+      exec frs initialize
+
+      exec frs activate menuitem 'AddRow'
+      exec frs begin
+         exec frs message 'Adding new row to table....'
+         exec frs sleep 2
+         exec sql execute procedure dbproc903 (col1 = 'column2', col2 = 20,
+	1   col3 = 2.222)
+         exec sql declare cursor1 cursor for
+	1   select col1, col2, col3 from table903
+         exec sql open cursor1
+         exec sql whenever not found goto 100
+c        LOOP INDEFINITELY
+         do while (1 .eq. 1)
+            exec sql fetch cursor1 into :col1, :col2, :col3
+            exec frs insertrow table903form tblfld903 (col1 = :col1,
+	1       col2 = :col2, col3 = :col3)
+         end do
+
+100      exec sql close cursor1
+      exec frs end
+
+      exec frs activate menuitem 'End'
+      exec frs begin
+         exec frs breakdisplay
+      exec frs end
+
+      end
+!!
+? fill link903.opt 
+!!
+TST_ROOT_OUTPUT:[FE.LOCAL.ABF]cproc903.obj
+TST_ROOT_OUTPUT:[FE.LOCAL.ABF]cblproc903.obj
+TST_ROOT_OUTPUT:[FE.LOCAL.ABF]fortran903.obj
+!!
+? fill setup903.sql 
+!!
+drop table903;\p\g
+create table table903 (col1 varchar(10) not null, col2 integer4,
+   col3 float4);\p\g
+!!
+? fill dbproc903.sql 
+!!
+drop procedure dbproc903;\p\g
+create procedure dbproc903 (col1 varchar(10) not null, col2 integer4,
+    col3 float4) as
+begin
+   insert into table903 values (:col1, :col2, :col3);
+   commit;
+end;\p\g
+!!
+? fill app902.app 
+!!
+COPYAPP	6	5	1994_05_27 22:22:36 GMT  
+OC_APPL:	0	app902	application for abf in-depth test	
+	[]		0		0	0	2		top903	link903.opt	SQL			0
+CUC_ADEPEND:
+	DUMMY		0	0		0
+OC_OSLFRAME:	1	top903		
+	top903.osq	II02top903	0	none	0	0	2	dynamic						0
+CUC_AODEPEND:
+	blank		1601	3502		0
+OC_HLPROC:	1	fortran903		
+		fortran903	0	none	0	0	2	FORTRAN						0
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_HLPROC:	1	cproc903		
+		cproc903	0	none	0	0	2	C						0
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_HLPROC:	1	cblproc903		
+		cblproc903	0	none	0	0	2	COBOL						0
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_AFORMREF:	1	blank3		
+			0		0	0	2							0
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_AFORMREF:	1	blank		
+			0		0	0	2							0
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_FORM:	0	blank	blank form	
+	80	23	0	0	0	0	0	7	0	0	0	0	0	0	0	0
+CUC_FIELD:
+CUC_TRIM:
+!!
+? fill table903form.frm 
+!!
+COPYFORM:	6.0	1989_08_08 23:17:44 GMT  
+FORM:	table903form		
+	80	25	0	0	1	0	1	7	0	0	0	0	0	0	0	4
+FIELD:
+	0	tblfld903	0	16	0	3	20	47	2	16	1	3	0		0	0	0	33	0	0	0					1	0
+	0	col1	21	12	0	10	1	10	0	1	10	0	1	Col1	1	1	0	0	0	0	0		c10			2	1
+	1	col2	-30	5	0	13	1	13	0	12	13	0	12	Col2	12	1	0	0	0	0	0		-f13			2	2
+	2	col3	-31	5	0	20	1	20	0	26	20	0	26	Col3	26	1	0	0	0	0	0		-n20.3			2	3
+TRIM:
+	0	0	TABLE903 TABLE(S):	0	0	0	0
+!!
+? copyform -i SEPPARAMDB table903form.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1998 Ingres Corporation
+Copied form 'table903form' to database.
+Encoding forms into database . . .
+>>
+? copyapp in SEPPARAMDB app902.app 
+<<
+INGRES COPYAPP Copyright (c) 1984, 1998 Ingres Corporation
+Copied Application `app902' to the database.
+Copied Frame `top903' to the database.
+Copied Procedure `fortran903' to the database.
+Copied Procedure `cproc903' to the database.
+Copied Procedure `cblproc903' to the database.
+Copied Form `blank' to the database.
+>>
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup903.sql 
+<<
+/* SQL Startup File */
+ drop table903;
+create table table903 (col1 varchar(10) not null, col2 integer4,
+   col3 float4);
+continue
+* 
+>>
+* \i dbproc903.sql 
+<<
+ drop procedure dbproc903;
+create procedure dbproc903 (col1 varchar(10) not null, col2 integer4,
+    col3 float4) as
+begin
+   insert into table903 values (:col1, :col2, :col3);
+   commit;
+end;
+continue
+* 
+>>
+* \q 
+<<
+~
+>>
+? esqlc cproc903 
+<<
+~
+>>
+? cc cproc903.c 
+<<
+~
+>>
+? esqlcbl cblproc903 
+<<
+~
+>>
+? cobol cblproc903.cob 
+<<
+~
+>>
+? esqlf fortran903 
+<<
+~
+>>
+? fortran fortran903.for 
+<<
+~
+>>
+? abf -e SEPPARAMDB 
+<<
+~
+>>
+^^ app902`ESC'
+<<
+~
+>>
+^^ edit`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Edit
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Go  Utilities  Help  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Edit"
+
+%% Retrieving Application catalogs . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Applications Catalog                                                      |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_app902                  |testenv |application for abf in-depth test         | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Go  Utilities  Help  >               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ go`CR'`CR'
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Go  Utilities  Help  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "Go"
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Non-existent application object code directory.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'top903' . . .                                               ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'top903' . . .                                               ||
+||Forcing compilation to create internal object code.                           ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'top903' . . .                                               ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'top903.osq' . . .                                                  ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'top903' . . .                                               ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'top903.osq' . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'top903' . . .                                               ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'top903.osq' . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'top903' . . .                                               ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'top903.osq' . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'top903' . . .                                               ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'top903.osq' . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'top903' . . .                                               ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'top903.osq' . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Linking host language procedures . . .                                        ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app902'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'top903' . . .                                               ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'top903.osq' . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Linking host language procedures . . .                                        ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+---------------------------------------------------------------------
+%%     
+%% Fetching 'top903' from the database ...
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  C  FORTRAN  COBOL  Quit_                                                       |
+__________________________________________________________________________________
+@@
+>>
+? delete cblproc903.cob 
+<<
+~
+>>
+? delete cblproc903.obj 
+<<
+~
+>>
+? delete cproc903.c 
+<<
+~
+>>
+? delete cproc903.obj 
+<<
+~
+>>
+? delete fortran903.for 
+<<
+~
+>>
+? delete fortran903.obj 
+<<
+~
+>>
+? delobj SEPPARAMDB -form blank table903form 
+<<
+~
+>>
+? delobj SEPPARAMDB -application app902 
+<<
+~
+>>
+.else 
+? echo 
+<<
+NOTE: This test currently runs only on vms.
+>>
+<< IF (Unix) 
+
+>>
+.endif 
+.endif 
+
+
+Ending at: FRI NOV 14 16:51:12 2003

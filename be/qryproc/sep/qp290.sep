@@ -1,0 +1,248 @@
+/*
+        Test Name: qp290.sep
+        Time: Mon May 14 11:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp290.sep
+        Module  : be/qryproc
+        Filename: qp290.sep
+        Purpose : To test the new feature row producing procedure. 
+        Input Files  : rp1.sc
+        Output Files : rp1.exe
+        Database     : qryprocdb
+        Tables       : qp290_table1, qp290_table2, qp290_table3
+        Synopsis     : This is to test the EXECUTE PROCEDURE LOOP syntax row
+                       producing procedures with an embedded ESQLC program.
+
+ History: 11-May-2001   (wu$ca01)       Created
+**
+**  ROW PRODUCING PROCEDURE
+**
+**  - SYNTAX, EXECUTE PROCEDURE LOOP 
+**
+**  Known Problems:
+**  1) Procedure 2: does not return the rows. 10874359 (Resolved)
+           8-Jan-2002	(wu$ca01) Issue 10874359 resolved - update test canon.
+*/
+? fill setup.sql 
+!!
+\i cleanup.sql
+create table qp290_table1 (a1 int, a2 char(10), a3 date)\g
+insert into qp290_table1 values(100, 'abcd', '01-jan-2001')\g
+insert into qp290_table1 values(101, 'xyz', '02-jan-2001')\g
+insert into qp290_table1 values(102, 'xxx', '03-jan-2001')\g
+insert into qp290_table1 values(103, 'qqqqq', '04-jan-2001')\g
+insert into qp290_table1 values(104, 'junk', '05-jan-2001')\g
+create table qp290_table2 (a1 int, a2 char(10), a3 date)\g
+insert into qp290_table2 values(200, 'abcd', '01-jan-2001')\g
+insert into qp290_table2 values(201, 'xyz', '02-jan-2001')\g
+insert into qp290_table2 values(202, 'xxx', '03-jan-2001')\g
+insert into qp290_table2 values(203, 'qqqqq', '04-jan-2001')\g
+insert into qp290_table2 values(204, 'junk', '05-jan-2001')\g
+create table qp290_table3 (a1 char(10), a2 varchar(16),
+                  a4 integer4, a5 integer2, a6 integer1,
+                  a7 decimal(9,2), a8 float8, a9 float4,
+                  a10 date, a11 money, a12 byte(3))\g
+insert into qp290_table3 values ('charval', 'varcharval',
+                        100, 100, 100,
+                        123.45, 123.45, 123.45,
+                        '01-jan-2001', 123.45, X'414243');\g
+insert into qp290_table3 values ('charval1', 'varcharval1',
+                        101, 101, 101,
+                        123.46, 123.46, 123.46,
+                        '02-jan-2001', 123.46, X'414244');\g
+!!
+? fill cleanup.sql 
+!!
+drop table qp290_table1\g
+drop table qp290_table2\g
+drop table qp290_table3\g
+drop procedure qp290_rp1\g
+drop procedure qp290_rp2\g
+!!
+? fill rp1.sql 
+!!
+/*-------------------------------------*
+   GOOD SYNTAX: nested FOR with ENDLOOP
+*/
+create procedure qp290_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp290_table1 order by 1 do
+      if v1 = 104 then
+          endloop;
+      else
+          return row(:v1, :v2, :v3);
+      endif; 
+      for select a1, a2, a3 into :v4, :v5, :v6 from qp290_table2 order by 1 do
+         return row(:v4, :v5, :v6);
+      endfor;
+   endfor;
+end;\g
+create procedure qp290_rp2
+       result row(char(10), varchar(16),
+                  integer4, integer2, integer1,
+                  decimal(9,2), float8, float4,
+                  date, money, byte(3))
+as declare
+   v1 char(10);
+   v2 varchar(16);
+   v4 integer4;
+   v5 integer2;
+   v6 integer1;
+   v7 decimal(9,2);
+   v8 float8;
+   v9 float4;
+   v10 date;
+   v11 money;
+   v12 byte(3);
+begin
+   for select * into :v1, :v2, :v4, :v5, :v6,
+                     :v7, :v8, :v9, :v10, :v11, :v12
+                from qp290_table3 order by 1 do
+      return row(:v1, :v2, :v4, :v5, :v6,
+                 :v7, :v8, :v9, :v10, :v11, :v12);
+   endfor;
+end;\g
+!!
+? fill rp1.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+      int       v1;
+      char      v2[32];
+      char      v3[32];
+
+      char    x1[10];
+      char    x2[18];
+      int     x4;
+      short   x5;
+      char    x6;
+      double  x7;
+      double  x8;
+      float   x9;
+      char    x10[26];
+      double  x11;
+      char    x12[8];
+   EXEC SQL END DECLARE SECTION;
+
+   int       i;
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+printf("Procedure 1\n");
+   EXEC SQL execute procedure qp290_rp1
+                    result row (:v1, :v2, :v3);
+   EXEC SQL begin;
+      printf("Proc Loop 1: %d, '%s', '%s'\n", v1,v2,v3);
+   EXEC SQL end;
+
+printf("Procedure 2\n");
+   EXEC SQL execute procedure qp290_rp2
+                    result row (:x1, :x2, :x4, :x5, :x6,
+                                :x7, :x8, :x9, :x10, :x11, :x12);
+   EXEC SQL begin;
+      printf("Proc Loop 2: %f\n", x7);
+   EXEC SQL end;
+
+   EXEC SQL disconnect;
+}
+!!
+? esqlc rp1.sc 
+<<
+~
+>>
+? sepcc rp1.c 
+<<
+~
+>>
+? seplnk rp1 
+<<
+~
+>>
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* \i rp1.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? run rp1.exe SEPPARAMDB 
+<<
+Procedure 1
+Proc Loop 1: 100, 'abcd      ', '01-jan-2001              '
+Proc Loop 1: 200, 'abcd      ', '01-jan-2001              '
+Proc Loop 1: 201, 'xyz       ', '02-jan-2001              '
+Proc Loop 1: 202, 'xxx       ', '03-jan-2001              '
+Proc Loop 1: 203, 'qqqqq     ', '04-jan-2001              '
+Proc Loop 1: 204, 'junk      ', '05-jan-2001              '
+Proc Loop 1: 101, 'xyz       ', '02-jan-2001              '
+Proc Loop 1: 200, 'abcd      ', '01-jan-2001              '
+Proc Loop 1: 201, 'xyz       ', '02-jan-2001              '
+Proc Loop 1: 202, 'xxx       ', '03-jan-2001              '
+Proc Loop 1: 203, 'qqqqq     ', '04-jan-2001              '
+Proc Loop 1: 204, 'junk      ', '05-jan-2001              '
+Proc Loop 1: 102, 'xxx       ', '03-jan-2001              '
+Proc Loop 1: 200, 'abcd      ', '01-jan-2001              '
+Proc Loop 1: 201, 'xyz       ', '02-jan-2001              '
+Proc Loop 1: 202, 'xxx       ', '03-jan-2001              '
+Proc Loop 1: 203, 'qqqqq     ', '04-jan-2001              '
+Proc Loop 1: 204, 'junk      ', '05-jan-2001              '
+Proc Loop 1: 103, 'qqqqq     ', '04-jan-2001              '
+Proc Loop 1: 200, 'abcd      ', '01-jan-2001              '
+Proc Loop 1: 201, 'xyz       ', '02-jan-2001              '
+Proc Loop 1: 202, 'xxx       ', '03-jan-2001              '
+Proc Loop 1: 203, 'qqqqq     ', '04-jan-2001              '
+Proc Loop 1: 204, 'junk      ', '05-jan-2001              '
+Procedure 2
+Proc Loop 2: 123.450000
+Proc Loop 2: 123.460000
+>>
+? delete rp1.c 
+<<
+~
+>>
+? delete rp1.o 
+<<
+~
+>>
+? delete rp1.obj 
+<<
+~
+>>
+? delete rp1.exe 
+<<
+~
+>>
+
+
+Ending at: Tue Jan  8 16:28:36 2002

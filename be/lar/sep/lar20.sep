@@ -1,0 +1,154 @@
+/*
+	Copyright (c) 2006 Ingres Corporation
+
+	Test Name: lar20.sep, formerly prfdb07.sep
+	Time: Thu Mar  9 16:15:47 1995
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : lar20.sep
+	Module  : be/lar
+	Filename: lar20.sep
+	Purpose	: Test bug #67327: secondary index not saved with tbl-level
+	          ckpdb
+	Input Files  : NONE
+	Output Files : NONE
+	Database     : SEPPARAMDB
+	Tables       : prfdb07tab
+	Synopsis     : Create a table with a unique constraint; enter a row
+	               and ckpdb the table.  Delete the row.  Rollforwarddb
+	               the table -j.  Try to insert a duplicate row.
+	               With bug #67327, the violation of the unique constraint
+	               is allowed because the secondary index responsible for
+	               enforcing the constraint is not included in the table	              -
+ level checkpoint.  The rollforwarddb restores the table
+	               to its state before the row deletion, but since the index
+	               is not included in the checkpoint, it is left in the 
+	               current state (after the row deletion) and does not 
+	               recognize the final insert as a duplicate.
+
+ History:  9-Mar-1995	(holla02)	Created
+          14-Feb-1997	(rusfr01)
+		Certain sep tests were modified to run on Windows NT.
+	  12-Jun-1998	(vande02)	Added Alternate canons on rollforwarddb
+					-table which is due to a partial bug fix
+			Table level recovery should be disallowed if the the 
+			table is not journaled.  We should disallow ckpdb to 
+			take a table level checkpoint rather then failing 
+			during table rollwarddb. Error from rollforwaddb 
+			-table=xxx is E_DM135F_RFP_NO_TBL_RECOV (see bug 91356)
+	  11-Sep-1998	(vande02) Removed the canon for failure of rollforwarddb
+			now that bug 91356 is fully fixed.  Table-level recovery
+			should be successful AFTER a ckpdb with journaling on.
+			Added the ckpdb +j just before the final rollforwarddb
+			-table=prfdb07tab -j.
+			Removed alternate canons that show the presence of 
+			bug 67327 now that it has been fixed.
+	  14-Apr-1999	(vande02) Hard-coded VPG_SZ to 8K
+	22-Sep-2006	(rogch01)
+		Add +w to ckpdb and rollforwarddb in case the database is
+		momentarily unavailable following the previous command.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table prfdb07tab;\g 
+<<
+~
+>>
+* create table prfdb07tab (col1 i4 unique not null, col2 varchar (32)) with page_siz-
+e=8192;\g 
+<<
+>>
+* insert into prfdb07tab values (1, 'Unique row');\g 
+<<
+(1 row)
+>>
+* insert into prfdb07tab values (1, 'Duplicate');\g 
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Thu Mar  9 16:21:39 1995)
+
+>>
+* select * from prfdb07tab;\g 
+<<
+
++-------------+--------------------------------+
+|col1         |col2                            |
++-------------+--------------------------------+
+|            1|Unique row                      |
++-------------+--------------------------------+
+(1 row)
+>>
+* \q 
+<<
+>>
+? ckpdb -d +j +w SEPPARAMDB
+<<
+~
+>>
+? ckpdb +w SEPPARAMDB -table=prfdb07tab 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* delete from prfdb07tab where col1=1;\g 
+<<
+(1 row)
+>>
+* select * from prfdb07tab;\g 
+<<
+
++-------------+--------------------------------+
+|col1         |col2                            |
++-------------+--------------------------------+
++-------------+--------------------------------+
+(0 rows)
+>>
+* \q 
+<<
+>>
+? rollforwarddb +w SEPPARAMDB -table=prfdb07tab -j 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from prfdb07tab;\g 
+<<
+
++-------------+--------------------------------+
+|col1         |col2                            |
++-------------+--------------------------------+
+|            1|Unique row                      |
++-------------+--------------------------------+
+(1 row)
+>>
+* insert into prfdb07tab values (1, 'Bug 67327 allows me');\g 
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Thu Mar  9 16:21:39 1995)
+
+>>
+* select * from prfdb07tab;\g 
+<<
+
++-------------+--------------------------------+
+|col1         |col2                            |
++-------------+--------------------------------+
+|            1|Unique row                      |
++-------------+--------------------------------+
+(1 row)
+>>
+* drop prfdb07tab;\g 
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Thu Jun 11 15:26:46 1998

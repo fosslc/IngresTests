@@ -1,0 +1,297 @@
+/*
+
+Copyright (c) 2004 Ingres Corporation
+
+	Test Name: msfn200.sep
+	Time: Wed Feb 09 07:07:50 2000
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : msfn200.sep
+	Module  : be/miscfunc
+	Filename: msfn200.sep
+	Purpose	: Initialize and extend to 4 locations the test database
+	Input Files  :none
+	Output Files :none
+	Database     :SEPPARAMDB
+	Tables       : 
+	Synopsis     :Initialize database for ANSI constraint testing
+
+    History: 	09-Feb-2000 (panyu01) 	Created.
+            	27-Mar-2000 (sarjo01) 	Cleanup.
+             	30-May-2000 (sarjo01) 	Cleanup.
+	     	24-Jul-2001 (boija02) 	Still diffing, final \ was causing
+	     				problems on Linux, so removed that.
+	     				Weirdly organised, needless
+			 		different filenames on unix vs.windows,
+			 		never used droploc.bat and far too many
+			 		ignored canons, so generally cleaned up.
+		25-Jul-2001 (rogch01)	Stop ignoring failed connections.
+             	12-Apr-2004 (sinna02) 	Modified the test to work on VMS.
+		20-Sep-2004 (legru01)	Change how directories 
+					(e.g.; ii_user1,ii_user2, etc.) will be
+					created and/or deleted on windows.
+					Replaced the "rm -r" and the 
+					"mkdir -p" MKS toolkit commands with 
+					the OS level commands "rd" and "md."
+					This change allows this test to be 
+					portable without depending on third
+					party commands to create and/or 
+					delete directories
+                29-Apr-2005 (sinna02)   Fix the test to run on VMS.IF condition
+                                        was not given properly which bypassed 
+                                        the commands for VMS.
+                                               
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+.if (UNIX) 
+? fill iicreateloc.sql 
+!!
+echo "create location ii_user1 with area ='" > createloc.sql ; env \
+| grep II_SYSTEM | awk -F= '{print $2}' >> createloc.sql \
+; echo "/ii_user1', usage=(database);commit;\p\g" >> createloc.sql ; \
+echo "" >> createloc.sql ; \
+echo "create location ii_user2 with area ='" >> createloc.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> createloc.sql ; \
+echo "/ii_user2', usage=(database);commit;\p\g" >> createloc.sql ; \
+echo "" >> createloc.sql ; \
+echo "create location ii_index1 with area ='" >> createloc.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> createloc.sql ; \
+echo "/ii_index1', usage=(database);commit;\p\g" >> createloc.sql ; \
+echo "" >> createloc.sql ; \
+echo "create location ii_index2 with area ='" >> createloc.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> createloc.sql ; \
+echo "/ii_index2', usage=(database);commit;\p\g" >> createloc.sql ; 
+!!
+? run chmod u+x iicreateloc.sql 
+<<
+>>
+? run iicreateloc.sql 
+<<
+>>
+.endif
+.if (NT_GENERIC) 
+? fill createloc.bat
+!!
+echo create location ii_user1 with area='%II_SYSTEM%\ii_user1', usage=(database); commit; \p-
+\g > createloc.sql
+echo create location ii_user2 with area='%II_SYSTEM%\ii_user2', usage=(database); commit; \p-
+\g >> createloc.sql
+echo create location ii_index1 with area ='%II_SYSTEM%\ii_index1', usage=(database);commit; \p-
+\g >> createloc.sql
+echo create location ii_index2 with area ='%II_SYSTEM%\ii_index2', usage=(database);commit; \p-
+\g >> createloc.sql
+!!
+? run createloc.bat
+<<
+>>
+.endif
+? sql -s -uingres iidbdb 
+<<
+>>
+* drop location ii_user1;\g
+<<
+~
+>>
+* drop location ii_user2;\g
+<<
+~
+>>
+* drop location ii_index1;\g
+<<
+~
+>>
+* drop location ii_index2;\g
+<<
+~
+>>
+* \q
+<<
+>>
+.if (NT_GENERIC)
+? fill mklocdir.bat
+!!
+qasetuser ingres rd /S /Q %ii_system%\ii_user1 
+qasetuser ingres rd /S /Q %ii_system%\ii_user2 
+qasetuser ingres rd /S /Q %ii_system%\ii_index1 
+qasetuser ingres rd /S /Q %ii_system%\ii_index2 
+qasetuser ingres md "%II_SYSTEM%\ii_user1\ingres\data\default" 
+qasetuser ingres md "%II_SYSTEM%\ii_user2\ingres\data\default" 
+qasetuser ingres md "%II_SYSTEM%\ii_index1\ingres\data\default" 
+qasetuser ingres md "%II_SYSTEM%\ii_index2\ingres\data\default" 
+!!
+? run mklocdir.bat
+<<
+~
+>>
+? delete mklocdir.bat
+<<
+file was deleted
+>>
+.endif
+.if (UNIX)
+? qasetuser ingres rm -r @file(ii_system,ii_user1) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,ii_user2) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,ii_index1) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,ii_index2) 
+<<
+~
+>>
+? qasetuser ingres mkdir -p @file(ii_system,ii_user1,ingres,data,default) 
+<<
+>>
+? qasetuser ingres mkdir -p @file(ii_system,ii_user2,ingres,data,default) 
+<<
+>>
+? qasetuser ingres mkdir -p @file(ii_system,ii_index1,ingres,data,default) 
+<<
+>>
+? qasetuser ingres mkdir -p @file(ii_system,ii_index2,ingres,data,default) 
+<<
+>>
+.endif
+.if (VMS)
+? fill msfnbuild.com
+!!
+$! msfnbuild.com:create the multiple DB locations.
+$!*****************************************************************************
+$ set noon
+$ echo ="write sys$output"
+$!
+$!clean the old locations
+$!
+$ i=0
+$ CLEANLOOP:
+$ i=i+1
+$!
+$ if i .gt.2 then goto DONE
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.ii_user1...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.ii_user2...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.ii_index1...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.ii_index2...]*.*;*
+$!
+$ goto CLEANLOOP
+$ DONE:
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000]ii_*.*;*
+$!
+$!create the new locations
+$!
+$ create/dir ii_system:[000000.ii_user1.ingres.data]
+$ create/dir ii_system:[000000.ii_user2.ingres.data]
+$ create/dir ii_system:[000000.ii_index1.ingres.data]
+$ create/dir ii_system:[000000.ii_index2.ingres.data]
+$!
+$!parse II_SYSTEM, define the area logicals pointing to row device locations:
+$!
+$ disk=f$extract(0,f$length(f$trnlnm("II_SYSTEM"))-1,f$trnlnm("II_SYSTEM"))
+$ i= f$locate(":", disk)
+$ disk1=f$extract(0, i, disk)
+$ disk2=f$extract(i+2, f$length("''disk'"), disk)
+$!
+$ if (f$trnlnm("''disk1'") .eqs. "")
+$ then
+$       dev=disk
+$ else
+$       if (disk2 .eqs. "")
+$       then
+$               dev=f$extract(0,f$length(f$trnlnm("''disk1'"))-1,-
+                    f$trnlnm("''disk1'"))
+$       else
+$               dev=f$extract(0,f$length(f$trnlnm("''disk1'"))-1,-
+                    f$trnlnm("''disk1'")) + "''disk2'"
+$       endif
+$ endif
+$!
+$ dev1="''dev'"+"ii_user1.]"
+$ dev2="''dev'"+"ii_user2.]"
+$ dev3="''dev'"+"ii_index1.]"
+$ dev4="''dev'"+"ii_index2.]"
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area1 'dev1
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area2 'dev2
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area3 'dev3
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area4 'dev4
+$ exit
+!!
+? run msfnbuild.com
+<<
+>>
+? fill createloc.sql
+!!
+create location ii_user1 with area='area1', usage=(database);commit;\g
+create location ii_user2 with area='area2', usage=(database);commit;\g
+create location ii_index1 with area ='area3',usage=(database);commit;\g
+create location ii_index2 with area ='area4',usage=(database);commit;\g
+!!
+.endif
+? sql -uingres -s iidbdb
+<<
+>>
+* \i createloc.sql
+<<
+~
+>>
+* execute procedure iiqef_add_location(database_name='SEPPARAMDB',location_name='ii_user1', a-
+ccess=8, need_dbdir_flg=1)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='SEPPARAMDB',location_name='ii_user2', a-
+ccess=8, need_dbdir_flg=1)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='SEPPARAMDB',location_name='ii_index1', a-
+ccess=8, need_dbdir_flg=1)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='SEPPARAMDB',location_name='ii_index2', a-
+ccess=8, need_dbdir_flg=1)\g
+<<
+>>
+* \q
+<<
+>>
+? delete createloc.sql
+<<
+file was deleted
+>>
+
+
+Ending at: Wed Feb 09 07:08:09 2000

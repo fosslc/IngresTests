@@ -1,0 +1,532 @@
+/*
+        Test Name    : qp340.sep
+        Time         : Thu Jan 30 15:50:40 2003
+        User Name    : testenv
+
+        Test ID      : qp340
+        Module       :
+        Filename     : qp340.sep
+        Purpose      : Testing Ingres 2.6 SP2 'Lock Timeout of NOWAIT' 
+        Input Files  : none
+        Output Files : none
+        Database     : SEPPARAMDB
+        Tables       : qp340_tbl1, qp340_tbl2 
+        Synopsis     : Testing that 
+                       'SET LOCKMODE ON <table> ... TIMEOUT=NOWAIT ' 
+                       is specific to the table locked in another session, 
+                       Set Trace Point DM35
+        Setup        :
+
+        History:  27-Feb-2003 (sykga01)  Created.
+	  14-Jun-2004   (sinra04) Replaced esqlc command with sepesqlc command
+			to make tests when run on VMS use same canon as that
+			of  Unix & Windows.
+
+*/
+
+/*
+** Define the SQL script to create
+** and populate the test tables, view and index. 
+*/
+
+? fill setup.sql
+!!
+create table qp340_tbl1 (lname char(24), fname char(24), telephone char(14))\p\g
+insert into qp340_tbl1 values ('Davis', 'Steven', '(516) 735-4647')\p\g
+insert into qp340_tbl1 values ('Davidson', 'Mary', '(516) 735-8181')\p\g
+insert into qp340_tbl1 values ('Davidson', 'John', '(516) 735-8181')\p\g
+insert into qp340_tbl1 values ('Smith', 'William', '(631) 442-5242')\p\g
+insert into qp340_tbl1 values ('Johnson', 'James', '(516) 675-6154')\p\g
+insert into qp340_tbl1 values ('Walsh', 'Joan', '(516) 331-2365')\p\g
+insert into qp340_tbl1 values ('Williams', 'Charles', '(212) 599-1001')\p\g
+insert into qp340_tbl1 values ('Andrews', 'Alison', '(212) 664-3001')\p\g
+create table qp340_tbl2 (lname char(24), fname char(24), telephone char(14))\p\g
+insert into qp340_tbl2 values ('Bush', 'George', '(516) 735-4647')\p\g
+insert into qp340_tbl2 values ('Blair', 'Tony', '(516) 735-8181')\p\g
+insert into qp340_tbl2 values ('Hussain', 'Saddam', '(516) 735-8181')\p\g
+create view qp340_vw as SELECT * FROM qp340_tbl2 WHERE lname LIKE 'B%'\p\g
+create index qp340_idx on qp340_tbl2 (lname)\p\g
+!!
+
+/*
+** Define the main C executable
+*/ 
+
+? fill qp340.sc 
+!!
+/*
+** Standard C Runtime header file
+*/
+#include <stdio.h>
+/*
+**  SQLCA required by Ingres LIBQ runtime for Ingres error handling
+*/
+EXEC SQL INCLUDE sqlca;   
+
+/*
+**  Local variable: program syntax message 
+*/
+char  *syntax = "\nSyntax: qp340.sep, dbname: qryprocdb\n";
+
+/*
+** The main() program
+*/
+
+main(int argc, char *argv[])
+{
+/*
+**  Declare host language variables used in queries.
+*/
+   EXEC SQL BEGIN DECLARE SECTION;
+        char   *dbname;
+        char   qp1[72];
+        char   qp2[72];
+        char   idx[72];
+        char   vw[72];
+        char   err_msg[101];
+   EXEC SQL END DECLARE SECTION;
+
+
+/*
+**  Checks that 2 arguments were specified on the command
+**  line that launched the program (1 arg plus the program name).
+**  If not enough args, then print a message and exit. 
+*/
+   if (argc < 2)
+   {
+      printf(syntax);
+      exit(-1);
+   }
+/*
+**  Set local variables: dbname is the database passed in at the 
+**  command line.
+*/
+   dbname = argv[1];
+
+/*
+** Connect to Session 1
+*/
+
+   printf("\nConnecting to Session 1\n");
+
+   EXEC SQL CONNECT :dbname session 1;
+
+   printf("\n");
+
+
+/*
+**  Update and lock the qp340_tbl1 table;
+*/
+
+   printf("\nUpdating the qp340_tbl1 table in Session 1\n");
+
+   EXEC SQL UPDATE 
+                qp340_tbl1
+            SET 
+                fname='SESSION' 
+            WHERE 
+                lname='Davis'; 
+
+/*
+** Connect to Session 2
+*/
+
+   printf("\nConnecting to Session 2\n");
+
+   EXEC SQL CONNECT :dbname session 2;
+
+/*
+** Set Trace Point DM35
+*/
+
+   EXEC SQL SET TRACE POINT DM35;
+
+/*
+**  Set the error handler to 
+**  call an error routine but continue program execution. 
+*/
+
+    EXEC SQL WHENEVER NOT FOUND CONTINUE;
+
+        EXEC SQL WHENEVER SQLWARNING CONTINUE;
+        EXEC SQL WHENEVER SQLERROR goto ERR; 
+    EXEC SQL COMMIT;
+
+    START:
+
+/*
+** Set lockmode TIMEOUT=NOWAIT on qp340_tbl1 and qp340_tbl2 tables 
+*/
+
+   printf("\n");
+
+   printf("\nSet Lockmode TIMEOUT=NOWAIT on qp340_tbl1 and qp340_tbl2\n");
+
+   EXEC SQL SET LOCKMODE ON qp340_tbl1 WHERE TIMEOUT=NOWAIT;
+   EXEC SQL SET LOCKMODE ON qp340_tbl2 WHERE TIMEOUT=NOWAIT;
+
+/*
+**  START MQT
+**  INSERT row in the qp340_tbl2 table 
+**  This will update the qp340_vw VIEW and qp340_idx INDEX
+*/
+
+   printf("\nINSERT row in the qp340_tbl2 table in Session 2\n");
+
+   EXEC SQL INSERT INTO 
+                qp340_tbl2 
+                (
+                lname,
+                fname,
+                telephone
+                )
+            VALUES
+                ('Benn',
+                 'Tony',
+                 '999999999'
+                );
+
+/*
+** Check the qp340_tbl2 TABLE has been appended
+*/
+
+   printf("\nSELECT from qp340_tbl2 table to check INSERT\n");
+
+   printf("\n");
+
+   EXEC SQL SELECT 
+                TRIM(lname) + ', ' + TRIM(fname) + ' ' + telephone
+            INTO 
+                :qp2 
+            FROM 
+                qp340_tbl2 
+            ORDER BY lname, fname, telephone;
+   EXEC SQL BEGIN;
+      printf("%s\n", qp2);
+   EXEC SQL END;
+
+/*
+** Check the qp340_tbl2 VIEW has been updated
+*/
+
+   printf("\nSELECT from qp340_vw VIEW to check INSERT\n");
+
+   printf("\n");
+
+   EXEC SQL SELECT 
+                TRIM(lname) + ', ' + TRIM(fname) + ' ' + telephone
+            INTO 
+                :vw 
+            FROM 
+                qp340_vw 
+            ORDER BY lname, fname, telephone;
+   EXEC SQL BEGIN;
+      printf("%s\n", vw);
+   EXEC SQL END;
+
+/*
+** Check the qp340_tbl2 INDEX has been updated
+*/
+
+   printf("\nSELECT from qp340_idx INDEX to check update\n");
+
+   printf("\n");
+
+   EXEC SQL SELECT 
+                TRIM(lname) + ', ' + TRIM(CHAR(tidp))
+            INTO 
+                :idx 
+            FROM 
+                qp340_idx 
+            ORDER BY lname, tidp;
+   EXEC SQL BEGIN;
+      printf("%s\n", idx);
+   EXEC SQL END;
+
+/*
+**  Query the locked qp340_tbl1 table 
+**  The query will not wait for locks to be released and will
+**  return an error invoking the error routine.
+*/
+
+   printf("\n");
+
+   printf("\nSELECT from qp340_tbl1 table in Session 2\n");
+
+   printf("\n");
+
+   EXEC SQL SELECT 
+                TRIM(lname) + ', ' + TRIM(fname) + ' ' + telephone
+            INTO 
+                :qp1
+            FROM 
+                qp340_tbl1
+            ORDER BY lname, fname, telephone;
+   EXEC SQL BEGIN;
+      printf("%s\n", qp1);
+   EXEC SQL END;
+
+
+  EXEC SQL COMMIT;
+
+/*
+** End of MQT
+*/
+
+      goto END;
+
+/*
+** ERROR ROUTINE
+** Return an error message and roll back the MQT
+*/
+
+   ERR:
+       EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+           if (sqlca.sqlcode != 0) 
+              { 
+               EXEC SQL inquire_sql (:err_msg=ERRORTEXT);
+               printf("\n%s\n", err_msg);
+               EXEC SQL ROLLBACK; 
+   	       printf("\nLock Timeout - MQT Rolled back\n");
+              }
+
+   END:
+
+/*
+** Check the qp340_tbl2 TABLE has rolled back to its pre-MQT state
+*/
+
+   printf("\nSELECT from qp340_tbl2 table to check ROLLBACK\n");
+
+   printf("\n");
+
+   EXEC SQL SELECT 
+                TRIM(lname) + ', ' + TRIM(fname) + ' ' + telephone
+            INTO 
+                :qp2 
+            FROM 
+                qp340_tbl2 
+            ORDER BY lname, fname, telephone;
+   EXEC SQL BEGIN;
+      printf("%s\n", qp2);
+   EXEC SQL END;
+
+/*
+** Check the qp340_tbl2 VIEW has rolled back to its pre-MQT state
+*/
+
+   printf("\nSELECT from qp340_vw VIEW to check ROLLBACK\n");
+
+   printf("\n");
+
+   EXEC SQL SELECT 
+                TRIM(lname) + ', ' + TRIM(fname) + ' ' + telephone
+            INTO 
+                :vw 
+            FROM 
+                qp340_vw 
+            ORDER BY lname, fname, telephone;
+   EXEC SQL BEGIN;
+      printf("%s\n", vw);
+   EXEC SQL END;
+
+/*
+** Check the qp340_tbl2 INDEX has rolled back to its pre-MQT state
+*/
+
+   printf("\nSELECT from qp340_idx INDEX to check ROLLBACK\n");
+
+   printf("\n");
+
+   EXEC SQL SELECT 
+                TRIM(lname) + ', ' + TRIM(CHAR(tidp))
+            INTO 
+                :idx 
+            FROM 
+                qp340_idx 
+            ORDER BY lname, tidp;
+   EXEC SQL BEGIN;
+      printf("%s\n", idx);
+   EXEC SQL END;
+
+/*
+** Disconnect from Session 2
+*/
+
+   printf("\nDisconnecting from Session 2\n");
+
+   EXEC SQL DISCONNECT session 2;
+
+/*  
+**  Disconnect from Session 1.
+*/
+
+   printf("\nDisconnecting from Session 1\n");
+
+   EXEC SQL disconnect session 1;
+
+/*
+**  END OF EXEC SQL Script. 
+*/
+}
+!!
+
+/*
+** End of main C executable definition
+*/
+
+/* 
+** Preprocess, Compile and Link EXEC SQL Script
+*/
+
+? sepesqlc qp340.sc 
+<<
+ESQL qp340.sc:
+>>
+? sepcc qp340 
+<<
+~
+>>
+? seplnk qp340 
+<<
+>>
+
+/*
+** Create and populate test tables
+*/
+
+? sql -s SEPPARAMDB
+<<
+
+>>
+* drop table qp340_tbl1; \g
+<<
+~
+>>
+* drop table qp340_tbl2; \g
+<<
+~
+>>
+* \i setup.sql
+<<
+create table qp340_tbl1 (lname char(24), fname char(24), telephone char(14))
+insert into qp340_tbl1 values ('Davis', 'Steven', '(516) 735-4647')
+(1 row)
+insert into qp340_tbl1 values ('Davidson', 'Mary', '(516) 735-8181')
+(1 row)
+insert into qp340_tbl1 values ('Davidson', 'John', '(516) 735-8181')
+(1 row)
+insert into qp340_tbl1 values ('Smith', 'William', '(631) 442-5242')
+(1 row)
+insert into qp340_tbl1 values ('Johnson', 'James', '(516) 675-6154')
+(1 row)
+insert into qp340_tbl1 values ('Walsh', 'Joan', '(516) 331-2365')
+(1 row)
+insert into qp340_tbl1 values ('Williams', 'Charles', '(212) 599-1001')
+(1 row)
+insert into qp340_tbl1 values ('Andrews', 'Alison', '(212) 664-3001')
+(1 row)
+create table qp340_tbl2 (lname char(24), fname char(24), telephone char(14))
+insert into qp340_tbl2 values ('Bush', 'George', '(516) 735-4647')
+(1 row)
+insert into qp340_tbl2 values ('Blair', 'Tony', '(516) 735-8181')
+(1 row)
+insert into qp340_tbl2 values ('Hussain', 'Saddam', '(516) 735-8181')
+(1 row)
+create view qp340_vw as SELECT * FROM qp340_tbl2 WHERE lname LIKE 'B%'
+create index qp340_idx on qp340_tbl2 (lname)
+(3 rows)
+>>
+* \q
+<<
+~
+>>
+
+/*
+** Run the EXEC SQL Script
+*/
+
+? run qp340.exe SEPPARAMDB 
+<<
+Connecting to Session 1
+
+
+Updating the qp340_tbl1 table in Session 1
+
+Connecting to Session 2
+
+
+Set Lockmode TIMEOUT=NOWAIT on qp340_tbl1 and qp340_tbl2
+
+INSERT row in the qp340_tbl2 table in Session 2
+
+SELECT from qp340_tbl2 table to check INSERT
+
+Benn, Tony 999999999
+Blair, Tony (516) 735-8181
+Bush, George (516) 735-4647
+Hussain, Saddam (516) 735-8181
+
+SELECT from qp340_vw VIEW to check INSERT
+
+Benn, Tony 999999999
+Blair, Tony (516) 735-8181
+Bush, George (516) 735-4647
+
+SELECT from qp340_idx INDEX to check update
+
+Benn, 3
+Blair, 1
+Bush, 0
+Hussain, 2
+
+
+SELECT from qp340_tbl1 table in Session 2
+
+
+E_US125E Timeout occurred on lock request (see SET LOCKMODE command).
+    (Fri Mar 14 11:57:35 2003)
+
+Lock Timeout - MQT Rolled back
+
+SELECT from qp340_tbl2 table to check ROLLBACK
+
+Blair, Tony (516) 735-8181
+Bush, George (516) 735-4647
+Hussain, Saddam (516) 735-8181
+
+SELECT from qp340_vw VIEW to check ROLLBACK
+
+Blair, Tony (516) 735-8181
+Bush, George (516) 735-4647
+
+SELECT from qp340_idx INDEX to check ROLLBACK
+
+Blair, 1
+Bush, 0
+Hussain, 2
+
+Disconnecting from Session 2
+
+Disconnecting from Session 1
+>>
+? delete qp340.c 
+<<
+~
+>>
+? delete qp340.obj 
+<<
+~
+>>
+? delete qp340.o 
+<<
+~
+>>
+? delete qp340.exe 
+<<
+~
+>>
+
+
+Ending at: Wed Mar 22 17:31:02 2000

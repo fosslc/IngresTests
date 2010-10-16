@@ -1,0 +1,205 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : glc31.sep
+  Suite         : embed!esqlc 
+  Focus         : Verifies fixes for bugs 50421 and 39107, related to 
+                : the object_key datatype. 
+  Databases     : SEPPARAMDB
+  Tables        : glc31_t1 
+  Filled Files  : glc31.sc
+  Run as user   : testenv
+  Summary       : Tests that ORDER BY works correctly for logical_key; 
+                : tests that an ESQLC varchar host variable works correctly
+                : for logical_key.
+  Exp. DIFFs    : None
+
+  History: 02-Feb-1996 (Author)	Created.
+           02-Apr-1997 (chiel02) Modified for Windows NT and added an
+                       alternate canon for the sepcc command.  
+           07-Apr-1998 (uptad01) commit caused diffs because it outputs the
+                       OS type in its message Banner. Made it an ignored canon 
+           09-Dec-1998 (panyu01) Mantained cannons for VMS.
+           22-Dec-1998 (ngutr03) Updated canon for esqlc frank5.sc
+           09-Jul-2008 (sarjo01) Total rewrite. Removed createdb and bogus
+                       esqlc for wrong file; removed ORDER BY check from
+                       ESQLC prog and did it in TM (the ESQLC version was
+                       not checking that the order was correct, only that the
+                       DESC order was the reverse of the ASC order). 
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table glc31_t1\g
+<<
+~
+>>
+* create table glc31_t1 (col1 object_key with system_maintained, -
+  col2 char(10))\g
+<<
+
+>>
+* insert into glc31_t1 (col2) values ('one')\g
+<<
+(1 row)
+>>
+* insert into glc31_t1 (col2) values ('two')\g
+<<
+(1 row)
+>>
+* insert into glc31_t1 (col2) values ('three')\g
+<<
+(1 row)
+>>
+* insert into glc31_t1 (col2) values ('four')\g
+<<
+(1 row)
+>>
+* insert into glc31_t1 (col2) values ('five')\g
+<<
+(1 row)
+>>
+* insert into glc31_t1 (col2) values ('six')\g
+<<
+(1 row)
+>>
+* insert into glc31_t1 (col2) values ('seven')\g
+<<
+(1 row)
+>>
+* insert into glc31_t1 (col2) values ('eight')\g
+<<
+(1 row)
+>>
+* insert into glc31_t1 (col2) values ('nine')\g
+<<
+(1 row)
+>>
+* insert into glc31_t1 (col2) values ('ten')\g
+<<
+(1 row)
+>>
+* delete from glc31_t1 where col2 = 'four' or col2 = 'one'\g
+<<
+(2 rows)
+>>
+* insert into glc31_t1 (col2) values ('four')\g
+<<
+(1 row)
+>>
+* insert into glc31_t1 (col2) values ('one')\g
+<<
+(1 row)
+>>
+* select col2 from glc31_t1 order by col1 asc\g
+<<
+
++----------+
+|col2      |
++----------+
+|two       |
+|three     |
+|five      |
+|six       |
+|seven     |
+|eight     |
+|nine      |
+|ten       |
+|four      |
+|one       |
++----------+
+(10 rows)
+>>
+* select col2 from glc31_t1 order by col1 desc\g
+<<
+
++----------+
+|col2      |
++----------+
+|one       |
+|four      |
+|ten       |
+|nine      |
+|eight     |
+|seven     |
+|six       |
+|five      |
+|three     |
+|two       |
++----------+
+(10 rows)
+>>
+* \q
+<<
+~
+>>
+? fill glc31.sc 
+!!
+#include <stdio.h>
+
+void main(int argc, char *argv[])
+{
+   EXEC SQL begin declare section;
+
+      varchar struct {
+           short dlen;
+           char buf[16];
+      } buf1;
+
+      char buf2[11];
+
+      char *dbname;
+
+   EXEC SQL end declare section;
+
+   dbname = argv[1];
+
+   EXEC SQL connect :dbname;
+
+   EXEC SQL select col1 into :buf1
+            from glc31_t1 where col2 = 'five';
+
+   EXEC SQL select col2 into :buf2 from glc31_t1
+            where col1 = :buf1;
+
+   printf("Val: '%s'\n", buf2);
+
+   EXEC SQL disconnect;
+}
+!!
+? esqlc glc31.sc 
+<<
+ESQL glc31.sc:
+>>
+<<
+>>
+? sepcc glc31 
+<<
+>>
+<<
+glc31.c
+>>
+? seplnk glc31 
+<<
+>>
+? run glc31.exe SEPPARAMDB 
+<<
+Val: 'five      '
+>>
+? delete glc31.o 
+<<
+~
+>>
+? delete glc31.obj 
+<<
+~
+>>
+? delete glc31.c 
+<<
+~
+>>
+? delete glc31.exe 
+<<
+~
+>>

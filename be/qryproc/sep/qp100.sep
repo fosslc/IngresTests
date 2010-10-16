@@ -1,0 +1,267 @@
+/*
+Copyright (c) 2006 Ingres Corporation
+
+	Test Name: qp100.sep (formerly efa34.sep)
+	Time: Fri Apr  2 18:24:26 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename: qp100.sep
+	Purpose	: Test coercion between different datatypes.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     : Testing coercion between integer and character,
+		       between float and decimal datatypes.
+
+        History:
+	   2-Apr-1993	(malee)	  Created
+	   7-MAR-1997	(vissu01) Modified for NT
+           6-Nov-2006	(vande02) Updated canon due to expected E_US100F 
+				  resulting in a different location in the
+				  output, removed drop syntax in program to
+				  simplify canon (objects are dropped via the
+				  SQL session), added copyright, header cleanup.
+*/
+? fill efa34.sc 
+!!
+exec sql include sqlca;
+
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever not found call sqlprint;
+exec sql whenever sqlwarning call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+main(argc, argv)
+exec sql begin declare section;
+  int  argc;
+  char **argv;
+exec sql end declare section;
+{
+	exec sql connect :argv[1];
+	efa34_1();
+	efa34_2();
+	exec sql disconnect;
+
+} /* main */
+
+efa34_1()
+{
+exec sql begin declare section;
+  int  i;
+  char c[81];
+exec sql end declare section;
+
+	printf ("\ntest 1: testing coercion between integer and character\n\n");
+
+	exec sql create procedure efa34_1 (i   integer not null with default,
+					   c   varchar(81) not null with default) as
+        declare mesg_buf 	varchar(81) not null with default;
+	begin
+                message i;
+                i = int4(c) + 1000;
+		mesg_buf = 'value of i = ' + varchar(i);
+                message mesg_buf;
+
+                message c;
+		c = c + varchar(i);
+		mesg_buf = 'value of c = ' + c;
+                message mesg_buf;
+	end;
+
+	i = 12345;
+	printf ("passing integer   = %d\n",i);
+
+	strcpy (c, "678");
+	printf ("passing char      = %s\n",c);
+
+	exec sql execute procedure efa34_1 (i = byref(:i), c = byref(:c));
+
+	printf ("returned i        = %d\n",i);
+	printf ("returned c        = %s\n\n",c);
+
+	strcpy (c, "ab");
+	printf ("passing char = %s\n",c);
+
+	exec sql execute procedure efa34_1 (c = byref(:c));
+
+	printf ("returned c        = %s\n",c);
+	/* the value will not be changed due to existing of error within dbproc */
+
+	exec sql commit;
+
+} /* efa34_1 */
+
+efa34_2()
+{
+exec sql begin declare section;
+  float  f4, deci;
+exec sql end declare section;
+
+	printf ("\n------------------------------------------------------\n\n");
+	printf ("\ntest 2.1: testing coercion between float and decimal\n\n");
+
+	exec sql create procedure efa34_2_2 (f4   f4 not null with default,
+					     deci decimal(6,3) not null with default) as
+        declare mesg_buf 	varchar(81) not null with default;
+	begin
+		mesg_buf = varchar(f4);
+                message mesg_buf;
+		f4 = 555.55; 
+		mesg_buf = 'return varchar(f4) = ' + varchar(f4);
+                message mesg_buf;
+
+		mesg_buf = varchar(deci);
+                message mesg_buf;
+		deci = 66.666;
+		mesg_buf = 'return varchar(deci) = ' + varchar(deci);
+                message mesg_buf;
+
+		f4 = decimal(f4);
+                mesg_buf = 'return decimal(f4) = ' + varchar(f4);
+                message mesg_buf;
+
+                deci = float4(deci);
+                mesg_buf = 'return float4(deci) = ' + varchar(deci);
+                message mesg_buf;
+	end;
+
+	exec sql create procedure efa34_2_1 (f4   f4 not null with default,
+					     deci decimal(6,3) not null with default,
+                                             dobyref integer not null with default) -
+as
+        declare mesg_buf 	varchar(81) not null with default;
+	begin
+		f4 = 33.333;
+		deci = 44.444;
+                if dobyref = 1 then
+		  execute procedure efa34_2_2(f4 = byref(:f4), deci = byref(:deci));
+                else 
+                  execute procedure efa34_2_2(f4 = :f4, deci = :deci);
+                endif;
+	end;
+
+
+	f4 = 111.111;
+	printf ("passing float     = %6.3f\n",f4);
+
+	deci = 222.222;
+	printf ("passing decimal   = %6.3f\n",deci);
+
+	exec sql execute procedure efa34_2_1 (f4 = byref(:f4), deci = byref(:deci), dobyref-
+ = 0);
+	printf ("returned f4       = %6.3f\n",f4);
+	printf ("returned decimal  = %6.3f\n\n",deci);
+
+        exec sql execute procedure efa34_2_1 (f4 = byref(:deci), deci = byref(:f4), -
+dobyref = 1);
+        printf ("returned f4       = %6.3f\n",f4);
+        printf ("returned decimal  = %6.3f\n\n",deci);
+
+	exec sql commit;
+
+} /* efa34_2 */
+!!
+? sepesqlc efa34.sc 
+<<
+ESQL efa34.sc:
+>>
+? sepcc efa34.c 
+<<
+>>
+<<
+efa34.c
+>>
+? seplnk efa34 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* drop procedure efa34_1\g
+<<
+~
+>>
+* drop procedure efa34_2_2\g
+<<
+~
+>>
+* drop procedure efa34_2_1\g
+<<
+~
+>>
+* \q
+<<
+>>
+? run efa34.exe SEPPARAMDB 
+<<
+
+test 1: testing coercion between integer and character
+
+passing integer   = 12345
+passing char      = 678
+MESSAGE: 12345
+MESSAGE 0: value of i = 1678
+MESSAGE 0: 678
+MESSAGE 0: value of c = 6781678
+returned i        = 1678
+returned c        = 6781678
+
+passing char = ab
+MESSAGE: 0
+MESSAGE 0: value of i = 0
+MESSAGE 0: ab
+MESSAGE 0: value of c = ab0
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Mon Nov  6 09:01:28 2006)
+returned c        = ab
+
+------------------------------------------------------
+
+
+test 2.1: testing coercion between float and decimal
+
+passing float     = 111.111
+passing decimal   = 222.222
+MESSAGE 0: 33.333
+MESSAGE 0: return varchar(f4) = 555.550
+MESSAGE 0: 44.444
+MESSAGE 0: return varchar(deci) = 66.666
+MESSAGE 0: return decimal(f4) = 555.000
+MESSAGE 0: return float4(deci) = 66.666
+returned f4       = 33.333
+returned decimal  = 44.444
+
+MESSAGE 0: 33.333
+MESSAGE 0: return varchar(f4) = 555.550
+MESSAGE 0: 44.444
+MESSAGE 0: return varchar(deci) = 66.666
+MESSAGE 0: return decimal(f4) = 555.000
+MESSAGE 0: return float4(deci) = 66.666
+returned f4       = 66.666
+returned decimal  = 555.000
+
+>>
+? delete efa34.c 
+<<
+~
+>>
+? delete efa34.o 
+<<
+~
+>>
+? delete efa34.obj 
+<<
+~
+>>
+? delete efa34.exe 
+<<
+~
+>>
+
+
+Ending at: Mon Nov  6 09:01:38 2006

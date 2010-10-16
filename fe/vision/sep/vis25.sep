@@ -1,0 +1,1664 @@
+/*
+	Test Name: oma32.sep
+	Time: Tue Jul  3 18:26:17 1990
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : oma32
+	Module  : em2602
+	Filename: oma32.sep
+	Purpose	:
+	Input Files  :
+	Output Files :
+	Database     :	SEPPARAMDB
+	Tables       :	inventory, product_units
+	Synopsis     :	Passing paramters between Vision frames
+
+History :  3-Jul-1990	Created				Author: saundra
+          21-Jul-1992	(brenda) Bug 38096 is fixed so this test will now run
+                        on UNIX.  Accepted alternate canons for different SEP
+                        behavior on UNIX and VMS (ie. extra lines and partial
+                        screen capture).  
+          26-Aug-1993	(brenda) Updated canons to include new Import menuitem
+                        and new Local Procedure option.  Updated canon for 
+                        change in screen display when including a source file.
+          06-Feb-1997	(vissu01)	modified for NT
+          04-Sep-1997	(cheis01)	add alternate canons for NT.
+          07-Jul-2001	(rogch01)
+		Remove NT canons and make Unix canons generic to allow test to
+		run clean in 24 lines.
+           3-NOV-2003	(Sinra04)  command (^^ end`CR'y`CR'end`CR') broken into
+				   two seperate commands and technique of `ESC'
+				   `CR' applied to avoid fetching diffs.
+
+*/
+? delobj SEPPARAMDB -form a2602a a2602b b2602 u2602 app2602 
+<<
+~
+>>
+? delobj SEPPARAMDB -application app2602 
+<<
+~
+>>
+? fill u2602.tmp 
+!!
+/*
+**  Frame:         u2602
+**  Form:          u2602
+**  Description:   First Update frame in application 2602
+**
+**  Source File:   u2602.osq
+**  Frame Type:    Update
+**  Template File: msupdate.tf, Version: 1.0
+*/
+INITIALIZE (
+    /* hidden versions of primary keys & join fields */
+    iih_prod_code = I4 WITH NULL,
+
+    /* flag fields needed for NULLable key column(s) */
+    iiNullKeyFlag1 = INTEGER(2) NOT NULL,
+
+    /* working variables needed by template file */
+    IIchar1     = CHAR(1),              /* holds answer to Yes/No prompts */
+    IIerrorno   = INTEGER(4),           /* holds DBMS statement error nmbr */
+    IIint       = INTEGER(4),           /* general purpose integer */
+    IIint2      = INTEGER(4),           /* general purpose integer */
+    IIobjname   = CHAR(32) NOT NULL,    /* holds an object name */
+    IIrowcount  = INTEGER(4),           /* holds DBMS statement row count */
+    IIrowsfound = CHAR(1),              /* tells if query selected >0 rows */
+    IIupdrules  = INTEGER(2)            /* update rule status */
+        ) =
+BEGIN
+    IIretval = 1;       /* Success. This built-in global is used for
+                        ** communication between frames.
+                        */
+    SET_FORMS FRS (VALIDATE(NEXTFIELD) = 1, VALIDATE(PREVIOUSFIELD) = 1,
+        ACTIVATE(NEXTFIELD) = 1, ACTIVATE(PREVIOUSFIELD) = 1,
+        ACTIVATE(MENUITEM) = 1,  ACTIVATE(KEYS) = 1,
+        GETMESSAGES = 0);
+    /* query mode required for qualification() function */
+    SET_FORMS FORM (MODE = 'fill');
+
+    message 'I changed the mode from update to fill and removed whouse' +
+	    ' from display.';
+
+    sleep 2;
+
+    COMMIT WORK;
+    SET AUTOCOMMIT OFF;
+END
+
+'Go' (EXPLANATION = 'Run query'), KEY FRSKEY4 =
+BEGIN
+    IIrowsfound = 'n';
+
+    MESSAGE 'Selecting data . . .';
+
+						    /*# BEGIN Select\Master */
+    u2602 := SELECT
+    prod_code = m.prod_code, iih_prod_code = m.prod_code, 
+      quantity = m.quantity, wsale_price = m.wsale_price, 
+      retail_price = m.retail_price 
+    FROM inventory m 
+    WHERE
+    QUALIFICATION(m.prod_code = prod_code, m.quantity = quantity, 
+      m.wsale_price = wsale_price, m.retail_price = retail_price) 
+
+						      /*# END Select\Master */
+    BEGIN
+    INITIALIZE =
+    BEGIN
+        COMMIT WORK;                    /* release locks */
+        /* submenu temporarily puts form in update mode */
+        IIrowsfound = 'y';    /* indicate that >0 rows qualified */
+        SET_FORMS FORM (CHANGE = 0);    /* typing query Qual set change=1 */
+    END
+    
+    'Next' (VALIDATE = 0, ACTIVATE = 0,
+            EXPLANATION = 'Display next row of selected data'),
+            KEY FRSKEY4 (VALIDATE = 0, ACTIVATE = 0) =
+    BEGIN
+        INQUIRE_FORMS FORM (IIint = CHANGE);
+        IF (IIint = 1) THEN
+            IIchar1 = PROMPT
+                'Do you wish to "Next" without saving changes (y/n)? ';
+            IF (UPPERCASE(:IIchar1) != 'Y') THEN
+                MESSAGE 'Select menuitem "Save" to save changes.';
+                SLEEP 2;
+                RESUME MENU;
+            ENDIF;
+        ENDIF;
+        SET_FORMS FORM (CHANGE = 0);
+        NEXT;
+        COMMIT WORK;    /* Release any locks acquired while selecting
+                        ** data for the "NEXT" statement.
+                        */
+    END
+    
+    'Save' (ACTIVATE = 1,
+            EXPLANATION = 'Update database with current screen data'),
+            KEY FRSKEY8 (ACTIVATE = 1) =
+    BEGIN
+    
+        INQUIRE_FORMS FORM (IIint = CHANGE);
+        IF (IIint = 1) THEN
+            VALIDATE;   /* validate all fields on form */
+    
+            MESSAGE 'Saving changes . . .';
+    
+            /* set NULLable-key flag fields */
+            IF (iih_prod_code IS NULL) THEN
+                iiNullKeyFlag1 = 1;
+            ELSE
+                iiNullKeyFlag1 = 0;
+            ENDIF;
+            
+            REPEATED UPDATE inventory
+            SET prod_code = :prod_code, quantity = :quantity, 
+              wsale_price = :wsale_price, retail_price = :retail_price, 
+              whouse_no = :whouse_no 
+            WHERE ((:iiNullKeyFlag1 = 1 AND prod_code IS NULL) OR 
+              (prod_code = :iih_prod_code)) ; 
+            
+            INQUIRE_INGRES (IIerrorno = ERRORNO);
+            IF IIerrorno != 0 THEN
+                ROLLBACK WORK;
+                MESSAGE 'An error occurred while saving your changes to this'
+                      + ' (master) data. Details about the error were'
+                      + ' described by the message immediately preceding'
+                      + ' this one. The "Save" operation was not performed.'
+                      + ' Please correct the error and select "Save" again.'
+                      WITH STYLE = POPUP;
+                RESUME;
+            ENDIF;
+    
+            COMMIT WORK;
+            SET_FORMS FORM (CHANGE = 0);
+    
+            NEXT;
+            COMMIT WORK;    /* Release any locks acquired while selecting
+                            ** data for the "NEXT" statement.
+                            */
+        ELSE
+            MESSAGE 'No changes to Save.';
+            SLEEP 2;
+        ENDIF;
+    END                     /* end of 'Save' menuitem */
+    
+    'Delete' (VALIDATE = 0, ACTIVATE = 0,
+            EXPLANATION = 'Delete current screen data from database') =
+    BEGIN
+        IIchar1 = PROMPT
+            'Delete this data from the Database (y/n)?';
+        IF (UPPERCASE(:IIchar1) != 'Y') THEN
+            RESUME;
+        ENDIF;
+    
+        MESSAGE 'Deleting . . .';
+    
+        /* set NULLable-key flag fields */
+        IF (iih_prod_code IS NULL) THEN
+            iiNullKeyFlag1 = 1;
+        ELSE
+            iiNullKeyFlag1 = 0;
+        ENDIF;
+        
+        REPEATED DELETE FROM inventory
+        WHERE ((:iiNullKeyFlag1 = 1 AND prod_code IS NULL) OR 
+          (prod_code = :iih_prod_code)) ; 
+        
+        INQUIRE_INGRES (IIerrorno = ERRORNO);
+        IF (IIerrorno != 0) THEN
+            ROLLBACK WORK;
+            MESSAGE 'An error occurred while Deleting this (master) data.'
+                  + ' Details about the error were described by the'
+                  + ' message immediately preceding this one.'
+                  + ' This data was not Deleted.'
+                  + ' Correct the error and select "Delete" again.'
+                  WITH STYLE = POPUP;
+            RESUME;
+        ENDIF;
+    
+        COMMIT WORK;
+        SET_FORMS FORM (CHANGE = 0);
+    
+        NEXT;       /* Data Deleted. Get Next screen of data. */
+    
+        COMMIT WORK;    /* Release any locks acquired while selecting
+                        ** data for the "NEXT" statement.
+                        */
+    END    /* end of 'Delete' menuitem */
+    
+    'ListChoices' (VALIDATE = 0, ACTIVATE = 0,
+            EXPLANATION = 'Show valid values for current field'),
+            KEY FRSKEY10 (VALIDATE = 0, ACTIVATE = 0) =
+    BEGIN
+        IIint = -1;
+        IIint = CALLPROC help_field();
+    
+        IF (IIint > 0) THEN
+            /* value was selected onto form */
+            SET_FORMS FORM (CHANGE = 1);
+        ENDIF;
+    END
+
+    'Help' (VALIDATE = 0, ACTIVATE = 0,
+        EXPLANATION = 'Display help for this frame'),
+        KEY FRSKEY1 (VALIDATE = 0, ACTIVATE = 0) =
+    BEGIN
+        HELPFILE 'First Update frame in application 2602'
+        	'/pv1/testenv/fe/emerald/sep/u2602.hlp';
+    END
+
+    'End' (VALIDATE = 0, ACTIVATE = 0,
+        EXPLANATION = 'Return from Update mode to Query mode'),
+        KEY FRSKEY3 (VALIDATE = 0, ACTIVATE = 0) =
+    BEGIN
+        INQUIRE_FORMS FORM (IIint = CHANGE);
+        IF (IIint = 1) THEN
+            IIchar1 = PROMPT 'Do you wish to leave Update'
+                           + ' without saving changes (y/n)? ';
+            IF (UPPERCASE(:IIchar1) != 'Y') THEN
+                MESSAGE 'Select menuitem "Save" to save changes.';
+                SLEEP 2;
+                RESUME MENU;
+            ENDIF;
+        ENDIF;
+        ENDLOOP;        /* exit submenu */
+    END
+    END;        /* end of submenu in 'Go' menuitem */
+
+    /* display mode reverts to prior mode ('query') after submenu */
+    IF (IIrowsfound = 'y') THEN
+        CLEAR FIELD ALL;
+        SET_FORMS FORM (CHANGE = 0);
+    ENDIF;
+END /* end of 'Go' menuitem */
+
+'Clear' (VALIDATE = 0, ACTIVATE = 0, EXPLANATION = 'Clear all fields') =
+BEGIN
+    CLEAR FIELD ALL;
+END
+
+'ListChoices' (VALIDATE = 0, ACTIVATE = 0,
+        EXPLANATION = 'Show valid values for current field'),
+        KEY FRSKEY10 (VALIDATE = 0, ACTIVATE = 0) =
+BEGIN
+    IIint = -1;
+    IIint = CALLPROC help_field();
+
+    IF (IIint > 0) THEN
+        /* value was selected onto form */
+        SET_FORMS FORM (CHANGE = 1);
+    ENDIF;
+END
+
+'Help' (VALIDATE = 0, ACTIVATE = 0,
+        EXPLANATION = 'Display help for this frame'),
+        KEY FRSKEY1 (VALIDATE = 0, ACTIVATE = 0) =
+BEGIN
+    HELPFILE 'First Update frame in application 2602'
+    	'/pv1/testenv/fe/emerald/sep/u2602.hlq';
+END
+
+'TopFrame' (VALIDATE = 0, ACTIVATE = 0,
+        EXPLANATION = 'Return to top frame in application') =
+BEGIN
+    IIretval = 2;       /* return to top frame */
+    RETURN ;
+END
+
+'End' (VALIDATE = 0, ACTIVATE = 0,
+        EXPLANATION = 'Return to previous frame'),
+        KEY FRSKEY3 (VALIDATE = 0, ACTIVATE = 0) =
+BEGIN
+    RETURN ;
+END
+!!
+? vision -e SEPPARAMDB 
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ create`CR'app2602`TAB'Parameter passing between frames`TAB'single-line`ESC'
+<<
+~
+>>
+^^ ok`CR'create`CR'a`CR'A2602a`TAB'First Append frame in application 2602`TAB'produc-
+t_units`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+
+%% MENU RESPONSE: OK
+%% MENU:   OK  Cancel  Duplicate  Import  ListChoices  Help
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "OK"
+
+%% Saving Append Frame 'a2602a' . . .
+%% Saving changes to the Visual Query . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vision - Visual Query Editor                                                    |
+|Frame: a2602a                                                                   |
+|        +-----------<Append>+  Display on Form                                  |
+|        |product_units      | /                                                 |
+|        |-------------------+---Assignment/Default----------+                   |
+|        |prod_code          |_y|                             |                   |
+|        |sales_price        |y|                             |                   |
+|        |unit_size          |y|                             |                   |
+|        |vendorno           |y|                             |                   |
+|        +---------------------------------------------------+                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  AddTable  DelTable  Edit  AddJoin  DelJoin  NextTable  TableDef  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'`ESC'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   AddTable  DelTable  Edit  AddJoin  DelJoin  NextTable  TableDef  >
+%% MENU AT POSITION `11' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `11' is "End"
+
+%% Saving Append Frame 'a2602a' . . .
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|Vision - Application Flow Diagram                                               |
+|Editing: app2602             +-----------New+                                   |
+|                             |   app2602    |                                   |
+|                             +--------<Menu>+                                   |
+|                                |                                               |
+|                                |                                               |
+|                       +--------+                                               |
+|                     A2602a                                                     |
+|                       |                                                        |
+|                    +-----------New+                                            |
+|                    |    a2602a    |                                            |
+|                    +------<Append>+_                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Create  Destroy  Edit  Compile  Go  Insert  Remove  MoreInfo  >               |
+__________________________________________________________________________________
+@@
+
+%% Shifting menu items in from the RIGHT
+>>
+^^ create`CR'd`CR'a`CR'A2602b`TAB'Second Append frame in application 2602`TAB'invent-
+ory`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+
+%% MENU RESPONSE: OK
+%% MENU:   OK  Cancel  Duplicate  Import  ListChoices  Help
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "OK"
+
+%% Saving Append Frame 'a2602b' . . .
+%% Saving changes to the Visual Query . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vision - Visual Query Editor                                                    |
+|Frame: a2602b                                                                   |
+|        +-----------<Append>+  Display on Form                                  |
+|        |inventory          | /                                                 |
+|        |-------------------+---Assignment/Default----------+                   |
+|        |prod_code          |_y|                             |                   |
+|        |quantity           |y|                             |                   |
+|        |wsale_price        |y|                             |                   |
+|        |retail_price       |y|                             |                   |
+|        |whouse_no          |y|                             |                   |
+|        +---------------------------------------------------+                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  AddTable  DelTable  Edit  AddJoin  DelJoin  NextTable  TableDef  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'create`CR'`CR'b`CR'B2602`TAB'First Browse frame in application 2602`TAB'in-
+ventory`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+
+%% MENU RESPONSE: OK
+%% MENU:   OK  Cancel  Duplicate  Import  ListChoices  Help
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "OK"
+
+%% Saving Browse Frame 'b2602' . . .
+%% Saving changes to the Visual Query . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vision - Visual Query Editor                                                    |
+|Frame: b2602                                                                    |
+|        +-----------<Browse>+  Display on Form                                  |
+|        |inventory          | /                                                 |
+|        |-------------------+---Query Restriction------------Sort+              |
+|        |prod_code          |_y|                             |  | |              |
+|        |quantity           |y|                             |  | |              |
+|        |wsale_price        |y|                             |  | |              |
+|        |retail_price       |y|                             |  | |              |
+|        |whouse_no          |y|                             |  | |              |
+|        +--------------------------------------------------------+              |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  AddTable  DelTable  Edit  AddJoin  DelJoin  NextTable  TableDef  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'create`CR'l`CR'u`CR'U2602`TAB'First Update frame in application 2602`TAB'i-
+nventory`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+
+%% MENU RESPONSE: OK
+%% MENU:   OK  Cancel  Duplicate  Import  ListChoices  Help
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "OK"
+
+%% Saving Update Frame 'u2602' . . .
+%% Saving changes to the Visual Query . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vision - Visual Query Editor                                                    |
+|Frame: u2602                                                                    |
+|        +-----------<Update>+  Display on Form    Insert (y/n): _n               |
+|        |inventory          | /                   Delete (y/n): y               |
+|        |-------------------+---Query Restriction------------Sort+              |
+|        |prod_code          |y|                             |  | |              |
+|        |quantity           |y|                             |  | |              |
+|        |wsale_price        |y|                             |  | |              |
+|        |retail_price       |y|                             |  | |              |
+|        |whouse_no          |y|                             |  | |              |
+|        +--------------------------------------------------------+              |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  AddTable  DelTable  Edit  AddJoin  DelJoin  NextTable  TableDef  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'edit`CR'f`CR'`ESC'
+<<
+~
+>>
+^^ `^J'prod_code`TAB'prod_code`ESC'
+<<
+
+%% MENU RESPONSE: 
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vision - Appl+-----------------------------------------------------------------+|
+|Editing: app2| Parameters passed from parent frame to current frame:           ||
+|  +----------|                                                                 ||
+|  |Frame Edit|  Parent Frame: a2602a                                           ||
+|  |----------| Current Frame: u2602                                            ||
+|  |Visual Que|-----------------------------------------------------------------||
+|  |Data Entry|Field Name or                   |Field Name In                   ||
+|  |Menuitem T|Expression in Parent      assign|Current (called)                ||
+|  |Frame Para|(calling) Frame           to -->|Frame                           ||
+|  |Local Vari|--------------------------------+--------------------------------||
+|  |Local Proc|_                                |                                ||
+|  |Global Com|                                |                                ||
+|  |Escape Cod|                                |                                ||
+|  |Source Cod|                                |                                ||
+|  |Errors    |                                |                                ||
+|  +----------|                                |                                ||
+|    |        +-----------------------------------------------------------------+|
+| +-----------New+   +-----------New+   +-----------New+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Insert  Delete  Move  Variables  ListChoices  Help  Cancel  End               |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD 
+##
+__________________________________________________________________________________
+|Vision - Appl+-----------------------------------------------------------------+|
+|Editing: app2| Parameters passed from parent frame to current frame:           ||
+|  +----------|                                                                 ||
+|  |Frame Edit|  Parent Frame: a2602a                                           ||
+|  |----------| Current Frame: u2602                                            ||
+|  |Visual Que|-----------------------------------------------------------------||
+|  |Data Entry|Field Name or                   |Field Name In                   ||
+|  |Menuitem T|Expression in Parent      assign|Current (called)                ||
+|  |Frame Para|(calling) Frame           to -->|Frame                           ||
+|  |Local Vari|--------------------------------+--------------------------------||
+|  |Local Proc|prod_code_                       |                                ||
+|  |Global Com|                                |                                ||
+|  |Escape Cod|                                |                                ||
+|  |Source Cod|                                |                                ||
+|  |Errors    |                                |                                ||
+|  +----------|                                |                                ||
+|    |        +-----------------------------------------------------------------+|
+| +-----------New+   +-----------New+   +-----------New+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Insert  Delete  Move  Variables  ListChoices  Help  Cancel  End               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD 
+##
+__________________________________________________________________________________
+|Vision - Appl+-----------------------------------------------------------------+|
+|Editing: app2| Parameters passed from parent frame to current frame:           ||
+|  +----------|                                                                 ||
+|  |Frame Edit|  Parent Frame: a2602a                                           ||
+|  |----------| Current Frame: u2602                                            ||
+|  |Visual Que|-----------------------------------------------------------------||
+|  |Data Entry|Field Name or                   |Field Name In                   ||
+|  |Menuitem T|Expression in Parent      assign|Current (called)                ||
+|  |Frame Para|(calling) Frame           to -->|Frame                           ||
+|  |Local Vari|--------------------------------+--------------------------------||
+|  |Local Proc|prod_code                       |prod_code                       ||
+|  |Global Com|                                |                                ||
+|  |Escape Cod|                                |                                ||
+|  |Source Cod|                                |                                ||
+|  |Errors    |                                |                                ||
+|  +----------|                                |                                ||
+|    |        +-----------------------------------------------------------------+|
+| +-----------New+   +-----------New+   +-----------New+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|_  Insert  Delete  Move  Variables  ListChoices  Help  Cancel  End               |
+__________________________________________________________________________________
+@@
+>>
+^^ end`CR'`^H'edit`CR'f`CR'`ESC'
+<<
+~
+>>
+^^ `^J'prod_code`TAB'prod_code`ESC'
+<<
+
+%% MENU RESPONSE: 
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vision - Appl+-----------------------------------------------------------------+|
+|Editing: app2| Parameters passed from parent frame to current frame:           ||
+|  +----------|                                                                 ||
+|  |Frame Edit|  Parent Frame: a2602a                                           ||
+|  |----------| Current Frame: a2602b                                           ||
+|  |Visual Que|-----------------------------------------------------------------||
+|  |Data Entry|Field Name or                   |Field Name In                   ||
+|  |Menuitem T|Expression in Parent      assign|Current (called)                ||
+|  |Frame Para|(calling) Frame           to -->|Frame                           ||
+|  |Local Vari|--------------------------------+--------------------------------||
+|  |Local Proc|_                                |                                ||
+|  |Global Com|                                |                                ||
+|  |Escape Cod|                                |                                ||
+|  |Source Cod|                                |                                ||
+|  |Errors    |                                |                                ||
+|  +----------|                                |                                ||
+|    |        +-----------------------------------------------------------------+|
+| +-----------New+   +-----------New+   +-----------New+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Insert  Delete  Move  Variables  ListChoices  Help  Cancel  End               |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD 
+##
+__________________________________________________________________________________
+|Vision - Appl+-----------------------------------------------------------------+|
+|Editing: app2| Parameters passed from parent frame to current frame:           ||
+|  +----------|                                                                 ||
+|  |Frame Edit|  Parent Frame: a2602a                                           ||
+|  |----------| Current Frame: a2602b                                           ||
+|  |Visual Que|-----------------------------------------------------------------||
+|  |Data Entry|Field Name or                   |Field Name In                   ||
+|  |Menuitem T|Expression in Parent      assign|Current (called)                ||
+|  |Frame Para|(calling) Frame           to -->|Frame                           ||
+|  |Local Vari|--------------------------------+--------------------------------||
+|  |Local Proc|prod_code_                       |                                ||
+|  |Global Com|                                |                                ||
+|  |Escape Cod|                                |                                ||
+|  |Source Cod|                                |                                ||
+|  |Errors    |                                |                                ||
+|  +----------|                                |                                ||
+|    |        +-----------------------------------------------------------------+|
+| +-----------New+   +-----------New+   +-----------New+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Insert  Delete  Move  Variables  ListChoices  Help  Cancel  End               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD 
+##
+__________________________________________________________________________________
+|Vision - Appl+-----------------------------------------------------------------+|
+|Editing: app2| Parameters passed from parent frame to current frame:           ||
+|  +----------|                                                                 ||
+|  |Frame Edit|  Parent Frame: a2602a                                           ||
+|  |----------| Current Frame: a2602b                                           ||
+|  |Visual Que|-----------------------------------------------------------------||
+|  |Data Entry|Field Name or                   |Field Name In                   ||
+|  |Menuitem T|Expression in Parent      assign|Current (called)                ||
+|  |Frame Para|(calling) Frame           to -->|Frame                           ||
+|  |Local Vari|--------------------------------+--------------------------------||
+|  |Local Proc|prod_code                       |prod_code                       ||
+|  |Global Com|                                |                                ||
+|  |Escape Cod|                                |                                ||
+|  |Source Cod|                                |                                ||
+|  |Errors    |                                |                                ||
+|  +----------|                                |                                ||
+|    |        +-----------------------------------------------------------------+|
+| +-----------New+   +-----------New+   +-----------New+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|_  Insert  Delete  Move  Variables  ListChoices  Help  Cancel  End               |
+__________________________________________________________________________________
+@@
+>>
+^^ end`CR'`^L'`^L'edit`CR'f`CR'`ESC'
+<<
+~
+>>
+^^ `^J'prod_code`TAB'prod_code`ESC'
+<<
+
+%% MENU RESPONSE: 
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vision - Appl+-----------------------------------------------------------------+|
+|Editing: app2| Parameters passed from parent frame to current frame:           ||
+|  +----------|                                                                 ||
+|  |Frame Edit|  Parent Frame: a2602a                                           ||
+|  |----------| Current Frame: b2602                                            ||
+|  |Visual Que|-----------------------------------------------------------------||
+|  |Data Entry|Field Name or                   |Field Name In                   ||
+|  |Menuitem T|Expression in Parent      assign|Current (called)                ||
+|  |Frame Para|(calling) Frame           to -->|Frame                           ||
+|  |Local Vari|--------------------------------+--------------------------------||
+|  |Local Proc|_                                |                                ||
+|  |Global Com|                                |                                ||
+|  |Escape Cod|                                |                                ||
+|  |Source Cod|                                |                                ||
+|  |Errors    |                                |                                ||
+|  +----------|                                |                                ||
+|    |        +-----------------------------------------------------------------+|
+| +-----------New+   +-----------New+   +-----------New+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Insert  Delete  Move  Variables  ListChoices  Help  Cancel  End               |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD 
+##
+__________________________________________________________________________________
+|Vision - Appl+-----------------------------------------------------------------+|
+|Editing: app2| Parameters passed from parent frame to current frame:           ||
+|  +----------|                                                                 ||
+|  |Frame Edit|  Parent Frame: a2602a                                           ||
+|  |----------| Current Frame: b2602                                            ||
+|  |Visual Que|-----------------------------------------------------------------||
+|  |Data Entry|Field Name or                   |Field Name In                   ||
+|  |Menuitem T|Expression in Parent      assign|Current (called)                ||
+|  |Frame Para|(calling) Frame           to -->|Frame                           ||
+|  |Local Vari|--------------------------------+--------------------------------||
+|  |Local Proc|prod_code_                       |                                ||
+|  |Global Com|                                |                                ||
+|  |Escape Cod|                                |                                ||
+|  |Source Cod|                                |                                ||
+|  |Errors    |                                |                                ||
+|  +----------|                                |                                ||
+|    |        +-----------------------------------------------------------------+|
+| +-----------New+   +-----------New+   +-----------New+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Insert  Delete  Move  Variables  ListChoices  Help  Cancel  End               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD 
+##
+__________________________________________________________________________________
+|Vision - Appl+-----------------------------------------------------------------+|
+|Editing: app2| Parameters passed from parent frame to current frame:           ||
+|  +----------|                                                                 ||
+|  |Frame Edit|  Parent Frame: a2602a                                           ||
+|  |----------| Current Frame: b2602                                            ||
+|  |Visual Que|-----------------------------------------------------------------||
+|  |Data Entry|Field Name or                   |Field Name In                   ||
+|  |Menuitem T|Expression in Parent      assign|Current (called)                ||
+|  |Frame Para|(calling) Frame           to -->|Frame                           ||
+|  |Local Vari|--------------------------------+--------------------------------||
+|  |Local Proc|prod_code                       |prod_code                       ||
+|  |Global Com|                                |                                ||
+|  |Escape Cod|                                |                                ||
+|  |Source Cod|                                |                                ||
+|  |Errors    |                                |                                ||
+|  +----------|                                |                                ||
+|    |        +-----------------------------------------------------------------+|
+| +-----------New+   +-----------New+   +-----------New+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|_  Insert  Delete  Move  Variables  ListChoices  Help  Cancel  End               |
+__________________________________________________________________________________
+@@
+>>
+^^ end`CR'`^K'`^K'go`CR'
+<<
+~
+>>
+^^ a2602a`CR'409`TAB'1.39`TAB'1`TAB'9041`ESC'
+<<
+
+%% MENU RESPONSE: A2602a
+%% MENU:   A2602a  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "A2602a"
+
+%% Fetching 'a2602a' from the database ...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|              First Append frame in application 2602                Append Frame|
+|                                                                                |
+|   Prod Code: _                           Sales Price:                           |
+|   Unit Size:                               Vendorno:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >             |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Prod Code:
+##
+__________________________________________________________________________________
+|              First Append frame in application 2602                Append Frame|
+|                                                                                |
+|   Prod Code: 409_                        Sales Price:                           |
+|   Unit Size:                               Vendorno:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >             |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Sales Price:
+##
+__________________________________________________________________________________
+|              First Append frame in application 2602                Append Frame|
+|                                                                                |
+|   Prod Code: 409                        Sales Price: 1.39_                      |
+|   Unit Size:                               Vendorno:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >             |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Unit Size:
+##
+__________________________________________________________________________________
+|              First Append frame in application 2602                Append Frame|
+|                                                                                |
+|   Prod Code: 409                        Sales Price: $ 1.39                    |
+|   Unit Size: 1_                             Vendorno:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Vendorno:
+##
+__________________________________________________________________________________
+|              First Append frame in application 2602                Append Frame|
+|                                                                                |
+|   Prod Code: 409                        Sales Price: $ 1.39                    |
+|   Unit Size: 1                             Vendorno: 9041_                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >             |
+__________________________________________________________________________________
+@@
+>>
+^^ a2602b`CR'`ESC'
+<<
+
+%% MENU RESPONSE: A2602b
+%% MENU:   A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "A2602b"
+
+%% Fetching 'a2602b' from the database ...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|             Second Append frame in application 2602                Append Frame|
+|                                                                                |
+|   Prod Code: _409                           Quantity:                           |
+| Wsale Price:                           Retail Price:                           |
+|   Whouse No:                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Save  Clear  ListChoices  Help  TopFrame  End                                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ u2602`CR'`ESC'
+<<
+
+%% MENU RESPONSE: U2602
+%% MENU:   A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "U2602"
+
+%% Fetching 'u2602' from the database ...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|              First Update frame in application 2602                Update Frame|
+|                                                                                |
+|   Prod Code: _409                           Quantity:                           |
+| Wsale Price:                           Retail Price:                           |
+|   Whouse No:                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Go  Clear  ListChoices  Help  TopFrame  End                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ b2602`CR'`ESC'
+<<
+
+%% MENU RESPONSE: B2602
+%% MENU:   A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "B2602"
+
+%% Fetching 'b2602' from the database ...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|              First Browse frame in application 2602                Browse Frame|
+|                                                                                |
+|   Prod Code: _409                           Quantity:                           |
+| Wsale Price:                           Retail Price:                           |
+|   Whouse No:                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Go  Clear  ListChoices  Help  TopFrame  End                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ go`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   Go  Clear  ListChoices  Help  TopFrame  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Go"
+
+%% Selecting data . . .
+%% No rows retrieved
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|              First Browse frame in application 2602                Browse Frame|
+|                                                                                |
+|   Prod Code: _409                           Quantity:                           |
+| Wsale Price:                           Retail Price:                           |
+|   Whouse No:                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Go  Clear  ListChoices  Help  TopFrame  End                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'y`CR'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >
+%% MENU AT POSITION `8' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `8' is "End"
+
+%% PROMPT: Do you wish to leave Append without saving changes (y/n)? 
+
+%% PROMPT RESPONSE: y
+
+%%  
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                  Parameter passing between frames                    Menu Frame|
+|                                                                                |
+|           A2602a              First Append frame in application 2602_           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  A2602a  Help  End                                                             |
+__________________________________________________________________________________
+@@
+>>
+^^ end`CR'
+<<
+~
+>>
+^^ `ESC'`CR'
+<<
+
+%% Shifting menu items in from the RIGHT
+
+%% MENU RESPONSE: 
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|Vision - Application Flow Diagram                                               |
+|Editing: app2602             +--------------+                                   |
+|                             |   app2602    |                                   |
+|                             +--------<Menu>+                                   |
+|                                |                                               |
+|                                |                                               |
+|                       +--------+                                               |
+|                     A2602a                                                     |
+|                       |                                                        |
+|                    +--------------+                                            |
+|                    |    a2602a    |                                            |
+|                    +------<Append>+                                            |
+|                       |                                                        |
+|                       |                                                        |
+|    +------------------+------------------+                                     |
+|  A2602b             U2602              B2602                                   |
+|    |                  |                  |                                     |
+| +--------------+   +--------------+   +--------------+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|<  MoreInfo  Utilities  Catalog  Help  End  Quit  _                              |
+__________________________________________________________________________________
+@@
+>>
+^^ `^J'`^J'`^H'edit`CR's`CR'
+<<
+~
+>>
+^^ u2602.tmp`CR'y`CR'
+<<
+Enter name of file to be included: 
+source file was copied into target file
+ode File  | |                                                        |
+|  |Errors            |-+------------------+                                     |
+|  +------------------+2602              B2602                                   |
+|    |                  |                  |                                     |
+| +--------------+   +--------------+   +--------------+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Cancel  Help                                                          |
+__________________________________________________________________________________
+@@
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|Vision - Application Flow Diagram                                               |
+|Editing: app2602             +--------------+                                   |
+|                             |   app2602    |                                   |
+|                             +--------<Menu>+                                   |
+|                                |                                               |
+|                                |                                               |
+|                       +--------+                                               |
+|                     A2602a                                                     |
+|                       |                                                        |
+|                    +--------------+                                            |
+|                    |    a2602a    |                                            |
+|                    +------<Append>+                                            |
+|                       |                                                        |
+|                       |                                                        |
+|    +------------------+------------------+                                     |
+|  A2602b             U2602              B2602                                   |
+|    |                  |                  |                                     |
+| +--------------+   +--------Custom+   +--------------+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+_                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Create  Destroy  Edit  Compile  Go  Insert  Remove  MoreInfo  >               |
+__________________________________________________________________________________
+@@
+>>
+<<
+Enter name of file to be included: 
+source file was copied into target file
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|Vision - Application Flow Diagram                                               |
+|Editing: app2602             +--------------+                                   |
+|                             |   app2602    |                                   |
+|                             +--------<Menu>+                                   |
+|                                |                                               |
+|                                |                                               |
+|                       +--------+                                               |
+|                     A2602a                                                     |
+|                       |                                                        |
+|                    +--------------+                                            |
+|                    |    a2602a    |                                            |
+|                    +------<Append>+                                            |
+|                       |                                                        |
+|                       |                                                        |
+|    +------------------+------------------+                                     |
+|  A2602b             U2602              B2602                                   |
+|    |                  |                  |                                     |
+| +--------------+   +--------Custom+   +--------------+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+_                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Create  Destroy  Edit  Compile  Go  Insert  Remove  MoreInfo  >               |
+__________________________________________________________________________________
+@@
+>>
+<< IF (VMS) 
+Enter name of file to be included: 
+source file was copied into target file
+--<Update>+   +------<Browse>+                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Cancel  Help                                                          |
+__________________________________________________________________________________
+@@
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|Vision - Application Flow Diagram                                               |
+|Editing: app2602             +--------------+                                   |
+|                             |   app2602    |                                   |
+|                             +--------<Menu>+                                   |
+|                                |                                               |
+|                                |                                               |
+|                       +--------+                                               |
+|                     A2602a                                                     |
+|                       |                                                        |
+|                    +--------------+                                            |
+|                    |    a2602a    |                                            |
+|                    +------<Append>+                                            |
+|                       |                                                        |
+|                       |                                                        |
+|    +------------------+------------------+                                     |
+|  A2602b             U2602              B2602                                   |
+|    |                  |                  |                                     |
+| +--------------+   +--------Custom+   +--------------+                         |
+| |    a2602b    |   |    u2602     |   |    b2602     |                         |
+| +------<Append>+   +------<Update>+   +------<Browse>+_                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Create  Destroy  Edit  Compile  Go  Insert  Remove  MoreInfo  >               |
+__________________________________________________________________________________
+@@
+>>
+^^ `^K'go`CR'
+<<
+~
+>>
+^^ 409`TAB'1.39`TAB'1`TAB'9041`ESC'
+<<
+
+%% CHANGED FIELD Prod Code:
+##
+__________________________________________________________________________________
+|              First Append frame in application 2602                Append Frame|
+|                                                                                |
+|   Prod Code: 409_                        Sales Price:                           |
+|   Unit Size:                               Vendorno:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >             |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Sales Price:
+##
+__________________________________________________________________________________
+|              First Append frame in application 2602                Append Frame|
+|                                                                                |
+|   Prod Code: 409                        Sales Price: 1.39_                      |
+|   Unit Size:                               Vendorno:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >             |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Unit Size:
+##
+__________________________________________________________________________________
+|              First Append frame in application 2602                Append Frame|
+|                                                                                |
+|   Prod Code: 409                        Sales Price: $ 1.39                    |
+|   Unit Size: 1_                             Vendorno:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Vendorno:
+##
+__________________________________________________________________________________
+|              First Append frame in application 2602                Append Frame|
+|                                                                                |
+|   Prod Code: 409                        Sales Price: $ 1.39                    |
+|   Unit Size: 1                             Vendorno: 9041_                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >             |
+__________________________________________________________________________________
+@@
+>>
+^^ u2602`CR'`ESC'
+<<
+
+%% MENU RESPONSE: U2602
+%% MENU:   A2602b  U2602  B2602  Save  Clear  ListChoices  Help  TopFrame  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "U2602"
+
+%% Fetching 'u2602' from the database ...
+%% I changed the mode from update to fill and removed whouse from display.
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|              First Update frame in application 2602                Update Frame|
+|                                                                                |
+|   Prod Code: _409                           Quantity:                           |
+| Wsale Price:                           Retail Price:                           |
+|   Whouse No:                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Go  Clear  ListChoices  Help  TopFrame  End                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'y`CR'
+<<
+~
+>>
+^^ quit`CR'
+<<
+~
+>>
+? delete a2602a.hlp 
+<<
+~
+>>
+? delete a2602a.osq 
+<<
+~
+>>
+? delete a2602b.hlp 
+<<
+~
+>>
+? delete a2602b.osq 
+<<
+~
+>>
+? delete app2602.hlp 
+<<
+~
+>>
+? delete app2602.osq 
+<<
+~
+>>
+? delete b2602.hlp 
+<<
+~
+>>
+? delete b2602.hlq 
+<<
+~
+>>
+? delete b2602.osq 
+<<
+~
+>>
+? delete u2602.hlp 
+<<
+~
+>>
+? delete u2602.hlq 
+<<
+~
+>>
+? delete u2602.osq 
+<<
+~
+>>
+? delobj SEPPARAMDB -form a2602a a2602b b2602 u2602 app2602 
+<<
+~
+>>
+? delobj SEPPARAMDB -application app2602 
+<<
+~
+>>
+
+
+Ending at: Mon Nov  3 17:00:11 2003

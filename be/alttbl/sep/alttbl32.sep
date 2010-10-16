@@ -1,0 +1,420 @@
+/*
+	Test Name: alttbl32.sep
+	Time: Sat Jan 25 01:24:58 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :
+	Output Files :
+	Database     :
+	Tables       :
+	Synopsis     :Alter table drop column should detect granted columns.
+
+ History: 25-Jan-1997	(wanya01)	Created
+ 03/23/99      (kamra01)  Modified the page_size to 4K instead of vpg_sz	 
+           3-Jul-2001	(BOIJA02) Create date isn't useful to us and the format
+			appears to make it diff. I've dropped it and recanonised
+*/
+? fill alttbl32.sql 
+!!
+/* testing drop column and column has been granted */
+set autocommit on \p\g
+drop table t \p\g
+create table t (col1 int, col2 int ) with page_size = 4096 \p\g
+insert into t values(1,2) \p\g
+insert into t values(4,3)  \p\g
+grant select on table t to public \p\g
+grant update(col2) on table t to public \p\g
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number \p\g
+alter table t drop column col2 restrict \p\g
+alter table t drop column col2 cascade \p\g
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number \p\g
+drop table t \p\g
+
+
+create table t (col1 int, col2 int , col3 int) with page_size = 4096 \p\g
+insert into t values(1,2,3) \p\g
+insert into t values(4,3,9)  \p\g
+grant select on table t to public \p\g
+grant update(col2,col3) on table t to public \p\g
+grant update (col1,col2 ) on table t to public \p\g 
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number \p\g
+alter table t drop column col2 restrict \p\g
+alter table t drop column col2 cascade \p\g
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number \p\g
+drop table t \p\g
+ 
+create table t (col1 int, col2 int ) with page_size = 4096 \p\g
+insert into t values(1,2) \p\g
+insert into t values(2,5) \p\g
+grant select on table t to ingres  \p\g
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number \p\g
+alter table t drop column col2 restrict \p\g
+alter table t drop column col2 cascade \p\g
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number \p\g
+drop table t \p\g
+
+create table t (col1 int, col2 int ) with page_size = 4096 \p\g
+grant update on table t to testenv  \p\g
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number \p\g
+alter table t drop column col2 restrict \p\g
+alter table t drop column col2 cascade \p\g
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number \p\g
+drop table t \p\g
+
+
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i alttbl32.sql 
+<<
+/* SQL Startup File */
+ /* testing drop column and column has been granted */
+set autocommit on 
+drop table t 
+E_US0AC1 DROP: 't' does not exist or is not owned by you.
+    (Tue Jul  3 12:36:23 2001)
+
+create table t (col1 int, col2 int ) with page_size = 4096 
+insert into t values(1,2) 
+(1 row)
+insert into t values(4,3)  
+(1 row)
+grant select on table t to public 
+grant update(col2) on table t to public 
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number 
+
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|object_name                     |object_owner                    |permit_grantor   -
+               |object|permit_user                     |permit|permit|text_sequence|-
+text_segment                                                                        -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|t                               |testenv                         |testenv          -
+               |T     |                                |     0|     2|            1|-
+grant select on table "testenv".t to public                                         -
+                                                                                    -
+                                                                        |
+|t                               |testenv                         |testenv          -
+               |T     |                                |     0|     3|            1|-
+grant update (col2) on table "testenv".t to public                                  -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+(2 rows)
+alter table t drop column col2 restrict 
+E_QE016B ALTER TABLE DROP COLUMN RESTRICT:  restricted destruction of base
+    table column cannot proceed as it  has one or more dependent objects
+    which would become abandoned.
+    (Tue Jul  3 12:36:24 2001)
+
+alter table t drop column col2 cascade 
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number 
+
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|object_name                     |object_owner                    |permit_grantor   -
+               |object|permit_user                     |permit|permit|text_sequence|-
+text_segment                                                                        -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|t                               |testenv                         |testenv          -
+               |T     |                                |     0|     2|            1|-
+grant select on table "testenv".t to public                                         -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+(1 row)
+drop table t 
+
+
+create table t (col1 int, col2 int , col3 int) with page_size = 4096 
+insert into t values(1,2,3) 
+(1 row)
+insert into t values(4,3,9)  
+(1 row)
+grant select on table t to public 
+grant update(col2,col3) on table t to public 
+grant update (col1,col2 ) on table t to public 
+ 
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number 
+
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|object_name                     |object_owner                    |permit_grantor   -
+               |object|permit_user                     |permit|permit|text_sequence|-
+text_segment                                                                        -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|t                               |testenv                         |testenv          -
+               |T     |                                |     0|     2|            1|-
+grant select on table "testenv".t to public                                         -
+                                                                                    -
+                                                                        |
+|t                               |testenv                         |testenv          -
+               |T     |                                |     0|     3|            1|-
+grant update (col3, col2) on table "testenv".t to public                            -
+                                                                                    -
+                                                                        |
+|t                               |testenv                         |testenv          -
+               |T     |                                |     0|     4|            1|-
+grant update (col2, col1) on table "testenv".t to public                            -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+(3 rows)
+alter table t drop column col2 restrict 
+E_QE016B ALTER TABLE DROP COLUMN RESTRICT:  restricted destruction of base
+    table column cannot proceed as it  has one or more dependent objects
+    which would become abandoned.
+    (Tue Jul  3 12:36:24 2001)
+
+alter table t drop column col2 cascade 
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number 
+
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|object_name                     |object_owner                    |permit_grantor   -
+               |object|permit_user                     |permit|permit|text_sequence|-
+text_segment                                                                        -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|t                               |testenv                         |testenv          -
+               |T     |                                |     0|     2|            1|-
+grant select on table "testenv".t to public                                         -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+(1 row)
+drop table t 
+ 
+create table t (col1 int, col2 int ) with page_size = 4096 
+insert into t values(1,2) 
+(1 row)
+insert into t values(2,5) 
+(1 row)
+grant select on table t to ingres  
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number 
+
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|object_name                     |object_owner                    |permit_grantor   -
+               |object|permit_user                     |permit|permit|text_sequence|-
+text_segment                                                                        -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|t                               |testenv                         |testenv          -
+               |T     |ingres                          |     0|     2|            1|-
+grant select on table "testenv".t to ingres                                         -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+(1 row)
+alter table t drop column col2 restrict 
+alter table t drop column col2 cascade 
+E_US0834 line 1, Table 't' owned by 'testenv' does not contain column
+    'col2'.
+    (Tue Jul  3 12:36:24 2001)
+
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number 
+
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|object_name                     |object_owner                    |permit_grantor   -
+               |object|permit_user                     |permit|permit|text_sequence|-
+text_segment                                                                        -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|t                               |testenv                         |testenv          -
+               |T     |ingres                          |     0|     2|            1|-
+grant select on table "testenv".t to ingres                                         -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+(1 row)
+drop table t 
+
+create table t (col1 int, col2 int ) with page_size = 4096 
+grant update on table t to testenv  
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number 
+
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|object_name                     |object_owner                    |permit_grantor   -
+               |object|permit_user                     |permit|permit|text_sequence|-
+text_segment                                                                        -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|t                               |testenv                         |testenv          -
+               |T     |testenv                         |     0|     2|            1|-
+grant update on table "testenv".t to testenv                                        -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+(1 row)
+alter table t drop column col2 restrict 
+alter table t drop column col2 cascade 
+E_US0834 line 1, Table 't' owned by 'testenv' does not contain column
+    'col2'.
+    (Tue Jul  3 12:36:24 2001)
+
+select object_name, object_owner, permit_grantor, object_type, permit_user, 
+permit_depth, permit_number, text_sequence, text_segment from iipermits 
+where object_name='t' order by permit_number 
+
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|object_name                     |object_owner                    |permit_grantor   -
+               |object|permit_user                     |permit|permit|text_sequence|-
+text_segment                                                                        -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+|t                               |testenv                         |testenv          -
+               |T     |testenv                         |     0|     2|            1|-
+grant update on table "testenv".t to testenv                                        -
+                                                                                    -
+                                                                        |
++--------------------------------+--------------------------------+------------------
+---------------+------+--------------------------------+------+------+-------------+-
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+------------------------------------------------------------------------+
+(1 row)
+drop table t 
+>>
+* \q 
+<<
+
+>>
+
+
+Ending at: Tue Jul  3 12:36:28 2001

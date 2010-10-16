@@ -1,0 +1,296 @@
+/*
+Copyright (c) 2006 Ingres Corporation.
+
+	Test Name: qp271.sep
+	Time: Mon Mar 24 10:50:30 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :	in1.sql, in2.sql, b80808.sql
+	Output Files :
+	Database     :	SEPPARAMDB
+	Tables       :	tt1, tt2
+	Synopsis     :	When a procedure is created with the "set of"
+			clause for statement level rule, firing a same
+			row level rule should return consistent error
+			message.
+			(Bug 80808, used to give either E_US0965 or
+			E_QE0123.)
+
+ History: 24-Mar-1997	(cheis01) Created
+	  26-Mar-1999	(kamra01) modified VPG_SZ to 8192
+           2-Nov-2006	(vande02) Updated to new help procedure format, aligned
+                                  history, and Copyright.
+*/
+? fill in1.sql 
+!!
+/*
+ROW level rule
+*/
+create rule r1 after insert into tt1
+execute procedure p1 (enum=new.enum, dept=new.dept,salary=new.salary)\p\g
+!!
+? fill in2.sql 
+!!
+/*
+STATEMENT level rule
+*/
+create rule r1 after insert into tt1 for each statement
+execute procedure p1 (enum=new.enum, dept=new.dept, salary=new.salary)\p\g
+!!
+? fill b80808.sql 
+!!
+create table tt1(enum int, dept varchar(15), salary money) with page_size=8192\p\g
+create table tt2 as select * from tt1\p\g
+
+create procedure p1 (p_tt1 set of (enum int, dept varchar(10), salary money))
+as begin
+insert into tt2 select * from p_tt1;
+end \p\g
+
+\i in1.sql
+
+help procedure p1\p\g
+help rule r1\p\g
+
+insert into tt1 values (1, 'development', 36000)\p\g
+select * from tt1\p\g
+select * from tt2\p\g
+
+drop rule r1\p\g
+
+\i in2.sql
+
+help procedure p1\p\g
+help rule r1\p\g
+
+insert into tt1 values (1, 'development', 36000)\p\g
+select * from tt1\p\g
+select * from tt2\p\g
+
+drop rule r1\p\g
+
+\i in1.sql
+
+help procedure p1\p\g
+help rule r1\p\g
+
+insert into tt1 values (1, 'accouting', 30000)\p\g
+select * from tt1\p\g
+select * from tt2\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop rule r1\g 
+<<
+~
+>>
+* drop procedure p1\g 
+<<
+~
+>>
+* drop table tt1, tt2\g 
+<<
+~
+>>
+* \i b80808.sql 
+<<
+ 
+ create table tt1(enum int, dept varchar(15), salary money) with page_size=8192
+create table tt2 as select * from tt1
+(0 rows)
+
+create procedure p1 (p_tt1 set of (enum int, dept varchar(10), salary money))
+as begin
+insert into tt2 select * from p_tt1;
+end 
+
+/*
+ROW level rule
+*/
+create rule r1 after insert into tt1
+execute procedure p1 (enum=new.enum, dept=new.dept,salary=new.salary)
+
+help procedure p1
+Procedure:            p1
+Owner:                testenv
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 12:22:11     
+
+Procedure Definition:
+/*    1 */ create procedure  p1 (p_tt1 set of (enum int, dept         
+varchar(10), salary money)) as begin insert into "testenv". tt2 select
+* from p_tt1;                                                         
+/*    2 */ end                                                        
+
+
+
+help rule r1
+Rule:                 r1
+Procedure Type:       user object
+Owner:                testenv
+Table:                tt1
+
+Rule Definition:
+create rule  r1 after insert into tt1 execute procedure "testenv". p1 
+(enum=new.enum, dept=new.dept,salary=new.salary)                      
+
+
+
+
+insert into tt1 values (1, 'development', 36000)
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Thu Nov  2 12:13:51 2006)
+
+select * from tt1
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
++-------------+---------------+--------------------+
+(0 rows)
+select * from tt2
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
++-------------+---------------+--------------------+
+(0 rows)
+
+drop rule r1
+
+/*
+STATEMENT level rule
+*/
+create rule r1 after insert into tt1 for each statement
+execute procedure p1 (enum=new.enum, dept=new.dept, salary=new.salary)
+
+help procedure p1
+Procedure:            p1
+Owner:                testenv
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 12:22:11     
+
+Procedure Definition:
+/*    1 */ create procedure  p1 (p_tt1 set of (enum int, dept         
+varchar(10), salary money)) as begin insert into "testenv". tt2 select
+* from p_tt1;                                                         
+/*    2 */ end                                                        
+
+
+
+help rule r1
+Rule:                 r1
+Procedure Type:       user object
+Owner:                testenv
+Table:                tt1
+
+Rule Definition:
+create rule  r1 after insert into tt1 for each statement execute      
+procedure "testenv". p1 (enum=new.enum, dept=new.dept,                
+salary=new.salary)                                                    
+
+
+
+
+insert into tt1 values (1, 'development', 36000)
+(1 row)
+select * from tt1
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|development    |           $36000.00|
++-------------+---------------+--------------------+
+(1 row)
+select * from tt2
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|developmen     |           $36000.00|
++-------------+---------------+--------------------+
+(1 row)
+
+drop rule r1
+
+/*
+ROW level rule
+*/
+create rule r1 after insert into tt1
+execute procedure p1 (enum=new.enum, dept=new.dept,salary=new.salary)
+
+help procedure p1
+Procedure:            p1
+Owner:                testenv
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 12:22:11     
+
+Procedure Definition:
+/*    1 */ create procedure  p1 (p_tt1 set of (enum int, dept         
+varchar(10), salary money)) as begin insert into "testenv". tt2 select
+* from p_tt1;                                                         
+/*    2 */ end                                                        
+
+
+
+help rule r1
+Rule:                 r1
+Procedure Type:       user object
+Owner:                testenv
+Table:                tt1
+
+Rule Definition:
+create rule  r1 after insert into tt1 execute procedure "testenv". p1 
+(enum=new.enum, dept=new.dept,salary=new.salary)                      
+
+
+
+
+insert into tt1 values (1, 'accouting', 30000)
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Thu Nov  2 12:13:51 2006)
+
+select * from tt1
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|development    |           $36000.00|
++-------------+---------------+--------------------+
+(1 row)
+select * from tt2
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|developmen     |           $36000.00|
++-------------+---------------+--------------------+
+(1 row)
+>>
+* drop rule r1\g 
+<<
+
+>>
+* drop procedure p1\g 
+<<
+
+>>
+* drop table tt1, tt2\g\q
+<<
+
+>>
+
+
+Ending at: Thu Nov  2 12:14:45 2006

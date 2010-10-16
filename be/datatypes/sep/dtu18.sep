@@ -1,0 +1,806 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: dtu18.sep
+	Time: Wed Mar 05 09:08:09 2003
+	User Name: ingres
+	Terminal type: septerm
+
+	Test ID : dtu18.sep
+	Module  : be/datatypes
+	Filename: dtu18.sep
+	Purpose	: To test the Unicode coercion and wildcard searching support,
+                  first available with Ingres 2.6/0303 and later releases.
+	Input Files  : dtu18_cpytbl.sc, dtu18_strfct.sc
+	Output Files : dtu18_cpytbl.exe, dtu18_strfct.exe
+	Database     : unidb
+	Tables       : dtu18_uni, dtu18_uni2, dtu18_char, dtu18_char2
+	Synopsis     : The Ingres variable II_CHARSETxx (where xx is the
+                       installation code) will set to UTF8 in the beginning
+                       of this test, and restore to its default value at the
+                       end.
+                       This test includes two embedded C programs, the first
+                       program is to create and populate tables, and testing
+                       the coercion between Unicode and non-Unicode data as
+                       well by copying Unicode data into a non-Unicode table,
+                       and vice versa. The second program is to create and
+                       execute database queries to compare and search the
+                       tables using SQL concat() with LIKE predicate, and 
+                       trim() functions.
+
+*** TEST CASES:
+    simple coercion-copying from Unicode table to non-Unicode table
+    simple coercion-copying from non-Unicode table to Unicode table
+    concat(nchar_col, nchar_col)...LIKE...
+    concat(nchar_col, nvarchar_col)...LIKE...
+    concat(nvarchar_col, nvarchar_col)...LIKE...
+    concat(trim(char_col), trim(nchar_col))...LIKE...
+    concat(char_col, nvchar_col)...LIKE...
+    concat(vchar_col, trim(nchar_col))...LIKE...
+    concat(vchar_col, nvchar_col)...LIKE...
+
+
+ History: 05-Mar-2003	(wu$ca01)	Created
+          19-May-2003	(wu$ca01) Changed the variable 'wcc' size from 64 to
+                        128.
+	  10-oct-2003	(somsa01) Updated ro work on Windows.
+  	  20-Jan-2004	(rogch01) Updated test to work on VMS.
+	  11-May-2004	(shafa01) Removed all steps used for setting the
+			II_CHARSETxx to UTF8 for all platforms. Due to Unicode
+			Coercion changes put in Ingres r3, this change should
+			only be in main and going forward.
+          18-Sep-2008	(vande02) Added conditional canons to allow for UTF8
+                        collation sequence order. Header cleanup.
+*/
+? fill dtu18_cpytbl.sc 
+!!
+/* This program is to create and populate 4 tables:
+** one Unicode table1 with the data types of nchar and nvarchar,
+** one non-Unicode table1 with the data types of char and varchar.
+** Create another Unicode table2 by copying the columns from the
+** non-Unicode table1.
+** Create another non-Unicode table2 by copying the columns from
+** the Unicode table1.  
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+typedef struct
+{
+    short len;
+    wchar_t text[1];
+} NVCH_STRUCT;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *col2[] =
+    {
+    L"ab",
+    L"a b",
+    L"A a",
+    L"A A",
+    L"BAB",
+    L"bBb",
+    L"BbB",
+    L"BBB",
+    L"Cs",
+    L"cs",
+    L"C C",
+    L"cC",
+    L"RRRR",
+    L"R R",
+    L"r R",
+    L"rrr",
+    L"st",
+    L"St",
+    L"ST",
+    L"s t",
+    L"tTt",
+    L"t T t",
+    L"TtT",
+    L"t T T",
+    };
+static wchar_t *col3[] =
+    {
+    L"de",
+    L"d e",
+    L"Deee",
+    L"D D",
+    L"EDE",
+    L"eDe",
+    L"EdE",
+    L"EEE",
+    L"Ft",
+    L"ft",
+    L"F T",
+    L"fF",
+    L"UUU U",
+    L"U U",
+    L"u U",
+    L"uuu",
+    L"vw",
+    L"Vw",
+    L"VW",
+    L"v w",
+    L"WuW",
+    L"wUw",
+    L"WUw",
+    L"w W W",
+    };
+#define NUMROWS 24
+
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int   i;
+      char  *dbname;
+      wchar_t wc1[7];
+      wchar_t wc2[16];
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[7];
+      } nv1;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[16];
+      } nv2;
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+   EXEC SQL DROP TABLE dtu18_uni;
+   EXEC SQL DROP TABLE dtu18_char;
+   EXEC SQL DROP TABLE dtu18_uni2;
+   EXEC SQL DROP TABLE dtu18_char2;
+
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   printf("Creating tables...\n");
+
+   EXEC SQL CREATE TABLE dtu18_uni (
+	nchar_col NCHAR(6) not null,
+	nvchar_col NVARCHAR(15) not null);
+
+   EXEC SQL CREATE TABLE dtu18_char (
+	char_col CHAR(10) not null,
+ 	vchar_col VARCHAR(20) not null);
+
+   EXEC SQL CREATE TABLE dtu18_uni2 (
+	nchar_col NCHAR(10),
+	nvchar_col NVARCHAR(20));
+
+   EXEC SQL CREATE TABLE dtu18_char2 (
+	char_col CHAR(6),
+ 	vchar_col VARCHAR(15));
+
+   printf("Inserting rows into unicode table1...\n");
+
+   for (i = 0; i < NUMROWS; i++)
+   {
+      wcscpy(wc1, col2[i]);
+      wcscpy(wc2, col3[i]);
+      UC_ASSIGN(nv1, col2[i]);
+      UC_ASSIGN(nv2, col3[i]);
+
+      EXEC SQL INSERT INTO dtu18_uni VALUES (:wc1, :wc2);
+
+   }
+
+  printf("Inserting rows into non-unicode table1...\n");
+
+
+  EXEC SQL INSERT INTO dtu18_char values ('gh', 'x x');
+  EXEC SQL INSERT INTO dtu18_char values ('g h', 'xxx');
+  EXEC SQL INSERT INTO dtu18_char values ('GH', 'XOXO');
+  EXEC SQL INSERT INTO dtu18_char values ('G H', 'X X');
+  EXEC SQL INSERT INTO dtu18_char values ('HHH', 'y');
+  EXEC SQL INSERT INTO dtu18_char values ('H H', 'yny');
+  EXEC SQL INSERT INTO dtu18_char values ('hhh', 'yNy');
+  EXEC SQL INSERT INTO dtu18_char values ('hh', 'yyy');
+  EXEC SQL INSERT INTO dtu18_char values ('I', 'Z');
+  EXEC SQL INSERT INTO dtu18_char values ('iii', 'z z');
+  EXEC SQL INSERT INTO dtu18_char values ('iIi', 'zZzZz');
+  EXEC SQL INSERT INTO dtu18_char values ('IiI', 'Zz');
+  EXEC SQL INSERT INTO dtu18_char values ('jpj', 'm');
+  EXEC SQL INSERT INTO dtu18_char values ('j&j', 'Mm');
+  EXEC SQL INSERT INTO dtu18_char values ('JJJ', 'm m');
+  EXEC SQL INSERT INTO dtu18_char values ('Jj', 'M m');
+  EXEC SQL INSERT INTO dtu18_char values ('kq', 'nN');
+  EXEC SQL INSERT INTO dtu18_char values ('k q', 'n N');
+  EXEC SQL INSERT INTO dtu18_char values ('KQ', 'N N');
+  EXEC SQL INSERT INTO dtu18_char values ('Kq', 'NN');
+  EXEC SQL INSERT INTO dtu18_char values ('lL', 'O');
+  EXEC SQL INSERT INTO dtu18_char values ('Ll', 'OO');
+  EXEC SQL INSERT INTO dtu18_char values ('L l', 'oo');
+  EXEC SQL INSERT INTO dtu18_char values ('l L', 'O O');
+
+
+  printf("Copying from non-unicode table1 into unicode table2...\n");
+  EXEC SQL INSERT INTO dtu18_uni2 SELECT * from dtu18_char;
+
+  printf("Copying from unicode table1 into non-unicode table2...\n");
+  EXEC SQL INSERT INTO dtu18_char2 SELECT * from dtu18_uni;
+
+  printf("Operation complete\n");
+
+  EXEC SQL DISCONNECT;
+}
+!!
+? fill dtu18_strfct.sc 
+!!
+/* This program is to create and execute database queries to compare
+** and search the tables using SQL concat() with LIKE predicate, and
+** trim() functions.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  char      st1[11];
+  char      st2[21];
+  char      st3[7];
+  char      st4[16];
+  wchar_t wc1[7], k1[7];
+  wchar_t wc2[16];
+  wchar_t wc3[11];
+  wchar_t wc4[21];
+  wchar_t wcc[128];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[26];
+  } nv1, nv2, k2;
+
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|===============================================================-
+==|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Select UNICODE table1...");
+         EXEC SQL SELECT * INTO :wc1, :wc2 
+         FROM dtu18_uni order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|\n", wc1, wc2);
+         EXEC SQL END;
+         break;
+ 
+      case 2:
+         print_header("Select UNICODE table2...");
+         EXEC SQL SELECT * INTO :wc3, :wc4 
+         FROM dtu18_uni2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|\n", wc3, wc4);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("Select NON-UNICODE table1...");
+         EXEC SQL SELECT * INTO :st1, :st2 
+         FROM dtu18_char order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%s|\n", st1, st2);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         print_header("Select NON-UNICODE table2..."); 
+         EXEC SQL SELECT * INTO :st3, :st4 
+         FROM dtu18_char2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%s|\n", st3, st4);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("concat(nchar_col, nchar_col)...");
+         EXEC SQL SELECT dtu18_uni.nchar_col, dtu18_uni2.nchar_col,
+         concat(dtu18_uni.nchar_col, dtu18_uni2.nchar_col) 
+         INTO :wc1, :wc3, :wcc
+         FROM dtu18_uni, dtu18_uni2
+         WHERE dtu18_uni.nchar_col LIKE 't %' AND dtu18_uni2.nchar_col
+         LIKE 'k%'
+         order by dtu18_uni.nchar_col, dtu18_uni2.nchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|%S|\n", wc1, wc3, wcc);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header("concat(nchar_col, nvchar_col)...");
+         EXEC SQL SELECT dtu18_uni.nchar_col, dtu18_uni2.nvchar_col,
+         concat(dtu18_uni.nchar_col, dtu18_uni2.nvchar_col)
+         INTO :wc1, :wc4, :wcc
+         FROM dtu18_uni, dtu18_uni2
+         WHERE dtu18_uni.nchar_col LIKE 'a%' AND dtu18_uni2.nvchar_col
+         LIKE 'y%'
+         order by dtu18_uni.nchar_col, dtu18_uni2.nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|%S|\n", wc1, wc4, wcc);
+         EXEC SQL END;
+         break;
+
+      case 7:
+         print_header("concat(nvchar_col, nvchar_col)...");
+         EXEC SQL SELECT dtu18_uni.nvchar_col, dtu18_uni2.nvchar_col,
+         concat(dtu18_uni.nvchar_col+' ', dtu18_uni2.nvchar_col)
+         INTO :wc2, :wc4, :wcc
+         FROM dtu18_uni, dtu18_uni2
+         WHERE dtu18_uni.nvchar_col LIKE 'U%U' AND dtu18_uni2.nvchar_col
+         LIKE 'x%x'
+         order by dtu18_uni.nvchar_col, dtu18_uni2.nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|%S|\n", wc2, wc4, wcc);
+         EXEC SQL END;
+         break;
+
+      case 8:
+         print_header("concat(trim(char_col), trim(nchar_col))...");
+         EXEC SQL SELECT dtu18_char.char_col, dtu18_uni2.nchar_col,
+         concat(trim(dtu18_char.char_col), trim(dtu18_uni2.nchar_col))
+         INTO :st1, :wc3, :wcc
+         FROM dtu18_char, dtu18_uni2
+         WHERE dtu18_char.char_col LIKE 'H%'
+         AND dtu18_uni2.nchar_col LIKE 'h%'
+         order by dtu18_char.char_col, dtu18_uni2.nchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|%S|\n", st1, wc3, wcc);
+         EXEC SQL END;
+         break;
+
+      case 9:
+         print_header("concat(char_col, nvchar_col)...");
+         EXEC SQL SELECT dtu18_char.char_col, dtu18_uni2.nvchar_col,
+         concat(dtu18_char.char_col, dtu18_uni2.nvchar_col)
+         INTO :st1, :wc4, :wcc
+         FROM dtu18_char, dtu18_uni2
+         WHERE dtu18_char.char_col LIKE 'l%'
+         AND dtu18_uni2.nvchar_col LIKE 'XOXO'
+         order by dtu18_char.char_col, dtu18_uni2.nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|%S|\n", st1, wc4, wcc);
+         EXEC SQL END;
+         break;
+
+      case 10:
+         print_header("concat(vchar_col, trim(nchar_col))...");
+         EXEC SQL SELECT dtu18_char.vchar_col, dtu18_uni2.nchar_col,
+         concat(dtu18_char.vchar_col, trim(dtu18_uni2.nchar_col))
+         INTO :st2, :wc3, :wcc
+         FROM dtu18_char, dtu18_uni2
+         WHERE dtu18_char.vchar_col LIKE 'Z%'
+         AND dtu18_uni2.nchar_col LIKE 'j%j%'
+         order by dtu18_char.vchar_col, dtu18_uni2.nchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|%S|\n", st2, wc3, wcc);
+         EXEC SQL END;
+         break;
+
+      case 11:
+         print_header("concat(vchar_col, nvchar_col)...");
+         EXEC SQL SELECT dtu18_char.vchar_col, dtu18_uni2.nvchar_col,
+         concat(dtu18_char.vchar_col +'*', dtu18_uni2.nvchar_col)
+         INTO :st2, :wc4, :wcc
+         FROM dtu18_char, dtu18_uni2
+         WHERE dtu18_char.vchar_col LIKE 'O%'
+         AND dtu18_uni2.nvchar_col LIKE 'm%'
+         order by dtu18_char.vchar_col, dtu18_uni2.nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|%S|\n", st2, wc4, wcc);
+         EXEC SQL END;
+         break;
+
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu18_cpytbl.sc 
+<<
+ESQL dtu18_cpytbl.sc:
+>>
+<<
+>>
+? sepcc dtu18_cpytbl 
+<<
+dtu18_cpytbl.c
+>>
+<<
+
+>>
+? seplnk dtu18_cpytbl 
+<<
+
+>>
+? esqlc dtu18_strfct.sc 
+<<
+ESQL dtu18_strfct.sc:
+>>
+<<
+>>
+? sepcc dtu18_strfct 
+<<
+dtu18_strfct.c
+>>
+<<
+
+>>
+? seplnk dtu18_strfct 
+<<
+
+>>
+? run dtu18_cpytbl.exe SEPPARAMDB3 
+<<
+Creating tables...
+Inserting rows into unicode table1...
+Inserting rows into non-unicode table1...
+Copying from non-unicode table1 into unicode table2...
+Copying from unicode table1 into non-unicode table2...
+Operation complete
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 1 
+<<
+Select UNICODE table1...
+|=================================================================|
+|A a   |Deee|
+|A A   |D D|
+|a b   |d e|
+|ab    |de|
+|BAB   |EDE|
+|bBb   |eDe|
+|BbB   |EdE|
+|BBB   |EEE|
+|cC    |fF|
+|C C   |F T|
+|cs    |ft|
+|Cs    |Ft|
+|r R   |u U|
+|R R   |U U|
+|rrr   |uuu|
+|RRRR  |UUU U|
+|s t   |v w|
+|st    |vw|
+|St    |Vw|
+|ST    |VW|
+|t T t |wUw|
+|tTt   |WuW|
+|t T T |w W W|
+|TtT   |WUw|
+|=================================================================|
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 2 
+<<
+Select UNICODE table2...
+|=================================================================|
+|g h       |xxx|
+|gh        |x x|
+|G H       |X X|
+|GH        |XOXO|
+|hh        |yyy|
+|H H       |yny|
+|hhh       |yNy|
+|HHH       |y|
+|I         |Z|
+|iii       |z z|
+|iIi       |zZzZz|
+|IiI       |Zz|
+|j&j       |Mm|
+|Jj        |M m|
+|JJJ       |m m|
+|jpj       |m|
+|k q       |n N|
+|kq        |nN|
+|Kq        |NN|
+|KQ        |N N|
+|l L       |O O|
+|lL        |O|
+|L l       |oo|
+|Ll        |OO|
+|=================================================================|
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 3 
+<< IF (ING_CHARSET == "UTF8") 
+Select NON-UNICODE table1...
+|=================================================================|
+|g h       |xxx|
+|gh        |x x|
+|G H       |X X|
+|GH        |XOXO|
+|hh        |yyy|
+|H H       |yny|
+|hhh       |yNy|
+|HHH       |y|
+|I         |Z|
+|iii       |z z|
+|iIi       |zZzZz|
+|IiI       |Zz|
+|j&j       |Mm|
+|Jj        |M m|
+|JJJ       |m m|
+|jpj       |m|
+|k q       |n N|
+|kq        |nN|
+|Kq        |NN|
+|KQ        |N N|
+|l L       |O O|
+|lL        |O|
+|L l       |oo|
+|Ll        |OO|
+|=================================================================|
+>>
+<<
+Select NON-UNICODE table1...
+|=================================================================|
+|G H       |X X|
+|GH        |XOXO|
+|H H       |yny|
+|HHH       |y|
+|I         |Z|
+|IiI       |Zz|
+|JJJ       |m m|
+|Jj        |M m|
+|KQ        |N N|
+|Kq        |NN|
+|L l       |oo|
+|Ll        |OO|
+|g h       |xxx|
+|gh        |x x|
+|hh        |yyy|
+|hhh       |yNy|
+|iIi       |zZzZz|
+|iii       |z z|
+|j&j       |Mm|
+|jpj       |m|
+|k q       |n N|
+|kq        |nN|
+|l L       |O O|
+|lL        |O|
+|=================================================================|
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 4 
+<< IF (ING_CHARSET == "UTF8") 
+Select NON-UNICODE table2...
+|=================================================================|
+|A a   |Deee|
+|A A   |D D|
+|a b   |d e|
+|ab    |de|
+|BAB   |EDE|
+|bBb   |eDe|
+|BbB   |EdE|
+|BBB   |EEE|
+|cC    |fF|
+|C C   |F T|
+|cs    |ft|
+|Cs    |Ft|
+|r R   |u U|
+|R R   |U U|
+|rrr   |uuu|
+|RRRR  |UUU U|
+|s t   |v w|
+|st    |vw|
+|St    |Vw|
+|ST    |VW|
+|t T t |wUw|
+|tTt   |WuW|
+|t T T |w W W|
+|TtT   |WUw|
+|=================================================================|
+>>
+<<
+Select NON-UNICODE table2...
+|=================================================================|
+|A A   |D D|
+|A a   |Deee|
+|BAB   |EDE|
+|BBB   |EEE|
+|BbB   |EdE|
+|C C   |F T|
+|Cs    |Ft|
+|R R   |U U|
+|RRRR  |UUU U|
+|ST    |VW|
+|St    |Vw|
+|TtT   |WUw|
+|a b   |d e|
+|ab    |de|
+|bBb   |eDe|
+|cC    |fF|
+|cs    |ft|
+|r R   |u U|
+|rrr   |uuu|
+|s t   |v w|
+|st    |vw|
+|t T T |w W W|
+|t T t |wUw|
+|tTt   |WuW|
+|=================================================================|
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 5 
+<<
+concat(nchar_col, nchar_col)...
+|=================================================================|
+|t T t |k q       |t T t k q       |
+|t T t |kq        |t T t kq        |
+|t T T |k q       |t T T k q       |
+|t T T |kq        |t T T kq        |
+|=================================================================|
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 6 
+<<
+concat(nchar_col, nvchar_col)...
+|=================================================================|
+|a b   |y|a b   y                   |
+|a b   |yny|a b   yny                 |
+|a b   |yNy|a b   yNy                 |
+|a b   |yyy|a b   yyy                 |
+|ab    |y|ab    y                   |
+|ab    |yny|ab    yny                 |
+|ab    |yNy|ab    yNy                 |
+|ab    |yyy|ab    yyy                 |
+|=================================================================|
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 7 
+<<
+concat(nvchar_col, nvchar_col)...
+|=================================================================|
+|U U|x x|U U x x|
+|U U|xxx|U U xxx|
+|UUU U|x x|UUU U x x|
+|UUU U|xxx|UUU U xxx|
+|=================================================================|
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 8 
+<<
+concat(trim(char_col), trim(nchar_col))...
+|=================================================================|
+|H H       |hh        |H Hhh|
+|H H       |hhh       |H Hhhh|
+|HHH       |hh        |HHHhh|
+|HHH       |hhh       |HHHhhh|
+|=================================================================|
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 9 
+<<
+concat(char_col, nvchar_col)...
+|=================================================================|
+|l L       |XOXO|l L       XOXO|
+|lL        |XOXO|lL        XOXO|
+|=================================================================|
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 10 
+<<
+concat(vchar_col, trim(nchar_col))...
+|=================================================================|
+|Z|j&j       |Zj&j|
+|Z|jpj       |Zjpj|
+|Zz|j&j       |Zzj&j|
+|Zz|jpj       |Zzjpj|
+|=================================================================|
+>>
+? run dtu18_strfct.exe SEPPARAMDB3 11 
+<<
+concat(vchar_col, nvchar_col)...
+|=================================================================|
+|O|m|O*m|
+|O|m m|O*m m|
+|O O|m|O O*m|
+|O O|m m|O O*m m|
+|OO|m|OO*m|
+|OO|m m|OO*m m|
+|=================================================================|
+>>
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* drop table dtu18_uni\g
+<<
+>>
+* drop table dtu18_uni2\g
+<<
+>>
+* drop table dtu18_char\g
+<<
+>>
+* drop table dtu18_char2\g
+<<
+>>
+* \q
+<<
+
+>>
+? delete dtu18_cpytbl.c 
+<<
+file was deleted
+>>
+? delete dtu18_cpytbl.o 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu18_cpytbl.obj 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu18_cpytbl.exe 
+<<
+file was deleted
+>>
+? delete dtu18_strfct.c 
+<<
+file was deleted
+>>
+? delete dtu18_strfct.o 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu18_strfct.obj 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu18_strfct.exe 
+<<
+file was deleted
+>>
+
+
+Ending at: Thu Sep 18 16:35:27 2008

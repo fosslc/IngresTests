@@ -1,0 +1,782 @@
+# 28-Jun-2004 (vande02) Created
+# 27-Jul-2004 (devjo01) Convert to bash, implement set & forget logic.
+# 28-Mar-2005 (devjo01) Correct minor "unary operator expected" bug.
+# 12-Jun-2008 (thich01) Correct shell detection and add auto option for prompt
+#                       free execution.
+#
+#=======================================================================
+##
+## Source this script to set up the Ingres test environment
+##
+## First time this script is sourced, you will be prompted for certain
+## "primal" environment settings.  Once entered and verified, settings
+## will be stored as ~/.tstenvrc.  Settings can then be tweaked by
+## editing the rc file.   Many of these settings are historic holdovers
+## that allow other shell scripts to locate certain components.  Others
+## have perfectly good default values.  Unless you have unusual requirements,
+## it is generally best to leave most of these settings alone.
+##
+## If you want to change the Ingres installation used for testing, you
+## can source this script with a --reset parameter, keep the old settings,
+## and simply change the value for II_SYSTEM.
+##
+## usage: . tstenv [ --reset | -r| --force | -f ]
+##
+## where:	--reset, or -r will regenerate the parameter file.
+##		--force, or -f will override parameter file checks.
+##		--help, or any invalid input will get this message.
+##
+#=======================================================================
+#
+tstenv_paramfile=~/.tstenvrc
+
+#
+# tstenv_in_set() - Check if element is already in a space delimited set.
+#
+#       Params: $1 = set (double quote it!)
+#               $2 = element to test.
+#
+tstenv_in_set()
+{
+    for tstenv_in_set_i in $1
+    do
+	[ "$tstenv_in_set_i" = "$2" ] && return 0
+    done
+    return 1
+}
+
+#
+# Dive into sub-shell
+#
+(
+    # set certain script defaults.
+    file_banner='# Ingres Test Environment Settings'
+    tempfile=/tmp/tstenvrc.$$
+    opt=""
+    mode=""
+    frc=""
+    bi=""
+    
+    # utility function to report usage errors
+    #
+    # $1 = ancillary message.
+    #
+    usage()
+    {
+	$frc cat << ! | $frc fold -s -w 72
+
+Source this script to set up the Ingres test environment
+
+First time this script is sourced, you will be prompted for certain "primal" environment settings.  Once entered and verified, settings will be stored as $tstenv_paramfile.  Special settings can then be modified by editing the $tstenv_paramfile.   
+
+Many of these settings are historic holdovers that allow other shell scripts to locate certain components.  Others have perfectly good default values.  Unless you have unusual requirements, it is generally best to leave most of these settings alone.
+
+If you want to change the Ingres installation used for testing, you can source this script with a --reset parameter, keep the old settings, and simply change the value for II_SYSTEM.
+
+usage: . tstenv [ --reset | -r| --force | -f ]
+
+where:	--reset, or -r will regenerate the parameter file.
+	--force, or -f will override parameter file checks.
+	--help, or any invalid input will get this message.
+
+!
+	[ -n "$1" ] && $bi echo "$1" | $frc fold -s -w 72
+	$bi exit 2
+    }
+
+    # verify script environment
+    SHELL_CHECK=`basename $SHELL`
+    case "$SHELL_CHECK" in
+    (bash)
+	frc=command
+	bi=builtin
+	;;
+    (sh)
+	bi=builtin
+	;;
+    (*)
+	usage "Script must be sourced from bash or bourne shell environment"
+	;;
+    esac
+
+    # Verify parameters
+    while [ -n "$1" ]
+    do
+	case "$1" in
+	(--reset|-r)
+	    [ -f $tstenv_paramfile ] && $frc cat << !
+
+Resetting contents of existing $tstenv_paramfile.
+
+!
+	    opt="reset"
+	    ;;
+	(--force|-f)
+	    [ -f $tstenv_paramfile ] && $frc cat << !
+
+Resetting contents of "corrupted" $tstenv_paramfile.
+
+!
+	    opt="force"
+	    ;;
+	(--test)
+	    mode="test"
+	    ;;
+        (--auto)
+            mode="auto"
+            ;;
+	(--help)
+	    usage
+	    ;;
+	(*)
+	    usage "Invalid Command ($1)"
+	    ;;
+	esac 
+	shift
+    done
+
+    #
+    # Utility function to cleanup temporary files, etc.
+    #
+    cleanup()
+    {
+	[ -n "$1" ] && $bi echo "$1"
+	[ -f $tempfile ] && $frc rm -f $tempfile
+    }
+
+    # Make sure previous scratch file is gone.
+    cleanup
+
+    trap \
+     "cleanup 'Interrupted, exiting without setting up environment' ; exit 4" \
+     1 2
+
+    #
+    # Utility function for thumbs up or thumbs down questions.
+    #
+    # $1 = prompt.
+    #
+    confirm()
+    {
+	while :
+	do
+	    $bi echo -n "$1? : "
+	    read uinput junk
+	    [ -n "$junk" ] &&
+	    {
+		$bi echo "Invalid input, try again."
+		continue
+	    }
+	    case "$uinput" in
+	    (y|Y|[Yy][Ee][Ss])
+		return 0
+		;;
+	    (n|N|[Nn][Oo])
+		return 1
+		;;
+	    esac
+	    $bi echo "Invalid input, try again."
+	done
+    }
+
+    # Utility function to prompt user for a parameter.
+    #
+    # $1 = target EV.
+    # $2 = optional validation function
+    # $3 = derived values to clear if value changed & old value if prefix.
+    # $4 = derived values to clear if value changed & old value embedded.
+    # $5 = derived values to clear if value changed 
+    #
+    process_input()
+    {
+	defval="$(eval echo \$$1)"
+	defpr=""
+	verifier="$2"
+	[ -n "$defval" ] && [ "$defval" != "nonesuch" ] && defpr=" [$defval]"
+	while :
+	do
+            if [ "$mode" = "auto" ]
+            then
+                uinput=$defval
+            else
+	        $bi echo -n "$1${defpr}: " | $frc fold -s -w 50
+	        $bi read uinput
+	        [ -n "$uinput" ] || uinput=$defval
+	        [ -n "$uinput" ] || continue;
+	        [ -n "$verifier" ] &&
+	        {
+		    $verifier "$uinput" "" "$3" "$4" "$5" || 
+		    {
+		        if [ "$mode" = "test" ]
+		        then
+			    $frc cat << ! | $frc fold -s -w 72
+WARNING! ignoring verification failure because '--test' specified.
+
+!
+		        else
+			    uinput=""
+		        fi
+		    }
+	        }
+            fi
+	    [ -n "$uinput" ] && break
+	done
+
+	# If value has changed, unset any other EV's whose value was
+	# derived from the value changed.
+	[ -n "$defval" ] && [ "$defval" = "$uinput" ] ||
+	{
+	    prefixpattern="$($bi echo $defval | sed 's/[^ _A-Za-z0-9()]/\\&/g')"
+
+	    # EV's with old value as prefix. 
+	    [ -n "$3" ] &&
+	    {
+		for ev in $3
+		do
+		    # If derived value is prefixed by old value, unset it.
+		    eval "$bi echo \$$ev" | \
+		     grep -q "^$prefixpattern" && unset $ev
+		done
+	    }
+	    # EV's with old value embedded.
+	    [ -n "$4" ] &&
+	    {
+		sedcmd="$frc sed s,$prefixpattern,$uinput,g"
+		for ev in $4
+		do
+		    # If derived value has old value embedded
+		    # Substitue new value.
+		    $bi export $ev="$(eval $bi echo \$$ev\ | $sedcmd)"
+		done
+	    }
+	    # EV's to always clear if value changed.
+	    [ -n "$5" ] &&
+	    {
+		for ev in $5
+		do
+		    unset $ev
+		done
+	    }
+	}
+	if [ "$uinput" = "nonesuch" ]
+	then
+	    unset $1
+	else
+	    $bi export $1="$uinput"
+	fi
+    }
+
+    #
+    # Utility function to verify II_SYSTEM
+    #
+    # $1 = II_SYSTEM value to test.
+    # $2 = "quiet" | ""
+    #
+    verify_iisystem()
+    {
+	[ -d $1/ingres/bin ] ||
+	{
+	    [ "$2" = "quiet" ] || $frc cat << ! | $frc fold -s -w 72
+
+Invalid II_SYSTEM setting ($1).  Directory $1/ingres/bin does not exist!.  Ingres must be set up prior to sourcing this script.
+
+!
+	    return 1
+	}
+	export II_SYSTEM=$1
+	export II_INST=$($II_SYSTEM/ingres/bin/ingprenv \
+	 II_INSTALLATION 2>/dev/null)
+	[ -n "$II_INST" ] ||
+	{
+	    [ "$2" = "quiet" ] || $frc cat << ! | $frc fold -s -w 72
+
+Invalid II_SYSTEM setting ($1).  Ingres must be set up prior to sourcing
+this script.
+
+!
+	    return 1
+	}
+	return 0
+    }
+
+    #
+    # Utility function to verify ING_TST
+    #
+    # $1 = ING_TST value to test.
+    # $2 = "quiet" | ""
+    #
+    verify_ingtst()
+    {
+	[ -d $1 ] ||
+	{
+	    [ "$2" = "quiet" ] || $frc cat << ! | $frc fold -s -w 72
+
+Invalid setting for ING_TST ($1).  Directory $1/tstenv does not exist!
+
+!
+	    return 1
+	}
+	return 0
+    }
+
+    #
+    # Utility function to verify ING_TOOLS
+    #
+    # $1 = ING_TOOLS value to test.
+    # $2 = "quiet" | ""
+    #
+    verify_tools()
+    {
+	[ -d $1 ] ||
+	{
+	    [ "$2" = "quiet" ] || $frc cat << ! | $frc fold -s -w 72
+
+Invalid setting for ING_TOOLS.  Directory $1 does not exist!
+
+!
+	    return 1
+	}
+	[ -f $1/bin/qasetuser ] ||
+	{
+	    [ "$2" = "quiet" ] || $frc cat << ! | $frc fold -s -w 72
+Invalid setting for ING_TOOLS.  $1/bin/qasetuser does not exist!
+
+!
+	    return 1
+	}
+	$frc find $1/bin -name qasetuser \
+	 -user root -perm 4755 >/dev/null 2>&1 ||
+	{
+	    [ "$2" = "quiet" ] || $frc cat << ! | $frc fold -s -w 72
+ING_TOOLS environment at $1 is not properly setup.  qasetuser must be owned by root with permissions 4755!
+
+!
+	    return 1
+	}
+	return 0
+    }
+
+    # Outer while
+    while :
+    do
+
+    # Inner while
+    while :
+    do
+	if [ -f $tstenv_paramfile ]
+	then
+	    if [ "$file_banner" = "$( $frc head -1 $tstenv_paramfile )" ]
+	    then
+		# Open Source test environment parameter
+		# resource file already exists.
+		[ "$opt" = "reset" ] ||
+		{
+		    # Use previously set values.
+		    . $tstenv_paramfile
+
+		    # Sanity check
+		    verify_iisystem $II_SYSTEM || exit 1
+			
+		    # Proceed to value display.
+		    break
+		}
+	    else
+		# File name collision?
+		[ "$opt" = "force" ] || 
+		{
+		    $frc cat << ! | $frc fold -s -w 72
+
+WARNING!: $tstenv_paramfile exists, but does not appear to be a valid Ingres Test Environment Settings file.  Double check contents of file, then correct the situation by renaming or deleting existing $tstenv_paramfile, or if desired force a reinitialization of the existing file with --force.
+
+!
+		    exit 3
+		}
+	    fi
+	    if [ "$mode" != "auto" ] && confirm \
+	     "Do you want to retain defaults from old $tstenv_paramfile"
+	    then
+		. $tstenv_paramfile
+	    else
+		# Clear any EV set by previous version of the script.
+		for ev in II_SYSTEM \
+		  $( $frc grep "^$bi export" $tstenv_paramfile | \
+		     $frc sed "s/^$bi export \([A-Z_]*\)=.*$/\1/" )
+		do
+		    tstenv_in_set \
+		     "II_SYSTEM ING_TST ING_TOOLS ING_TOOLS SEPPARAM_JPASSWORD SEPPARAM_ODBCLIB"  "$ev" ||
+			$bi unset $ev
+		done
+	    fi
+	else
+	    $frc cat << ! | $frc fold -s -w 72
+
+The first time this script is sourced, you are prompted for information about your test environment.  After this first run, settings are saved in $tstenv_paramfile.  You may edit $tstenv_paramfile directly to modify some of the more arcane test environment parameters.
+
+To reset environment parameters, source this script with a --reset argument.
+
+If you want to exit this script at any time, just hit interrupt (cntl-c).
+
+!
+	fi
+
+	#
+	# Set default primal values if not already set
+	#
+	ING_ROOT=${ING_ROOT:-~ingres/ingresr3}
+	II_SYSTEM=${II_SYSTEM:-${ING_ROOT}/tstinst}
+	ING_TST=${ING_TST:-${ING_ROOT}/tst}
+	ING_TOOLS=${ING_TOOLS:-${ING_ROOT}/tools}
+	
+	#
+	# Prompt for a valid II_SYSTEM
+	#
+	$frc cat << ! | $frc fold -s -w 72
+
+II_SYSTEM is the base environment variable for an installed Ingres instance.  Prior to sourcing this script, Ingres should be successfully installed.  The value set in II_SYSTEM is the directory specification of the directory containing ingres/bin for the Ingres instance to be used for testing.
+
+!
+	process_input II_SYSTEM verify_iisystem \
+	 "TST_OUTPUT TST_ROOT_OUTPUT II_CONFIG II_GCC_LOG II_DBMS_LOG II_GCN_LOG II_SLAVE_LOG SEP_ADA_LD SEP_FORTRAN_LD" \
+	 "CLASSPATH" \
+	 "SEPPARAM_URL"
+    
+	#
+	# Prompt for ING_TOOLS
+	#
+	$frc cat << ! | $frc fold -s -w 72
+
+ING_TOOLS holds the directory specification for the root directory of the tools used in testing Ingres.
+
+!
+	process_input ING_TOOLS verify_tools \
+	 "TST_TOOLS TOOLS_DIR TST_SEP PEDITOR"
+
+	#
+	# Prompt for a valid ING_TST setting 
+	#
+	$frc cat << ! | $frc fold -s -w 72
+
+ING_TST holds the directory specification for the root directory of the Ingres test suites and associated tools and scripts.
+
+!
+	process_input ING_TST verify_ingtst \
+	 "TST_LISTEXEC TST_TESTOOLS TST_DOC TST_CFG TST_DCL TST_SHELL TST_TESTENV TST_INIT TST_DATA REP_TST"
+
+	#
+	# Always prompt for JUSER, even if some users may not need this.
+	#
+	$frc cat << ! | $frc fold -s -w 72
+
+SEPPARAM_JUSER holds the user ID used by certain of the JDBC acceptance tests.  Tests currently require that the account password for this user be stored in an environment variable, so if you intend to run the JDBC tests, you must select a non-privileged account set up solely for use with Ingres testing.
+
+As certain ODBC tests currently used the fixed account ID "testenv", it is suggested that this account name be selected if the ODBC tests are also to be run.
+
+!
+	SEPPARAM_JUSER="${SEPPARAM_JUSER:-testenv}"
+	process_input SEPPARAM_JUSER 
+
+	#
+	# Always prompt for password, even if some users may not need this.
+	#
+	$frc cat << ! | $frc fold -s -w 72
+
+SEPPARAM_JPASSWORD holds the password for user "$SEPPARAM_JUSER" (account selected for JDBC tests).  If you do not need to run the JDBC or ODBC test suites it is suggested that you leave the password as an invalid value.
+
+!
+        if [ "$mode" != "auto" ]
+        then
+            SEPPARAM_JPASSWORD="${SEPPARAM_JPASSWORD:-nonesuch}"
+        fi
+	process_input SEPPARAM_JPASSWORD
+
+	#
+	# Always prompt for ODBCLIB, even if some users may not need this.
+	#
+	$frc cat << ! | $frc fold -s -w 72
+
+SEPPARAM_ODBCLIB holds the fully qualified path to the ODBC Driver manager shared library.  This only needs to be set if you will be running the ODBC test suite.
+
+!
+        if [ "$mode" != "auto" ]
+        then
+	    SEPPARAM_ODBCLIB="${SEPPARAM_ODBCLIB:-nonesuch}"
+        fi
+	process_input SEPPARAM_ODBCLIB
+
+	[ "$SEPPARAM_JUSER" != "testenv" ] && [ -n "$SEPPARAM_ODBCLIB" ] &&
+	{
+	    #
+	    # Prompt for OPASSWORD, only if SEPPARAM_JUSER != "testenv",
+	    # and user has set SEPPARAM_ODBCLIB.
+	    #
+	    $frc cat << ! | $frc fold -s -w 72
+
+SEPPARAM_OPASSWORD holds the password for user id "testenv", which is currently hardwired into the ODBC test suite.   If you do not need to run the ODBC test suites it is suggested that you leave the password as an invalid value.
+
+!
+	    SEPPARAM_OPASSWORD="${SEPPARAM_OPASSWORD:-nonesuch}"
+	    process_input SEPPARAM_OPASSWORD
+	}
+
+	# Set EVs used by terciary derived values.
+	TST_OUTPUT=${TST_OUTPUT:-$II_SYSTEM/output}
+	TST_LISTEXEC=${TST_LISTEXEC:-$ING_TST/suites/acceptst}
+	TST_TOOLS=${TST_TOOLS:-$ING_TOOLS/bin}
+
+	#
+	# Generate tstenv resource script with all the settings
+	# Specified, plus all derived settings, plus any other
+	# test environment EV that should be set..
+	#
+	$frc cat << ! > $tempfile
+${file_banner}
+# Generated $(date)
+
+#=======================================================================
+#           GENERAL INGRES SYSTEM SETTINGS FOR TEST ENVIRONMENT
+#=======================================================================
+# Root directory of Ingres instance to use for the test environment
+$bi export II_SYSTEM=$II_SYSTEM
+# Root directory for test tools
+$bi export ING_TOOLS=$ING_TOOLS
+# Root directory for test suites
+$bi export ING_TST=$ING_TST
+# Root directory for test output
+$bi export TST_OUTPUT=${TST_OUTPUT:-$II_SYSTEM/output}
+# Directory holding test lists
+$bi export TST_LISTEXEC=${TST_LISTEXEC:-$ING_TST/suites/acceptst}
+# Where Ingres should get configuration info.
+$bi export II_CONFIG=${II_CONFIG:-$II_SYSTEM/ingres/files}
+# Two digit year above this value are in the previous century.
+$bi export II_DATE_CENTURY_BOUNDARY=${II_DATE_CENTURY_BOUNDARY:-10}
+# Major Version of Ingres to assume for tests.
+$bi export ING_REL=${ING_REL:-30}
+# on BSD change this to /usr/ucb/vi
+$bi export ING_EDIT=${ING_EDIT:-/usr/bin/vi}
+
+#=======================================================================
+#                     ING_TOOLS TEST SETTINGS
+#=======================================================================
+$bi export TST_TOOLS=${TST_TOOLS:-$ING_TOOLS/bin}
+$bi export TOOLS_DIR=${TOOLS_DIR:-$ING_TOOLS}
+$bi export TST_TESTOOLS=${TST_TESTOOLS:-$ING_TST/testtool}
+$bi export TST_SEP=${TST_SEP:-$ING_TOOLS/files}
+$bi export PEDITOR=${PEDITOR:-$TST_TOOLS/peditor}
+
+#=======================================================================
+#                      DERIVED TEST SETUP SETTINGS
+#=======================================================================
+$bi export TST_ROOT_OUTPUT=${TST_ROOT_OUTPUT:-$TST_OUTPUT}
+$bi export TST_CFG=${TST_CFG:-$TST_LISTEXEC}
+$bi export TST_DOC=${TST_DOC:-$ING_TST/suites/doc}
+$bi export TST_DCL=${TST_DCL:-$ING_TST/suites/dcl}
+$bi export TST_SHELL=${TST_SHELL:-$ING_TST/suites/shell}
+$bi export TST_TESTENV=${TST_TESTENV:-$ING_TST}
+$bi export TST_INIT=${TST_INIT:-$ING_TST/basis/init}
+$bi export TST_DATA=${TST_DATA:-$ING_TST/gcf/gcc/data}
+$bi export REP_TST=${REP_TST:-$ING_TST}
+
+#=======================================================================
+#                            SEP SETTINGS
+#=======================================================================
+
+# 
+# A suitable value for SEP_DIFF_SLEEP on a fast machine would be 10.
+# The default within sep of 250 milliseconds will affect how fast (or slow)
+# SEP will run. Some platforms cannot diff automated tests as fast as
+# other platforms.
+#
+$bi export SEP_DIFF_SLEEP=${SEP_DIFF_SLEEP:-10}
+# Time in seconds before a SEP test times out (hang protection)
+$bi export SEP_TIMEOUT=${SEP_TIMEOUT:-600}
+# OS system type.
+$bi export SEPPARAM_SYSTEM=${SEPPARAM_SYSTEM:-$(uname)}
+
+#=======================================================================
+#                          TERMINAL SETTINGS
+#=======================================================================
+$bi export TERM_INGRES=${TERM_INGRES:-vt100fx}
+$bi export TERM=${TERM:-vt100}
+
+#=======================================================================
+#                          DEBUGGING SETTINGS
+#
+# Uncomment these variables for debugging then restart INGRES installation.
+#=======================================================================
+# Location for logs holding extended error information for Ingres
+# servers. %p is replaced at runtime with PID of server.
+# $bi export II_DBMS_LOG=${II_DBMS_LOG:-$II_CONFIG/dbms_%p.log}
+# Additional GCC tracing information.
+# $bi export II_GCC_LOG=${II_GCC_LOG:-$II_SYSTEM/ingres/iigcc.log}
+# Additional GCN tracing information.
+# $bi export II_GCN_LOG=${II_GCN_LOG:-$II_SYSTEM/ingres/iigcn.log}
+# I/O slave tracing. Ingres INTERNAL threads only.
+# $bi export II_SLAVE_LOG=${II_SLAVE_LOG:-$II_SYSTEM/ingres/ioslave.log}
+
+#=======================================================================
+# JDBC SETTINGS FOR YOUR TESTING ENVIRONMENT
+#
+# Syntax for the SEPPARAM_URL is:
+#	jdbc:ingres://hostname:port#/db_name
+#
+# Customize the SEPPARAM_URL parameters as follows:
+# 	hostname = actual name of test machine
+#	port#	 = your II_INSTALLATION code + 7 such as II7
+#	db_name  = test database for JDBC such as 'jdbcdb'
+#=======================================================================
+$bi export CLASSPATH=${CLASSPATH:-.:$II_SYSTEM/ingres/lib/iijdbc.jar}
+$bi export SEPPARAM_URL=${SEPPARAM_URL:-jdbc:ingres://$($frc uname -n):${II_INST}7/jdbcdb}
+$bi export SEPPARAM_JUSER=${SEPPARAM_JUSER:-testenv}      
+# Password for "JUSER"
+$bi export SEPPARAM_JPASSWORD=${SEPPARAM_JPASSWORD}
+
+#=======================================================================
+# ODBC SETTINGS FOR YOUR TESTING ENVIRONMENT
+#=======================================================================
+
+# Specify path for your odbc
+$bi export SEPPARAM_ODBCLIB=${SEPPARAM_ODBCLIB}      
+$bi export SEPPARAM_OPASSWORD=${SEPPARAM_OPASSWORD}
+
+# 
+#=======================================================================
+# DO NOT MODIFY ANY VARIABLES AFTER THIS POINT UNLESS ADDITIONAL FE3GL
+# TESTING FOR OTHER COMPILERS WILL BE EXECUTED - DEPENDING ON THE TYPE
+# OF TESTING, YOU MAY HAVE TO UNCOMMENT AND MODIFY SOME LINES SUCH AS
+# THE LANGUAGE VARIABLES - READ THE COMMENTS CAREFULLY 
+#=======================================================================
+
+#=======================================================================
+#                        PROGRAM LANGUAGE SETTINGS
+#=======================================================================
+#  Uncomment and set these variables if you will be testing these languages.
+# $bi export ADA=<path for ada directory above /bin>
+# $bi export COBDIR=<path for cobol directory above /bin>
+# $bi export SEP_ADA_LD=$II_SYSTEM/ingres/lib/libingres.a
+# $bi export SEP_FORTRAN_LD="$II_SYSTEM/ingres/lib/libingres.a"
+# $bi export SEPPARAM_FORT_UNDER=<"TRUE" or "FALSE">
+# Set SEPPARAM_FORT_UNDER depending on whether fortran
+# compiler produces symbols with trailing underscores or not.
+# $bi export SEPPARAM_FORT_UNDER=FALSE
+
+# Cobol Linker options
+#$bi export FIX-ME "$II_SYSTEM/ingres/lib/libingres.a -lsocket -lnsl -lm -lc"
+
+!
+# end of new parameter file
+
+# source temp parameter file for benefit of display
+. $tempfile
+
+break
+done
+# end inner while.
+
+$frc cat << !
+====================================================================
+ Ingres r3 Open Source Test Installation: $II_INST
+====================================================================
+
+Variable settings are ...
+II_SYSTEM.........$II_SYSTEM
+ING_TST...........$ING_TST
+TERM_INGRES.......$TERM_INGRES
+
+TST_CFG...........$TST_CFG
+TST_LISTEXEC......$TST_LISTEXEC
+TST_DOC...........$TST_DOC
+TST_SHELL.........$TST_SHELL
+TST_ROOT_OUTPUT...$TST_ROOT_OUTPUT
+TST_OUTPUT........$TST_OUTPUT
+TST_TESTENV.......$TST_TESTENV
+TST_INIT..........$TST_INIT
+
+ING_TOOLS.........$ING_TOOLS
+TST_SEP...........$TST_SEP
+
+SEPPARAM_JUSER....$SEPPARAM_JUSER
+
+!
+if [ -f $tempfile ]
+then
+    [ "$mode" = "auto" ] || confirm "Do you want to keep these new settings" &&
+    {
+	$frc cp $tempfile $tstenv_paramfile
+	break
+    }
+else
+    break
+fi
+
+done
+# end outer while
+ 
+cleanup
+exit 0
+)
+
+[ $? -eq 0 ] &&
+{
+    # Success.  Source parameter file
+    . $tstenv_paramfile
+
+    # Add OS specific load library path EV names here. Default=LD_LIBRARY_PATH
+    case "$(uname)" in
+    (*)	tstenv_libpath=LD_LIBRARY_PATH
+	;;
+    esac
+    
+    #
+    # utility program to add new elements to an EV if not present.
+    #
+    # $1 = Environmnet variable.
+    # $2 = "before" | "after"
+    # $3 .. $9 - elements to append.
+    tstenv_add_to_ev()
+    {
+	target=$1
+	origval="$(eval echo \$${target})"
+	values=$(echo "$origval" | sed 's/:/ /g')
+	newvals=""
+	shift
+	bora="$1"
+
+	while [ -n "$2" ]
+	do
+	    [  -d $2 ] && tstenv_in_set "$values" "$2" ||
+	    {
+		values="$values $2"
+		[ -n "$newvals" ] && newvals="$newvals:"
+		newvals="$newvals$2"
+	    }
+	    shift
+	done
+
+	if [ "$bora" = "after" ]
+	then
+	    [ -n "$origval" ] && origval="$origval:"
+	    export $target="$origval$newvals"
+	else
+	    [ -n "$origval" ] && origval=":$origval"
+	    export $target="$newvals$origval"
+	fi
+    }
+
+    # Add additional directories to path if not already present.
+    tstenv_add_to_ev PATH 'before' '.' $II_SYSTEM/ingres/bin \
+     $II_SYSTEM/ingres/utility
+
+    tstenv_add_to_ev PATH 'after' \
+     /usr/ccs/bin $ING_TOOLS/bin $ING_TOOLS/utility ${ADA:+$ADA/bin} \
+     ${COBDIR:+$COBDIR/bin}
+
+    # Add additional directories to share library path if not already present.
+    tstenv_add_to_ev $tstenv_libpath 'after' /lib /usr/lib /usr/local/lib \
+     $II_SYSTEM/ingres/lib 
+
+    unset tstenv_add_to_ev
+    unset tstenv_libpath
+}
+
+unset tstenv_in_set
+unset tstenv_paramfile

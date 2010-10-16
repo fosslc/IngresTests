@@ -1,0 +1,1471 @@
+/*
+
+Copyright (c) 2004 Ingres Corporation
+
+
+	Test Name: lar75.sep
+	Time: Mon Jul  1 15:13:21 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : be/lar
+	Filename: lar75.sep
+	Purpose:  
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB(multi-location)
+	Tables       : t1   
+	Synopsis     : 1) create table t1 in location loc1
+		       2) checkpoint the databse with journal enable
+		       3) test that number of locations in -location=
+			  and -new_location= list is different.
+		       4) test the case that the number of locations in
+			  -location= and -new_location list is same.
+                       5) Check in the database that table t1 is
+			  recover and is relocated.
+		       6) Try to test that 'to change the number of
+			  locations associated with the table.'
+		       7) Check in the database that what have been
+			  done to table t1.
+		       8) clean up
+
+	Assertions:    1) When you try to relocate a table during
+			  rollforwarddb, the number of locations in
+			  -location= list and -new_location= list
+			  must be equal.
+		       2) When you attempt to change the number of
+			  locations associated with a table during
+			  rollforwarddb, you get errors
+			  E_DM1517_RELOC_TBL_LOC_ERR,
+			  E_DM1301_RFP_ROLL_FORWARD.
+
+ History:  2-Jul-1996	(CHOSH01) Created
+          31-Jul-1996	(Author)
+	  25-MAR-1997   (vissu01) This test cannot run on NT due to bug 81228
+          14-May-1997	(raora02) Changed sep to use locations created by
+				  lar00.sep.
+          25-Jun-1997	(Author)
+	  15-mar-1999	(popri01) Implement sed post-processing option.
+				  Update loc id in rollforward msg.
+          30-Aug-1999	(popri01) Add canons for rollforward
+				  alt. (new?) message text.
+	  24-Jan-2000   (vande02) Corrected canon from rollforward 'Completed'
+                                  msg. by removing word 'of'.
+          10-Feb-2000	(vande02) Add alt canon on test rerun and journaling
+				  will be turned on at next checkpoint.
+          14-Feb-2001	(sheco02) Add NT canon for ckpdb/rollforwarddb.
+          08-Apr-2004	(vande02) New with Ingres 3 'help table' has a reliable
+                                  row count immediately after table creation
+                                  and an insert.  Saving new canon for first
+				  'help table t1'.  Aligned history comments.
+				  Removed ignore canons to ensure sql database
+				  connections are verifed and quit from sql.
+				  Saved new NT_GENERIC canons for ckpdb
+                                  and rollforwarddb the number of files
+                                  copied has increased with Ingres 3.
+          22-Oct-2004   (vande02) Update NT_GENERIC ckpdb result.  New behavior
+                                  with Ingres r3 per Development. This change is
+                                  not in Ingres r3 Linux.  When it is, the main
+                                  canons will need to be updated.  Replaced
+                                  NT_GENERIC canon for rollforwarddb see issue
+				  13680639.
+	                          Removed SEDCKPFILE masking in the canons so
+				  the masking only takes place during test
+				  execution.
+          02-Dec-2004   (vande02) Reverted back to 'Preparing stall of database'
+                        	  on ckpdb output - see issue 13829385.
+           4-Mar-2005	(vande02) Updating rollforwarddb -j canons with E_DM1372
+				  warning - see issue 12851588, SIR 113664,
+				  change 473974.  Currently this is in r3.
+          22-Mar-2005   (vande02) Update NT_GENERIC canons, one less file needed
+                        	  during ckpdb/or rollforwarddb processing as
+				  of r3.0.2.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? sepset sed @file(ing_tst,be,lar,data,larmasks) 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table t1;commit;\g 
+<<
+~
+>>
+* create table t1(name varchar(10)) with location=(loc1,loc2);commit;\g 
+<<
+
+>>
+* insert into t1 values ('aaaaaaaaaa');commit;\g 
+<<
+(1 row)
+>>
+* help table t1;commit;\g
+<<
+Name:                 t1
+Owner:                testenv
+Created:              08-apr-2004 09:28:54     
+Location:             loc1,
+                      loc2
+Type:                 user table
+Version:              II3.0
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 13
+Row width:            13
+Number of rows:       1
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+name                             varchar        10  yes    null       
+
+Secondary indexes:    none
+
+
+
+>>
+* \q 
+<<
+
+>>
+? ckpdb -d +j SEPPARAMDB 
+<<
+Wed Jun 25 09:20:14 1997 CPP: Preparing to checkpoint database: lardb
+beginning checkpoint to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+Wed Jun 25 09:20:16 1997 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0001001.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:20:22 1997 CPP: Start checkpoint of location: loc1 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0001002.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:20:23 1997 CPP: Start checkpoint of location: loc2 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0001003.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:20:23 1997 CPP: Start checkpoint of location: loc3 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0001004.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:20:23 1997 CPP: Start checkpoint of location: loc4 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0001005.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:20:24 1997 CPP: Start checkpoint of location: loc5 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0001006.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+>>
+<<
+Mon Aug 30 06:46:13 1999 CPP: Preparing to checkpoint database: lardb
+Mon Aug 30 06:46:14 1999 CPP: Archiver must drain log records from log file
+                           : to journal file.  If Archiver is not running
+                           : this program will not continue.  Exit the program
+                           : and have the appropriate person restart the archiver.
+beginning checkpoint to disk /disk2/ing2X/ingres/ckp/default/lardb of 6 locations
+Mon Aug 30 06:46:15 1999 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0001001.ckp'
+executing checkpoint to disk
+Mon Aug 30 06:46:19 1999 CPP: Start checkpoint of location: loc1 to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0001002.ckp'
+executing checkpoint to disk
+Mon Aug 30 06:46:19 1999 CPP: Start checkpoint of location: loc2 to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0001003.ckp'
+executing checkpoint to disk
+Mon Aug 30 06:46:19 1999 CPP: Start checkpoint of location: loc3 to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0001004.ckp'
+executing checkpoint to disk
+Mon Aug 30 06:46:19 1999 CPP: Start checkpoint of location: loc4 to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0001005.ckp'
+executing checkpoint to disk
+Mon Aug 30 06:46:19 1999 CPP: Start checkpoint of location: loc5 to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0001006.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /disk2/ing2X/ingres/ckp/default/lardb of 6 locations
+>>
+<< IF (NT_GENERIC) 
+Tue Oct 26 20:30:47 2004 CPP: Preparing to checkpoint database: lardb
+Tue Oct 26 20:30:47 2004 CPP: Archiver must drain log records from log file
+                           : to journal file.  If Archiver is not running
+                           : this program will not continue.  Exit the program
+                           : and have the appropriate person restart the archiver.
+Beginning checkpoint to disk C:\Ingres3_D5\ingres\ckp\default\lardb of 6 locations.
+Tue Oct 26 20:30:47 2004 CPP: Start checkpoint of location: ii_database to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0039001.ckp'
+executing checkpoint
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaach.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaef.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaado.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaig.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaca.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacd.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaif.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaai.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabe.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaace.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaei.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaeh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaej.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaek.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaael.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaem.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaen.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaij.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaald.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaale.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaln.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaali.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaall.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalo.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamo.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaand.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaane.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaana.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaama.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamd.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaame.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaami.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaml.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaang.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaani.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaank.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaann.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaano.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoa.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaob.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaod.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoe.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaof.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaog.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaok.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaol.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaom.t00
+C:\Ingres3_D5\ingres\data\default\lardb\zzzz0039.ali
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaaa.cnf
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaab.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaac.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaad.t00
+104 File(s) copied
+Tue Oct 26 20:30:48 2004 CPP: Start checkpoint of location: loc1 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0039002.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc1\ingres\data\default\lardb\aaaaaban.t00
+C:\Ingres3_D5\loc1\ingres\data\default\lardb\zzzz0039.ali
+2 File(s) copied
+Tue Oct 26 20:30:48 2004 CPP: Start checkpoint of location: loc2 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0039003.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc2\ingres\data\default\lardb\aaaaaban.t01
+C:\Ingres3_D5\loc2\ingres\data\default\lardb\zzzz0039.ali
+2 File(s) copied
+Tue Oct 26 20:30:49 2004 CPP: Start checkpoint of location: loc3 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0039004.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc3\ingres\data\default\lardb\zzzz0039.ali
+1 File(s) copied
+Tue Oct 26 20:30:49 2004 CPP: Start checkpoint of location: loc4 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0039005.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc4\ingres\data\default\lardb\zzzz0039.ali
+1 File(s) copied
+Tue Oct 26 20:30:49 2004 CPP: Start checkpoint of location: loc5 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0039006.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc5\ingres\data\default\lardb\zzzz0039.ali
+1 File(s) copied
+Ending checkpoint to disk C:\Ingres3_D5\ingres\ckp\default\lardb of 6 locations
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* delete from t1;commit;\g 
+<<
+(1 row)
+>>
+* \q 
+<<
+
+>>
+? rollforwarddb SEPPARAMDB -table=t1 -relocate -location=loc1 -new_location=loc3,loc4 
+<<
+Tue Jul  2 13:40:23 1996 E_DM1005_JSP_BAD_ARG_COMBO	An inconsistent combination of a-
+rguments was given.
+>>
+? rollforwarddb SEPPARAMDB -table=t1 -relocate -location=loc1,loc2 -new_location=loc3 
+<<
+Tue Jul  2 13:40:27 1996 E_DM1005_JSP_BAD_ARG_COMBO	An inconsistent combination of a-
+rguments was given.
+>>
+? rollforwarddb -j SEPPARAMDB -table=t1 -relocate -location=loc1,loc2 -new_location=lo-
+c3,loc4 
+<<
+Wed May 14 17:04:29 1997 RFP: Preparing for table level rollforward on : lardb      -
+                     
+Wed May 14 17:04:29 1997 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Wed May 14 17:04:30 1997 CPP: Completed drain of log file for database: lardb
+The following tables will be recovered : 
+ t1
+Additional tables required to maintain physical consistency of the database :
+ NONE
+Tables found to be invalid : 
+ NONE
+
+Fri Mar  4 18:51:42 2005 E_DM1372_RFP_JNL_WARNING	ROLLFORWARDDB -j has been requeste-
+d on database 'lardb'.  This ROLLFORWARDDB leaves the database in a state which does-
+ not correspond to the existing state of the journals.  The only supported course of-
+ action following this request is another ROLLFORWARDDB or a CKPDB.
+
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+PARTIAL: beginning restore of disk /qa4/install/I7/ingres/ckp/default/lardb of 2 loc-
+ations
+beginning table level recovery
+deleting table t1 in database location /qa4/install/I7/loc1/ingres/data/default/lard-
+b
+ending table level recovery
+beginning table level recovery
+deleting table t1 in database location /qa4/install/I7/loc2/ingres/data/default/lard-
+b
+ending table level recovery
+done with disk operations
+>>
+<< IF (NT_GENERIC) 
+Tue Oct 26 20:31:40 2004 RFP: Preparing for table level rollforward on : lardb      -
+                     
+Tue Oct 26 20:31:40 2004 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Tue Oct 26 20:31:40 2004 CPP: Completed drain of log file for database: lardb
+The following tables will be recovered : 
+ t1
+Additional tables required to maintain physical consistency of the database :
+ NONE
+Tables found to be invalid : 
+ NONE
+
+Fri Mar  4 18:51:42 2005 E_DM1372_RFP_JNL_WARNING	ROLLFORWARDDB -j has been requeste-
+d on database 'lardb'.  This ROLLFORWARDDB leaves the database in a state which does-
+ not correspond to the existing state of the journals.  The only supported course of-
+ action following this request is another ROLLFORWARDDB or a CKPDB.
+
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+PARTIAL: Beginning restore of disk C:\Ingres3_D5\ingres\ckp\default\lardb of 2 locat-
+ions.
+beginning table level recovery
+deleting table t1                               in database location C:\Ingres3_D5\l-
+oc1\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0039002.ckp\aaaaaban.t00
+1 File(s) copied
+ending table level recovery
+beginning table level recovery
+deleting table t1                               in database location C:\Ingres3_D5\l-
+oc2\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0039003.ckp\aaaaaban.t01
+1 File(s) copied
+ending table level recovery
+Done with disk checkpoint operations.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* help table t1;commit;\g
+<<
+Name:                 t1
+Owner:                testenv
+Created:              14-may-1997 17:03:43     
+Location:             loc3,
+                      loc4
+Type:                 user table
+Version:              OI2.0
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 13
+Row width:            13
+Number of rows:       0
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+name                             varchar        10  yes    null       
+
+Secondary indexes:    none
+
+
+
+>>
+* select * from t1;commit;\g
+<<
+
++----------+
+|name      |
++----------+
+|aaaaaaaaaa|
++----------+
+(1 row)
+>>
+* \q
+<<
+
+>>
+? ckpdb -d +j SEPPARAMDB 
+<<
+Wed Jun 25 09:21:44 1997 CPP: Preparing to checkpoint database: lardb
+Wed Jun 25 09:21:45 1997 CPP: Preparing stall of database, active xact cnt: 0
+Wed Jun 25 09:21:45 1997 CPP: Finished stall of database
+beginning checkpoint to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+Wed Jun 25 09:21:46 1997 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0002001.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:21:48 1997 CPP: Start checkpoint of location: loc1 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0002002.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:21:48 1997 CPP: Start checkpoint of location: loc2 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0002003.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:21:48 1997 CPP: Start checkpoint of location: loc3 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0002004.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:21:49 1997 CPP: Start checkpoint of location: loc4 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0002005.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:21:49 1997 CPP: Start checkpoint of location: loc5 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0002006.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+>>
+<<
+Mon Aug 30 06:47:01 1999 CPP: Preparing to checkpoint database: lardb
+Mon Aug 30 06:47:02 1999 CPP: Archiver must drain log records from log file
+                           : to journal file.  If Archiver is not running
+                           : this program will not continue.  Exit the program
+                           : and have the appropriate person restart the archiver.
+beginning checkpoint to disk /disk2/ing2X/ingres/ckp/default/lardb of 6 locations
+Mon Aug 30 06:47:03 1999 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0002001.ckp'
+executing checkpoint to disk
+Mon Aug 30 06:47:04 1999 CPP: Start checkpoint of location: loc1 to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0002002.ckp'
+executing checkpoint to disk
+Mon Aug 30 06:47:04 1999 CPP: Start checkpoint of location: loc2 to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0002003.ckp'
+executing checkpoint to disk
+Mon Aug 30 06:47:04 1999 CPP: Start checkpoint of location: loc3 to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0002004.ckp'
+executing checkpoint to disk
+Mon Aug 30 06:47:04 1999 CPP: Start checkpoint of location: loc4 to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0002005.ckp'
+executing checkpoint to disk
+Mon Aug 30 06:47:04 1999 CPP: Start checkpoint of location: loc5 to disk:
+    path = '/disk2/ing2X/ingres/ckp/default/lardb'
+    file = 'c0002006.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /disk2/ing2X/ingres/ckp/default/lardb of 6 locations
+>>
+<< IF (NT_GENERIC) 
+Tue Oct 26 20:32:22 2004 CPP: Preparing to checkpoint database: lardb
+Tue Oct 26 20:32:22 2004 CPP: Archiver must drain log records from log file
+                           : to journal file.  If Archiver is not running
+                           : this program will not continue.  Exit the program
+                           : and have the appropriate person restart the archiver.
+Beginning checkpoint to disk C:\Ingres3_D5\ingres\ckp\default\lardb of 6 locations.
+Tue Oct 26 20:32:22 2004 CPP: Start checkpoint of location: ii_database to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0040001.ckp'
+executing checkpoint
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaach.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaef.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaado.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaig.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaca.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacd.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaif.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaai.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabe.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaace.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaei.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaeh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaej.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaek.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaael.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaem.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaen.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaij.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaald.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaale.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaln.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaali.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaall.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalo.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamo.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaand.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaane.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaana.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaama.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamd.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaame.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaami.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaml.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaang.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaani.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaank.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaann.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaano.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoa.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaob.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaod.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoe.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaof.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaog.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaok.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaol.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaom.t00
+C:\Ingres3_D5\ingres\data\default\lardb\zzzz0040.ali
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaaa.cnf
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaab.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaac.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaad.t00
+104 File(s) copied
+Tue Oct 26 20:32:24 2004 CPP: Start checkpoint of location: loc1 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0040002.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc1\ingres\data\default\lardb\zzzz0040.ali
+1 File(s) copied
+Tue Oct 26 20:32:24 2004 CPP: Start checkpoint of location: loc2 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0040003.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc2\ingres\data\default\lardb\zzzz0040.ali
+1 File(s) copied
+Tue Oct 26 20:32:24 2004 CPP: Start checkpoint of location: loc3 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0040004.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc3\ingres\data\default\lardb\aaaaaban.t00
+C:\Ingres3_D5\loc3\ingres\data\default\lardb\zzzz0040.ali
+2 File(s) copied
+Tue Oct 26 20:32:25 2004 CPP: Start checkpoint of location: loc4 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0040005.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc4\ingres\data\default\lardb\aaaaaban.t01
+C:\Ingres3_D5\loc4\ingres\data\default\lardb\zzzz0040.ali
+2 File(s) copied
+Tue Oct 26 20:32:25 2004 CPP: Start checkpoint of location: loc5 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0040006.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc5\ingres\data\default\lardb\zzzz0040.ali
+1 File(s) copied
+Ending checkpoint to disk C:\Ingres3_D5\ingres\ckp\default\lardb of 6 locations
+>>
+? rollforwarddb SEPPARAMDB -table=t1 -relocate -location=loc3 -new_location=loc3 
+<<
+Wed Jun 25 09:22:27 1997 RFP: Preparing for table level rollforward on : lardb      -
+                     
+Wed Jun 25 09:22:27 1997 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Wed Jun 25 09:22:27 1997 CPP: Completed drain of log file for database: lardb
+The following tables will be recovered : 
+ t1
+Additional tables required to maintain physical consistency of the database :
+ NONE
+Tables found to be invalid : 
+ NONE
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+PARTIAL: beginning restore of disk /qa2/oping20/I5/ingres/ckp/default/lardb of 2 loc-
+ations
+beginning table level recovery
+deleting table t1 in database location /qa2/oping20/I5/loc3/ingres/data/default/lard-
+b
+ending table level recovery
+beginning table level recovery
+deleting table t1 in database location /qa2/oping20/I5/loc4/ingres/data/default/lard-
+b
+ending table level recovery
+done with disk operations
+beginning restore of journals
+Wed Jun 25 09:22:32 1997 RFP: Start processing journal file sequence 2.
+done with disk operations
+Wed Jun 25 09:22:32 1997 Completed processing of 4 transactions.
+>>
+<< IF (NT_GENERIC) 
+Tue Oct 26 20:32:56 2004 RFP: Preparing for table level rollforward on : lardb      -
+                     
+Tue Oct 26 20:32:56 2004 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Tue Oct 26 20:32:56 2004 CPP: Completed drain of log file for database: lardb
+The following tables will be recovered : 
+ t1
+Additional tables required to maintain physical consistency of the database :
+ NONE
+Tables found to be invalid : 
+ NONE
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+PARTIAL: Beginning restore of disk C:\Ingres3_D5\ingres\ckp\default\lardb of 2 locat-
+ions.
+beginning table level recovery
+deleting table t1                               in database location C:\Ingres3_D5\l-
+oc3\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0040004.ckp\aaaaaban.t00
+1 File(s) copied
+ending table level recovery
+beginning table level recovery
+deleting table t1                               in database location C:\Ingres3_D5\l-
+oc4\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0040005.ckp\aaaaaban.t01
+1 File(s) copied
+ending table level recovery
+Done with disk checkpoint operations.
+beginning restore of journals
+Tue Oct 26 20:32:58 2004 RFP: Start processing journal file sequence 40.
+Done with disk checkpoint operations.
+Tue Oct 26 20:32:58 2004 Completed processing of 2 transactions.
+>>
+? ckpdb SEPPARAMDB 
+<<
+Wed Jun 25 09:22:50 1997 CPP: Preparing to checkpoint database: lardb
+Wed Jun 25 09:22:51 1997 CPP: Preparing stall of database, active xact cnt: 0
+Wed Jun 25 09:22:51 1997 CPP: Finished stall of database
+beginning checkpoint to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+Wed Jun 25 09:22:52 1997 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003001.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:22:54 1997 CPP: Start checkpoint of location: loc1 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003002.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:22:54 1997 CPP: Start checkpoint of location: loc2 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003003.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:22:54 1997 CPP: Start checkpoint of location: loc3 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003004.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:22:55 1997 CPP: Start checkpoint of location: loc4 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003005.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:22:55 1997 CPP: Start checkpoint of location: loc5 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003006.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+>>
+<< IF (NT_GENERIC) 
+Tue Oct 26 20:33:45 2004 CPP: Preparing to checkpoint database: lardb
+Tue Oct 26 20:33:45 2004 CPP: Preparing stall of database, active xact cnt: 0
+Tue Oct 26 20:33:45 2004 CPP: Finished stall of database
+Beginning checkpoint to disk C:\Ingres3_D5\ingres\ckp\default\lardb of 6 locations.
+Tue Oct 26 20:33:46 2004 CPP: Start checkpoint of location: ii_database to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041001.ckp'
+executing checkpoint
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaach.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaef.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaado.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaig.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaca.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacd.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaif.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaai.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabe.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaace.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaei.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaeh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaej.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaek.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaael.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaem.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaen.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaij.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaald.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaale.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaln.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaali.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaall.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalo.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamo.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaand.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaane.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaana.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaama.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamd.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaame.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaami.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaml.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaang.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaani.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaank.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaann.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaano.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoa.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaob.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaod.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoe.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaof.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaog.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaok.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaol.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaom.t00
+C:\Ingres3_D5\ingres\data\default\lardb\zzzz0041.ali
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaaa.cnf
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaab.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaac.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaad.t00
+104 File(s) copied
+Tue Oct 26 20:33:47 2004 CPP: Start checkpoint of location: loc1 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041002.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc1\ingres\data\default\lardb\zzzz0041.ali
+1 File(s) copied
+Tue Oct 26 20:33:47 2004 CPP: Start checkpoint of location: loc2 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041003.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc2\ingres\data\default\lardb\zzzz0041.ali
+1 File(s) copied
+Tue Oct 26 20:33:47 2004 CPP: Start checkpoint of location: loc3 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041004.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc3\ingres\data\default\lardb\aaaaaban.t00
+C:\Ingres3_D5\loc3\ingres\data\default\lardb\zzzz0041.ali
+2 File(s) copied
+Tue Oct 26 20:33:47 2004 CPP: Start checkpoint of location: loc4 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041005.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc4\ingres\data\default\lardb\aaaaaban.t01
+C:\Ingres3_D5\loc4\ingres\data\default\lardb\zzzz0041.ali
+2 File(s) copied
+Tue Oct 26 20:33:48 2004 CPP: Start checkpoint of location: loc5 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041006.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc5\ingres\data\default\lardb\zzzz0041.ali
+1 File(s) copied
+Ending checkpoint to disk C:\Ingres3_D5\ingres\ckp\default\lardb of 6 locations
+>>
+/*
+bug 77513
+*/
+? rollforwarddb SEPPARAMDB -table=t1 -relocate -location=loc3 -new_location=loc4 
+<<
+Wed May 14 17:05:32 1997 RFP: Preparing for table level rollforward on : lardb      -
+                     
+Wed May 14 17:05:32 1997 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Wed May 14 17:05:32 1997 CPP: Completed drain of log file for database: lardb
+Wed May 14 17:05:33 1997 E_DM1517_RELOC_TBL_LOC_ERR	You cannot relocate 't1' to a lo-
+cation which contains part of the table.
+Wed May 14 17:05:33 1997 E_DM1301_RFP_ROLL_FORWARD	An error occurred that prevents f-
+urther processing.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* help table t1;commit;\g
+<<
+Name:                 t1
+Owner:                testenv
+Created:              14-may-1997 17:03:43     
+Location:             loc3,
+                      loc4
+Type:                 user table
+Version:              OI2.0
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 13
+Row width:            13
+Number of rows:       0
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+name                             varchar        10  yes    null       
+
+Secondary indexes:    none
+
+
+
+>>
+* select * from t1;commit;\g
+<<
+
++----------+
+|name      |
++----------+
+|aaaaaaaaaa|
++----------+
+(1 row)
+>>
+* \q
+<<
+
+>>
+? rollforwarddb SEPPARAMDB 
+<<
+Wed Jun 25 09:23:20 1997 RFP: Preparing for database rollforward on : lardb         -
+                  
+Wed Jun 25 09:23:20 1997 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+beginning restore of disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+Wed Jun 25 09:23:21 1997 RFP: Deleting files at root location : ii_database:
+Wed Jun 25 09:23:23 1997 RFP: Start restore of location: ii_database from disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003001.ckp'
+executing restore to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+deleting files in location /qa2/oping20/I5/loc1/ingres/data/default/lardb
+Wed May 14 14:54:48 1997 RFP: Start restore of location: loc1 from disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003002.ckp'
+executing restore to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+deleting files in location /qa2/oping20/I5/loc2/ingres/data/default/lardb
+Wed May 14 14:54:48 1997 RFP: Start restore of location: loc2 from disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003003.ckp'
+executing restore to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+deleting files in location /qa2/oping20/I5/loc3/ingres/data/default/lardb
+Wed May 14 14:54:48 1997 RFP: Start restore of location: loc3 from disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003004.ckp'
+executing restore to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+deleting files in location /qa2/oping20/I5/loc4/ingres/data/default/lardb
+Wed May 14 14:54:48 1997 RFP: Start restore of location: loc4 from disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003005.ckp'
+executing restore to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+deleting files in location /qa2/oping20/I5/loc5/ingres/data/default/lardb
+Wed May 14 14:54:48 1997 RFP: Start restore of location: loc5 from disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0003006.ckp'
+executing restore to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+done with disk operations
+beginning restore of journals
+Wed Jun 25 09:23:36 1997 RFP: Start processing journal file sequence 3.
+done with disk operations
+Wed Jun 25 09:23:36 1997 Completed processing 1 transaction.
+Wed Jun 25 09:23:36 1997 Rollforward completed successfully.
+>>
+<< IF (NT_GENERIC) 
+Tue Oct 26 20:34:29 2004 RFP: Preparing for database rollforward on : lardb         -
+                  
+Tue Oct 26 20:34:30 2004 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Beginning restore of disk C:\Ingres3_D5\ingres\ckp\default\lardb of 6 locations.
+Tue Oct 26 20:34:30 2004 RFP: Deleting files at root location : ii_database:
+Tue Oct 26 20:34:30 2004 RFP: Start restore of location: ii_database from disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041001.ckp'
+executing restore from disk
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabf.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabg.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaach.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabh.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaadf.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaef.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaado.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaadk.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaadl.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaig.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaadm.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaadn.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaca.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaacb.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaadp.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaacc.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaacd.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaif.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaai.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabe.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabi.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabm.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabj.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabk.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabl.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaace.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabn.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaadg.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaei.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaadh.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaadi.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaadj.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaeh.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaacg.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaabp.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaacf.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaej.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaek.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaael.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaem.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaen.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaij.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaald.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaalm.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaale.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaalf.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaalg.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaalh.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaln.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaalj.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaali.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaalk.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaall.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaalo.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamm.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamn.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamo.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaand.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaane.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamp.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaana.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaanb.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaanc.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaalp.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaama.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamb.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamc.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamd.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaame.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamf.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamg.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamh.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaami.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaamj.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaanf.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaml.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaang.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaanh.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaani.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaanj.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaank.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaanl.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaanm.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaann.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaano.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaanp.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaoa.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaob.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaoc.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaod.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaoe.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaof.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaog.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaoh.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaoi.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaoj.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaok.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaol.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaom.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\zzzz0041.ali
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaaa.cnf
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaab.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaac.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041001.ckp\aaaaaaad.t00
+104 File(s) copied
+deleting files in location C:\Ingres3_D5\loc1\ingres\data\default\lardb 
+Tue Oct 26 20:34:31 2004 RFP: Start restore of location: loc1 from disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041002.ckp'
+executing restore from disk
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041002.ckp\zzzz0041.ali
+1 File(s) copied
+deleting files in location C:\Ingres3_D5\loc2\ingres\data\default\lardb 
+Tue Oct 26 20:34:32 2004 RFP: Start restore of location: loc2 from disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041003.ckp'
+executing restore from disk
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041003.ckp\zzzz0041.ali
+1 File(s) copied
+deleting files in location C:\Ingres3_D5\loc3\ingres\data\default\lardb 
+Tue Oct 26 20:34:32 2004 RFP: Start restore of location: loc3 from disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041004.ckp'
+executing restore from disk
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041004.ckp\aaaaaban.t00
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041004.ckp\zzzz0041.ali
+2 File(s) copied
+deleting files in location C:\Ingres3_D5\loc4\ingres\data\default\lardb 
+Tue Oct 26 20:34:32 2004 RFP: Start restore of location: loc4 from disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041005.ckp'
+executing restore from disk
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041005.ckp\aaaaaban.t01
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041005.ckp\zzzz0041.ali
+2 File(s) copied
+deleting files in location C:\Ingres3_D5\loc5\ingres\data\default\lardb 
+Tue Oct 26 20:34:33 2004 RFP: Start restore of location: loc5 from disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0041006.ckp'
+executing restore from disk
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0041006.ckp\zzzz0041.ali
+1 File(s) copied
+Done with disk checkpoint operations.
+beginning restore of journals
+Tue Oct 26 20:34:33 2004 RFP: Start processing journal file sequence 41.
+Done with disk checkpoint operations.
+Tue Oct 26 20:34:33 2004 Completed processing 1 transaction.
+Tue Oct 26 20:34:33 2004 Rollforward completed successfully.
+>>
+? ckpdb SEPPARAMDB 
+<<
+Wed Jun 25 09:23:49 1997 CPP: Preparing to checkpoint database: lardb
+Wed Jun 25 09:23:50 1997 CPP: Preparing stall of database, active xact cnt: 0
+Wed Jun 25 09:23:50 1997 CPP: Finished stall of database
+beginning checkpoint to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+Wed Jun 25 09:23:51 1997 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0004001.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:23:55 1997 CPP: Start checkpoint of location: loc1 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0004002.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:23:55 1997 CPP: Start checkpoint of location: loc2 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0004003.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:23:56 1997 CPP: Start checkpoint of location: loc3 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0004004.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:23:56 1997 CPP: Start checkpoint of location: loc4 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0004005.ckp'
+executing checkpoint to disk
+Wed Jun 25 09:23:56 1997 CPP: Start checkpoint of location: loc5 to disk:
+    path = '/qa2/oping20/I5/ingres/ckp/default/lardb'
+    file = 'c0004006.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /qa2/oping20/I5/ingres/ckp/default/lardb of 6 locations
+>>
+<< IF (NT_GENERIC) 
+Tue Oct 26 20:35:20 2004 CPP: Preparing to checkpoint database: lardb
+Tue Oct 26 20:35:20 2004 CPP: Preparing stall of database, active xact cnt: 0
+Tue Oct 26 20:35:20 2004 CPP: Finished stall of database
+Beginning checkpoint to disk C:\Ingres3_D5\ingres\ckp\default\lardb of 6 locations.
+Tue Oct 26 20:35:20 2004 CPP: Start checkpoint of location: ii_database to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0042001.ckp'
+executing checkpoint
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaach.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaef.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaado.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaig.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaca.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacd.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaif.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaai.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabe.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaace.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaei.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaadj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaeh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaabp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaacf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaej.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaek.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaael.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaem.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaen.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaij.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaald.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaale.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaln.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaali.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalk.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaall.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalo.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamn.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamo.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaand.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaane.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaana.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaalp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaama.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamb.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamd.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaame.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamg.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaami.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaamj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanf.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaml.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaang.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaani.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaank.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanl.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanm.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaann.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaano.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaanp.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoa.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaob.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoc.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaod.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoe.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaof.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaog.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoh.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoi.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaoj.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaok.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaol.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaom.t00
+C:\Ingres3_D5\ingres\data\default\lardb\zzzz0042.ali
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaaa.cnf
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaab.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaac.t00
+C:\Ingres3_D5\ingres\data\default\lardb\aaaaaaad.t00
+104 File(s) copied
+Tue Oct 26 20:35:21 2004 CPP: Start checkpoint of location: loc1 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0042002.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc1\ingres\data\default\lardb\zzzz0042.ali
+1 File(s) copied
+Tue Oct 26 20:35:22 2004 CPP: Start checkpoint of location: loc2 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0042003.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc2\ingres\data\default\lardb\zzzz0042.ali
+1 File(s) copied
+Tue Oct 26 20:35:22 2004 CPP: Start checkpoint of location: loc3 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0042004.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc3\ingres\data\default\lardb\aaaaaban.t00
+C:\Ingres3_D5\loc3\ingres\data\default\lardb\zzzz0042.ali
+2 File(s) copied
+Tue Oct 26 20:35:22 2004 CPP: Start checkpoint of location: loc4 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0042005.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc4\ingres\data\default\lardb\aaaaaban.t01
+C:\Ingres3_D5\loc4\ingres\data\default\lardb\zzzz0042.ali
+2 File(s) copied
+Tue Oct 26 20:35:23 2004 CPP: Start checkpoint of location: loc5 to disk:
+    path = 'C:\Ingres3_D5\ingres\ckp\default\lardb'
+    file = 'c0042006.ckp'
+executing checkpoint
+C:\Ingres3_D5\loc5\ingres\data\default\lardb\zzzz0042.ali
+1 File(s) copied
+Ending checkpoint to disk C:\Ingres3_D5\ingres\ckp\default\lardb of 6 locations
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table t1;commit;\g
+<<
+>>
+* \q
+<<
+
+>>
+
+
+Ending at: Tue Oct 26 20:36:09 2004

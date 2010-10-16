@@ -1,0 +1,306 @@
+/*
+	Test Name: alttbl24.sep
+	Time: Thu Dec 19 10:17:16 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	: testing bug 81725, 79854
+	Input Files  : b79854a.sql , b79854b.sql, b79854c.sql
+	Output Files : 
+	Database     : SEPPARAMDB
+	Tables       : 
+	Synopsis     : Create a table with several columns, then create a view a
+            as select col1+col2... If user try to drop any column whi           
+        ch is being used in view, column should not be dropped wi               
+    th restrict and view should also be dropped with cascade.                       -
+DBMS server should not be crashed in the following test
+ History: 19-Dec-1996	(wanya01)	Created 
+          27-May-1997	(wanya01)
+	03/23/99      (kamra01)  Modified the page_size to 4K instead of vpg_sz	 
+
+*/
+? fill b79854a.sql 
+!!
+set autocommit on \p\g
+drop table t \p\g
+create table t(col1 int, col2 int, col3 int) with page_size = 4096 \p\g
+create view v(co1, col2) as select col1+col2, col1-col2 from t \p\g
+insert into t values(1,2,3) \p\g
+select * from v \p\g
+alter table t drop column col2 restrict\p\g
+select * from t \p\g
+select * from v \p\g
+alter table t drop column col3 restrict \p\g
+select * from t \p\g
+select * from v \p\g
+drop table t \p\g
+
+!!
+? fill b79854b.sql 
+!!
+create table t(col1 int, col2 int) with page_size = 4096 \p\g
+create view v(co1, col2) as select col1+col2, col1-col2 from t \p\g
+insert into t values(1,2) \p\g
+select * from v \p\g
+alter table t drop column col2 cascade \p\g
+select * from t \p\g
+select * from v \p\g
+drop table t \p\g
+!!
+? fill b79854c.sql 
+!!
+set autocommit on \p\g
+drop table t \p\g
+create table t(col1 int, col2 int, col3 int) with page_size = 4096 \p\g
+create view v(co1, col2) as select col1+col2, col1-col2 from t \p\g
+insert into t values(1,2,3) \p\g
+select * from v \p\g
+alter table t drop column col2 restrict\p\g
+select * from t \p\g
+select * from v \p\g
+alter table t drop column col3 restrict \p\g
+select * from t \p\g
+select * from v \p\g
+drop table t \p\g
+
+create table t(col1 int, col2 int) with page_size = 4096 \p\g
+create view v(co1, col2) as select col1+col2, col1-col2 from t \p\g
+insert into t values(1,2) \p\g
+select * from v \p\g
+alter table t drop column col2 cascade \p\g
+select * from t \p\g
+select * from v \p\g
+drop table t \p\g
+!!
+? fill b81725.sql 
+!!
+drop table t \p\g
+create table t (col1 int, col2 int) with page_size=4096 \p\g
+insert into t values (1,2) \p\g
+create view v(col1) as select col1 from t \p\g
+select * from t \p\g
+select * from v \p\g
+alter table t drop column col2  restrict \p\g
+drop table t \p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i b79854a.sql 
+<<
+/* SQL Startup File */
+ set autocommit on 
+drop table t 
+E_US0AC1 DROP: 't' does not exist or is not owned by you.
+    (Sat Jan 11 04:53:11 1997)
+
+create table t(col1 int, col2 int, col3 int) with page_size = 4096 
+create view v(co1, col2) as select col1+col2, col1-col2 from t 
+insert into t values(1,2,3) 
+(1 row)
+select * from v 
+
++-------------+-------------+
+|co1          |col2         |
++-------------+-------------+
+|            3|           -1|
++-------------+-------------+
+(1 row)
+alter table t drop column col2 restrict
+E_QE016B ALTER TABLE DROP COLUMN RESTRICT:  restricted destruction of base
+    table column cannot proceed as it  has one or more dependent objects
+    which would become abandoned.
+    (Sat Jan 11 04:53:22 1997)
+
+select * from t 
+
++-------------+-------------+-------------+
+|col1         |col2         |col3         |
++-------------+-------------+-------------+
+|            1|            2|            3|
++-------------+-------------+-------------+
+(1 row)
+select * from v 
+
++-------------+-------------+
+|co1          |col2         |
++-------------+-------------+
+|            3|           -1|
++-------------+-------------+
+(1 row)
+alter table t drop column col3 restrict 
+select * from t 
+
++-------------+-------------+
+|col1         |col2         |
++-------------+-------------+
+|            1|            2|
++-------------+-------------+
+(1 row)
+select * from v 
+
++-------------+-------------+
+|co1          |col2         |
++-------------+-------------+
+|            3|           -1|
++-------------+-------------+
+(1 row)
+drop table t 
+>>
+* \i b79854b.sql 
+<<
+
+ create table t(col1 int, col2 int) with page_size = 4096 
+create view v(co1, col2) as select col1+col2, col1-col2 from t 
+insert into t values(1,2) 
+(1 row)
+select * from v 
+
++-------------+-------------+
+|co1          |col2         |
++-------------+-------------+
+|            3|           -1|
++-------------+-------------+
+(1 row)
+alter table t drop column col2 cascade 
+select * from t 
+
++-------------+
+|col1         |
++-------------+
+|            1|
++-------------+
+(1 row)
+select * from v 
+E_US0845 Table 'v' does not exist or is not owned by you.
+    (Sat Jan 11 04:53:44 1997)
+
+drop table t 
+>>
+* \i b79854c.sql 
+<<
+ set autocommit on 
+drop table t 
+E_US0AC1 DROP: 't' does not exist or is not owned by you.
+    (Sat Jan 11 04:53:47 1997)
+
+create table t(col1 int, col2 int, col3 int) with page_size = 4096 
+create view v(co1, col2) as select col1+col2, col1-col2 from t 
+insert into t values(1,2,3) 
+(1 row)
+select * from v 
+
++-------------+-------------+
+|co1          |col2         |
++-------------+-------------+
+|            3|           -1|
++-------------+-------------+
+(1 row)
+alter table t drop column col2 restrict
+E_QE016B ALTER TABLE DROP COLUMN RESTRICT:  restricted destruction of base
+    table column cannot proceed as it  has one or more dependent objects
+    which would become abandoned.
+    (Sat Jan 11 04:53:48 1997)
+
+select * from t 
+
++-------------+-------------+-------------+
+|col1         |col2         |col3         |
++-------------+-------------+-------------+
+|            1|            2|            3|
++-------------+-------------+-------------+
+(1 row)
+select * from v 
+
++-------------+-------------+
+|co1          |col2         |
++-------------+-------------+
+|            3|           -1|
++-------------+-------------+
+(1 row)
+alter table t drop column col3 restrict 
+select * from t 
+
++-------------+-------------+
+|col1         |col2         |
++-------------+-------------+
+|            1|            2|
++-------------+-------------+
+(1 row)
+select * from v 
+
++-------------+-------------+
+|co1          |col2         |
++-------------+-------------+
+|            3|           -1|
++-------------+-------------+
+(1 row)
+drop table t 
+
+create table t(col1 int, col2 int) with page_size = 4096 
+create view v(co1, col2) as select col1+col2, col1-col2 from t 
+insert into t values(1,2) 
+(1 row)
+select * from v 
+
++-------------+-------------+
+|co1          |col2         |
++-------------+-------------+
+|            3|           -1|
++-------------+-------------+
+(1 row)
+alter table t drop column col2 cascade 
+select * from t 
+
++-------------+
+|col1         |
++-------------+
+|            1|
++-------------+
+(1 row)
+select * from v 
+E_US0845 Table 'v' does not exist or is not owned by you.
+    (Sat Jan 11 04:53:52 1997)
+
+drop table t 
+>>
+* \i b81725.sql     
+<<
+ drop table t 
+E_US0AC1 DROP: 't' does not exist or is not owned by you.
+    (Tue May 27 13:58:09 1997)
+
+create table t (col1 int, col2 int) with page_size=4096 
+insert into t values (1,2) 
+(1 row)
+create view v(col1) as select col1 from t 
+select * from t 
+
++-------------+-------------+
+|col1         |col2         |
++-------------+-------------+
+|            1|            2|
++-------------+-------------+
+(1 row)
+select * from v 
+
++-------------+
+|col1         |
++-------------+
+|            1|
++-------------+
+(1 row)
+alter table t drop column col2  restrict 
+drop table t 
+>>
+* \q
+<<
+
+>>
+
+
+Ending at: Tue May 27 13:58:25 1997

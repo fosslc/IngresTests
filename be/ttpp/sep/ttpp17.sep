@@ -1,0 +1,192 @@
+/* 	
+	Copyright (c) 2007 Ingres Corporation
+
+	Test Name: ttpp17.sep 
+	Time: Thu Jan  9 12:28:02 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : ttpp17.sep 
+	Module  : 
+	Filename:
+	Purpose	: The purpose of this test is to test that the SET OF parameters
+		  exactly match the table definition, when a Global Temporary
+  		  table is passed to a procedure. It also tests the restriction
+ 		  that a Global Temporary Table cannot be used with in a
+		  procedure.
+	Input Files  :
+	Output Files :
+	Database     :  ttppdb
+	Tables       :  session.tt1, tt1
+	Synopsis     :	Test parameters passing of a procedure that
+			receives a temporary table parameter.
+			Entries in "set of <elements>" in procedure
+			definition must be identical to the
+			corresponding column definitions including 
+			name and sequence in temporary table definition.
+
+ History: 21-May-1997	(cheis01) Created
+	  01-Arp-1999	(yu$pe02) Hard code page size to 4K.
+	  05-Jul-2002   (shafa01) Test cleanup Bug: 108167
+          19-Jul-2006	(rogch01) Changes for Ingres 2006 Update 1.  Session
+				  tables do not need to be prefixed with the
+				  session schema but must be unambiguous.  One
+				  test which failed before now passes because
+				  numeric to string coercion is allowed.
+          18-Apr-2007	(vande02) Changes for Ingres 2006 Release 2 to reverse
+                                  above change 19-Jul-2006 (rogch01). Per
+				  Development, a change was implemented to
+				  disallow numeric to string coercion so error
+				  E_US0B61 is expected in one test case.
+				  Made header corrections, aligned history.
+	   1-oct-2007   (kibro01) b119191 - Updated message for US0B61
+          29-Oct-2007	(kiria01) b117790
+		Updating canons reflecting string-number coercion changes.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop procedure p1\g
+<<
+~
+>>
+* drop table tt1\g
+<<
+~
+>>
+* declare global temporary table session.tt1 (c1 varchar(10), c2 varchar(15))
+<<
+>>
+* on commit preserve rows with norecovery, page_size=4096\g
+<<
+>>
+* insert into session.tt1 values ('Carl', 'marketing')\g
+<<
+(1 row)
+>>
+* insert into session.tt1 values ('John', 'travel')\g
+<<
+(1 row)
+>>
+* create table tt1 (col1 varchar(15), col2 char) with page_size=4096\g
+<<
+>>
+* create procedure p1 (name varchar(15), dept varchar(10)) as
+<<
+>>
+* begin insert into tt1 select * from session.tt1; end;\g
+<<
+E_PS0BD5 CREATE PROCEDURE: lightweight session tables may not be
+    referenced within a database procedure. The table 'tt1' is a lightweight session
+    table, and hence it cannot be used in this database procedure.
+    (Wed May 21 13:33:08 1997)
+
+>>
+* create procedure p1 (yahoo set of (col1 varchar(15), col2 int)) as
+<<
+>>
+* begin insert into tt1 select * from yahoo; end;\g
+<<
+
+>>
+* create procedure p1 (yahoo set of (c1 varchar(15), c2 varchar)) as
+<<
+>>
+* begin insert into tt1 select * from yahoo; end;\g
+<<
+E_US0960 Procedure 'p1' already exists.
+    (Mon Oct 29 16:35:15 2007)
+
+>>
+* execute procedure p1(yahoo=session.tt1);\g
+<<
+E_OP08AF Global temporary table parameter: tt1, was passed to procedure:
+    p1, whose  SET OF parameter doesn't exactly match the table definition.
+    (Wed May 21 14:01:53 1997)
+
+>>
+* drop procedure p1\g
+<<
+>>
+* create procedure p1 (yahoo set of (c1 varchar(15), c2 varchar(10))) as
+<<
+>>
+* begin insert into tt1 select * from yahoo; end;\g
+<<
+>>
+* execute procedure p1(yahoo=session.tt1);\g
+<<
+E_OP08AF Global temporary table parameter: tt1, was passed to procedure:
+    p1, whose  SET OF parameter doesn't exactly match the table definition.
+    (Wed May 21 16:00:43 1997)
+
+>>
+* drop procedure p1\g
+<<
+>>
+* create procedure p1 (yahoo set of (c2 varchar(15), c1 varchar(10))) as
+<<
+>>
+* begin insert into tt1 select * from yahoo; end;\g
+<<
+>>
+* execute procedure p1(yahoo=session.tt1);\g
+<<
+E_OP08AF Global temporary table parameter: tt1, was passed to procedure:
+    p1, whose  SET OF parameter doesn't exactly match the table definition.
+    (Wed May 21 16:53:42 1997)
+
+>>
+* drop procedure p1\g
+<<
+>>
+* create procedure p1 (yahoo set of (c1 varchar(10), c2 varchar(15))) as
+<<
+>>
+* begin insert into tt1 select * from yahoo; end;\g
+<<
+>>
+* execute procedure p1(yahoo=session.tt1);\g
+<<
+
+>>
+* select * from tt1\g
+<<
+
++---------------+------+
+|col1           |col2  |
++---------------+------+
+|Carl           |m     |
+|John           |t     |
++---------------+------+
+(2 rows)
+>>
+* execute procedure p1(yahoo=session.tt1);\g
+<<
+
+>>
+* select * from tt1\g
+<<
+
++---------------+------+
+|col1           |col2  |
++---------------+------+
+|Carl           |m     |
+|John           |t     |
+|Carl           |m     |
+|John           |t     |
++---------------+------+
+(4 rows)
+>>
+* drop procedure p1\g
+<<
+
+>>
+* drop table tt1\g\q
+<<
+
+>>
+
+
+Ending at: Mon Oct 29 16:35:29 2007

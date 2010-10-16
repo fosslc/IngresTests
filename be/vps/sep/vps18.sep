@@ -1,0 +1,621 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name	: vps18.sep
+	Suite		: be!vps
+	Purpose		: Verify Global Temporary Tables along with indexes
+			:   with/without persistence using various data types
+			:   inlcuding Unicode types along with various page
+			:   sizes and storage structures.
+	Database	: vpsdb
+	Tables		: vps18_01, vps18_02, session.vps18_gtt1,
+			:   session.vps18_gtt2
+	Filled Files	: vps18_insert.sc
+	Output Files	:
+	Synopsis	: Create two base tables and GTTs (Global Temporary
+			: Tables) using the base tables with different page
+			: sizes, datatypes and create indexes on GTTs. Modify
+			: table with different storage structures and insert
+			: records using sql files, select, delete options and
+			: validate the indexes on GTTs.
+
+ History:  2-Jan-2007	(Prodigy) Created
+	  20-Feb-2007	(vande02) Changed the use of proc1/proc2 to use a test
+				  program vps18.sc instead.  This is to be able
+				  to keep the 20K inserts but not have the
+				  transaction log fill up and abort the SQL
+				  session during runtime.
+          11-Mar-2007	(Prodigy) Changed selects, updated canons and included
+				  comments.
+          01-May-2007	(vande02) Removed the final query with longnvarchar.
+				  This query did not add much value to the
+				  purpose of this test and byte-swapping on some
+				  platforms will cause a string of canons for
+				  the dispaly.  Decided to take it out.
+*/
+? fill vps18_insert.sc 
+!!
+#include    <stdio.h>
+EXEC SQL include sqlca;
+
+main(int argc, char *argv[])
+{
+   EXEC SQL begin declare section;
+      char    *dbname, k, l, m;
+      int     i, j, rowcount;
+      double  j1;
+   EXEC SQL end declare section;
+
+   dbname = argv[1];
+   rowcount = atoi(argv[2]);
+
+   EXEC SQL whenever sqlerror stop;
+   EXEC SQL connect :dbname;
+   EXEC SQL set autocommit on; 
+
+   k = 'a';
+   l = 'b';
+   m = 'c';
+
+   i = 1;
+   j1 = 1.1;
+   while (i <= rowcount)
+   {
+      EXEC SQL repeated insert into vps18_01 values (
+               :i, varchar(:k)+varchar(:i), byte(:i), :j1, byte(:i),
+               varchar(:l)+varchar(:i), varchar(:m)+varchar(:i));
+      i = i+1;
+      j1 = j1+1.1;
+   }
+
+   i = 1;
+   j = 1;
+   while (i <= rowcount)
+   {
+      EXEC SQL repeated insert into vps18_02 values (:i, :j, byte(:i),
+               '01-01-1921', nvarchar(:k)+nvarchar(:i),nchar(:l)+nchar(:i),
+               varchar(:m)+varchar(:i));
+      i = i+1;
+      j = j+1;
+   }
+
+   EXEC SQL disconnect;
+}
+
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table vps18_01\g 
+<<
+~
+>>
+* drop table vps18_02\g 
+<<
+~
+>>
+* create table vps18_01 (col1_int int, col2_char char(3), col3_longbyte long byte,co-
+l4_money money, col5_byte byte(4), col6_varchar varchar(6), col7_longvarchar long va-
+rchar)\g 
+<<
+
+>>
+* create table vps18_02 (col1_int int, col2_float float, col3_bytevarying byte varyi-
+ng, col4_date date, col5_nvarchar nvarchar, col6_nchar nchar, col7_longnvarchar long-
+ nvarchar)\g 
+<<
+
+>>
+* \q 
+<<
+
+>>
+? esqlc vps18_insert.sc 
+<<
+ESQL vps18_insert.sc:
+>>
+? sepcc vps18_insert 
+<<
+>>
+<< IF (NT_GENERIC)
+vps18_insert.c
+>>
+? seplnk vps18_insert 
+<<
+>>
+? run vps18_insert.exe SEPPARAMDB 20000 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select count(*) from vps18_01\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|        20000|
++-------------+
+(1 row)
+>>
+* select count(*) from vps18_02\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|        20000|
++-------------+
+(1 row)
+>>
+* declare global temporary table session.vps18_gtt1 as select col1_int, col2_char, col3_longb-
+yte, col4_money,col5_byte,col6_varchar, col7_longvarchar from vps18_01 on commit pre-
+serve rows with norecovery, structure=isam, page_size=VPG_SZ\g 
+<<
+(20000 rows)
+>>
+/*
+	Create index on GTT using persistence option and check the index
+	is intact even after modification of GTT.
+*/
+* create index vps18_index1 on session.vps18_gtt1 (col1_int, col4_money, col5_byte) with key=(col1_int)-
+, structure=hash,page_size=VPG_SZ, persistence\g 
+<<
+(20000 rows)
+>>
+* select col4_money from session.vps18_gtt1 where (col1_int>=18185 and col1_int<=18198) order-
+ by col4_money\g 
+<<
+
++--------------------+
+|col4_money          |
++--------------------+
+|           $20003.50|
+|           $20004.60|
+|           $20005.70|
+|           $20006.80|
+|           $20007.90|
+|           $20009.00|
+|           $20010.10|
+|           $20011.20|
+|           $20012.30|
+|           $20013.40|
+|           $20014.50|
+|           $20015.60|
+|           $20016.70|
+|           $20017.80|
++--------------------+
+(14 rows)
+>>
+* select col1_int from session.vps18_gtt1 where (col4_money>=19922.750 and col4_money<=19935.-
+939) order by col1_int\g 
+<<
+
++-------------+
+|col1_int     |
++-------------+
+|        18112|
+|        18113|
+|        18114|
+|        18115|
+|        18116|
+|        18117|
+|        18118|
+|        18119|
+|        18120|
+|        18121|
+|        18122|
+|        18123|
++-------------+
+(12 rows)
+>>
+* modify session.vps18_gtt1 to btree\g 
+<<
+(20000 rows)
+>>
+/*
+	Create index on GTT with the same name after modifying GTT.
+*/
+* create index vps18_index1 on session.vps18_gtt1(col1_int, col4_money, col5_byte) with key=(col1_int),-
+ structure=hash, page_size=VPG_SZ, persistence\g 
+<<
+E_US13EE CREATE INDEX: duplicate table name 'vps18_index1'.
+    (Sun Mar 11 06:32:22 2007)
+
+>>
+/*
+	Create Index on GTT without using persistence option and check
+	the index is removed after the modification of GTT.
+*/
+* create index vps18_index2 on session.vps18_gtt1 (col4_money, col5_byte) with key=(col4_money), struct-
+ure=isam, page_size=VPG_SZ\g 
+<<
+(20000 rows)
+>>
+* modify session.vps18_gtt1 to hash\g 
+<<
+(20000 rows)
+>>
+/*
+	Create index on GTT with the same name using persistence option
+	after modifiying the GTT.
+*/
+* create index vps18_index2 on session.vps18_gtt1 (col4_money, col5_byte) with key=(col4_money), struct-
+ure=btree, page_size=VPG_SZ, persistence\g 
+<<
+(20000 rows)
+>>
+* select col4_money from session.vps18_gtt1 where (col4_money=20005.70)\g 
+<<
+
++--------------------+
+|col4_money          |
++--------------------+
+|           $20005.70|
++--------------------+
+(1 row)
+>>
+* select col1_int from session.vps18_gtt1 where (col1_int>=19945.840 and col1_int<=19953.539)-
+ order by col1_int\g 
+<<
+
++-------------+
+|col1_int     |
++-------------+
+|        19946|
+|        19947|
+|        19948|
+|        19949|
+|        19950|
+|        19951|
+|        19952|
+|        19953|
++-------------+
+(8 rows)
+>>
+* delete from session.vps18_gtt1 where col1_int=22\g 
+<<
+(1 row)
+>>
+* select col1_int from session.vps18_gtt1 where col1_int=22\g 
+<<
+
++-------------+
+|col1_int     |
++-------------+
++-------------+
+(0 rows)
+>>
+* select col2_char from session.vps18_gtt1 where (col4_money=44.00)\g 
+<<
+
++------+
+|col2_c|
++------+
+|974   |
++------+
+(1 row)
+>>
+* declare global temporary table session.vps18_gtt2 as select col1_int, col2_float, col3_byt-
+evarying,col4_date, col5_nvarchar, col6_nchar, col7_longnvarchar from vps18_02 on co-
+mmit preserve rows with norecovery, structure=btree,page_size=VPG_SZ\g 
+<<
+(20000 rows)
+>>
+* create index vps18_index3 on session.vps18_gtt2 (col1_int, col2_float, col5_nvarchar) with key=(col1-
+_int),structure=isam, page_size=VPG_SZ, persistence\g 
+<<
+(20000 rows)
+>>
+* create index vps18_index4 on session.vps18_gtt2 (col1_int, col6_nchar) with key=(col1_int), structur-
+e=btree, page_size=VPG_SZ, persistence\g 
+<<
+(20000 rows)
+>>
+* select col1_int, col6_nchar from session.vps18_gtt2 where (col1_int>=1949 and col1_int<=19-
+61) order by 1\g
+<<
+
++-------------+------+
+|col1_int     |col6_n|
++-------------+------+
+|         1949|9     |
+|         1950|9     |
+|         1951|9     |
+|         1952|9     |
+|         1953|9     |
+|         1954|9     |
+|         1955|9     |
+|         1956|9     |
+|         1957|9     |
+|         1958|9     |
+|         1959|9     |
+|         1960|9     |
+|         1961|9     |
++-------------+------+
+(13 rows)
+>>
+* select col1_int from session.vps18_gtt2 where (col2_float>=19088.421 and col2_float<=19100-
+.123) order by col1_int\g 
+<<
+
++-------------+
+|col1_int     |
++-------------+
+|        19089|
+|        19090|
+|        19091|
+|        19092|
+|        19093|
+|        19094|
+|        19095|
+|        19096|
+|        19097|
+|        19098|
+|        19099|
+|        19100|
++-------------+
+(12 rows)
+>>
+* select col2_float from session.vps18_gtt2 where (col1_int>=19145 and col1_int<=19157) orde-
+r by col2_float\g 
+<<
+
++-----------+
+|col2_float |
++-----------+
+|  19145.000|
+|  19146.000|
+|  19147.000|
+|  19148.000|
+|  19149.000|
+|  19150.000|
+|  19151.000|
+|  19152.000|
+|  19153.000|
+|  19154.000|
+|  19155.000|
+|  19156.000|
+|  19157.000|
++-----------+
+(13 rows)
+>>
+* modify session.vps18_gtt2 to btree\g 
+<<
+(20000 rows)
+>>
+* delete from session.vps18_gtt2 where col1_int=19000\g 
+<<
+(1 row)
+>>
+* select col1_int from session.vps18_gtt2 where col1_int=19000\g 
+<<
+
++-------------+
+|col1_int     |
++-------------+
++-------------+
+(0 rows)
+>>
+* select session.vps18_gtt1.col1_int,session.vps18_gtt2.col1_int from session.vps18_gtt1,session.vps18_gtt2 where (session.vps-
+18_gtt1.col1_int>=19989 and session.vps18_gtt2.col1_int<=20000) and session.vps18_gtt1.col1_int=session.vps18_-
+gtt2.col1_int order by col1_int\g 
+<<
+
++-------------+-------------+
+|col1_int     |col1_int     |
++-------------+-------------+
+|        19989|        19989|
+|        19990|        19990|
+|        19991|        19991|
+|        19992|        19992|
+|        19993|        19993|
+|        19994|        19994|
+|        19995|        19995|
+|        19996|        19996|
+|        19997|        19997|
+|        19998|        19998|
+|        19999|        19999|
+|        20000|        20000|
++-------------+-------------+
+(12 rows)
+>>
+* select col1_int, col2_float from session.vps18_gtt2 where col1_int=(select col1_int from session.v-
+ps18_gtt1 where (col1_int>=11100 and col1_int<=11115)) order by col1_int\g 
+<<
+
++-------------+-----------+
+|col1_int     |col2_float |
++-------------+-----------+
+|        11100|  11100.000|
+|        11101|  11101.000|
+|        11102|  11102.000|
+|        11103|  11103.000|
+|        11104|  11104.000|
+|        11105|  11105.000|
+|        11106|  11106.000|
+|        11107|  11107.000|
+|        11108|  11108.000|
+|        11109|  11109.000|
+|        11110|  11110.000|
+|        11111|  11111.000|
+|        11112|  11112.000|
+|        11113|  11113.000|
+|        11114|  11114.000|
+|        11115|  11115.000|
++-------------+-----------+
+(16 rows)
+>>
+* select col2_float from session.vps18_gtt2 where col1_int=(select col1_int from session.vps18_gtt1 w-
+here(col1_int>=16000 and col1_int<=16015)) order by col2_float\g 
+<<
+
++-----------+
+|col2_float |
++-----------+
+|  16000.000|
+|  16001.000|
+|  16002.000|
+|  16003.000|
+|  16004.000|
+|  16005.000|
+|  16006.000|
+|  16007.000|
+|  16008.000|
+|  16009.000|
+|  16010.000|
+|  16011.000|
+|  16012.000|
+|  16013.000|
+|  16014.000|
+|  16015.000|
++-----------+
+(16 rows)
+>>
+* select col1_int, col2_float from session.vps18_gtt2 where col1_int=(select col1_int from session.v-
+ps18_gtt1 where(col1_int>=15000 and col1_int<=15015)) order by col2_float\g 
+<<
+
++-------------+-----------+
+|col1_int     |col2_float |
++-------------+-----------+
+|        15000|  15000.000|
+|        15001|  15001.000|
+|        15002|  15002.000|
+|        15003|  15003.000|
+|        15004|  15004.000|
+|        15005|  15005.000|
+|        15006|  15006.000|
+|        15007|  15007.000|
+|        15008|  15008.000|
+|        15009|  15009.000|
+|        15010|  15010.000|
+|        15011|  15011.000|
+|        15012|  15012.000|
+|        15013|  15013.000|
+|        15014|  15014.000|
+|        15015|  15015.000|
++-------------+-----------+
+(16 rows)
+>>
+* select col1_int, col4_money from session.vps18_gtt1 where col4_money=(select col1_int from -
+session.vps18_gtt2 where(col4_money>=9999 and col4_money<=10014)) order by col4_money\g 
+<<
+
++-------------+--------------------+
+|col1_int     |col4_money          |
++-------------+--------------------+
+|         9090|            $9999.00|
+|         9100|           $10010.00|
++-------------+--------------------+
+(2 rows)
+>>
+* select col4_money from session.vps18_gtt1 where col1_int=(select col1_int from session.vps18_gtt2 w-
+here(col1_int>=18015 and col1_int<=18030)) order by col1_int\g 
+<<
+
++--------------------+
+|col4_money          |
++--------------------+
+|           $19816.50|
+|           $19817.60|
+|           $19818.70|
+|           $19819.80|
+|           $19820.90|
+|           $19822.00|
+|           $19823.10|
+|           $19824.20|
+|           $19825.30|
+|           $19826.40|
+|           $19827.50|
+|           $19828.60|
+|           $19829.70|
+|           $19830.80|
+|           $19831.90|
+|           $19833.00|
++--------------------+
+(16 rows)
+>>
+* select col7_longvarchar from session.vps18_gtt1 where col4_money>=36.30 and col4_money<=44.-
+00 order by col4_money\g 
+<<
+
++--------------------------------+
+|col7_longvarchar                |
++--------------------------------+
+|9933                            |
+|9934                            |
+|9935                            |
+|9936                            |
+|9937                            |
+|9938                            |
+|9939                            |
+|9940                            |
++--------------------------------+
+(8 rows)
+>>
+* select col2_float, col5_nvarchar from session.vps18_gtt2 where col2_float>=1100.000 and co-
+l2_float<=1113.000 order by 1\g
+<<
+
++-----------+------+
+|col2_float |col5_n|
++-----------+------+
+|   1100.000|9     |
+|   1101.000|9     |
+|   1102.000|9     |
+|   1103.000|9     |
+|   1104.000|9     |
+|   1105.000|9     |
+|   1106.000|9     |
+|   1107.000|9     |
+|   1108.000|9     |
+|   1109.000|9     |
+|   1110.000|9     |
+|   1111.000|9     |
+|   1112.000|9     |
+|   1113.000|9     |
++-----------+------+
+(14 rows)
+>>
+* drop table vps18_01\g 
+<<
+
+>>
+* drop table vps18_02\g 
+<<
+
+>>
+* \q 
+<<
+
+>>
+? delete vps18_insert.c 
+<<
+file was deleted
+>>
+? delete vps18_insert.sc 
+<<
+file was deleted
+>>
+.if (NT_GENERIC) 
+? delete vps18_insert.obj 
+<<
+file was deleted
+>>
+.else 
+? delete vps18_insert.o 
+<<
+file was deleted
+>>
+.endif 
+? delete vps18_insert.exe 
+<<
+file was deleted
+>>
+
+
+Ending at: Sun Mar 11 07:51:06 2007

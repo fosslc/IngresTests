@@ -1,0 +1,729 @@
+/*
+	Test Name: api10.sep
+	Time: Mon Dec 13 10:41:02 1999
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : api10.sep
+	Module  : be/api
+	Filename: api10.sep
+	Purpose	: OpenAPI version 2 introduces environment handles. These handles have 
+                  their own ADF control blocks which default to the environment 
+                  logical settings and can be set with the new OpenAPI function 
+                  IIapi_setEnvParam(). On the other hand the new IIapi_formatData() 
+                  does the local data conversion based on setting in a specific 
+                  environment handle. To test IIapi_setEnvParam() and 
+                  IIapi_formatData() functions
+	Input Files  : N/A
+	Output Files : 
+	Database     : N/A
+	Tables       : N/A
+	Synopsis     :
+
+ History: 13-Dec-1999	(ngutr03)  Created
+          20-Jul-2000	(ngutr03)  Added free() function to clean up memory leak 
+                        Changed the following code lines in API_PrintData() 
+                          From: 
+                                strncpy(buffer,(char *)dataValue->dv_value, 32);
+		                buffer[ 32 ] = '\0';
+                          To:
+                                strncpy(buffer,(char *)dataValue->dv_value, 
+                                                          dataValue->dv_length);
+			        buffer[dataValue->dv_length] = '\0';
+                          to avoid buffer displaying ASCII characters when
+                          running this test on Windows 2000.
+                        Changed from "01-Jan-2000" to "20-July-2000" so that 
+                        user can tell whether something is a month or a day in
+                        ISO, SWEDEN/FINLAND, GERMAN formats.
+	11-jun-2003 (abbjo03)
+		Corrections to eliminate warnings on VMS.
+	10-nov-2004 (devjo01)
+		Remove extra API_Terminate code, & redundant free of
+		dstForm.fd_dstValue.dv_value.
+*/
+? cp @file(ii_system,ingres,files,iiapidep.h) iiapidep.h 
+<<
+~
+>>
+? cp @file(ii_system,ingres,files,iiapi.h) iiapi.tmp 
+<<
+~
+>>
+.if (NT_GENERIC) 
+? fill makeiiapi.bat 
+!!
+sed  "s/<iiapidep.h>/\"iiapidep.h\"/g" iiapi.tmp > iiapi.h 
+!!
+? run makeiiapi.bat 
+<<
+~
+>>
+.endif 
+.if (UNIX) 
+? fill makeiiapi.sh
+!!
+sed  "s/<iiapidep.h>/\"iiapidep.h\"/g" iiapi.tmp > iiapi.h
+!!
+? sh  makeiiapi.sh
+<<
+>>
+.endif 
+.if (VMS)
+? fill iiapi_edit.com
+!!
+$ pipe sed "s/<iiapidep.h>/""iiapidep.h""/g" iiapi.tmp > iiapi.h
+!!
+? qasetuser testenv @iiapi_edit.com
+<<
+>>
+.endif
+? fill formatdata.c 
+!!
+/***********************************************************************************-
+*****
+** Implementation File: formatdata.c												   **
+** Author:              ngutr03                                                     -
+   **
+** Last Revision:       December 10, 1999               							   **
+** Description:         OpenAPI version 2 introduces environment handles. These     -
+   **
+**                      handles have their own ADF control blocks which default to t-
+he **
+**                      environment logical settings and can be set with the new    -
+   **
+**                      OpenAPI function IIapi_setEnvParam(). On the other hand the -
+   **
+**                      new IIapi_formatData() does the local data conversion based -
+   **
+**                      on setting in a specific environment handle.                -
+   **
+** Purpose:             To test IIapi_setEnvParam() and IIapi_formatData() functions-
+   **
+**                                                                                  -
+   **
+************************************************************************************-
+*****/
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "iiapi.h"
+#include "iiapidep.h"
+
+/* function prototypes */
+II_PTR API_Initialize(II_LONG);										     /* Initialize environment */
+void API_DisplayStatus(char*, IIAPI_STATUS);						     /* Display status of the func-
+tion */
+void API_ReleaseEnv(II_PTR);										     /* Free the environment handle */
+void API_DisplayErrorInfo(II_PTR);									     /* Display Error Message Information-
+ */
+void API_Wait(IIAPI_GENPARM *);									         /* Wait if the task is not finished-
+ */
+void API_Terminate();										             /* Clean up all */
+II_PTR API_SetEnvParm(II_PTR, II_LONG, II_PTR);                          /* Assign a-
+n environment parameter and value in the environment handle */
+void API_printLine();
+IIAPI_DATAVALUE API_FormatData(II_PTR, IIAPI_DATAVALUE, IIAPI_DT_ID, IIAPI_DT_ID, II-
+API_FORMATPARM*);/* Format data based on the environment setting */
+void API_PrintData( IIAPI_DESCRIPTOR*, IIAPI_DATAVALUE*);                /* Display -
+output to the screen */
+
+/***********************************************************************************-
+**
+** Function Name: API_Initialize				    								**
+** Description:   Allocates an environment handle and returns it to the application -
+**
+** Input:         timeout                											**
+** Return value:  Environment Handle    											**
+************************************************************************************-
+**/
+
+II_PTR API_Initialize(II_LONG timeout)
+{
+	IIAPI_INITPARM iiapi_initparm;
+
+	iiapi_initparm.in_timeout = timeout;
+	iiapi_initparm.in_version = IIAPI_VERSION_2;
+	iiapi_initparm.in_envHandle = NULL;
+
+	printf("Initializing API environment...\n");
+	IIapi_initialize(&iiapi_initparm);
+
+	printf("%s\n", (iiapi_initparm.in_status == IIAPI_ST_SUCCESS) ? "Successfully, init-
+ialized API environment" : "Failed to initialize API environment");
+	API_DisplayStatus("IIapi_initialize", iiapi_initparm.in_status);
+	API_printLine();
+
+	return(iiapi_initparm.in_envHandle);
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_DisplayStatus													**
+** Description:   Displays status of the function upon its return					**
+** Input:         statusID															**
+** Return value:  None																**				
+************************************************************************************-
+**/
+
+void API_DisplayStatus(char* strMsg, IIAPI_STATUS statusID )
+{
+	printf("%s returned status = ", strMsg);
+	switch(statusID)
+	{
+	case IIAPI_ST_SUCCESS:
+		printf("IIAPI_ST_SUCCESS\n");
+		break;
+	case IIAPI_ST_WARNING:
+		printf("IIAPI_ST_WARNING\n");
+		break;
+	case IIAPI_ST_OUT_OF_MEMORY:
+		printf("IIAPI_ST_OUT_OF_MEMORY\n");
+		break;
+	case IIAPI_ST_FAILURE:
+		printf("IIAPI_ST_FAILURE\n");
+		break;
+	case IIAPI_ST_NOT_INITIALIZED:
+		printf("IIAPI_ST_NOT_INITIALIZED\n");
+		break;
+	case IIAPI_ST_INVALID_HANDLE:
+		printf("IIAPI_ST_INVALID_HANDLE\n");
+		break;
+	case IIAPI_ST_MESSAGE:
+		printf("IIAPI_ST_MESSAGE\n");
+		break;
+	case IIAPI_ST_ERROR:
+		printf("IIAPI_ST_ERROR\n");
+		break;
+	case IIAPI_ST_NO_DATA:
+		printf("IIAPI_ST_NO_DATA\n");
+		break;
+	default:
+		printf("Unknown Status");
+		break;
+	}
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_ReleaseEnv													**
+** Description:   Frees an environment handle and any resources associated with the -
+**
+**                environment handle.												**
+** Input:         envHandle															**
+** Return value:  None																**	
+************************************************************************************-
+**/
+
+void API_ReleaseEnv(II_PTR envHandle)
+{
+	IIAPI_RELENVPARM relEnvParm;
+
+	relEnvParm.re_envHandle = envHandle;
+	printf("Releasing API environment...\n");
+	IIapi_releaseEnv(&relEnvParm);
+	printf("%s\n", (relEnvParm.re_status == IIAPI_ST_SUCCESS) ? "Successfully, released-
+ API environment" : "Failed to release API environment");
+
+	API_DisplayStatus("IIapi_releaseEnv", relEnvParm.re_status);
+	API_printLine();
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_DisplayErrorInfo  											**
+** Description:   Displays Error Messages                                   		**
+** Input:         errorHandle  														**
+** Return value:  None      														**
+************************************************************************************-
+**/
+
+void API_DisplayErrorInfo(II_PTR errorHandle)
+{
+	IIAPI_GETEINFOPARM getEInfoParm;
+
+	getEInfoParm.ge_errorHandle = errorHandle;
+
+	while( TRUE )
+	{
+		IIapi_getErrorInfo(&getEInfoParm);
+		if( getEInfoParm.ge_status == IIAPI_ST_NO_DATA )
+			break;
+		fprintf(stderr, "\tType of Message:");
+		switch (getEInfoParm.ge_type)
+		{
+		case IIAPI_GE_ERROR:
+			fprintf(stderr, "IIAPI_GE_ERROR");
+			break;
+		case IIAPI_GE_WARNING:
+			fprintf(stderr, "IIAPI_GE_WARNING");
+			break;
+		case IIAPI_GE_MESSAGE:
+			fprintf(stderr, "IIAPI_GE_MESSAGE");
+			break;
+		default:
+			fprintf(stderr, "Unknown Message Type");
+			break;
+		}
+		fprintf(stderr, "\n\tSQLState:\t%s\n", getEInfoParm.ge_SQLSTATE);
+		fprintf(stderr, "\tError Code:\t%ld\n", getEInfoParm.ge_errorCode);
+		fprintf(stderr, "\tMessage:\t%s\n\n", getEInfoParm.ge_message);
+
+		if( getEInfoParm.ge_serverInfoAvail )
+		{
+			fprintf(stderr, "\tSVR_ID_Error:\t%ld\n", getEInfoParm.ge_serverInfo->svr_id_erro-
+r);
+			fprintf(stderr, "\tSVR_Local_Error:%ld\n", getEInfoParm.ge_serverInfo->svr_local_-
+error);
+			fprintf(stderr, "\tSVR_ID_Server:\t%ld\n", getEInfoParm.ge_serverInfo->svr_id_ser-
+ver);
+			fprintf(stderr, "\tSVR_Server_Type:%ld\n", getEInfoParm.ge_serverInfo->svr_server-
+_type);
+			fprintf(stderr, "\tSVR_Severity:\t");
+			switch(getEInfoParm.ge_serverInfo->svr_severity)
+			{
+			case IIAPI_SVR_DEFAULT:
+				fprintf(stderr, "IIAPI_SVR_DEFAULT");
+				break;
+			case IIAPI_SVR_MESSAGE:
+				fprintf(stderr, "IIAPI_SVR_MESSAGE");
+				break;
+			case IIAPI_SVR_WARNING:
+				fprintf(stderr, "IIAPI_SVR_WARNING");
+				break;
+			case IIAPI_SVR_FORMATTED:
+				fprintf(stderr, "IIAPI_SVR_FORMATTED");
+				break;
+			default:
+				fprintf(stderr, "Unknown");
+				break;
+			}
+			fprintf(stderr, "\n");
+		}
+	}
+	return;
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_Wait		    					            		    	**
+** Description:   Waits if the task is finished                                     -
+**
+** Input:         genParm								     						**
+** Return value:  None				                  								**
+************************************************************************************-
+**/
+void API_Wait(IIAPI_GENPARM* genParm)
+{
+	IIAPI_WAITPARM waitP;
+	waitP.wt_timeout = -1;
+
+    while (!genParm->gp_completed)
+	{
+        IIapi_wait(&waitP);
+	}
+	if( genParm->gp_status != IIAPI_ST_SUCCESS )
+	{
+		printf("Error in IIapi_wait\n");
+		API_DisplayStatus("IIapi_wait", genParm->gp_status);
+		if( genParm->gp_errorHandle != NULL )
+		{
+			/* Display error messages if there are...*/
+			API_DisplayErrorInfo(genParm->gp_errorHandle);	
+		}
+	}
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_Terminate		    					            		    **
+** Description:   Clean up all                                                      -
+**
+** Input:         None									     						**
+** Return value:  None				                  								**
+************************************************************************************-
+**/
+void API_Terminate()
+{
+ 	IIAPI_TERMPARM termParm;
+	/* Clean up */
+	printf("Terminating API...\n");
+	IIapi_terminate(&termParm);
+	if( termParm.tm_status == IIAPI_ST_FAILURE )
+	{
+		printf("Failed to terminate API\n");
+		API_DisplayStatus("IIapi_terminate", termParm.tm_status);
+	}
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_SetEnvParm    					            		    	**
+** Description:   Assign an environment parameter and value in the environment      -
+**
+**                handle                                                            -
+**
+** Input:         envHandle, paramID, paramValue             						**
+** Return value:  None                              								**
+************************************************************************************-
+**/
+
+II_PTR API_SetEnvParm(II_PTR envHandle, II_LONG paramID, II_PTR paramValue)
+{
+	IIAPI_SETENVPRMPARM setenvPrmParm;
+	
+	setenvPrmParm.se_envHandle = envHandle;
+	setenvPrmParm.se_paramID = paramID;
+	setenvPrmParm.se_paramValue = paramValue;
+
+	IIapi_setEnvParam( &setenvPrmParm );
+	if( setenvPrmParm.se_status != IIAPI_ST_SUCCESS )
+	{
+		printf("Error in IIapi_setEnvParam\n");
+	}
+	API_DisplayStatus("IIapi_setEnvParam", setenvPrmParm.se_status);
+	API_printLine();
+	
+	return( setenvPrmParm.se_envHandle );
+}
+
+void API_printLine()
+{
+	printf("------------------------------------\n\n");
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_FormatData     					            		    	**
+** Description:   Display date from different formats to the default format         -
+**
+** Input:         newEnvHandle, formatedValue                       				**
+**                srcDataType, dstDataType, dstForm                                 -
+**
+** Return value:  none                               								**
+************************************************************************************-
+**/
+
+IIAPI_DATAVALUE API_FormatData(II_PTR newEnvHandle, IIAPI_DATAVALUE value, IIAPI_DT_-
+ID srcDataType, 
+							   IIAPI_DT_ID dstDataType, IIAPI_FORMATPARM* dstForm)
+{
+
+    dstForm->fd_envHandle = newEnvHandle;
+
+    dstForm->fd_srcDesc.ds_dataType = srcDataType;
+    dstForm->fd_srcDesc.ds_nullable = FALSE;
+    dstForm->fd_srcDesc.ds_length = value.dv_length;
+    dstForm->fd_srcDesc.ds_precision = 0;
+    dstForm->fd_srcDesc.ds_scale = 0;
+    dstForm->fd_srcDesc.ds_columnType = IIAPI_COL_TUPLE;
+    dstForm->fd_srcDesc.ds_columnName = NULL;
+
+    dstForm->fd_srcValue.dv_null = FALSE;
+    dstForm->fd_srcValue.dv_length = dstForm->fd_srcDesc.ds_length;
+    dstForm->fd_srcValue.dv_value = value.dv_value;
+
+    dstForm->fd_dstDesc.ds_dataType = dstDataType;
+    dstForm->fd_dstDesc.ds_nullable = FALSE;
+    dstForm->fd_dstDesc.ds_length = value.dv_length;
+    dstForm->fd_dstDesc.ds_precision = 0;
+    dstForm->fd_dstDesc.ds_scale = 0;
+    dstForm->fd_dstDesc.ds_columnType = IIAPI_COL_TUPLE;
+    dstForm->fd_dstDesc.ds_columnName = NULL;
+
+    dstForm->fd_dstValue.dv_null = FALSE;
+    dstForm->fd_dstValue.dv_length = dstForm->fd_dstDesc.ds_length;
+	
+	/* format data */
+    IIapi_formatData( dstForm );
+	if( dstForm->fd_status != IIAPI_ST_SUCCESS )
+	{
+		printf("Error occured in IIapi_formatData -- ");
+		API_DisplayStatus("IIapi_formatData", dstForm->fd_status);
+	}
+	
+    API_PrintData( &(dstForm->fd_dstDesc), &(dstForm->fd_dstValue) );
+	
+	return( dstForm->fd_dstValue );
+	
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_PrintData     					            		    	**
+** Description:   Display information to the screen                                 -
+**
+** Input:         descriptor, dataValue                       						**
+** Return value:  none                               								**
+************************************************************************************-
+**/
+
+void API_PrintData( IIAPI_DESCRIPTOR       *descriptor,
+					IIAPI_DATAVALUE        *dataValue )
+{
+    IIAPI_CONVERTPARM   cv;
+    char                buffer[64];
+    
+   
+    if ( dataValue->dv_null )
+    {
+		II_sprintf( buffer, "(NULL)" );
+    }
+ 
+    switch( abs( descriptor->ds_dataType ) )
+    {
+        case IIAPI_CHA_TYPE:
+		case IIAPI_CHR_TYPE:
+			strncpy(buffer,(char *)dataValue->dv_value, dataValue->dv_length);
+			buffer[dataValue->dv_length] = '\0';
+            break;
+		/* convert date, decimal , money datatypes to character */
+        case IIAPI_DTE_TYPE:
+        case IIAPI_DEC_TYPE:
+        case IIAPI_MNY_TYPE:
+            cv.cv_srcDesc.ds_dataType = descriptor->ds_dataType;
+            cv.cv_srcDesc.ds_nullable = descriptor->ds_nullable;
+            cv.cv_srcDesc.ds_length = descriptor->ds_length;
+            cv.cv_srcDesc.ds_precision = descriptor->ds_precision;
+            cv.cv_srcDesc.ds_scale = descriptor->ds_scale;
+            cv.cv_srcDesc.ds_columnType = descriptor->ds_columnType;
+            cv.cv_srcDesc.ds_columnName = descriptor->ds_columnName;
+
+            cv.cv_srcValue.dv_null = dataValue->dv_null;
+            cv.cv_srcValue.dv_length = dataValue->dv_length;
+            cv.cv_srcValue.dv_value = dataValue->dv_value;
+ 
+            cv.cv_dstDesc.ds_dataType = IIAPI_CHA_TYPE;
+            cv.cv_dstDesc.ds_nullable = FALSE;
+            cv.cv_dstDesc.ds_length = 32;
+            cv.cv_dstDesc.ds_precision = 0;
+            cv.cv_dstDesc.ds_scale = 0;
+            cv.cv_dstDesc.ds_columnType = IIAPI_COL_TUPLE;
+            cv.cv_dstDesc.ds_columnName = NULL;
+ 
+            cv.cv_dstValue.dv_null = FALSE;
+            cv.cv_dstValue.dv_length = cv.cv_dstDesc.ds_length;
+            cv.cv_dstValue.dv_value = buffer;
+
+            IIapi_convertData( &cv );
+ 
+            if ( cv.cv_status != IIAPI_ST_SUCCESS )
+            {
+                II_sprintf( buffer, "(invalid type)" );
+                break;
+            }
+            buffer[ cv.cv_dstValue.dv_length ] = '\0';
+            break;
+ 
+        default:
+            II_sprintf( buffer, "invalid type" );
+            break;
+    }
+ 
+    printf("%s\n", buffer);
+}
+
+int main()
+{
+	II_PTR					envHandle1;
+	II_PTR					envHandle2;
+	II_PTR					newEnvHandle;
+	IIAPI_DATAVALUE	        dst_value;
+	IIAPI_FORMATPARM        dstForm;
+	int                     i;
+	char*                   desc[] = {
+									  "MULTINATION format (dd/mm/yy)", "ISO format (yymmdd)", 
+									  "SWEDEN/FINLAND format (yyyy-mm-dd)","GERMAN format (dd.mm.yyyy)", 
+									  "YMD format (yyyy-mmm-dd)", "MDY format (mmm-dd-yyyy)",
+									  "DMY format (dd-mmm-yyyy)","US format (dd-mmm-yyyy)" };
+
+	II_LONG					dateType[8] = {IIAPI_EPV_DFRMT_MULTI, IIAPI_EPV_DFRMT_ISO, 
+		                                   IIAPI_EPV_DFRMT_FINNISH, IIAPI_EPV_DFRMT_GERMAN-
+, 
+										   IIAPI_EPV_DFRMT_YMD, IIAPI_EPV_DFRMT_MDY, 
+										   IIAPI_EPV_DFRMT_DMY, IIAPI_EPV_DFRMT_US};
+
+	envHandle1 = API_Initialize(-1);
+	envHandle2 = API_Initialize(-1);
+
+	dst_value.dv_length = 12;
+	dst_value.dv_value = "20-July-2000";
+
+	printf("Displaying '20-July-2000' in default format...\n");
+	dstForm.fd_dstValue.dv_value = (II_PTR)malloc( dst_value.dv_length );
+	dst_value = API_FormatData(envHandle1, dst_value, IIAPI_CHA_TYPE, IIAPI_DTE_TYPE, &-
+dstForm);
+	API_printLine();
+	
+	for(i = 0; i < 8; i++)
+	{
+		printf("Setting environment to %s\n", desc[i]);
+		/* set environment parameters */
+		newEnvHandle = API_SetEnvParm(envHandle2, IIAPI_EP_DATE_FORMAT, &dateType[i]);
+		printf("Displaying '20-July-2000' in %s...\n", desc[i]);
+		dstForm.fd_dstValue.dv_value = (II_PTR)malloc( dst_value.dv_length );
+		API_FormatData(newEnvHandle, dst_value, IIAPI_DTE_TYPE, IIAPI_CHA_TYPE, &dstForm);
+		API_printLine();
+		free(dstForm.fd_dstValue.dv_value);
+	}
+	
+    /* release environment handle */
+	API_ReleaseEnv(envHandle1);
+    /* release environment handle */
+	API_ReleaseEnv(envHandle2);
+	/* terminate API */
+	API_Terminate();
+	free ( dst_value.dv_value);
+
+	printf("\t\t\t*** THE END ***\n");
+	
+	return (0);
+}
+
+!!
+? sepcc formatdata 
+<<
+>>
+<< IF (NT_GENERIC||VMS)
+formatdata.c
+>>
+.if (VMS)
+? seplnk -a formatdata
+<<
+>>
+.else
+? seplnk formatdata 
+<<
+>>
+.endif
+? run formatdata.exe 
+<<
+Initializing API environment...
+Successfully, initialized API environment
+IIapi_initialize returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Initializing API environment...
+Successfully, initialized API environment
+IIapi_initialize returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Displaying '20-July-2000' in default format...
+20-jul-2000                     
+------------------------------------
+
+Setting environment to MULTINATION format (dd/mm/yy)
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Displaying '20-July-2000' in MULTINATION format (dd/mm/yy)...
+20/07/00    
+------------------------------------
+
+Setting environment to ISO format (yymmdd)
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Displaying '20-July-2000' in ISO format (yymmdd)...
+000720      
+------------------------------------
+
+Setting environment to SWEDEN/FINLAND format (yyyy-mm-dd)
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Displaying '20-July-2000' in SWEDEN/FINLAND format (yyyy-mm-dd)...
+2000-07-20  
+------------------------------------
+
+Setting environment to GERMAN format (dd.mm.yyyy)
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Displaying '20-July-2000' in GERMAN format (dd.mm.yyyy)...
+20.07.2000  
+------------------------------------
+
+Setting environment to YMD format (yyyy-mmm-dd)
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Displaying '20-July-2000' in YMD format (yyyy-mmm-dd)...
+2000-jul-20 
+------------------------------------
+
+Setting environment to MDY format (mmm-dd-yyyy)
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Displaying '20-July-2000' in MDY format (mmm-dd-yyyy)...
+jul-20-2000 
+------------------------------------
+
+Setting environment to DMY format (dd-mmm-yyyy)
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Displaying '20-July-2000' in DMY format (dd-mmm-yyyy)...
+20-jul-2000 
+------------------------------------
+
+Setting environment to US format (dd-mmm-yyyy)
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Displaying '20-July-2000' in US format (dd-mmm-yyyy)...
+20-jul-2000 
+------------------------------------
+
+Releasing API environment...
+Successfully, released API environment
+IIapi_releaseEnv returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Releasing API environment...
+Successfully, released API environment
+IIapi_releaseEnv returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Terminating API...
+			*** THE END ***
+>>
+? delete iiapi_edit.com 
+<<
+~
+>>
+? delete makeiiapi.bat 
+<<
+~
+>>
+? delete formatdata.obj 
+<<
+~
+>>
+? delete formatdata.c 
+<<
+~
+>>
+? delete formatdata.o 
+<<
+~
+>>
+? delete formatdata.exe 
+<<
+~
+>>
+? delete iiapi.h 
+<<
+~
+>>
+? delete iiapi.tmp 
+<<
+~
+>>
+? delete iiapidep.h 
+<<
+~
+>>
+
+
+Ending at: Thu Jul 20 15:56:57 2000

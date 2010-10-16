@@ -1,0 +1,511 @@
+/*
+        Test Name    : eea06.sep
+        User Name    : testenv
+        Test ID      : eea06
+        Module       :
+        Filename     : eea06.sep
+        Purpose      : Test having various types of cursors open at once.
+        Input Files  : none
+        Output Files : none
+        Database     : SEPPARAMDB
+        Tables       : emp, dept
+        Synopsis     : Open four cursors at once. Use cursors for selects
+			and update. Close cursor1 and then reopen it. Use
+			cursor1 for select. Close all cursors and look at 
+			tables.
+        History      : 06-may-1987 - written for 6.0 tests (pad)
+                       18-jun-1990 - rewritten for SQL by Olga Pekelny
+                       03-aug-1990 - sepified by Olga Pekelny
+		       22-jul-1991 - rewritten by Troy Camacho for portability
+		       29-Aug-1991 - marked as incomplete by SteveR.
+		                     Also added DELETES for all the files
+		                     created via CP.  This is necessary 
+                                     otherwise subsequent tests will DIFF due
+                                     to the debris left by this test.
+          12-JUN-1992 Cleaned up test by adding comments.CAMACHO
+	  07-MAR-1997 (vissu01) Modified for NT		
+	  23-Mar-1999   (vande02) Hard-coded VPG_SZ to 8K and changed 'sql -s
+                                SEPPARAMDB' canon to be empty, in order to catch
+                                the msg. "TM could not connect ..." if the test
+                                database did not exist.
+	11-jun-2003 (abbjo03)
+		Add includes and other changes to avoid warnings on VMS.
+*/
+? fill eea06a.dat 
+!!
+    6Aitken	  50000.000	    5sales	    2NE	    8Verducci	   1112-mar-1947	     2
+
+    7Cameron	  35000.000	    8tech sup	    2SE	    6Shigio	   1115-aug-1960	     0
+
+    5Clark	  40000.000	    5sales	    2NC	    8Verducci	   1118-nov-1949	     1
+
+    5Curan	  30000.000	    8tech sup	    2NW	    6Shigio	   1120-aug-1959	     0
+
+    5Curry	  32000.000	    8tech sup	    2NW	    6Shigio	   1130-nov-1955	     3
+
+    6Gordon	  27000.000	    8tech sup	    2NC	    6Shigio	   1123-may-1963	     0
+
+    5Green	  26000.000	    6market	    2NW	    7McTigue	   1119-dec-1961	     0
+
+    7Gregori	  31000.000	    5sales	    2NW	    8Verducci	   1121-oct-1949	     2
+
+    8Kreseski	  24000.000	    8tech sup	    2NC	    6Shigio	   1111-sep-1955	     0
+
+    6Mandic	  43000.000	    5sales	    2SE	    8Verducci	   1110-jul-1964	     0
+
+    7McTigue	  41000.000	    5sales	    2NW	    8Verducci	   11 9-apr-1953	     1
+
+    4Ming	  22000.000	    8tech sup	    2SE	    6Shigio	   11 4-may-1956	     1
+
+    5Ramos	  30000.000	    8tech sup	    2NW	    6Shigio	   1121-jan-1941	     0
+
+    8Robinson	  80000.000	    5sales	    2NE	    8Verducci	   1120-nov-1952	     1
+
+    5Sabel	  21000.000	    8tech sup	    2SE	    6Shigio	   11 8-jan-1958	     0
+
+    6Saxena	  22000.000	    8tech sup	    2NC	    6Shigio	   11 8-may-1950	     0
+
+    6Shigio	  28000.000	    5sales	    2SE	    8Verducci	   11 9-jul-1948	     3
+
+    8Stannich	  33000.000	    6market	    2NW	    7McTigue	   1113-dec-1961	     0
+
+    5Stein	  40000.000	    5sales	    2NE	    8Verducci	   1125-dec-1952	     1
+
+    8Sullivan	  35000.000	    8tech sup	    2NW	    6Shigio	   1110-oct-1960	     1
+
+    8Verducci	  55000.000	    5admin	    2NW	    0	   1125-dec-1958	     2
+
+    9Zimmerman	  25000.000	    8tech sup	    2NE	    6Shigio	   1128-aug-1962	     0
+
+    7DiTallo	  65000.000	    8Contract	    3unk	    8Robinson	   1102-sep-1955	     -
+0
+
+    7Herbert	  35000.000	    7banking	    0	    9Emprinham	   1117-mar-1945	     0
+
+!!
+? fill eea06b.dat 
+!!
+admin   NW                 0.00C  2     4
+market  NW              9200.00A  1     2
+sales   NC            120000.00A  2     1
+sales   NE                 0.00D 18     4
+sales   NW            200000.00A  2     1
+sales   SC             95000.00E  1     1
+sales   SE            175000.00D 18     1
+tech supNC              5000.00C  2     3
+tech supNE             20000.00D 17     2
+tech supNW                 0.00B  1     1
+tech supSE                 0.00D 19     1
+!!
+? fill eea06.sc 
+!!
+#include <stdio.h>
+#include <stdlib.h>
+exec sql include sqlca;
+/***************/
+/*    EEA06    */
+/***************/
+
+main(argc, argv)
+exec sql begin declare section;
+        int argc;
+        char **argv;
+exec sql end declare section;
+
+{
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever not found call sqlprint;
+exec sql whenever sqlwarning call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+	/* Declarations for EMP basis table */
+EXEC SQL BEGIN DECLARE SECTION;
+	char	ename[11];
+	int	esalary;	/* Really money but no decimal places */
+	char	edept[9];
+	char	ediv[4];
+	char	emgr[11];
+	char	ebirthdate[26];
+	short	enum_dep;
+	/* Declarations for DEPT basis table */
+	char	ddname[9];
+	char	ddiv[4];
+	double	dsales;		/* Really money but no decimal places */
+	char	dbldg[3];
+	short	dfloor;
+	short	dnum_emp;
+	/* Useful vars */
+	int	done  ;		/* to signal end of cursor */
+	int	err1  ;		/* Error number */
+	int	err2  ;		/* Error number */
+	int	err3  ;		/* Error number */
+	int	err4  ;		/* Error number */
+EXEC SQL END DECLARE SECTION;
+
+printf("\n***************\n");
+printf("*    EEA06    *\n");
+printf("***************\n\n");
+
+printf("connecting with database...\n");
+exec sql connect :argv[1];
+
+	/*  plain cursor  */
+EXEC SQL DECLARE c1 CURSOR FOR
+		SELECT name, salary, dept, div, mgr, birthdate, num_dep
+		FROM emp
+		WHERE dept = 'sales';
+
+	/*  for update  */
+EXEC SQL DECLARE c2 CURSOR FOR
+		SELECT name, mgr, dept
+		FROM emp
+		WHERE div = 'NC'
+		FOR DIRECT UPDATE OF dept;
+
+	/*  for delete  */
+EXEC SQL DECLARE c3 CURSOR FOR
+		SELECT name
+		FROM emp
+		WHERE mgr = 'Clark'
+		FOR UPDATE OF name;
+
+	/*  for update  */
+EXEC SQL DECLARE c4 CURSOR FOR
+		SELECT dname, sales
+		FROM dept
+		WHERE sales = 0
+		FOR DIRECT UPDATE OF sales;
+
+	/*  GENERIC RERIEVE BEGIN  */
+
+	printf( "ESQL CURSOR Tests, Multiple Cursors Open at once \n\n" );
+
+EXEC SQL OPEN c1;
+EXEC SQL INQUIRE_INGRES (:err1 = errorno);
+EXEC SQL OPEN c2;
+EXEC SQL INQUIRE_INGRES (:err2 = errorno);
+EXEC SQL OPEN c3;
+EXEC SQL INQUIRE_INGRES (:err3 = errorno);
+EXEC SQL OPEN c4;
+EXEC SQL INQUIRE_INGRES (:err4 = errorno);
+	printf( "1) EMP(all) WHERE dept = sales \n" );
+	done = 0;
+	while ( !done && !err1 )
+	{
+EXEC SQL 	FETCH c1 INTO :ename, :esalary, :edept, :ediv, :emgr,
+			:ebirthdate, :enum_dep;
+EXEC SQL	INQUIRE_INGRES (:done = endquery, :err1 = errorno);
+		if (!done && !err1)
+			printf( "%11s, %6d, %4s, %3s, %11s, %13s, %3d\n",
+			ename,esalary,edept,ediv,emgr,ebirthdate,enum_dep);
+	}
+
+	printf( "\n2) EMP(name, mgr, dept) where div=NC \n" );
+	done = 0;
+	while (!done && !err2)
+	{
+EXEC SQL 	FETCH c2 INTO :ename, :emgr, :edept; 
+EXEC SQL 	INQUIRE_INGRES (:done = endquery, :err2 = errorno);
+		if (!done && !err2)
+		{
+			printf("%-11s, %-11s, %-9s\n", ename,emgr,edept);
+EXEC SQL 		UPDATE emp SET dept = UPPERCASE( dept ) 
+			       where current of c2;
+		}
+	}
+
+	printf( "\n3) EMP(name) where mgr = Clark \n" );
+	done = 0;
+	while (!done && !err3)
+	{
+EXEC SQL 	FETCH c3 INTO :ename;
+EXEC SQL 	INQUIRE_INGRES (:done = endquery, :err3 = errorno);
+		if (!done && !err3)
+		{
+			printf( "%-11s \n", ename );
+EXEC SQL 		DELETE FROM emp 
+			WHERE CURRENT OF c3;
+		}
+	}
+
+	printf( "\n(4) DEPT(dname, sales) where sales = 0 \n" );
+	done = 0;
+	while (!done && !err4)
+	{
+EXEC SQL 	FETCH c4 INTO :ddname, :dsales;
+EXEC SQL 	INQUIRE_INGRES (:done = endquery, :err4 = errorno);
+		if (!done && !err4)
+		{
+ 			printf( "%-9s, %10.3f \n", ddname, dsales );
+EXEC SQL		UPDATE dept SET sales =  -100
+                               WHERE CURRENT OF c4;
+		}
+	}
+
+	printf( "\n\n(1 revisited) EMP(all) WHERE dept = sales \n" );
+	done = 0;
+
+EXEC SQL CLOSE c1;
+EXEC SQL INQUIRE_INGRES (:err1 = errorno);
+	if (!err1)
+	EXEC SQL OPEN c1;
+	EXEC SQL INQUIRE_INGRES (:err1 = errorno);
+	while (!done && !err1)
+	{
+EXEC SQL FETCH c1 INTO :ename, :esalary, :edept, :ediv, :emgr,
+			:ebirthdate, :enum_dep;
+EXEC SQL INQUIRE_INGRES (:done = endquery, :err1 = errorno);
+		if (!done && !err1)
+			printf( "%11s, %6d, %4s, %3s, %11s, %13s, %3d\n",
+			ename,esalary,edept,ediv,emgr,ebirthdate,enum_dep);
+	}
+
+EXEC SQL CLOSE c1;
+EXEC SQL CLOSE c2;
+EXEC SQL CLOSE c3;
+EXEC SQL CLOSE c4;
+
+	printf("\nDumping EMP table\n");
+EXEC SQL SELECT name, salary, dept, div, mgr, birthdate, num_dep
+         INTO :ename, :esalary, :edept, :ediv, :emgr, :ebirthdate, :enum_dep   
+	 FROM emp;
+EXEC SQL BEGIN;
+printf( "%11s, %6d, %4s, %3s, %11s, %13s, %3d\n",
+	ename, esalary, edept, ediv, emgr, ebirthdate, enum_dep);
+EXEC SQL END;
+
+	printf("\nDumping EMP table\n");
+EXEC SQL SELECT dname, div, sales, bldg, floor, num_emp
+         INTO  :ddname, :ddiv, :dsales, :dbldg, :dfloor, :dnum_emp   
+	 FROM dept;
+EXEC SQL BEGIN;
+printf( "%9s, %4s, %10.3f, %3s, %3d, %3d\n",
+			ddname, ddiv, dsales, dbldg, dfloor, dnum_emp);
+EXEC SQL END;
+
+	printf( "\n===END OF TEST RUN===\n" );
+ 
+exec sql disconnect;
+
+exit(0);
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop emp\g
+<<
+~
+>>
+* drop dept\g
+<<
+~
+>>
+*	create table emp(
+<<
+>>
+*	name c10 not null with default,
+<<
+>>
+*	salary float not null with default,
+<<
+>>
+*	dept c8 not null with default,
+<<
+>>
+*	div c3 not null with default,
+<<
+>>
+*	mgr c10 not null with default,
+<<
+>>
+*	birthdate c25 not null with default,
+<<
+>>
+*	num_dep smallint not null with default)
+<<
+>>
+*	with noduplicates, page_size=8192\g
+<<
+>>
+*	copy emp(
+<<
+>>
+*	name= varchar(0)tab,
+<<
+>>
+*	salary= c0tab,
+<<
+>>
+*	dept= varchar(0)tab,
+<<
+>>
+*	div= varchar(0)tab,
+<<
+>>
+*	mgr= varchar(0)tab,
+<<
+>>
+*	birthdate= varchar(0)tab,
+<<
+>>
+*	num_dep= c0nl, nl= d1)
+<<
+>>
+*	from 'eea06a.dat'\g
+<<
+(24 rows)
+>>
+* create table dept ( dname c8, div c3, sales f8, bldg c2,
+<<
+>>
+*		floor  i1, num_emp i2) with page_size=8192\g
+<<
+>>
+* copy dept (	dname = c8, div = c3, sales = c20, bldg = c2,
+<<
+>>
+*		floor = c2, num_emp = c0nl)	
+<<
+>>
+*		from 'eea06b.dat'\g
+<<
+(11 rows)
+>>
+* \q
+<<
+>>
+? sepesqlc eea06.sc 
+<<
+ESQL eea06.sc:
+>>
+? sepcc eea06.c 
+<<
+>>
+<< IF (NT_GENERIC)
+eea06.c
+>>
+? seplnk eea06 
+<<
+>>
+? run eea06.exe SEPPARAMDB
+<<
+
+***************
+*    EEA06    *
+***************
+
+connecting with database...
+ESQL CURSOR Tests, Multiple Cursors Open at once
+
+1) EMP(all) WHERE dept = sales
+ Aitken    ,  50000, sales   , NE ,  Verducci  , 12-mar-1947              ,   2
+ Clark     ,  40000, sales   , NC ,  Verducci  , 18-nov-1949              ,   1
+ Gregori   ,  31000, sales   , NW ,  Verducci  , 21-oct-1949              ,   2
+ Mandic    ,  43000, sales   , SE ,  Verducci  , 10-jul-1964              ,   0
+ McTigue   ,  41000, sales   , NW ,  Verducci  ,  9-apr-1953              ,   1
+ Robinson  ,  80000, sales   , NE ,  Verducci  , 20-nov-1952              ,   1
+ Shigio    ,  28000, sales   , SE ,  Verducci  ,  9-jul-1948              ,   3
+ Stein     ,  40000, sales   , NE ,  Verducci  , 25-dec-1952              ,   1
+
+2) EMP(name, mgr, dept) where div=NC
+Clark      , Verducci   , sales
+Gordon     , Shigio     , tech sup
+Kreseski   , Shigio     , tech sup
+Saxena     , Shigio     , tech sup
+
+3) EMP(name) where mgr = Clark
+
+(4) DEPT(dname, sales) where sales = 0
+admin    ,      0.000
+sales    ,      0.000
+tech sup ,      0.000
+tech sup ,      0.000
+
+
+(1 revisited) EMP(all) WHERE dept = sales
+ Aitken    ,  50000, sales   , NE ,  Verducci  , 12-mar-1947              ,   2
+ Gregori   ,  31000, sales   , NW ,  Verducci  , 21-oct-1949              ,   2
+ Mandic    ,  43000, sales   , SE ,  Verducci  , 10-jul-1964              ,   0
+ McTigue   ,  41000, sales   , NW ,  Verducci  ,  9-apr-1953              ,   1
+ Robinson  ,  80000, sales   , NE ,  Verducci  , 20-nov-1952              ,   1
+ Shigio    ,  28000, sales   , SE ,  Verducci  ,  9-jul-1948              ,   3
+ Stein     ,  40000, sales   , NE ,  Verducci  , 25-dec-1952              ,   1
+
+Dumping EMP table
+ Aitken    ,  50000, sales   , NE ,  Verducci  , 12-mar-1947              ,   2
+ Cameron   ,  35000, tech sup, SE ,  Shigio    , 15-aug-1960              ,   0
+ Clark     ,  40000, SALES   , NC ,  Verducci  , 18-nov-1949              ,   1
+ Curan     ,  30000, tech sup, NW ,  Shigio    , 20-aug-1959              ,   0
+ Curry     ,  32000, tech sup, NW ,  Shigio    , 30-nov-1955              ,   3
+ Gordon    ,  27000, TECH SUP, NC ,  Shigio    , 23-may-1963              ,   0
+ Green     ,  26000, market  , NW ,  McTigue   , 19-dec-1961              ,   0
+ Gregori   ,  31000, sales   , NW ,  Verducci  , 21-oct-1949              ,   2
+ Kreseski  ,  24000, TECH SUP, NC ,  Shigio    , 11-sep-1955              ,   0
+ Mandic    ,  43000, sales   , SE ,  Verducci  , 10-jul-1964              ,   0
+ McTigue   ,  41000, sales   , NW ,  Verducci  ,  9-apr-1953              ,   1
+ Ming      ,  22000, tech sup, SE ,  Shigio    ,  4-may-1956              ,   1
+ Ramos     ,  30000, tech sup, NW ,  Shigio    , 21-jan-1941              ,   0
+ Robinson  ,  80000, sales   , NE ,  Verducci  , 20-nov-1952              ,   1
+ Sabel     ,  21000, tech sup, SE ,  Shigio    ,  8-jan-1958              ,   0
+ Saxena    ,  22000, TECH SUP, NC ,  Shigio    ,  8-may-1950              ,   0
+ Shigio    ,  28000, sales   , SE ,  Verducci  ,  9-jul-1948              ,   3
+ Stannich  ,  33000, market  , NW ,  McTigue   , 13-dec-1961              ,   0
+ Stein     ,  40000, sales   , NE ,  Verducci  , 25-dec-1952              ,   1
+ Sullivan  ,  35000, tech sup, NW ,  Shigio    , 10-oct-1960              ,   1
+ Verducci  ,  55000, admin   , NW ,            , 25-dec-1958              ,   2
+ Zimmerman ,  25000, tech sup, NE ,  Shigio    , 28-aug-1962              ,   0
+ DiTallo   ,  65000, Contract, unk,  Robinson  , 02-sep-1955              ,   0
+ Herbert   ,  35000, banking ,    ,  Emprinham , 17-mar-1945              ,   0
+
+Dumping EMP table
+ admin   ,  NW ,   -100.000,  C ,   2,   4
+ market  ,  NW ,   9200.000,  A ,   1,   2
+ sales   ,  NC , 120000.000,  A ,   2,   1
+ sales   ,  NE ,   -100.000,  D ,  18,   4
+ sales   ,  NW , 200000.000,  A ,   2,   1
+ sales   ,  SC ,  95000.000,  E ,   1,   1
+ sales   ,  SE , 175000.000,  D ,  18,   1
+ tech sup,  NC ,   5000.000,  C ,   2,   3
+ tech sup,  NE ,  20000.000,  D ,  17,   2
+ tech sup,  NW ,   -100.000,  B ,   1,   1
+ tech sup,  SE ,   -100.000,  D ,  19,   1
+
+===END OF TEST RUN===
+
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop emp\g
+<<
+~
+>>
+* drop dept\g
+<<
+~
+>>
+* \q
+<<
+>>
+? delete eea06.exe 
+<<
+~
+>>
+? delete eea06.c 
+<<
+~
+>>
+? delete eea06.obj 
+<<
+~
+>>
+? delete eea06.o 
+<<
+~
+>>
+
+
+Ending at: 12-JUN-1992 10:50:56

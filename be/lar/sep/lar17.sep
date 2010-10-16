@@ -1,0 +1,764 @@
+/*
+	Copyright (c) 2004 Ingres Corporation
+
+	Test Name: lar17.sep
+	Time: Wed Feb  8 18:27:53 1995
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : lar17.sep
+	Module  : be/lar
+	Filename: lar17.sep
+	Purpose	: Test table-level rollforwarddb with blob table
+	                 > using/not using -noblobs option
+	                 > journaled and nonjournaled.
+	Input Files  : fillblob.sc, updateblob.sc, f2500,
+	               prfdb04.sep, bea24.sep (used for blob contents)
+	Output Files : fillblob.[c,o,exe], updateblob.[c,o,exe]
+	Database     : SEPPARAMDB
+	Tables       : heaptbl
+	Synopsis     : Using esqlc programs, creates a blob table and
+	               populates it.  Ckpdb -j, insert & update,
+	               rollforwarddb -table.  Checks blob contents.
+	               Updates a row to alter blob data, then does a
+	               rollforwarddb -table -noblobs.  Checks contents:
+	               non-blob data (filename) should be readable but
+	               extended table should be marked inconsistent this is
+		       because the -noblobs option has been documented as NOT
+		       Supported as of II 2.5 see issues 8762048 and 13356305
+		       and the Ingres 2.6 Migration Guide.
+	               Reloads with db-level rollforwarddb and retests with
+	               journaling on.
+
+		       IMPORTANT: If  diffs are present after the 
+                                   select count(*) , then the test has failed.
+                                   
+
+
+ History:  8-Feb-1995	(holla02) Created
+          13-Feb-1995	(holla02) Modified structure & canons
+          28-Feb-1995	(holla02) Took new canons
+	  17-sep-1998	(kinte01) Delete fillblob.obj & updateblob.obj for VMS
+          07-Jan-1999   (hanch04) Update test for table level ckp error
+          29-Jan-1999   (hanch04) Update test for table level ckp error
+          24-Sep-1998   (uptad01) this test has been extended to cover 
+				  more table types (see lar142 - 153)
+                                  changed blobtbl to heaptbl
+                                  made compilation and TM quit canons ignored
+                                  added relevant ANSI headers for C code 	
+	  15-aug-1999	(popri01) Correct put_handler definition.
+	  10-oct-1999   (kamra01) The comments on 24th Sep '98 and 15th Aug are
+				  from main
+          17-Apr-2000	(marwi08) Correcting CANONs for error E_SC0206.
+          08-Jun-2004   (vande02) Removing multiple canons from the usage of
+				  '-noblobs' option as there is only one 
+                       		  expected answer.  The '-noblobs option is NOT
+		       		  supported as of II 2.5 see issues 8762048 and
+				  13356305 and Ingres 2.6 Migration Guide.
+	                          Adding checks of relstat2 to verify the status
+				  of table level recovery allowed or disallowed.
+                        	  Aligned history comments.  Put in empty canons
+				  for SQL connection verification.
+          21-Sep-2004	(wu$ca01) Update test to remove the two cases that
+                        tests rollforwarddb with the -noblobs option and the
+                        related select queries, since these two case would be
+                        the same as the other rollforwarddb test cases if
+                        removing the -noblobs option in this test.
+                        Miscellaneous updates to sep header.
+          01-Nov-2004	(vande02) Changing test input file lar01.sep to
+			lar17.sep so this test is not dependent on lar01.sep
+			which is not included in the open source test pack.
+          25-Mar-2005	(vande02) Added sleep 5 after first rollforwarddb so
+			all gets finished up by the time the relstat bit is
+			checked.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+	  22-Sep-2006	(rogch01)
+		        Add +w to rollforwarddb in case the database is momentarily
+			unavailable following the previous command.  Filled the copied
+			in files in case the test fails.
+          12-Nov-2007   (drivi01) Rename all binaries containing word "update"
+                        to use "updte" instead, to avoid Vista's installer 
+			detection.
+*/
+? fill fillblob.sc 
+!!
+#include <stdio.h>
+
+EXEC SQL INCLUDE SQLCA;
+char result[100001];
+
+int get_handler();
+int put_handler();
+void erreur();
+
+void main(int argc,char *argv[])
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char dbname[50];
+	char filename[256];
+EXEC SQL END DECLARE SECTION;
+
+
+
+	if (argc < 3)
+	{
+		printf ("\nUsage : fillblob <dbname> <filename> [create]\n");
+		exit(1);
+	}
+	strcpy(dbname, argv[1]);
+	strcpy(filename,argv[2]);
+	EXEC SQL WHENEVER SQLERROR STOP;
+	EXEC SQL CONNECT :dbname;
+	EXEC SQL WHENEVER SQLERROR CALL erreur;
+
+	if (argc == 4)
+	{	
+		EXEC SQL WHENEVER SQLERROR CONTINUE;
+		EXEC SQL DROP TABLE heaptbl;
+		EXEC SQL WHENEVER SQLERROR CALL erreur;
+		EXEC SQL CREATE TABLE heaptbl ( filename varchar(256), filecontent long varchar);
+	}
+
+	EXEC SQL INSERT INTO heaptbl VALUES(:filename,datahandler(put_handler(filename)));
+	EXEC SQL COMMIT;
+
+	EXEC SQL DISCONNECT;
+}
+
+void erreur()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char message[256];
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL INQUIRE_SQL(:message=errortext);
+	printf("\nSQL ERROR: %s",message);
+	EXEC SQL ROLLBACK;
+	EXEC SQL DISCONNECT;
+	exit(1);
+}
+
+int put_handler(char *filename)
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char mon_segment[3000];
+	int longueur;
+	EXEC SQL END DECLARE SECTION;
+
+	FILE *fic;
+	
+	fic = fopen (filename,"r");
+	if (fic == (FILE*)0) 
+	{
+		printf ("FillBlob Error: Cannot open file %s\n",filename);
+		exit(1);
+	}
+	while (fgets(mon_segment,100,fic)!= NULL )
+	{
+		longueur = strlen (mon_segment);
+		EXEC SQL PUT DATA (segment=:mon_segment,segmentlength=:longueur);
+	}
+	EXEC SQL PUT DATA (dataend = 1);
+        return longueur;
+}
+
+int get_handler()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char mon_segment[101];
+	int longueur;
+	int data_end;
+	EXEC SQL END DECLARE SECTION;
+	EXEC SQL WHENEVER SQLERROR call erreur;
+
+	strcpy(result,"");
+
+	data_end = 0;
+
+	while (data_end != 1)
+	{
+		EXEC SQL GET DATA (:mon_segment = segment, :longueur=segmentlength,:data_end = dat-
+aend)
+		WITH maxlength =100;
+		strcat (result, mon_segment);
+	}
+         return longueur;
+}
+
+!!
+? fill updteblob.sc 
+!!
+#include <stdio.h>
+
+EXEC SQL INCLUDE SQLCA;
+int put_handler();
+void erreur();
+
+void main(int argc,char *argv[])
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char dbname[50];
+	char filename[256];
+	char oldname[256];
+EXEC SQL END DECLARE SECTION;
+
+
+
+	if (argc < 4)
+	{
+		printf ("\nUsage : updteblob <dbname> <filename> <oldname>\n");
+		exit(1);
+	}
+	strcpy(dbname, argv[1]);
+	strcpy(filename,argv[2]);
+	strcpy(oldname, argv[3]);
+	EXEC SQL WHENEVER SQLERROR STOP;
+	EXEC SQL CONNECT :dbname;
+	EXEC SQL WHENEVER SQLERROR CALL erreur;
+
+	EXEC SQL UPDATE heaptbl 
+	SET filecontent = datahandler(put_handler(filename))
+	WHERE filename = :oldname;
+
+	EXEC SQL COMMIT;
+
+	EXEC SQL DISCONNECT;
+}
+
+void erreur()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char message[256];
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL INQUIRE_SQL(:message=errortext);
+	printf("\nSQL ERROR: %s",message);
+	EXEC SQL ROLLBACK;
+	EXEC SQL DISCONNECT;
+	exit(1);
+}
+
+int put_handler(char *filename)
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char mon_segment[3000];
+	int longueur;
+	EXEC SQL END DECLARE SECTION;
+
+	FILE *fic;
+	
+
+	fic = fopen (filename,"r");
+	if (fic == (FILE*)0) 
+	{
+		printf ("FillBlob Error: Cannot open file %s\n",filename);
+		exit(1);
+	}
+	while (fgets(mon_segment,100,fic)!= NULL )
+	{
+		longueur = strlen (mon_segment);
+		EXEC SQL PUT DATA (segment=:mon_segment,segmentlength=:longueur);
+	}
+	EXEC SQL PUT DATA (dataend = 1);
+        return longueur;
+}
+!!
+? fill f2500 
+!!
+ 100 chars --------------------------------------------------------------------------
+-------------->
+ 200 chars --------------------------------------------------------------------------
+-------------->
+ 300 chars --------------------------------------------------------------------------
+-------------->
+ 400 chars --------------------------------------------------------------------------
+-------------->
+ 500 chars --------------------------------------------------------------------------
+-------------->
+ 600 chars --------------------------------------------------------------------------
+-------------->
+ 700 chars --------------------------------------------------------------------------
+-------------->
+ 800 chars --------------------------------------------------------------------------
+-------------->
+ 900 chars --------------------------------------------------------------------------
+-------------->
+1000 chars --------------------------------------------------------------------------
+-------------->
+1100 chars --------------------------------------------------------------------------
+-------------->
+1200 chars --------------------------------------------------------------------------
+-------------->
+1300 chars --------------------------------------------------------------------------
+-------------->
+1400 chars --------------------------------------------------------------------------
+-------------->
+1500 chars --------------------------------------------------------------------------
+-------------->
+1600 chars --------------------------------------------------------------------------
+-------------->
+1700 chars --------------------------------------------------------------------------
+-------------->
+1800 chars --------------------------------------------------------------------------
+-------------->
+1900 chars --------------------------------------------------------------------------
+-------------->
+2000 chars --------------------------------------------------------------------------
+-------------->
+2100 chars --------------------------------------------------------------------------
+-------------->
+2200 chars --------------------------------------------------------------------------
+-------------->
+2300 chars --------------------------------------------------------------------------
+-------------->
+2400 chars --------------------------------------------------------------------------
+-------------->
+2500 chars --------------------------------------------------------------------------
+-------------->
+!!
+? fill prfdb04.sep
+!!
+!!
+? fill bea24.sep
+!!
+!!
+? cp @file(ing_tst,be,lar,sep,lar17.sep) prfdb04.sep 
+<<
+>>
+? cp @file(ing_tst,be,lar,sep,lar17.sep) bea24.sep 
+<<
+>>
+? sepesqlc fillblob.sc 
+<<
+ESQL fillblob.sc:
+>>
+? sepcc fillblob.c 
+<<
+~
+>>
+? seplnk fillblob 
+<<
+~
+>>
+? sepesqlc updteblob.sc 
+<<
+ESQL updteblob.sc:
+>>
+? sepcc updteblob.c 
+<<
+~
+>>
+? seplnk updteblob 
+<<
+~
+>>
+? run fillblob.exe SEPPARAMDB prfdb04.sep create 
+<<
+>>
+? run fillblob.exe SEPPARAMDB bea24.sep 
+<<
+>>
+? run fillblob.exe SEPPARAMDB updteblob.sc 
+<<
+>>
+? ckpdb -l +w -d -j SEPPARAMDB 
+<<
+~
+>>
+? run fillblob.exe SEPPARAMDB fillblob.sc 
+<<
+>>
+? run updteblob.exe SEPPARAMDB f2500 updteblob.sc 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from heaptbl;\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select filecontent from heaptbl where filename='updteblob.sc'\g 
+<<
++--------------------------------+
+|filecontent                     |
++--------------------------------+
+| 100 chars -------------------------------------------------------------------------
+--------------->\n 200 chars --------------------------------------------------------
+-------------------------------->\n 300 chars ---------------------------------------
+------------------------------------------------->\n 400 chars ----------------------
+------------------------------------------------------------------>\n 500 chars -----
+----------------------------------------------------------------------------------->-
+\n 600 chars ------------------------------------------------------------------------
+---------------->\n 700 chars -------------------------------------------------------
+--------------------------------->\n 800 chars --------------------------------------
+-------------------------------------------------->\n 900 chars ---------------------
+------------------------------------------------------------------->\n1000 chars ----
+-------------------------------------------------------------------------------------
+>\n1100 chars -----------------------------------------------------------------------
+----------------->\n1200 chars ------------------------------------------------------
+---------------------------------->\n1300 chars -------------------------------------
+--------------------------------------------------->\n1400 chars --------------------
+-------------------------------------------------------------------->\n1500 chars ---
+-------------------------------------------------------------------------------------
+->\n1600 chars ----------------------------------------------------------------------
+------------------>\n1700 chars -----------------------------------------------------
+----------------------------------->\n1800 chars ------------------------------------
+---------------------------------------------------->\n1900 chars -------------------
+--------------------------------------------------------------------->\n2000 chars --
+-------------------------------------------------------------------------------------
+-->\n2100 chars ---------------------------------------------------------------------
+------------------->\n2200 chars ----------------------------------------------------
+------------------------------------>\n2300 chars -----------------------------------
+----------------------------------------------------->\n2400 chars ------------------
+---------------------------------------------------------------------->\n2500 chars -
+-------------------------------------------------------------------------------------
+--->\n|
++--------------------------------+
+(1 row)
+>>
+* \q 
+<<
+>>
+/*
+Successful recovery but no journals to apply
+*/
+? rollforwarddb +w SEPPARAMDB -table=heaptbl 
+<<
+~
+>>
+? sleep 5
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from heaptbl;\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|            3|
++-------------+
+(1 row)
+>>
+* select filecontent from heaptbl where filename='updteblob.sc'\g 
+<<
+
++--------------------------------+
+|filecontent                     |
++--------------------------------+
+|#include <stdio.h>\n\nEXEC SQL INCLUDE SQLCA;\nint put_handler();\nvoid erreur();\n-
+\nvoid main(int argc,char *argv[])\n{\nEXEC SQL BEGIN DECLARE SECTION;\n\tchar dbnam-
+e[50];\n\tchar filename[256];\n\tchar oldname[256];\nEXEC SQL END DECLARE SECTION;\n-
+\n\n\n\tif (argc < 4)\n\t{\n\t\tprintf ("\\nUsage : updteblob <dbname> <filename> <-
+oldname>\\n");\n\t\texit(1);\n\t}\n\tstrcpy(dbname, argv[1]);\n\tstrcpy(filename,arg-
+v[2]);\n\tstrcpy(oldname, argv[3]);\n\tEXEC SQL WHENEVER SQLERROR STOP;\n\tEXEC SQL -
+CONNECT :dbname;\n\tEXEC SQL WHENEVER SQLERROR CALL erreur;\n\n\tEXEC SQL UPDATE hea-
+ptbl \n\tSET filecontent = datahandler(put_handler(filename))\n\tWHERE filename = :o-
+ldname;\n\n\tEXEC SQL COMMIT;\n\n\tEXEC SQL DISCONNECT;\n}\n\nvoid erreur()\n{\n\tEX-
+EC SQL BEGIN DECLARE SECTION;\n\tchar message[256];\n\tEXEC SQL END DECLARE SECTION;-
+\n\n\tEXEC SQL INQUIRE_SQL(:message=errortext);\n\tprintf("\\nSQL ERROR: %s",message-
+);\n\tEXEC SQL ROLLBACK;\n\tEXEC SQL DISCONNECT;\n\texit(1);\n}\n\nint put_handler(c-
+har *filename)\n{\n\tEXEC SQL BEGIN DECLARE SECTION;\n\tchar mon_segment[3000];\n\ti-
+nt longueur;\n\tEXEC SQL END DECLARE SECTION;\n\n\tFILE *fic;\n\t\n\n\tfic = fopen (-
+filename,"r");\n\tif (fic == (FILE*)0) \n\t{\n\t\tprintf ("FillBlob Error: Cannot op-
+en file %s\\n",filename);\n\t\texit(1);\n\t}\n\twhile (fgets(mon_segment,100,fic)!= -
+NULL )\n\t{\n\t\tlongueur = strlen (mon_segment);\n\t\tEXEC SQL PUT DATA (segment=:m-
+on_segment,segmentlength=:longueur);\n\t}\n\tEXEC SQL PUT DATA (dataend = 1);\n     -
+   return longueur;\n}\n|
++--------------------------------+
+(1 row)
+>>
+* select filecontent from heaptbl where filename='fillblob.sc';\g
+<<
++--------------------------------+
+|filecontent                     |
++--------------------------------+
++--------------------------------+
+(0 rows)
+>>
+* \q 
+<<
+>>
+? run fillblob.exe SEPPARAMDB fillblob.sc 
+<<
+>>
+? run updteblob.exe SEPPARAMDB f2500 updteblob.sc 
+<<
+>>
+/*
+Successful database recovery but no journals to apply
+*/
+? rollforwarddb +w SEPPARAMDB 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+/*
+When 0x800 bit is set in relstat2 table level recovery is DISALLOWED.
+Last database rollforwarddb WITHOUT journaling restored relstat2 to
+DISALLOW table level recovery.  Relstat2 staus will not be changed
+to ALLOW table level recovering UNTIL the next checkpoint (ckpdb +j).
+*/
+* select relid, hex(relstat2) from iirelation where relid='heaptbl';\g
+<<
+
++--------------------------------+--------+
+|relid                           |col2    |
++--------------------------------+--------+
+|heaptbl                         |04000802|
++--------------------------------+--------+
+(1 row)
+>>
+* \q
+<<
+>>
+/*
+Now journaling is enabled with this ckpdb
+*/
+? ckpdb -l +w -d +j SEPPARAMDB 
+<<
+~
+>>
+? run fillblob.exe SEPPARAMDB fillblob.sc 
+<<
+>>
+? run updteblob.exe SEPPARAMDB f2500 updteblob.sc 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+/*
+When same hex bit is set to zero in relstat2 table level recovery IS ALLOWED
+*/
+* select relid, hex(relstat2) from iirelation where relid='heaptbl';\g
+<<
+
++--------------------------------+--------+
+|relid                           |col2    |
++--------------------------------+--------+
+|heaptbl                         |04000002|
++--------------------------------+--------+
+(1 row)
+>>
+* select count(*) from heaptbl;\g
+<<
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select filecontent from heaptbl where filename='updteblob.sc';\g
+<<
++--------------------------------+
+|filecontent                     |
++--------------------------------+
+| 100 chars -------------------------------------------------------------------------
+--------------->\n 200 chars --------------------------------------------------------
+-------------------------------->\n 300 chars ---------------------------------------
+------------------------------------------------->\n 400 chars ----------------------
+------------------------------------------------------------------>\n 500 chars -----
+----------------------------------------------------------------------------------->-
+\n 600 chars ------------------------------------------------------------------------
+---------------->\n 700 chars -------------------------------------------------------
+--------------------------------->\n 800 chars --------------------------------------
+-------------------------------------------------->\n 900 chars ---------------------
+------------------------------------------------------------------->\n1000 chars ----
+-------------------------------------------------------------------------------------
+>\n1100 chars -----------------------------------------------------------------------
+----------------->\n1200 chars ------------------------------------------------------
+---------------------------------->\n1300 chars -------------------------------------
+--------------------------------------------------->\n1400 chars --------------------
+-------------------------------------------------------------------->\n1500 chars ---
+-------------------------------------------------------------------------------------
+->\n1600 chars ----------------------------------------------------------------------
+------------------>\n1700 chars -----------------------------------------------------
+----------------------------------->\n1800 chars ------------------------------------
+---------------------------------------------------->\n1900 chars -------------------
+--------------------------------------------------------------------->\n2000 chars --
+-------------------------------------------------------------------------------------
+-->\n2100 chars ---------------------------------------------------------------------
+------------------->\n2200 chars ----------------------------------------------------
+------------------------------------>\n2300 chars -----------------------------------
+----------------------------------------------------->\n2400 chars ------------------
+---------------------------------------------------------------------->\n2500 chars -
+-------------------------------------------------------------------------------------
+--->\n|
++--------------------------------+
+(1 row)
+>>
+* \q
+<<
+>>
+/*
+Successful table level recovery and journals are applied as journaling was
+enabled during the last ckpdb
+*/
+? rollforwarddb +w SEPPARAMDB -table=heaptbl 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+/*
+When same hex bit is set to zero in relstat2 table level recovery IS ALLOWED
+*/
+* select relid, hex(relstat2) from iirelation where relid='heaptbl';\g
+<<
+
++--------------------------------+--------+
+|relid                           |col2    |
++--------------------------------+--------+
+|heaptbl                         |04000002|
++--------------------------------+--------+
+(1 row)
+>>
+* select count(*) from heaptbl;\g
+<<
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select filecontent from heaptbl where filename='updteblob.sc';\g
+<<
++--------------------------------+
+|filecontent                     |
++--------------------------------+
+| 100 chars -------------------------------------------------------------------------
+--------------->\n 200 chars --------------------------------------------------------
+-------------------------------->\n 300 chars ---------------------------------------
+------------------------------------------------->\n 400 chars ----------------------
+------------------------------------------------------------------>\n 500 chars -----
+----------------------------------------------------------------------------------->-
+\n 600 chars ------------------------------------------------------------------------
+---------------->\n 700 chars -------------------------------------------------------
+--------------------------------->\n 800 chars --------------------------------------
+-------------------------------------------------->\n 900 chars ---------------------
+------------------------------------------------------------------->\n1000 chars ----
+-------------------------------------------------------------------------------------
+>\n1100 chars -----------------------------------------------------------------------
+----------------->\n1200 chars ------------------------------------------------------
+---------------------------------->\n1300 chars -------------------------------------
+--------------------------------------------------->\n1400 chars --------------------
+-------------------------------------------------------------------->\n1500 chars ---
+-------------------------------------------------------------------------------------
+->\n1600 chars ----------------------------------------------------------------------
+------------------>\n1700 chars -----------------------------------------------------
+----------------------------------->\n1800 chars ------------------------------------
+---------------------------------------------------->\n1900 chars -------------------
+--------------------------------------------------------------------->\n2000 chars --
+-------------------------------------------------------------------------------------
+-->\n2100 chars ---------------------------------------------------------------------
+------------------->\n2200 chars ----------------------------------------------------
+------------------------------------>\n2300 chars -----------------------------------
+----------------------------------------------------->\n2400 chars ------------------
+---------------------------------------------------------------------->\n2500 chars -
+-------------------------------------------------------------------------------------
+--->\n|
++--------------------------------+
+(1 row)
+>>
+* select filename from heaptbl order by filename;\g
+<<
+
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+|filename                                                                           -
+                                                                                    -
+                                                                                    -
+     |
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+|bea24.sep                                                                          -
+                                                                                    -
+                                                                                    -
+     |
+|fillblob.sc                                                                        -
+                                                                                    -
+                                                                                    -
+     |
+|prfdb04.sep                                                                        -
+                                                                                    -
+                                                                                    -
+     |
+|updteblob.sc                                                                      -
+                                                                                    -
+                                                                                    -
+     |
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+(4 rows)
+>>
+* drop table heaptbl;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? delete fillblob.obj 
+<<
+~
+>>
+? delete fillblob.exe 
+<<
+~
+>>
+? delete fillblob.o 
+<<
+~
+>>
+? delete fillblob.obj 
+<<
+~
+>>
+? delete fillblob.c 
+<<
+~
+>>
+? delete fillblob.obj 
+<<
+~
+>>
+? delete updteblob.exe 
+<<
+~
+>>
+? delete updteblob.o 
+<<
+~
+>>
+? delete updteblob.obj 
+<<
+~
+>>
+? delete updteblob.c 
+<<
+~
+>>
+
+
+Ending at: Wed Jun  9 18:39:39 2004

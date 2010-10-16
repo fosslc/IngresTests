@@ -1,0 +1,253 @@
+/*
+	Test Name: efa44.sep
+	Time: 
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename: efa44.sep
+	Purpose	: Test byref dbproc triggering rules which call nested dbprocs.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     : Create a dbproc that triggers rules which calls nested 
+		       dbprocs.  Also test when an error occurs in the dbproc 
+		       that was invoked by a rule.
+
+ 		History:  11-Nov-1993	(malee)	Created
+			  7-MAR-1997    (vissu01) Modified for NT
+			 23-Mar-1999	(vande02) Hard-coded VPG_SZ to 2K and 
+				changed 'sql -s SEPPARAMDB' canon to be empty,
+				in order to catch the msg. "TM could not connect
+				..." if the test database did not exist.
+*/
+? fill efa44.sc 
+!!
+exec sql include sqlca;
+
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever not found call sqlprint;
+exec sql whenever sqlwarning call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+main(argc, argv)
+exec sql begin declare section;
+  int  argc;
+  char **argv;
+exec sql end declare section;
+{
+	exec sql connect :argv[1];
+	efa44();
+	exec sql disconnect;
+}  /* main */
+
+efa44()
+{
+exec sql begin declare section;
+  char  emp[31], mname[31];
+  float sal;
+exec sql end declare section;
+
+/*
+** this test will check if the new employee has the valid manager,
+** before inserting the record into the employee table;
+** automatically update the salary table with a base salary and any 
+** employee with manager jim will have doubled salary.
+*/
+
+	exec sql drop table employee;
+	exec sql create table employee (emp varchar(30) not null, mname varchar(30) not nul-
+l) with page_size=2048;
+
+	exec sql drop table salary;
+	exec sql create table salary (emp varchar(30) not null, sal money not null) with page_size=2048;
+
+	exec sql drop table manager;
+	exec sql create table manager (emp varchar(30) not null, mname varchar(30) not null-
+) with page_size=2048;
+	exec sql insert into manager (emp, mname) values ('bob', 'john'); 
+	exec sql insert into manager (emp, mname) values ('harry', 'jim'); 
+
+	exec sql drop procedure ins_sal;
+	exec sql create procedure ins_sal (emp varchar(30) not null, sal money not null) as
+	begin
+		insert into salary (emp, sal) values (:emp, :sal);
+		select sal into :sal from salary where emp = :emp;
+	end;
+
+	exec sql drop procedure call_ins_sal;
+	exec sql create procedure call_ins_sal (emp varchar(30) not null, sal money not nul-
+l) as
+	begin
+		execute procedure ins_sal (emp = :emp, sal = byref(:sal));
+	end;
+
+
+	exec sql drop procedure check_emp;
+	exec sql create procedure check_emp (emp varchar(30) not null, mname varchar(30) no-
+t null) as
+	declare mesg_buf  varchar(81) not null;
+		check_val integer;
+		sal money;
+	begin
+		sal = 1000;
+		select count (*) into :check_val from manager 
+			where mname = :mname;
+		if check_val = 0 then
+			mesg_buf = 'Error 99999: Manager "' + :mname + '" not found - Employee "' + :emp -
++ '" will not be added';
+			raise error 99999 mesg_buf;
+		endif;
+		execute procedure call_ins_sal (emp = :emp, sal = byref(:sal));
+		mesg_buf = 'Employee "' + :emp + '" has been added with salary' + varchar(:sal);
+		message mesg_buf;
+	end;
+
+
+	exec sql drop procedure upd_sal;
+	exec sql create procedure upd_sal (emp varchar(30) not null, sal money not null) as
+	begin
+		update salary s from manager m, employee e  
+			set sal = :sal * 2
+			where s.emp = e.emp
+			and e.mname = m.mname
+			and m.mname = 'jim';
+		select sal into :sal from salary where emp = :emp;
+	end;
+
+	exec sql drop rule check_emp;
+	exec sql create rule check_emp after insert into employee 
+		execute procedure check_emp (emp = employee.emp,
+				             mname = employee.mname);
+
+	exec sql drop rule ins_sal;
+	exec sql create rule ins_sal after insert into salary
+		execute procedure upd_sal   (emp = salary.emp, 
+					     sal = salary.sal);
+
+	exec sql drop procedure ins_emp;
+	exec sql create procedure ins_emp (emp varchar(30) not null, mname varchar(30) not -
+null) as
+	begin
+		insert into employee (emp, mname) values (:emp, :mname); 
+	end;
+
+	exec sql execute procedure ins_emp (emp = 'a', mname = 'jack');
+	exec sql execute procedure ins_emp (emp = 'b', mname = 'john');
+	exec sql execute procedure ins_emp (emp = 'c', mname = 'bob');
+	exec sql execute procedure ins_emp (emp = 'd', mname = 'jim');
+	exec sql execute procedure ins_emp (emp = 'e', mname = 'jim');
+	exec sql commit;
+
+
+} /* efa44() */
+!!
+? sepesqlc efa44.sc 
+<<
+ESQL efa44.sc:
+>>
+? sepcc efa44.c 
+<<
+>>
+<<
+efa44.c
+>>
+? seplnk efa44 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table employee\g
+<<
+~
+>>
+* drop table salary\g
+<<
+~
+>>
+* drop table manager\g
+<<
+~
+>>
+* drop procedure ins_sal\g
+<<
+~
+>>
+* drop procedure call_ins_sal\g
+<<
+~
+>>
+* drop procedure check_emp\g
+<<
+~
+>>
+* drop procedure upd_sal\g
+<<
+~
+>>
+* drop procedure ins_emp\g
+<<
+~
+>>
+* drop rule check_emp\g
+<<
+~
+>>
+* drop rule ins_sal\g
+<<
+~
+>>
+* \q
+<<
+>>
+? run efa44.exe SEPPARAMDB 
+<<
+E_US0AC1 DROP: 'employee' does not exist or is not owned by you.
+    (Fri Nov 19 15:30:22 1993)
+E_US0AC1 DROP: 'salary' does not exist or is not owned by you.
+    (Fri Nov 19 15:30:23 1993)
+E_US0AC1 DROP: 'manager' does not exist or is not owned by you.
+    (Fri Nov 19 15:30:23 1993)
+E_US0965 Procedure 'ins_sal' not found.
+    (Fri Nov 19 15:30:24 1993)
+E_US0965 Procedure 'call_ins_sal' not found.
+    (Fri Nov 19 15:30:24 1993)
+E_US0965 Procedure 'check_emp' not found.
+    (Fri Nov 19 15:30:24 1993)
+E_US0965 Procedure 'upd_sal' not found.
+    (Fri Nov 19 15:30:24 1993)
+E_US189D DROP RULE: Rule 'check_emp' does not exist.
+    (Fri Nov 19 15:30:24 1993)
+E_US189D DROP RULE: Rule 'ins_sal' does not exist.
+    (Fri Nov 19 15:30:24 1993)
+E_US0965 Procedure 'ins_emp' not found.
+    (Fri Nov 19 15:30:25 1993)
+Error 99999: Manager "jack" not found - Employee "a" will not be added
+MESSAGE 0: Employee "b" has been added with salary           $ 1000.00
+Error 99999: Manager "bob" not found - Employee "c" will not be added
+MESSAGE 0: Employee "d" has been added with salary           $ 2000.00
+MESSAGE 0: Employee "e" has been added with salary           $ 2000.00
+>>
+? delete efa44.c 
+<<
+~
+>>
+? delete efa44.o 
+<<
+~
+>>
+? delete efa44.obj 
+<<
+~
+>>
+? delete efa44.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Nov 19 15:30:27 1993

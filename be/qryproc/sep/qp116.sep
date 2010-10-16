@@ -1,0 +1,171 @@
+/*
+	Test Name: ega09.sep
+	Time: Fri Jan 29 11:36:18 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : ega09.sep
+	Module  : be/qryproc
+	Filename: ega09.sep
+	Purpose	: Make sure updates works even if there is a query preceeded
+		  before the while loop. (for bug 47213)
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : ega09_t1
+	Synopsis     : Update within a while loop in a database procedure
+		       only works the first time around; subsequent updates
+		       do not.  Failure is dependent on a test of iirowcount
+		       following a query preceeding the while loop; not testing
+		       iirowcount outside the loop makes it work correctly.
+
+ History: 29-Jan-1993	(Alice Shyu)	Created
+          10-Feb-1993	(Alice Shyu)    Update documentation
+          12-Aug-1993	(camacho) Cleaned up test by putting it in a
+			easier format to read.
+	  30-nov-1993	(camacho) The test was diffing because SEP was 
+		confusing the "*   if" in a dbproc as a SEP if command.
+		The solution is to not start a line off with an "if". I
+		added line continuation character "-" at the end of the
+		previous lines and concatinated the if to the line
+		above it. Also did this for "else" and "endif".
+		DO NOT CHANGE BACK.
+	  23-Mar-1999  (vande02) Hard-coded VPG_SZ to 4K/changed 'sql -s
+                                SEPPARAMDB' canon to be empty, in order to catch
+                                the msg. "TM could not connect ..." if the test
+                                database did not exist.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table ega09_t1;\p\g
+<<
+~
+>>
+* create table ega09_t1(
+<<
+>>
+*	code varchar(5) not null with default,
+<<
+>>
+*	number integer not null with default)
+<<
+>>
+*	with duplicates, page_size=4096; \g
+<<
+>>
+* insert into ega09_t1 values ('AAAAA', 11);\g
+<<
+(1 row)
+>>
+* select * from ega09_t1;\g
+<<
+
++------+-------------+
+|code  |number       |
++------+-------------+
+|AAAAA |           11|
++------+-------------+
+(1 row)
+>>
+* commit;\g
+<<
+>>
+* drop procedure ega09_dbproc1; \p\g
+<<
+~
+>>
+* create procedure ega09_dbproc1 =
+<<
+>>
+* declare loop1 = integer not null;
+<<
+>>
+* 	messagebuf = varchar(80) not null;
+<<
+>>
+*   begin
+<<
+>>
+* 	update ega09_t1 set number = number + 1
+<<
+>>
+/*
+ THERE IS A PROBLEM WITH HAVING AN "IF", "ELSE" or "ENDIF"
+ AT THE BEGINNING OF THE LINE. DO NOT CHANGE THIS QUERY
+ BACK TO THE ORIGINAL FORMAT
+*/
+* 		where code = 'AAAAA'; -
+	if iirowcount = 0 then
+<<
+>>
+* 		return 0; -
+	endif;
+<<
+>>
+* 	loop1 = 0;
+<<
+>>
+* 	while (loop1 < 5) do
+<<
+>>
+* 		update ega09_t1 set number = number + 1
+<<
+>>
+* 			where code = 'AAAAA';
+<<
+>>
+* 		messagebuf = 'Just updated - loop count: ' + varchar(loop1)
+<<
+>>
+* 			+ ' iirowcount: ' + varchar(:iirowcount);
+<<
+>>
+* 		message :messagebuf;
+<<
+>>
+* 		loop1 = loop1 + 1;
+<<
+>>
+* 	endwhile;
+<<
+>>
+*   end;\g
+<<
+>>
+* commit;\g
+<<
+>>
+* execute procedure ega09_dbproc1;\g
+<<
+MESSAGE 0: Just updated - loop count: 0 iirowcount: 1
+MESSAGE 0: Just updated - loop count: 1 iirowcount: 1
+MESSAGE 0: Just updated - loop count: 2 iirowcount: 1
+MESSAGE 0: Just updated - loop count: 3 iirowcount: 1
+MESSAGE 0: Just updated - loop count: 4 iirowcount: 1
+>>
+* select * from ega09_t1;\g
+<<
+
++------+-------------+
+|code  |number       |
++------+-------------+
+|AAAAA |           17|
++------+-------------+
+(1 row)
+>>
+* drop procedure ega09_dbproc1;\g
+<<
+~
+>>
+* drop table ega09_t1;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Thu Aug 12 14:40:58 1993

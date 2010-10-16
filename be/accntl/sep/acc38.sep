@@ -1,0 +1,447 @@
+/*
+Test Name: dba30
+Time: march 12th 15:10
+User Name: rch
+
+Test ID : dba30
+Module  :qrymod
+Filename:dba30.sep
+Purpose :tests inheritance of permits between groups users and roles
+Input Files :none
+Output Files:none
+Database    :SEPPARAMDB3
+Tables      :dba30_p1( a database procedure)
+Synopsis    :Grants execute privilege to a user. Then checks
+		a) other group members don't get the privilege
+		b) the privileged user can perform the execute
+		c) the privileged user can assume a role id and still retain
+		   the privilege.
+	     
+	     Initialization test = dba00.sep
+
+
+History :Created by rch		Created: 3.12.90	Author :rch
+10-3-91  rewritten to use driver program to make more portable by Troy Camacho
+23-Jan-1992 (fredv)
+	Fixed typos taht cause cc errors.
+23-Jan-1992 (fredv)
+	Can't have '_' in the file name for portability reason. Removed
+	underscore from all file names.
+4-nov-1992 (Camacho)
+        Deleted out the compiling and linking of files : DBPH.SC and
+        DBMISC.SC because they were not needed. Also moved the driver
+        files to a location under accntl rather than qryproc.
+13-MAR-1997 (vissu01)	Modified for NT
+25-Dec-1998 (somsa01)	Minor correction to NT canon.
+22-mar-1999     (yu$pe02) Hard code page size to 4K.
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,accntl,src,dbstub.h) dbstub.h 
+<<
+>>
+? cp @file(ing_tst,be,accntl,src,driverdb.c) driverdb.c 
+<<
+>>
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepcc driverdb.c 
+<<
+>>
+<<
+driverdb.c
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop procedure dba30_p1;\g
+<<
+~
+>>
+* create procedure dba30_p1 as
+<<
+>>
+* begin
+<<
+>>
+* 	message 'executing dba30_p1';
+<<
+>>
+* end;\p\g
+<<
+ create procedure dba30_p1 as
+ begin
+ 	message 'executing dba30_p1';
+ end;
+>>
+* grant execute
+<<
+>>
+* on procedure dba30_p1
+<<
+>>
+* to pvusr3   ;\p\g
+<<
+ grant execute
+ on procedure dba30_p1
+ to pvusr3      ;
+>>
+* \q
+<<
+>>
+? fill dba30group.sc 
+!!
+#define DBA30
+
+#include "dbstub.h"
+
+#include <stdio.h>
+
+exec sql begin declare section;
+extern char     db_name_str[32];
+exec sql end declare section;
+
+dba30()
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+    exec sql disconnect;
+    exec sql connect :db_name_str options='-Gpvusr3_group';
+    exec sql execute procedure dba30_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba30group 
+<<
+ESQL dba30group.sc:
+>>
+? sepcc dba30group 
+<<
+>>
+<<
+dba30group.c
+>>
+? seplnk driver driverdb dba30group 
+<<
+>>
+? qasetuser pvusr2 run driver.exe SEPPARAMDRIVERDB -tdba30 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba30
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba30 XX
+
+E_US0D36 User has no permission to execute database procedure 'dba30_p1'.
+    (Thu Oct  3 14:09:25 1991)
+
+disconnecting with database...
+>>
+? qasetuser pvusr3 run driver.exe SEPPARAMDRIVERDB -tdba30 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba30
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba30 XX
+
+MESSAGE 0: executing dba30_p1
+
+disconnecting with database...
+>>
+? fill dba30user.sc 
+!!
+#define DBA30
+
+#include "dbstub.h"
+
+#include <stdio.h>
+
+exec sql begin declare section;
+extern char     db_name_str[32];
+exec sql end declare section;
+
+dba30()
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+    exec sql disconnect;
+    exec sql connect :db_name_str;
+    exec sql execute procedure dba30_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba30user 
+<<
+ESQL dba30user.sc:
+>>
+? sepcc dba30user 
+<<
+>>
+<<
+dba30user.c
+>>
+? seplnk driver driverdb dba30user 
+<<
+>>
+? qasetuser pvusr3 run driver.exe SEPPARAMDRIVERDB -tdba30 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba30
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba30 XX
+
+MESSAGE 0: executing dba30_p1
+
+disconnecting with database...
+>>
+? qasetuser pvusr2 run driver.exe SEPPARAMDRIVERDB -tdba30 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba30
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba30 XX
+
+E_US0D36 User has no permission to execute database procedure 'dba30_p1'.
+    (Thu Oct  3 14:11:03 1991)
+
+disconnecting with database...
+>>
+? fill dba30role.sc 
+!!
+#define DBA30
+
+#include "dbstub.h"
+
+#include <stdio.h>
+
+exec sql begin declare section;
+extern char     db_name_str[32];
+exec sql end declare section;
+
+dba30()
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+    exec sql disconnect;
+    exec sql connect :db_name_str options='-Rpvusr3_role';
+    exec sql execute procedure dba30_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba30role 
+<<
+ESQL dba30role.sc:
+>>
+? sepcc dba30role 
+<<
+>>
+<<
+dba30role.c
+>>
+? seplnk driver driverdb dba30role 
+<<
+>>
+? qasetuser pvusr3 run driver.exe SEPPARAMDRIVERDB -tdba30 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba30
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba30 XX
+
+MESSAGE 0: executing dba30_p1
+
+disconnecting with database...
+>>
+? qasetuser pvusr2 run driver.exe SEPPARAMDRIVERDB -tdba30 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba30
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba30 XX
+
+E_US0D36 User has no permission to execute database procedure 'dba30_p1'.
+    (Thu Oct  3 14:11:24 1991)
+
+disconnecting with database...
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop procedure dba30_p1;\p\g
+<<
+/* SQL Startup File */
+ drop procedure dba30_p1;
+>>
+* \q
+<<
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete dbstub.h 
+<<
+~
+>>
+? delete driverdb.c 
+<<
+~
+>>
+? delete driverdb.o 
+<<
+~
+>>
+? delete driverdb.obj 
+<<
+~
+>>
+? delete dba30.c 
+<<
+~
+>>
+? delete dba30.o 
+<<
+~
+>>
+? delete dba30.obj 
+<<
+~
+>>
+? delete dba30group.c 
+<<
+~
+>>
+? delete dba30group.exe 
+<<
+~
+>>
+? delete dba30group.obj 
+<<
+~
+>>
+? delete dba30group.o 
+<<
+~
+>>
+? delete dba30role.c 
+<<
+~
+>>
+? delete dba30role.exe 
+<<
+~
+>>
+? delete dba30role.obj 
+<<
+~
+>>
+? delete dba30role.o 
+<<
+~
+>>
+? delete dba30user.c 
+<<
+~
+>>
+? delete dba30user.exe 
+<<
+~
+>>
+? delete dba30user.obj 
+<<
+~
+>>
+? delete dba30user.o 
+<<
+~
+>>
+
+
+Ending at: Thu Oct  3 14:11:33 1991

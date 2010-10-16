@@ -1,0 +1,273 @@
+/*
+	Test Name: pza16sc.sep
+	Time: Fri Oct 8 09:30:38 1993
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : pza16sc
+	Module  : 3gl
+	Filename: pza16sc.sep
+	Purpose	: test the Decimal Data Type
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : dectable
+	Synopsis     : Uses select (cursor and singleton), and update 
+		       statements with host language variables to
+		       manipulate the decimal data type.  Also attempts 
+		       to do some distructive tests with multi-session
+		       and using the DECIMAL() function with a character
+		       string.  This test will generate several errors
+		       where appropriate.
+
+ History: 8-Oct-1993	(jbryson)	Created
+          02-Apr-1997  Modified (chiel02)
+                       Added an alternate canon for the sepcc command.
+                       Removed the platform specifications of the canons 
+                       for the esqlc command to make it work under NT.    
+			 03-Mar-2000 (sarjo01)
+							 Added READLOCK=NOLOCK for Session 2 to prevent wait
+							 caused by 2.5 locking changes. Startrack 8737602.
+*/
+? delete pza16sc.c 
+<<
+~
+>>
+? delete pza16sc.o 
+<<
+~
+>>
+? delete pza16sc.obj 
+<<
+~
+>>
+? delete pza16sc.exe 
+<<
+~
+>>
+? fill pza16sc.sql 
+!!
+create table dectable (
+       intcol integer,
+       deccol decimal,
+       deccol2 decimal(20,5))\p\g
+insert into dectable values (1,1,1.1)\p\g
+insert into dectable values (2,2,2.2)\p\g
+insert into dectable values (3,3,3.3)\p\g
+insert into dectable values (4,4,4.4)\p\g
+insert into dectable values (5,null,null)\p\g
+insert into dectable values (6,6,6.6)\p\g
+insert into dectable values (8,null,8.8)\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* drop table dectable\g 
+<<
+~
+>>
+* \i pza16sc.sql 
+<<
+ 
+ create table dectable (
+       intcol integer,
+       deccol decimal,
+       deccol2 decimal(20,5))
+insert into dectable values (1,1,1.1)
+(1 row)
+insert into dectable values (2,2,2.2)
+(1 row)
+insert into dectable values (3,3,3.3)
+(1 row)
+insert into dectable values (4,4,4.4)
+(1 row)
+insert into dectable values (5,null,null)
+(1 row)
+insert into dectable values (6,6,6.6)
+(1 row)
+insert into dectable values (8,null,8.8)
+(1 row)
+>>
+* \q 
+<<
+~
+>>
+? fill pza16sc.sc 
+!!
+#include    <stdio.h>
+#include    <string.h>	
+EXEC SQL INCLUDE SQLCA;
+
+main(argc,argv)
+int     argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char*   argv[];
+EXEC SQL END DECLARE SECTION;
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+	int     i;
+	short	ind, ind2;
+	double  dec, dec2;
+   EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   EXEC SQL CONNECT :argv[1] SESSION 2;
+   EXEC SQL SET LOCKMODE SESSION WHERE READLOCK=NOLOCK; 
+   EXEC SQL CONNECT :argv[1] SESSION 1;
+
+   EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+   EXEC SQL DECLARE c1 CURSOR FOR SELECT intcol,deccol,deccol2
+	FROM dectable;
+
+   printf("Cursor select from decimal table...\n");
+   EXEC SQL OPEN c1 FOR READONLY;
+   while(1)
+   {
+      EXEC SQL FETCH c1 INTO :i, :dec:ind, :dec2:ind2;
+      if (sqlca.sqlcode)
+         break;
+
+      printf("  ");
+      printit(i,dec,ind,dec2,ind2);
+
+      EXEC SQL SET_SQL (SESSION = 2);
+
+      EXEC SQL SELECT intcol,DECIMAL(deccol,20,10),deccol2
+	    INTO :i, :dec:ind, :dec2:ind2
+	    FROM dectable
+	    WHERE intcol = :i;
+      printf("**");
+      printit(i,dec,ind,dec2,ind2);
+
+      EXEC SQL SET_SQL (SESSION = 1);
+   }
+   EXEC SQL CLOSE c1;
+   EXEC SQL SET_SQL (SESSION = 1);
+
+   printf("\nUpdate of decimal table...DECIMAL('ab.df')...\n");
+   EXEC SQL UPDATE dectable 
+	SET   deccol2 = DECIMAL('ab.df')
+	WHERE deccol = 1;
+
+   printf("\nUpdate of decimal table...DECIMAL('ab.df',10,5)...\n");
+   EXEC SQL UPDATE dectable 
+	SET   deccol2 = DECIMAL('ab.df',10,5)
+	WHERE deccol = 1;
+
+
+   printf("\nSingleton select from decimal table, using DECIMAL(integer)...\n");
+   EXEC SQL SELECT DECIMAL(intcol,20,10),deccol,deccol2
+	INTO :i, :dec:ind, :dec2:ind2
+	FROM dectable
+	WHERE intcol = 1;
+   printit(i,dec,ind,dec2,ind2);
+
+   EXEC SQL DISCONNECT ALL;
+}
+
+/******************************************************/
+printit(i,dec,ind,dec2,ind2)
+EXEC SQL BEGIN DECLARE SECTION;
+   int     i;
+   double  dec, dec2;
+   short   ind, ind2;
+EXEC SQL END DECLARE SECTION;
+{
+   switch(ind)
+   {
+      case 0:
+         printf("dec#%d dec=%f\t\t",i,dec);
+	 break;
+      case -1: 
+         printf("dec#%d **decind=%d **NULL**\t",i,ind);
+	 break;
+      default:
+	 printf("ERROR!---dec#%d ind=%d dec=%f\n",i,ind,dec);
+   }
+
+   switch(ind2)
+   {
+      case 0:
+         printf("dec2=%f\n",dec2);
+	 break;
+      case -1: 
+         printf("**decind2=%d **NULL**\n",ind2);
+	 break;
+      default:
+	 printf("ERROR!---dec#%d ind2=%d dec2=%f\n",i,ind2,dec2);
+   }
+}
+!!
+? esqlc pza16sc.sc 
+<< 
+ESQL pza16sc.sc:
+>>
+<< 
+>>
+? sepcc pza16sc 
+<<
+>>
+<<
+pza16sc.c
+>>
+? seplnk pza16sc 
+<<
+>>
+? run pza16sc.exe SEPPARAMDB 
+<<
+Cursor select from decimal table...
+  dec#1 dec=1.000000		dec2=1.100000
+**dec#1 dec=1.000000		dec2=1.100000
+  dec#2 dec=2.000000		dec2=2.200000
+**dec#2 dec=2.000000		dec2=2.200000
+  dec#3 dec=3.000000		dec2=3.300000
+**dec#3 dec=3.000000		dec2=3.300000
+  dec#4 dec=4.000000		dec2=4.400000
+**dec#4 dec=4.000000		dec2=4.400000
+  dec#5 **decind=-1 **NULL**	**decind2=-1 **NULL**
+**dec#5 **decind=-1 **NULL**	**decind2=-1 **NULL**
+  dec#6 dec=6.000000		dec2=6.600000
+**dec#6 dec=6.000000		dec2=6.600000
+  dec#8 **decind=-1 **NULL**	dec2=8.800000
+**dec#8 **decind=-1 **NULL**	dec2=8.800000
+
+Update of decimal table...DECIMAL('ab.df')...
+E_PS0C80 No default values are provided for the decimal() conversion
+    function when a value with datatype `varchar' is given as the first
+    parameter.  Explicitly specify precision and scale.
+    (Fri Oct  8 10:37:35 1993)
+
+Update of decimal table...DECIMAL('ab.df',10,5)...
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Fri Oct  8 10:37:35 1993)
+
+Singleton select from decimal table, using DECIMAL(integer)...
+dec#1 dec=1.000000		dec2=1.100000
+>>
+? delete pza16sc.c 
+<<
+~
+>>
+? delete pza16sc.o 
+<<
+~
+>>
+? delete pza16sc.obj 
+<<
+~
+>>
+? delete pza16sc.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Oct  8 10:37:48 1993

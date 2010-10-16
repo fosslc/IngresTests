@@ -1,0 +1,622 @@
+/*
+        Test Name: qp306.sep
+        Time: Fri Feb 21 09:56:28 2003
+        User Name: testenv
+        Terminal type: septerm
+ 
+        Test ID : qp306
+        Module  : BE/QRYPROC
+        Filename: qp306.sep
+        Purpose : To test use of sequences (integer and decimal type)
+        Input Files  : qp306_seqs.sql
+        Output Files : None
+        Database     : SEPPARAMDB
+        Tables       : qp306_tbl1, qp306_tbl2, qp306_tbl3
+        Synopsis     : This test will verify the use of sequences, both
+                       integer and decimal type, and will also do several
+                       error-handling tests as well. This test is the
+                       same as qp309.sep except that it uses the ANSI
+                       syntax in all commands instead of Oracle.
+
+** Successful test cases:
+**
+**    Use NEXT VALUE in SELECT list of SELECT statement
+**    Use CURRENT VALUE and NEXT VALUE in SELECT list of CREATE TABLE
+**    statement
+**    Use NEXT VALUE in VALUES clause of INSERT statement
+**    Use NEXT VALUE in SET clause of UPDATE statement
+**    Use NEXT VALUE in SELECT statement
+**    Use NEXT VALUE in SELECT list of INSERT statement
+**
+** Error handling test cases:
+**
+**    Use in SELECT statement with the DISTINCT operator
+**    Use in SELECT statement combined with a UNION select
+**    Use in SELECT statement with a GROUP BY clause
+**    Use in SELECT statement with a CASE expression
+**    Use in SELECT statement with an aggregate function (SUM)
+**    Use in SELECT statement with a WHERE clause
+**    Use in SELECT statement with an ORDR BY clause
+**    Use in CHECK CONSTRAINT of a DEFAULT value of a CREATE TABLE statement
+**    Use in an invalid INSERT statement
+**    Use valid select/inesrt/update statements
+**    Use CURRENT VALUE in SELECT list of subquery without NEXT VALUE
+
+** NOTE: This tests uses ANSI (2 word) options in all sequence statements
+**       such as one of the following:
+**
+** create sequence:                     select/insert/update sequence:
+**
+** no minvalue                          select next value for seq_name...
+** no maxvalue                          insert next value for seq_name...
+** no cache                             update tbl_name set tbl_col =
+** no cycle                                next value for seq_name...
+** no order                             insert into tbl_name select next value
+**                                         for seq_name, col2 from tbl1_name
+**
+** KNOWN PROBLEMS:
+** There is currently a known problem (no bug #) regarding the last test
+** case below when trying to insert multiple sequence objects into a table.
+** Therefore, this test will currently fail due to an error when attempting
+** to do this insert because this test was modified to show results for a
+** successful test case. Once a bug # is known, this test will be updated
+** with that information.
+**
+** Errors: E_OP0890 Too many bases added to a QEN_ADF struct.
+** Issues: 13120679 Get error E_OP0890 when using multiple sequences
+**            concurrently in one table.
+**
+ History: 19-Feb-2003   (marwi08) Created
+          17-Mar-2003   (vande02) Adding statements where select list of a
+                                  subquery is in an INSERT statement and selects
+                                  to check the results.
+          24-Mar-2003   (vande02) Changing pre-drop object canons to ignore.
+                                  Testing 'drop sequence' syntax in qp304.sep.
+	   3-Dec-2003	(marwi08) Added test case to test use of multiple
+				  sequence objects into one table.
+	   1-oct-2007   (kibro01) b119191 - Updated message for US0B61
+          29-Oct-2007	(kiria01) b117790
+		Updating canons reflecting string-number coercion changes.
+*/
+/*
+        First fill input file to create needed sequences
+*/
+? fill qp306_seqs.sql 
+!!
+create sequence qp306_intseq maxvalue 1000000 no cycle\g
+create sequence qp306_decseq as decimal minvalue 1000 start with 1000 cache 100\g
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* set autocommit on\g
+<<
+>>
+/*
+        Make sure sequences and tables don't already exist
+*/
+* drop sequence qp306_intseq\g
+<<
+~
+>>
+* drop sequence qp306_decseq\g
+<<
+~
+>>
+* drop qp306_tbl1\g
+<<
+~
+>>
+* drop qp306_tbl2\g
+<<
+~
+>>
+* drop qp306_tbl3\g
+<<
+~
+>>
+* drop qp306_tbl4\g
+<<
+~
+>>
+* drop qp306_multseqobjs_tbl\g
+<<
+~
+>>
+/*
+        Now load in sequences
+*/
+* \i qp306_seqs.sql 
+<<
+>>
+/*
+        Now show some valid uses of sequences
+        First in the SELECT list of a SELECT statement
+*/
+* select first 10 next value for qp306_intseq from iirelation order by 1\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|            1|
+|            2|
+|            3|
+|            4|
+|            5|
+|            6|
+|            7|
+|            8|
+|            9|
+|           10|
++-------------+
+(10 rows)
+>>
+* create table qp306_tbl1 as select first 100 relid, current value for qp306_decseq -
+as currcol, next value for qp306_decseq as nextcol from iirelation\g 
+<<
+(100 rows)
+>>
+* select currcol, nextcol from qp306_tbl1 order by 1, 2\g 
+<<
+
++------+------+
+|currco|nextco|
++------+------+
+|  1000|  1000|
+|  1001|  1001|
+|  1002|  1002|
+|  1003|  1003|
+|  1004|  1004|
+|  1005|  1005|
+|  1006|  1006|
+|  1007|  1007|
+|  1008|  1008|
+|  1009|  1009|
+|  1010|  1010|
+|  1011|  1011|
+|  1012|  1012|
+|  1013|  1013|
+|  1014|  1014|
+|  1015|  1015|
+|  1016|  1016|
+|  1017|  1017|
+|  1018|  1018|
+|  1019|  1019|
+|  1020|  1020|
+|  1021|  1021|
+|  1022|  1022|
+|  1023|  1023|
+|  1024|  1024|
+|  1025|  1025|
+|  1026|  1026|
+|  1027|  1027|
+|  1028|  1028|
+|  1029|  1029|
+|  1030|  1030|
+|  1031|  1031|
+|  1032|  1032|
+|  1033|  1033|
+|  1034|  1034|
+|  1035|  1035|
+|  1036|  1036|
+|  1037|  1037|
+|  1038|  1038|
+|  1039|  1039|
+|  1040|  1040|
+|  1041|  1041|
+|  1042|  1042|
+|  1043|  1043|
+|  1044|  1044|
+|  1045|  1045|
+|  1046|  1046|
+|  1047|  1047|
+|  1048|  1048|
+|  1049|  1049|
+|  1050|  1050|
+|  1051|  1051|
+|  1052|  1052|
+|  1053|  1053|
+|  1054|  1054|
+|  1055|  1055|
+|  1056|  1056|
+|  1057|  1057|
+|  1058|  1058|
+|  1059|  1059|
+|  1060|  1060|
+|  1061|  1061|
+|  1062|  1062|
+|  1063|  1063|
+|  1064|  1064|
+|  1065|  1065|
+|  1066|  1066|
+|  1067|  1067|
+|  1068|  1068|
+|  1069|  1069|
+|  1070|  1070|
+|  1071|  1071|
+|  1072|  1072|
+|  1073|  1073|
+|  1074|  1074|
+|  1075|  1075|
+|  1076|  1076|
+|  1077|  1077|
+|  1078|  1078|
+|  1079|  1079|
+|  1080|  1080|
+|  1081|  1081|
+|  1082|  1082|
+|  1083|  1083|
+|  1084|  1084|
+|  1085|  1085|
+|  1086|  1086|
+|  1087|  1087|
+|  1088|  1088|
+|  1089|  1089|
+|  1090|  1090|
+|  1091|  1091|
+|  1092|  1092|
+|  1093|  1093|
+|  1094|  1094|
+|  1095|  1095|
+|  1096|  1096|
+|  1097|  1097|
+|  1098|  1098|
+|  1099|  1099|
++------+------+
+(100 rows)
+>>
+* create table qp306_tbl2 (c1 int, c2 char(4))\g 
+<<
+>>
+/*
+        Now in the VALUES clause of an INSERT statement
+*/
+* insert into qp306_tbl2 values(next value for qp306_intseq, 'aaaa')\g 
+<<
+(1 row)
+>>
+* insert into qp306_tbl2 values(next value for qp306_intseq, 'bbbb')\g 
+<<
+(1 row)
+>>
+* select * from qp306_tbl2 order by 1, 2\g 
+<<
+
++-------------+------+
+|c1           |c2    |
++-------------+------+
+|           11|aaaa  |
+|           12|bbbb  |
++-------------+------+
+(2 rows)
+>>
+/*
+        Now in the SET clause of an UPDATE statement
+*/
+* update qp306_tbl2 set c1 = next value for qp306_decseq\g 
+<<
+(2 rows)
+>>
+* select * from qp306_tbl2 order by 1,2\g 
+<<
+
++-------------+------+
+|c1           |c2    |
++-------------+------+
+|         1100|aaaa  |
+|         1101|bbbb  |
++-------------+------+
+(2 rows)
+>>
+/*
+        Now do some error checking of invalid uses of sequences
+        First in the SELECT statement with the DISTINCT operator
+*/
+* select distinct next value for qp306_intseq, relid from iirelation\g 
+<<
+E_US18AF Next value/current value sequence operators used in incorrect
+    context.
+    (Fri Feb 21 10:06:29 2003)
+
+>>
+/*
+        Next in the SELECT statement combined with a UNION select
+*/
+* select next value for qp306_intseq, relid from iirelation union select c1, c2 from-
+ qp306_tbl2\g 
+<<
+E_US18AF Next value/current value sequence operators used in incorrect
+    context.
+    (Fri Feb 21 10:11:14 2003)
+
+>>
+/*
+        Now in the SELECT statement with a GROUP BY clause
+*/
+* select next value for qp306_intseq, relid from iirelation group by relid\g 
+<<
+E_US18AF Next value/current value sequence operators used in incorrect
+    context.
+    (Fri Feb 21 10:12:09 2003)
+
+>>
+/*
+        Now in a SELECT statement with a CASE expression
+*/
+* select case when c1 = 5 then next value for qp306_intseq else 22 end, c2 from qp30-
+6_tbl2\g
+<<
+E_US18AF Next value/current value sequence operators used in incorrect
+    context.
+    (Fri Feb 21 10:13:17 2003)
+
+>>
+/*
+        Now in a SELECT statement with an aggregate function (SUM)
+*/
+* select sum(next value for qp306_intseq) from iirelation\g 
+<<
+E_US18AF Next value/current value sequence operators used in incorrect
+    context.
+    (Fri Feb 21 10:14:00 2003)
+
+>>
+/*
+        Now in a SELECT statement with a WHERE clause
+*/
+* select * from iirelation where reltid < next value for qp306_intseq\g 
+<<
+E_US18AF Next value/current value sequence operators used in incorrect
+    context.
+    (Fri Feb 21 10:16:35 2003)
+
+>>
+/*
+        Now in a SELECT statement with an ORDR BY clause
+*/
+* select * from iirelation order by next value for qp306_intseq\g 
+<<
+E_US18AF Next value/current value sequence operators used in incorrect
+    context.
+    (Fri Feb 21 10:17:19 2003)
+
+>>
+/*
+        Now in a CHECK CONSTRAINT of a DEFAULT value of a CREATE 
+        TABLE statement
+*/
+* create table qp306_tbl3 (c1 int check(c1 < next value for qp306_intseq))\g 
+<<
+E_US18AF Next value/current value sequence operators used in incorrect
+    context.
+    (Fri Feb 21 10:18:28 2003)
+
+>>
+/*
+        Just verifying that table didn't get created due to error
+*/
+* help table qp306_tbl3\g 
+<<
+No tables were found that matched 'qp306_tbl3'
+
+
+>>
+/*
+        Now do a test of an invalid insert with NEXTVAL
+*/
+* insert into qp306_tbl2 values('cccc',next value for qp306_intseq)\g
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Mon Oct 29 16:29:41 2007)
+
+>>
+/*
+        First verify that insert failed into table
+*/
+* select * from qp306_tbl2 order by 1,2\g
+<<
+
++-------------+------+
+|c1           |c2    |
++-------------+------+
+|         1100|aaaa  |
+|         1101|bbbb  |
++-------------+------+
+(2 rows)
+>>
+/*
+	Now try to use CURRENT VALUE without NEXT VALUE with
+	autocommit on - expect error
+*/
+* select current value for qp306_intseq\g
+<<
+E_QE00A2 An attempt to issue a CURRENT VALUE request on a sequence was
+    made
+ before issuing a NEXT VALUE request.
+    (Fri Apr  4 08:24:02 2003)
+>>
+/*
+	Now set autocommit back to OFF 
+*/
+* set autocommit off\g
+<<
+>>
+/*
+        Now verify NEXT VALUE for integer sequence is correct - should be 13
+*/
+* select next value for qp306_intseq\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|           14|
++-------------+
+(1 row)
+>>
+/*
+	Now create a fourth table for testing
+*/
+* create table qp306_tbl4(col1_tbl4 int, col2_tbl4 char(9))\g
+<<
+>>
+/*
+        Now test sequence in the SELECT list of a subquery in 
+	INSERT statements using NEXT VALUE and CURRENT VALUE with
+	integer and decimal sequences.
+*/
+* insert into qp306_tbl4 select next value for qp306_intseq, c2 from qp306_tbl2\g
+<<
+(2 rows)
+>>
+* select * from qp306_tbl4 order by 1,2\g
+<<
+
++-------------+---------+
+|col1_tbl4    |col2_tbl4|
++-------------+---------+
+|           15|aaaa     |
+|           16|bbbb     |
++-------------+---------+
+(2 rows)
+>>
+* insert into qp306_tbl4 select current value for qp306_intseq, c2 from qp306_tbl2\g
+<<
+(2 rows)
+>>
+* select * from qp306_tbl4 order by 1,2\g
+<<
+
++-------------+---------+
+|col1_tbl4    |col2_tbl4|
++-------------+---------+
+|           15|aaaa     |
+|           16|aaaa     |
+|           16|bbbb     |
+|           16|bbbb     |
++-------------+---------+
+(4 rows)
+>>
+* insert into qp306_tbl4 select next value for qp306_decseq, c2 from qp306_tbl2\g
+<<
+(2 rows)
+>>
+* select * from qp306_tbl4 order by 1,2\g
+<<
+
++-------------+---------+
+|col1_tbl4    |col2_tbl4|
++-------------+---------+
+|           15|aaaa     |
+|           16|aaaa     |
+|           16|bbbb     |
+|           16|bbbb     |
+|         1102|aaaa     |
+|         1103|bbbb     |
++-------------+---------+
+(6 rows)
+>>
+* insert into qp306_tbl4 select current value for qp306_decseq, c2 from qp306_tbl2\g
+<<
+(2 rows)
+>>
+* select * from qp306_tbl4 order by 1,2\g
+<<
+
++-------------+---------+
+|col1_tbl4    |col2_tbl4|
++-------------+---------+
+|           15|aaaa     |
+|           16|aaaa     |
+|           16|bbbb     |
+|           16|bbbb     |
+|         1102|aaaa     |
+|         1103|aaaa     |
+|         1103|bbbb     |
+|         1103|bbbb     |
++-------------+---------+
+(8 rows)
+>>
+/*
+        Just another verification of help sequences
+*/
+* help sequence qp306_intseq, qp306_decseq\g 
+<<
+Sequence:             qp306_intseq
+Owner:                testenv
+
+Sequence Definition:
+Create sequence testenv.qp306_intseq as integer start with 1
+     increment by 1 no minvalue maxvalue 1000000
+     no cycle no order                                                
+
+
+Sequence:             qp306_decseq
+Owner:                testenv
+
+Sequence Definition:
+Create sequence testenv.qp306_decseq as decimal(5) start with 1000    
+     increment by 1 minvalue 1000 no maxvalue
+     cache 100 no cycle no order                                      
+
+
+
+>>
+/*
+	Now test use of multiple sequence objects into one table.
+	First create the test table.
+*/
+* create table qp306_multseqobjs_tbl(col1_int integer not null not default, col2_dec-
+ decimal(8) not null not default)\g
+<<
+~
+>>
+/*
+	Now try to insert a row using both existing sequences.
+*/
+* insert into qp306_multseqobjs_tbl(col1_int, col2_dec) values (next value for qp306-
+_intseq, next value for qp306_decseq)\g
+<<
+(1 row)
+>>
+/*
+	Now verify data exists in table
+*/
+* select * from qp306_multseqobjs_tbl order by 1\g
+<<
+
++-------------+---------+
+|col1_int     |col2_dec |
++-------------+---------+
+|           17|     1104|
++-------------+---------+
+(1 row)
+>>
+/*
+        Cleanup
+*/
+* drop sequence qp306_intseq\g 
+<<
+>>
+* drop sequence qp306_decseq\g 
+<<
+>>
+* drop qp306_tbl1\g 
+<<
+>>
+* drop qp306_tbl2\g 
+<<
+>>
+* drop qp306_tbl4\g 
+<<
+>>
+* drop qp306_multseqobjs_tbl\g
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Mon Oct 29 16:30:32 2007

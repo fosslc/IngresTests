@@ -1,0 +1,305 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: utl23.sep
+	Time: Fri Feb  2 09:37:49 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	: test ability to do optimizedb and auditdb on a 
+		  table with a logical key column. Checks bugs in
+		  BUGS system #'s 62184 and 45752.  Also tests ability
+		  to do a COPY FROM into a table with a logical key 
+		  column.
+	Input Files  : None.
+	Output Files : None.
+	Database     : SEPPARAMDB
+	Tables       : utl23
+	Synopsis     : create a table with a logical key column, then
+		       checkpoint it so the auditdb has something to
+		       work with.  Add some records to the table, then
+		       do an auditdb. Create a table that holds info 
+		       from a COPY FROM statement, then do the copy.
+		       display the info from the copy to see that the 
+		       logical key column looks like a select from any
+		       other table with a logical key column (bug 45752).
+		       Do an optimizedb that creates a histogram on the 
+		       column (bug 62184). Then we destroy the db, since
+		       we are done.
+
+
+ History:  2-Feb-1996	(Author)	Created
+          11-Nov-1996	(Author)
+          11-Nov-1996	(Author)
+          24-Feb-1999	(kamra01)
+			created alternate canon to eliminate diffs due to dbcpmt
+	  05-APR-1999   (madsu02) hard coded the variable VPG_SZ to 8192 
+			page_size.
+          30-Jan-2001	(BOIJA02) General cleanup, actually test for bug now, 
+			don't unnecessarily create a new database, order select
+			statements.
+          17-Apr-2001	(BOIJA02) NT canons are unfixed, we're not testing 
+			ckpdb here, so I've ignored the output. 
+			See issue 10885476 for more detail
+
+          25-May-2001	(BOIJA02) 2.5 specific updates to oping20 XIP
+          24-Aug-2001   (BOIJA02) Xing to main +2.6 specific tweaks
+          18-Sep-2008	(vande02) Added conditional canon to allow for UTF8
+                                  collation sequence order. Header cleanup.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table utl23\g
+<<
+~
+>>
+* create table utl23 (col1 table_key not system_maintained, 
+<<
+>>
+* col2 char(10) ) with page_size=8192 \g 
+<<
+>>
+* commit \g 
+<<
+>>
+* \q 
+<<
+>>
+? ckpdb -d +j SEPPARAMDB 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* insert into utl23 values ('12345678', 'one') \g 
+<<
+(1 row)
+>>
+* insert into utl23 values (X'0000000000000007', 'two') \g 
+<<
+(1 row)
+>>
+* insert into utl23 values (X'0000000000000008', 'three') \g 
+<<
+(1 row)
+>>
+* insert into utl23 values (X'0000000000000009', 'four') \g 
+<<
+(1 row)
+>>
+* insert into utl23 values ('        ', 'five') \g 
+<<
+(1 row)
+>>
+* insert into utl23 values ('abcdefgh', 'six') \g 
+<<
+(1 row)
+>>
+* insert into utl23 values (X'0000000000000000', 'seven') \g 
+<<
+(1 row)
+>>
+* select * from utl23 order by 2 \g 
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|        |five      |
+|\000\000\000\000\000\000\000\t|four      |
+|12345678|one       |
+|\000\000\000\000\000\000\000\000|seven     |
+|abcdefgh|six       |
+|\000\000\000\000\000\000\000\b|three     |
+|\000\000\000\000\000\000\000\007|two       |
++--------+----------+
+(7 rows)
+>>
+* commit \g 
+<<
+>>
+* \q 
+<<
+>>
+? auditdb SEPPARAMDB -table=utl23 -file 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table utl23audit\g
+<<
+~
+>>
+* create table utl23audit( 
+<<
+>>
+* date date not null with default, 
+<<
+>>
+* usrname char(32) not null with default, 
+<<
+>>
+* operati char(8) not null with default, 
+<<
+>>
+* tranid1 integer not null with default, 
+<<
+>>
+* tranid2 integer not null with default, 
+<<
+>>
+* table_id1 integer not null with default, 
+<<
+>>
+* table_id2 integer not null with default, 
+<<
+>>
+* col1 table_key not system_maintained, 
+<<
+>>
+* col2 char(10) ) with page_size=8192 \g 
+<<
+>>
+* copy table utl23audit () from 'utl23.trl' \g 
+<<
+(7 rows)
+>>
+* select col1 from utl23audit order by 1\g 
+<< IF (ING_CHARSET == "UTF8") 
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
+|        |
+|\000\000\000\000\000\000\000\b|
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\t|
+|12345678|
+|abcdefgh|
++--------+
+(7 rows)
+>>
+<<
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\b|
+|\000\000\000\000\000\000\000\t|
+|        |
+|12345678|
+|abcdefgh|
++--------+
+(7 rows)
+>>
+* select char(col1) from utl23audit order by 1\g 
+<< IF (ING_CHARSET == "UTF8") 
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
+|        |
+|\000\000\000\000\000\000\000\b|
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\t|
+|12345678|
+|abcdefgh|
++--------+
+(7 rows)
+>>
+<<
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\b|
+|\000\000\000\000\000\000\000\t|
+|        |
+|12345678|
+|abcdefgh|
++--------+
+(7 rows)
+>>
+* select hex(char(col1)) from utl23audit order by 1\g 
+<<
+
++----------------+
+|col1            |
++----------------+
+|0000000000000000|
+|0000000000000007|
+|0000000000000008|
+|0000000000000009|
+|2020202020202020|
+|3132333435363738|
+|6162636465666768|
++----------------+
+(7 rows)
+>>
+* commit \g 
+<<
+>>
+* \q 
+<<
+>>
+? optimizedb -zh SEPPARAMDB -rutl23 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from utl23 order by 1,2\g
+<< IF (ING_CHARSET == "UTF8") 
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|        |five      |
+|\000\000\000\000\000\000\000\000|seven     |
+|\000\000\000\000\000\000\000\b|three     |
+|\000\000\000\000\000\000\000\007|two       |
+|\000\000\000\000\000\000\000\t|four      |
+|12345678|one       |
+|abcdefgh|six       |
++--------+----------+
+(7 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|seven     |
+|\000\000\000\000\000\000\000\007|two       |
+|\000\000\000\000\000\000\000\b|three     |
+|\000\000\000\000\000\000\000\t|four      |
+|        |five      |
+|12345678|one       |
+|abcdefgh|six       |
++--------+----------+
+(7 rows)
+>>
+* \q
+<<
+>>
+? delete utl23.trl 
+<<
+file was deleted
+>>
+
+
+Ending at: Thu Sep 18 14:22:44 2008

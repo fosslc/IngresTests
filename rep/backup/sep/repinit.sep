@@ -1,0 +1,340 @@
+/*
+	Test Name: repinit.sep
+	Time: Thu Feb 27 14:13:19 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : repinit
+	Module  : replicator 
+	Filename: repinit.sep
+	Purpose	: stops the servers, creates and populates tables, dereplic
+		  and repcat on the databases
+	Input Files  : repdata.sql, dependen.dat,emp.dat
+	Output Files :
+	Database     : repdb1, repdb2, repdb3
+	Tables       : dependen, emp
+	Synopsis     : See purpose
+
+
+ History: 19-Aug-1996	(poisy01)	Created
+	  28-Oct-1996   (poisy01)	
+          14-Feb-1997	(poisy01)
+	20-May-1998 (abbjo03)
+		Remove unnecessary initializations and unused tables.
+*/
+? fill dependen.dat 
+!!
+   13Alcott, Scott    7Deborah05-may-1986              
+
+   13Alcott, Scott    5Jason08-jan-1971              
+
+   12Bee, Charles    7Chester24-aug-1981              
+
+   12Bee, Charles    3Tom10-jun-1983              
+
+   12Belter, Kris    6Alfred26-sep-1988              
+
+   12Belter, Kris    5Janet16-sep-1985              
+
+   12Belter, Kris    8Jennifer08-jun-1988              
+
+   15Bluff, Clarence    6Marvin31-may-1979              
+
+   14Bridges, Debra    6Daphne04-sep-1988              
+
+   14Downing, Susan    3Tom08-jun-1988              
+
+   14Fine, Laurence    8Patricia17-jun-1978              
+
+   13Jones, Ashley    6Marvin31-may-1979              
+
+   12Lorenzo, Sue    5Aaron12-apr-1987              
+
+   12Lorenzo, Sue    6Daphne31-may-1979              
+
+   12Noonan, Brad    5Carol31-may-1979              
+
+   12Noonan, Brad    8Patricia20-sep-1983              
+
+   12Noonan, Brad    7Stephen18-sep-1988              
+
+   16O'Foote, Suzanne    6Walter24-aug-1981              
+
+   14Peterson, Jean    5James12-apr-1987              
+
+   14Randall, David    4Lynn17-jun-1978              
+
+   14Randall, David    7Michele12-apr-1987              
+
+   14Smith, Chester    5Avery17-jun-1978              
+
+   12Smith, Peggy    5Brent08-sep-1988              
+
+   12Stein, Frank    7Annette12-apr-1987              
+
+   16Thompson, Howard    6Raquel08-sep-1988              
+
+   16Walters, Lindsay    6George24-aug-1981              
+
+   11Wolfe, Neal    5Bruce01-jun-1983              
+
+   11Wolfe, Neal    6Ernest12-apr-1987              
+
+!!
+? fill emp.dat 
+!!
+   13Alcott, Scott   13Sr Programmer              $50.00	   11Wolfe, Neal
+   17Applegate, Donald    7Analyst              $51.00	   11Wolfe, Neal
+   12Bee, Charles   13Sr Programmer              $43.00	   17Fielding, Wallace
+   12Belter, Kris   10Programmer              $33.00	   13Alcott, Scott
+   13Beringer, Tom   10Programmer              $41.00	   13King, Richard
+   15Beveridge, Fern   14Project Leader              $57.00	   11Wolfe, Neal
+   15Bluff, Clarence   10Programmer              $24.00	   13Jones, Ashley
+   14Bridges, Debra   13Sr Programmer              $48.00	   14Parsons, Carol
+   13Chung, Arthur   10Programmer              $21.00	   13Ortega, Julio
+   14Downing, Susan   10Programmer              $29.00	   12Bee, Charles
+   17Fielding, Wallace   14Project Leader              $47.00	   12Jones, Betty
+   14Fine, Laurence   13Sr Programmer              $42.00	   12Jones, Betty
+   14Hilton, Connie   10Programmer              $37.00	   14Bridges, Debra
+   13Jones, Ashley   13Sr Programmer              $49.00	   15Turner, Russell
+   12Jones, Betty   14Project Leader              $66.00	   15Turner, Russell
+   13King, Richard   13Sr Programmer              $39.00	   17Beveridge, Fernce
+   12Lorenzo, Sue   10Consultant              $52.00	   14Parsons, Carol
+   12Moore, Holly   10Programmer              $36.00	   16Thompson, Howard
+   12Noonan, Brad   10Programmer              $25.00	   13Jones, Ashley
+   16O'Foote, Suzanne   10Programmer              $40.00	   14Bridges, Debra
+   13Ortega, Julio   13Sr Programmer              $50.00	   11Wolfe, Neal
+   14Parsons, Carol   14Project Leader              $55.00	   11Wolfe, Neal
+   14Peterson, Jean    7Analyst              $32.00	   13Alcott, Scott
+   14Randall, David   10Programmer              $34.00	   13Alcott, Scott
+   14Rolls, Richard   10Programmer              $28.00	   13King, Richard
+   14Smith, Chester   10Programmer              $22.00	   12Bee, Charles
+   12Smith, Peggy   10Consultant              $32.00	   16Thompson, Howard
+   12Stein, Frank   10Programmer              $27.00	   16Thompson, Howard
+   16Thompson, Howard   13Sr Programmer              $45.00	   12Jones, Betty
+   15Turner, Russell   14Project Leader              $53.00	   12Jones, Betty
+   16Walters, Lindsay    7Analyst              $44.00	   14Fine, Laurence
+   11Wolfe, Neal   14Project Leader              $65.00	    0
+!!
+? fill drop.sql 
+!!
+drop table projects;
+drop table emp;
+drop table tasks;
+drop table dependents;
+drop table emp_priority;
+drop table tasks_priority; 
+drop table tasks_cdds;
+\g
+!!
+? fill repdata.sql 
+!!
+
+/* Create and load the emp and dependents tables. */
+
+create table emp(
+	name varchar(20) not null not default,
+	title varchar(15) not null with default,
+	hourly_rate money not null with default,
+	manager varchar(20) with null
+)
+with noduplicates
+\g
+copy emp(
+	name= varchar(0),
+	title= varchar(0),
+	hourly_rate= c0tab,
+	manager= varchar(0) with null('NULL'),
+	nl= d1)
+from 'emp.dat'
+\g
+modify emp to btree unique on
+	name
+\g
+create table dependents(
+	name varchar(20) not null not default,
+	depname varchar(15) not null not default,
+	birth date not null not default
+)
+with noduplicates
+\g
+copy dependents(
+	name= varchar(0),
+	depname= varchar(0),
+	birth= c0nl,
+	nl= d1)
+from 'dependen.dat'
+\g
+modify dependents to btree unique on
+	name,
+	depname
+\g
+!!
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+~
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+~
+>>
+? sql -s SEPPARAMDB_3 
+<<
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+~
+>>
+? dereplic SEPPARAMDB_1 
+<<
+~
+>>
+? dereplic SEPPARAMDB_2 
+<<
+~
+>>
+? dereplic SEPPARAMDB_3 
+<<
+~
+>>
+? repcat SEPPARAMDB_1 
+<<
+~
+>>
+? repcat SEPPARAMDB_2 
+<<
+~
+>>
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* \i drop.sql
+<<
+~
+>>
+* \i repdata.sql 
+<<
+(32 rows)
+(32 rows)
+(28 rows)
+(28 rows)
+>>
+* help\g 
+<<
+Name                               Owner                              Type
+
+dd_cdds                            testenv                            table
+dd_cdds_name_idx                   testenv                            index
+dd_databases                       testenv                            table
+dd_db_cdds                         testenv                            table
+dd_db_name_idx                     testenv                            index
+dd_dbms_types                      testenv                            table
+dd_distrib_queue                   testenv                            table
+dd_events                          testenv                            table
+dd_flag_values                     testenv                            table
+dd_input_queue                     testenv                            table
+dd_last_number                     testenv                            table
+dd_mail_alert                      testenv                            table
+dd_nodes                           testenv                            table
+dd_option_values                   testenv                            table
+dd_paths                           testenv                            table
+dd_reg_tbl_idx                     testenv                            index
+dd_regist_columns                  testenv                            table
+dd_regist_tables                   testenv                            table
+dd_server_flags                    testenv                            table
+dd_servers                         testenv                            table
+dd_support_tables                  testenv                            table
+dependents                         testenv                            table
+emp                                testenv                            table
+(23 rows)
+>>
+* \q 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* \i drop.sql
+<<
+~
+>>
+* \i repdata.sql 
+<<
+(32 rows)
+(32 rows)
+(28 rows)
+(28 rows)
+>>
+* help\g 
+<<
+Name                               Owner                              Type
+
+dd_cdds                            testenv                            table
+dd_cdds_name_idx                   testenv                            index
+dd_databases                       testenv                            table
+dd_db_cdds                         testenv                            table
+dd_db_name_idx                     testenv                            index
+dd_dbms_types                      testenv                            table
+dd_distrib_queue                   testenv                            table
+dd_events                          testenv                            table
+dd_flag_values                     testenv                            table
+dd_input_queue                     testenv                            table
+dd_last_number                     testenv                            table
+dd_mail_alert                      testenv                            table
+dd_nodes                           testenv                            table
+dd_option_values                   testenv                            table
+dd_paths                           testenv                            table
+dd_reg_tbl_idx                     testenv                            index
+dd_regist_columns                  testenv                            table
+dd_regist_tables                   testenv                            table
+dd_server_flags                    testenv                            table
+dd_servers                         testenv                            table
+dd_support_tables                  testenv                            table
+dependents                         testenv                            table
+emp                                testenv                            table
+(23 rows)
+>>
+* \q 
+<<
+>>
+? sql -s SEPPARAMDB_3 
+<<
+>>
+* \i drop.sql
+<<
+~
+>>
+* \i repdata.sql 
+<<
+ 
+(32 rows)
+(32 rows)
+(28 rows)
+(28 rows)
+>>
+* help\g 
+<<
+Name                               Owner                              Type
+
+dependents                         testenv                            table
+emp                                testenv                            table
+>>
+<<
+Name                               Owner                              Type
+
+dependents                         testenv                            table
+emp                                testenv                            table
+(2 rows)
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Mon Jun 30 16:19:26 1997

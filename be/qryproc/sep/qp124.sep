@@ -1,0 +1,181 @@
+/*
+	Test Name: eha06.sep
+	Time: 29-JUN-1989 15:22:21
+	User Name: testenv   
+ 
+	Test ID : eha06
+	Module  : 
+	Filename: eha06.sep
+	Purpose	: Test of the various queries in the 'mappings' document
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : s, p, sp
+	Synopsis     : selects including some that have caused problems
+			in the past and WHERE/aggregate embedding tests
+
+	History	: xx-xxx-1989	Created				Author
+		11-26-91 Converted to using a setup Test.CAMACHO
+	Setup Test   : eaa00.sep
+
+          12-Aug-1993	(garys) updated canon to accept new 65 error # and
+				message for Illegal use of aggregate function 
+				in a WHERE clause.
+          28-Aug-1996	(Author)
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from sp 
+<<
+>>
+*	where sno in 
+<<
+>>
+*	 (select sno from s where city='lon') and pno in 
+<<
+>>
+*		(select pno from p where color='re*');\g 
+/*
+	this SELECT statement has caused problems/bugts some
+	where along the development path in the SQL translator
+*/
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
++------+------+------+
+(0 rows)
+>>
+* select sno from s 
+<<
+>>
+*	where not exists 
+<<
+>>
+*	 (select distinct pno from sp);\g 
+/*
+	this SELECT statement has caused problems/bugts some where 
+	along the development path in the SQL translator
+*/
+<<
+
++------+
+|sno   |
++------+
++------+
+(0 rows)
+>>
+* select distinct pno, max(qty) from sp 
+<<
+>>
+*	where qty > 200 
+<<
+>>
+*		group by pno 
+<<
+>>
+*		having sum(qty) > 300 
+<<
+>>
+*		order by 2, pno desc;\g 
+/*
+this query demonstrates that the WHERE clause must be embedded in BOTH
+aggregates in the target list and aggregates in the having clause.  The
+right answer (DATE-INTRO p. 134) does not include pno p4 - and that is what
+you get if you don't embed the WHERE clause in the having aggregate
+*/
+<<
+
++------+------+
+|pno   |col2  |
++------+------+
+|p1    |   300|
+|p5    |   400|
+|p3    |   400|
+|p2    |   400|
++------+------+
+(4 rows)
+>>
+* select pno from p px 
+<<
+>>
+*	where px.weight *5 >any 
+<<
+>>
+*	 (select sum(weight) from p py 
+<<
+>>
+*		where py.city=px.city) order by 1;\g 
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p3    |
+|p4    |
+|p5    |
+|p6    |
++------+
+(6 rows)
+>>
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p4    |
+|p6    |
+|p5    |
+|p2    |
+|p3    |
++------+
+(6 rows)
+>>
+* select pno, qty from sp 
+<<
+>>
+*	where avg(qty) in 
+<<
+>>
+*	 (select spz.qty from sp spz 
+<<
+>>
+*		where pno='p1');\g 
+/*
+*/
+<<
+E_US0B72 line 1.  Illegal use of aggregate function in a WHERE clause.
+    (Thu Aug 12 13:26:45 1993)
+
+>>
+* select avg(qty) from sp 
+<<
+>>
+*	where sno =any 
+<<
+>>
+*	 (select sno from s 
+<<
+>>
+*		where city = 'paris');\g 
+<<
+
++-----------+
+|col1       |
++-----------+
+|    300.000|
++-----------+
+(1 row)
+>>
+* \q 
+<<
+~
+>>
+
+
+Ending at: Wed Aug 28 08:31:59 1996

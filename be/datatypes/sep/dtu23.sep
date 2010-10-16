@@ -1,0 +1,888 @@
+/*
+	Test Name: dtu23.sep
+	Time: Thu Mar 27 16:08:09 2003
+	User Name: ingres
+	Terminal type: septerm
+
+	Test ID : dtu23.sep
+	Module  : be/datatypes
+	Filename: dtu23.sep
+	Purpose	: To test the unicode coercion and wildcard searching support,
+                  first available with Ingres 2.6/0303 and later releases.
+	Input Files  : dtu23_tbl.sc, dtu23_ucs.sc
+	Output Files : dtu23_tbl.exe, dtu23_ucs.exe
+	Database     : dtu23_unidb
+	Tables       : dtu23_uni, dtu23_char
+	Synopsis     : The Ingres variable II_CHARSETxx (where xx is the
+                       installation code) should be set to UTF8 before running
+                       this test.
+                       This is to test Unicode coercion and wildcard searching 
+                       with a customized case-insensitive collation sequence
+                       involving the 26 Latin alphabet characters ONLY.
+                       In this test, a customized case-insensitive collation
+                       sequence will be created and compiled to enforce the
+                       equivalence for the uppercase and lowercase characters.
+                       Then, create a Unicode database with the customized
+                       collation sequence. This test also includes two 
+                       embedded C programs, one program is to create and 
+                       populate one Unicode and one non-Unicode table. The
+                       second program is to create and execute database
+                       queries to compare and search the tables using SQL
+                       'LIKE/NOT LIKE' predicates, and equijoin.
+
+
+*** TEST CASES:
+    Create and compile a customized case-insensitive collation sequence for Unicode
+    Create and compile a customized case-insensitive collation sequence for ASCII characters
+    Create a Unicode database with the customized collation sequences
+    nchar_col LIKE 'string%'
+    nvchar_col LIKE 'string%'
+    nchar_col NOT LIKE 'string%'
+    nvchar_col NOT LIKE 'string%'
+    nchar_col = char_col
+    nchar_col = vchar_col
+    nvchar_col = char_col
+    nvchar_col = vchar_col
+    nchar_col NOT LIKE char_col AND nchar_col LIKE 'string%'
+    nchar_col NOT LIKE vchar_col AND nchar_col LIKE 'string%'
+    nvchar_col NOT LIKE char_col AND nvchar_col LIKE '%string'
+    nvchar_col NOT LIKE vchar_col AND nvchar_col LIKE '%string'
+
+
+ History: 27-Mar-2003	(wu$ca01)	Created
+          19-May-2003	(wu$ca01) Added the trim function to test cases 11,
+                        12, and 13. Updated test CANON for test cases 12 and
+                        13 due to order DIFF. Removed the 'Known problem' 
+                        section due to issue 12574215 is resolved.
+	  10-oct-2003	(somsa01) Updated to work on Windows.
+          11-Nov-2003   (vande02) Added end of canon delimiter for command
+                        delete setcharset.sh because it got removed in error.
+	  20-Jan-2004	(rogch01) Updated test to work on VMS.
+	  11-May-2004	(shafa01) Removed all steps used for setting the
+			II_CHARSETxx to UTF8 for all platforms. Due to Unicode
+			Coercion changes put in Ingres r3, this change should
+			only be in main and going forward.
+*/
+? fill dtu23_nocase.src
+!!
+a:A
+b:B
+c:C
+d:D
+e:E
+f:F
+g:G
+h:H
+i:I
+j:J
+k:K
+l:L
+m:M
+n:N
+o:O
+p:P
+q:Q
+r:R
+s:S
+t:T
+u:U
+v:V
+w:W
+x:X
+y:Y
+z:Z
+:Collation sequence to enforce the equivalence for the 26
+:Latin uppercase and lowercase characters ONLY. 
+:March 27, 2003
+:Cathy Wu
+!!
+? fill dtu23_nocaseU.uce
+!!
+# Unicode collation element table to enforce the equivalence for
+# the 26 Latin uppercase and lowercase characters ONLY.
+# March 27, 2003
+# Cathy Wu
+
+@version 0.0.000
+
+0041 ; [.06C3.0020.0008.0041] # LATIN CAPITAL LETTER A
+0042 ; [.06D7.0020.0008.0042] # LATIN CAPITAL LETTER B
+0043 ; [.06EB.0020.0008.0043] # LATIN CAPITAL LETTER C
+0044 ; [.06F7.0020.0008.0044] # LATIN CAPITAL LETTER D
+0045 ; [.0713.0020.0008.0045] # LATIN CAPITAL LETTER E
+0046 ; [.073F.0020.0008.0046] # LATIN CAPITAL LETTER F
+0047 ; [.0747.0020.0008.0047] # LATIN CAPITAL LETTER G
+0048 ; [.0767.0020.0008.0048] # LATIN CAPITAL LETTER H
+0049 ; [.0781.0020.0008.0049] # LATIN CAPITAL LETTER I
+004A ; [.0795.0020.0008.004A] # LATIN CAPITAL LETTER J
+004B ; [.07A5.0020.0008.004B] # LATIN CAPITAL LETTER K
+004C ; [.07B1.0020.0008.004C] # LATIN CAPITAL LETTER L
+004D ; [.07D9.0020.0008.004D] # LATIN CAPITAL LETTER M
+004E ; [.07E1.0020.0008.004E] # LATIN CAPITAL LETTER N
+004F ; [.07F9.0020.0008.004F] # LATIN CAPITAL LETTER O
+0050 ; [.0811.0020.0008.0050] # LATIN CAPITAL LETTER P
+0051 ; [.081D.0020.0008.0051] # LATIN CAPITAL LETTER Q
+0052 ; [.0829.0020.0008.0052] # LATIN CAPITAL LETTER R
+0053 ; [.0851.0020.0008.0053] # LATIN CAPITAL LETTER S
+0054 ; [.0869.0020.0008.0054] # LATIN CAPITAL LETTER T
+0055 ; [.0881.0020.0008.0055] # LATIN CAPITAL LETTER U
+0056 ; [.0899.0020.0008.0056] # LATIN CAPITAL LETTER V
+0057 ; [.08A5.0020.0008.0057] # LATIN CAPITAL LETTER W
+0058 ; [.08AD.0020.0008.0058] # LATIN CAPITAL LETTER X
+0059 ; [.08B1.0020.0008.0059] # LATIN CAPITAL LETTER Y
+005A ; [.08BD.0020.0008.005A] # LATIN CAPITAL LETTER Z
+0061 ; [.06C3.0020.0008.0061] # LATIN SMALL LETTER A
+0062 ; [.06D7.0020.0008.0062] # LATIN SMALL LETTER B
+0063 ; [.06EB.0020.0008.0063] # LATIN SMALL LETTER C
+0064 ; [.06F7.0020.0008.0064] # LATIN SMALL LETTER D
+0065 ; [.0713.0020.0008.0065] # LATIN SMALL LETTER E
+0066 ; [.073F.0020.0008.0066] # LATIN SMALL LETTER F
+0067 ; [.0747.0020.0008.0067] # LATIN SMALL LETTER G
+0068 ; [.0767.0020.0008.0068] # LATIN SMALL LETTER H
+0069 ; [.0781.0020.0008.0069] # LATIN SMALL LETTER I
+006A ; [.0795.0020.0008.006A] # LATIN SMALL LETTER J
+006B ; [.07A5.0020.0008.006B] # LATIN SMALL LETTER K
+006C ; [.07B1.0020.0008.006C] # LATIN SMALL LETTER L
+006D ; [.07D9.0020.0008.006D] # LATIN SMALL LETTER M
+006E ; [.07E1.0020.0008.006E] # LATIN SMALL LETTER N
+006F ; [.07F9.0020.0008.006F] # LATIN SMALL LETTER O
+0070 ; [.0811.0020.0008.0070] # LATIN SMALL LETTER P
+0071 ; [.081D.0020.0008.0071] # LATIN SMALL LETTER Q
+0072 ; [.0829.0020.0008.0072] # LATIN SMALL LETTER R
+0073 ; [.0851.0020.0008.0073] # LATIN SMALL LETTER S
+0074 ; [.0869.0020.0008.0074] # LATIN SMALL LETTER T
+0075 ; [.0881.0020.0008.0075] # LATIN SMALL LETTER U
+0076 ; [.0899.0020.0008.0076] # LATIN SMALL LETTER V
+0077 ; [.08A5.0020.0008.0077] # LATIN SMALL LETTER W
+0078 ; [.08AD.0020.0008.0078] # LATIN SMALL LETTER X
+0079 ; [.08B1.0020.0008.0079] # LATIN SMALL LETTER Y
+007A ; [.08BD.0020.0008.007A] # LATIN SMALL LETTER Z
+!!
+? fill dtu23_tbl.sc
+!!
+/* This program is to create and populate two Unicode and one non-Unicode
+** tables.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+typedef struct
+{
+    short len;
+    wchar_t text[1];
+} NVCH_STRUCT;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *col1[] =
+    {
+    L"BCDEF",
+    L"bcdeF",
+    L"Ghijk",
+    L"ghijk",
+    L"opqrs",
+    L"oPQrs",
+    L"zzzzz",
+    L"ZZZZZ",
+    L"RQW",
+    L"RqW",
+    };
+static wchar_t *col2[] =
+    {
+    L"bcdef",
+    L"GHIJK",
+    L"gHiJk",
+    L"OPQrs",
+    L"oQPRS",
+    L"rstuv",
+    L"rqwxy",
+    L"zZZzz",
+    L"bndm",
+    L"crqw",
+    };
+#define NUMROWS 10
+
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int   i;
+      char  *dbname;
+      wchar_t wc1[11];
+      wchar_t wc2[11];
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[11];
+      } nv1;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[11];
+      } nv2;
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+   EXEC SQL DROP TABLE dtu23_uni;
+   EXEC SQL DROP TABLE dtu23_char;
+
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   printf("Creating tables...\n");
+
+   EXEC SQL CREATE TABLE dtu23_uni (
+	nchar_col NCHAR(10) not null,
+	nvchar_col NVARCHAR(10) not null);
+
+   EXEC SQL CREATE TABLE dtu23_char (
+	char_col CHAR(10) not null,
+ 	vchar_col VARCHAR(10) not null);
+
+
+   printf("Inserting rows into tables...\n");
+
+   for (i = 0; i < NUMROWS; i++)
+   {
+      wcscpy(wc1, col1[i]);
+      wcscpy(wc2, col2[i]);
+      UC_ASSIGN(nv1, col1[i]);
+      UC_ASSIGN(nv2, col2[i]);
+
+      EXEC SQL INSERT INTO dtu23_uni VALUES (:wc1, :wc2);
+
+   }
+
+  EXEC SQL INSERT INTO dtu23_char SELECT * from dtu23_uni;
+
+  printf("Operation complete\n");
+
+  EXEC SQL DISCONNECT;
+}
+!!
+? fill dtu23_ucs.sc
+!!
+/* This program is to create and execute database queries to compare
+** and search the tables using SQL LIKE/NOT LIKE predicate, and
+** joins(equijoin, left/right/full outer joins).
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  short     ind1, ind2;
+  char      st1[11];
+  char      st2[11];
+  wchar_t wc1[11], k1[11];
+  wchar_t wc2[11];
+
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[11];
+  } nv1, nv2, k2;
+
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|=================================================================|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Select UNICODE table...");
+         EXEC SQL SELECT * INTO :wc1, :wc2 
+         FROM dtu23_uni order by nchar_col, nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|\n", wc1, wc2);
+         EXEC SQL END;
+         break;
+ 
+      case 2:
+         print_header("Select NON-UNICODE table...");
+         EXEC SQL SELECT * INTO :st1, :st2 
+         FROM dtu23_char order by char_col, vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%s|%s|\n", st1, st2);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("nchar_col LIKE 'bc%' OR 'OP%'...");
+         EXEC SQL SELECT nchar_col
+         INTO :wc1
+         FROM dtu23_uni
+         WHERE nchar_col LIKE 'bc%' OR nchar_col LIKE 'OP%'
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|\n", wc1);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         print_header("nvchar_col LIKE 'ghi%'...");
+         EXEC SQL SELECT nvchar_col
+         INTO :wc2
+         FROM dtu23_uni
+         WHERE nvchar_col LIKE 'ghi%'
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|\n", wc2);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("nchar_col NOT LIKE 'zZ%' AND 'rq%'...");
+         EXEC SQL SELECT nchar_col
+         INTO :wc1
+         FROM dtu23_uni
+         WHERE nchar_col NOT LIKE 'zZ%' AND nchar_col NOT LIKE 'rq%'
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|\n", wc1);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header("nvchar_col NOT LIKE 'O%' AND 'g%'...");
+         EXEC SQL SELECT nvchar_col
+         INTO :wc2
+         FROM dtu23_uni
+         WHERE nvchar_col NOT LIKE 'O%' AND nvchar_col NOT LIKE 'g%'
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|\n", wc2);
+         EXEC SQL END;
+         break;
+
+      case 7:
+         print_header("nchar_col = char_col...");
+         EXEC SQL SELECT dtu23_uni.nchar_col, dtu23_char.char_col
+         INTO :wc1, :st1
+         FROM dtu23_uni, dtu23_char
+         WHERE dtu23_uni.nchar_col = dtu23_char.char_col
+         order by dtu23_uni.nchar_col, dtu23_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break;
+
+      case 8:
+         print_header("nchar_col = vchar_col...");
+         EXEC SQL SELECT dtu23_uni.nchar_col, dtu23_char.vchar_col
+         INTO :wc1, :st2
+         FROM dtu23_uni, dtu23_char
+         WHERE dtu23_uni.nchar_col = dtu23_char.vchar_col
+         order by dtu23_uni.nchar_col, dtu23_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st2);
+         EXEC SQL END;
+         break;
+
+      case 9:
+         print_header("nvchar_col = char_col...");
+         EXEC SQL SELECT dtu23_uni.nvchar_col, dtu23_char.char_col
+         INTO :wc2, :st1
+         FROM dtu23_uni, dtu23_char
+         WHERE dtu23_uni.nvchar_col = dtu23_char.char_col
+         order by dtu23_uni.nvchar_col, dtu23_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break;
+
+      case 10:
+         print_header("nvchar_col = vchar_col...");
+         EXEC SQL SELECT dtu23_uni.nvchar_col, dtu23_char.vchar_col
+         INTO :wc2, :st2
+         FROM dtu23_uni, dtu23_char
+         WHERE dtu23_uni.nvchar_col = dtu23_char.vchar_col
+         order by dtu23_uni.nvchar_col, dtu23_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st2);
+         EXEC SQL END;
+         break;
+
+      case 11:
+         print_header("nchar_col NOT LIKE char_col AND nchar_col LIKE 'bC%'...");
+         EXEC SQL SELECT dtu23_uni.nchar_col, dtu23_char.char_col
+         INTO :wc1, :st1
+         FROM dtu23_uni, dtu23_char
+         WHERE trim(dtu23_uni.nchar_col) NOT LIKE trim(dtu23_char.char_col) AND
+         dtu23_uni.nchar_col LIKE 'bC%'
+         order by dtu23_uni.nchar_col, dtu23_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break;
+
+      case 12:
+         print_header("nchar_col NOT LIKE vchar_col AND nchar_col LIKE 'OP%'...");
+         EXEC SQL SELECT dtu23_uni.nchar_col, dtu23_char.vchar_col
+         INTO :wc1, :st2
+         FROM dtu23_uni, dtu23_char
+         WHERE trim(dtu23_uni.nchar_col) NOT LIKE dtu23_char.vchar_col AND
+         dtu23_uni.nchar_col LIKE 'OP%'
+         order by dtu23_uni.nchar_col, dtu23_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st2);
+         EXEC SQL END;
+         break;
+
+      case 13:
+         print_header("nvchar_col NOT LIKE char_col AND nvchar_col LIKE '%ZZ'...");
+         EXEC SQL SELECT dtu23_uni.nvchar_col, dtu23_char.char_col
+         INTO :wc2, :st1
+         FROM dtu23_uni, dtu23_char
+         WHERE dtu23_uni.nvchar_col NOT LIKE trim(dtu23_char.char_col) AND
+         dtu23_uni.nvchar_col LIKE '%ZZ'
+         order by dtu23_uni.nvchar_col, dtu23_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break;
+
+      case 14:
+         print_header("nvchar_col NOT LIKE vchar_col AND nvchar_col LIKE '%Ijk'...");
+         EXEC SQL SELECT dtu23_uni.nvchar_col, dtu23_char.vchar_col
+         INTO :wc2, :st2
+         FROM dtu23_uni, dtu23_char
+         WHERE dtu23_uni.nvchar_col NOT LIKE dtu23_char.vchar_col AND
+         dtu23_uni.nvchar_col LIKE '%Ijk'
+         order by dtu23_uni.nvchar_col, dtu23_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st2);
+         EXEC SQL END;
+         break;
+
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu23_tbl.sc
+<<
+ESQL dtu23_tbl.sc:
+>>
+<<
+>>
+? sepcc dtu23_tbl
+<<
+dtu23_tbl.c
+>>
+<<
+
+>>
+? seplnk dtu23_tbl
+<<
+
+>>
+? esqlc dtu23_ucs.sc
+<<
+ESQL dtu23_ucs.sc:
+>>
+<<
+>>
+? sepcc dtu23_ucs
+<<
+dtu23_ucs.c
+>>
+<<
+
+>>
+? seplnk dtu23_ucs
+<<
+
+>>
+.if (VMS)
+? delete @file(ii_system,ingres,files,collation,dtu23_nocase)
+<<
+~
+>>
+? delete @file(ii_system,ingres,files,collation,dtu23_nocaseU)
+<<
+~
+>>
+.else
+? qasetuser ingres rm @file(ii_system,ingres,files,collation,dtu23_nocase)
+<<
+~
+>>
+? qasetuser ingres rm @file(ii_system,ingres,files,collation,dtu23_nocaseU)
+<<
+~
+>>
+.endif
+? qasetuser ingres aducompile dtu23_nocase.src dtu23_nocase
+<<
+
+>>
+? qasetuser ingres aducompile dtu23_nocaseU.uce dtu23_nocaseU -u
+<<
+
+>>
+? destroydb dtu23_unidb
+<<
+~
+>>
+? createdb -ldtu23_nocase -ndtu23_nocaseU dtu23_unidb
+<<
+Creating database 'dtu23_unidb' . . .
+
+  Creating DBMS System Catalogs . . .
+  Modifying DBMS System Catalogs . . .
+  Creating Standard Catalog Interface . . .
+  Creating Front-end System Catalogs . . .
+
+Creation of database 'dtu23_unidb' completed successfully.
+>>
+? run dtu23_tbl.exe dtu23_unidb
+<<
+Creating tables...
+Inserting rows into tables...
+Operation complete
+>>
+? run dtu23_ucs.exe dtu23_unidb 1
+<<
+Select UNICODE table...
+|=================================================================|
+|BCDEF     |bcdef|
+|bcdeF     |GHIJK|
+|Ghijk     |gHiJk|
+|ghijk     |OPQrs|
+|opqrs     |oQPRS|
+|oPQrs     |rstuv|
+|RQW       |bndm|
+|RqW       |crqw|
+|zzzzz     |rqwxy|
+|ZZZZZ     |zZZzz|
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 2
+<<
+Select NON-UNICODE table...
+|=================================================================|
+|BCDEF     |bcdef|
+|bcdeF     |GHIJK|
+|Ghijk     |gHiJk|
+|ghijk     |OPQrs|
+|opqrs     |oQPRS|
+|oPQrs     |rstuv|
+|RQW       |bndm|
+|RqW       |crqw|
+|zzzzz     |rqwxy|
+|ZZZZZ     |zZZzz|
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 3
+<<
+nchar_col LIKE 'bc%' OR 'OP%'...
+|=================================================================|
+|bcdeF     |
+|BCDEF     |
+|oPQrs     |
+|opqrs     |
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 4
+<<
+nvchar_col LIKE 'ghi%'...
+|=================================================================|
+|gHiJk|
+|GHIJK|
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 5
+<<
+nchar_col NOT LIKE 'zZ%' AND 'rq%'...
+|=================================================================|
+|bcdeF     |
+|BCDEF     |
+|ghijk     |
+|Ghijk     |
+|opqrs     |
+|oPQrs     |
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 6
+<<
+nvchar_col NOT LIKE 'O%' AND 'g%'...
+|=================================================================|
+|bcdef|
+|bndm|
+|crqw|
+|rqwxy|
+|rstuv|
+|zZZzz|
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 7
+<<
+nchar_col = char_col...
+|=================================================================|
+|bcdeF     |bcdeF     |
+|BCDEF     |bcdeF     |
+|bcdeF     |BCDEF     |
+|BCDEF     |BCDEF     |
+|Ghijk     |ghijk     |
+|ghijk     |ghijk     |
+|Ghijk     |Ghijk     |
+|ghijk     |Ghijk     |
+|opqrs     |opqrs     |
+|oPQrs     |opqrs     |
+|opqrs     |oPQrs     |
+|oPQrs     |oPQrs     |
+|RqW       |RQW       |
+|RQW       |RQW       |
+|RqW       |RqW       |
+|RQW       |RqW       |
+|zzzzz     |ZZZZZ     |
+|ZZZZZ     |ZZZZZ     |
+|zzzzz     |zzzzz     |
+|ZZZZZ     |zzzzz     |
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 8
+<<
+nchar_col = vchar_col...
+|=================================================================|
+|bcdeF     |bcdef|
+|BCDEF     |bcdef|
+|Ghijk     |GHIJK|
+|ghijk     |GHIJK|
+|Ghijk     |gHiJk|
+|ghijk     |gHiJk|
+|opqrs     |OPQrs|
+|oPQrs     |OPQrs|
+|zzzzz     |zZZzz|
+|ZZZZZ     |zZZzz|
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 9
+<<
+nvchar_col = char_col...
+|=================================================================|
+|bcdef|bcdeF     |
+|bcdef|BCDEF     |
+|gHiJk|ghijk     |
+|GHIJK|ghijk     |
+|gHiJk|Ghijk     |
+|GHIJK|Ghijk     |
+|OPQrs|opqrs     |
+|OPQrs|oPQrs     |
+|zZZzz|ZZZZZ     |
+|zZZzz|zzzzz     |
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 10
+<<
+nvchar_col = vchar_col...
+|=================================================================|
+|bcdef|bcdef|
+|bndm|bndm|
+|crqw|crqw|
+|gHiJk|GHIJK|
+|GHIJK|GHIJK|
+|gHiJk|gHiJk|
+|GHIJK|gHiJk|
+|OPQrs|OPQrs|
+|oQPRS|oQPRS|
+|rqwxy|rqwxy|
+|rstuv|rstuv|
+|zZZzz|zZZzz|
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 11
+<<
+nchar_col NOT LIKE char_col AND nchar_col LIKE 'bC%'...
+|=================================================================|
+|bcdeF     |ghijk     |
+|bcdeF     |Ghijk     |
+|BCDEF     |Ghijk     |
+|BCDEF     |ghijk     |
+|BCDEF     |oPQrs     |
+|bcdeF     |opqrs     |
+|bcdeF     |oPQrs     |
+|BCDEF     |opqrs     |
+|bcdeF     |RqW       |
+|BCDEF     |RqW       |
+|bcdeF     |RQW       |
+|BCDEF     |RQW       |
+|BCDEF     |zzzzz     |
+|BCDEF     |ZZZZZ     |
+|bcdeF     |zzzzz     |
+|bcdeF     |ZZZZZ     |
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 12
+<<
+nchar_col NOT LIKE vchar_col AND nchar_col LIKE 'OP%'...
+|=================================================================|
+|oPQrs     |bcdef|
+|opqrs     |bcdef|
+|oPQrs     |bndm|
+|opqrs     |bndm|
+|opqrs     |crqw|
+|oPQrs     |crqw|
+|opqrs     |GHIJK|
+|oPQrs     |GHIJK|
+|oPQrs     |gHiJk|
+|opqrs     |gHiJk|
+|opqrs     |oQPRS|
+|oPQrs     |oQPRS|
+|opqrs     |rqwxy|
+|oPQrs     |rqwxy|
+|opqrs     |rstuv|
+|oPQrs     |rstuv|
+|oPQrs     |zZZzz|
+|opqrs     |zZZzz|
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 13
+<<
+nvchar_col NOT LIKE char_col AND nvchar_col LIKE '%ZZ'...
+|=================================================================|
+|zZZzz|bcdeF     |
+|zZZzz|BCDEF     |
+|zZZzz|ghijk     |
+|zZZzz|Ghijk     |
+|zZZzz|opqrs     |
+|zZZzz|oPQrs     |
+|zZZzz|RqW       |
+|zZZzz|RQW       |
+|=================================================================|
+>>
+? run dtu23_ucs.exe dtu23_unidb 14
+<<
+nvchar_col NOT LIKE vchar_col AND nvchar_col LIKE '%Ijk'...
+|=================================================================|
+|gHiJk|bcdef|
+|GHIJK|bcdef|
+|gHiJk|bndm|
+|GHIJK|bndm|
+|gHiJk|crqw|
+|GHIJK|crqw|
+|GHIJK|OPQrs|
+|gHiJk|OPQrs|
+|gHiJk|oQPRS|
+|GHIJK|oQPRS|
+|GHIJK|rqwxy|
+|gHiJk|rqwxy|
+|GHIJK|rstuv|
+|gHiJk|rstuv|
+|GHIJK|zZZzz|
+|gHiJk|zZZzz|
+|=================================================================|
+>>
+? destroydb dtu23_unidb
+<<
+Destroying database 'dtu23_unidb'...
+
+Destruction of database 'dtu23_unidb' completed successfully.
+>>
+.if (VMS)
+? delete @file(ii_system,ingres,files,collation,dtu23_nocase)
+<<
+file was deleted
+>>
+? delete @file(ii_system,ingres,files,collation,dtu23_nocaseU)
+<<
+file was deleted
+>>
+.else
+? qasetuser ingres rm @file(ii_system,ingres,files,collation,dtu23_nocase)
+<<
+
+>>
+? qasetuser ingres rm @file(ii_system,ingres,files,collation,dtu23_nocaseU)
+<<
+
+>>
+.endif
+? delete dtu23_tbl.c
+<<
+file was deleted
+>>
+? delete dtu23_tbl.o
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu23_tbl.obj
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu23_tbl.exe
+<<
+file was deleted
+>>
+? delete dtu23_ucs.c
+<<
+file was deleted
+>>
+? delete dtu23_ucs.o
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu23_ucs.obj
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu23_ucs.exe
+<<
+file was deleted
+>>
+
+Ending at: Mon Mar 30 23:32:00 2003

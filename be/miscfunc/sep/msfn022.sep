@@ -1,0 +1,271 @@
+/*
+        Test Name: msfn022.sep
+        Time: Tue Mar 21 10:36:14 2000
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : case2.sep
+        Module  :
+        Filename:
+        Purpose :
+        Input Files  :
+        Output Files :
+        Database     :  SEPPARAMDB
+        Tables       :  casetable
+        Synopsis     :  Test CASE statement in different places
+                     :  in INSERT, UPDATE, CREATE, DELETE 
+
+    History: 21-Mar-2000 (linvi02) Created.
+             11-Apr-2000 (sarjo01) Cleanup.
+                         E_OP0681 error pending resolution of
+                         S/T 8866260
+           03-Nov-2000   (sarjo01) Update canons for resolution of
+                         8866260
+          25-Jul-2001	(rogch01)
+		Incorporated casetable initialisation from soon to be defunct
+		test msfn020.sep.  Added some more rows to the tableselect
+		table including one which breaks the (named) check constraint.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table casetable\g
+<<
+~
+>>
+* create table casetable(someint int, somename varchar(30), somechar char(15))\g 
+<<
+
+>>
+* insert into casetable values(2, 'days', 'weekend')\g 
+<<
+(1 row)
+>>
+* insert into casetable values(5, 'days', 'weekdays')\g 
+<<
+(1 row)
+>>
+* insert into casetable values(12, 'months', 'year')\g 
+<<
+(1 row)
+>>
+* insert into casetable values(24, 'hours', 'day')\g 
+<<
+(1 row)
+>>
+* insert into casetable values(100, 'years', 'century')\g 
+<<
+(1 row)
+>>
+* drop table tableselect\g
+<<
+~
+>>
+* create table tableselect (age int, constraint agegreaterthan1 check (case age when-
+ 1 then 11 when 2 then 22   when 3 then 33 when 4 then 44 when 5 then 55 else 0 end -
+> 10))\g
+<<
+
+>>
+* insert into tableselect values(1)\g
+<<
+(1 row)
+>>
+* insert into tableselect values(3)\g
+<<
+(1 row)
+>>
+* insert into tableselect values(5)\g
+<<
+(1 row)
+>>
+* insert into tableselect values(7)\g
+<<
+E_US1905 Check integrity constraint '"agegreaterthan1"'
+    on table '"tableselect"' was violated.
+    (Wed Jul 25 03:55:43 2001)
+
+>>
+* select * from tableselect\g
+<<
+
++-------------+
+|age          |
++-------------+
+|            1|
+|            3|
+|            5|
++-------------+
+(3 rows)
+>>
+* drop table tableselect2\g
+<<
+~
+>>
+* create table tableselect2 as select case someint when 2 then 2 when 5 then 5 else -
+25 end as week,case when somename = 'days' then 'days' when somename = 'hours' then -
+'one day' else 'not days' end as "weather day",case somechar when 'weekend' then som-
+echar when 'weekdays' then somechar else 'does not matter' end as "whole week" from -
+casetable where case someint when 2 then someint when 7 then someint when 12 then so-
+meint when 24 then someint else someint/2 end <=case when someint < 100 then someint-
+ else someint-70 end or case when somename = 'years' then 'years' else 'nothing' end-
+ = case somename when somename then somename end group by someint, somename, somecha-
+r having case someint when 2 then 2 when 5 then 5 else 6 end >= case someint when so-
+meint then someint end or case when somechar = 'weekend' then somechar when somechar-
+ = 'weekdays' then 'weekdays' when somechar = 'day' then somechar else 'not good' en-
+d = case when somechar <> 'century' then somechar when somechar <> 'years' then some-
+char else 'too long' end\g
+<<
+(3 rows)
+>>
+* select * from tableselect2 order by 1\g
+<<
+
++------+--------+---------------+
+|week  |weather |whole week     |
++------+--------+---------------+
+|     2|days    |weekend        |
+|     5|days    |weekdays       |
+|    25|one day |does not matter|
++------+--------+---------------+
+(3 rows)
+>>
+* drop view caseview\g
+<<
+~
+>>
+* create view caseview(case1, case2, case3) as select case someint when 2 then 2 whe-
+n 5 then 5 else 25 end as week,case when somename = 'days' then 'days' when somename-
+ = 'hours' then 'one day' else 'not days' end as "weather day",case somechar when   -
+'weekend' then somechar when 'weekdays' then somechar else 'does not matter' end as -
+"whole week" from casetable where case someint when 2 then someint when 7 then somei-
+nt when 12 then someint when 24 then someint else someint/2 end <=case when someint -
+< 100 then someint else someint-70 end or case when somename = 'years' then 'years' -
+else 'nothing' end = case somename when somename then somename end group by someint,-
+ somename, somechar having case someint when 2 then 2 when 5 then 5 else 6 end >=   -
+case someint when someint then someint end or case when somechar = 'weekend' then   -
+somechar when somechar = 'weekdays' then 'weekdays' when somechar = 'day' then somec-
+har else 'not good' end = case when somechar <> 'century' then somechar when somecha-
+r <> 'years' then somechar else 'too long' end\g
+<<
+>>
+* select * from caseview order by 1\g
+<<
+
++------+--------+---------------+
+|case1 |case2   |case3          |
++------+--------+---------------+
+|     2|days    |weekend        |
+|     5|days    |weekdays       |
+|    25|one day |does not matter|
++------+--------+---------------+
+(3 rows)
+>>
+* select case when case1 > 1 then case1 else 101 end, case case3 when 'weekdays' the-
+n case3 else 'nothing' end, case case2 when 'days' then case2 else 'dates' end from -
+caseview\g
+<<
+
++------+---------------+--------+
+|col1  |col2           |col3    |
++------+---------------+--------+
+|     2|nothing        |days    |
+|     5|weekdays       |days    |
+|    25|nothing        |dates   |
++------+---------------+--------+
+(3 rows)
+>>
+* drop table tableinsert\g
+<<
+~
+>>
+* create table tableinsert(age int, name char(20), hobby char(20))\g
+<<
+
+>>
+* insert into tableinsert(age, name, hobby) select case someint when 2 then 2 when 5-
+ then 5 else 25 end as week,case when somename = 'days' then 'days' when somename   -
+ = 'hours' then 'one day' else 'not days' end as "weather day",case somechar when   -
+'weekend' then somechar when 'weekdays' then somechar else 'does not matter' end as -
+"whole week" from casetable where case someint when 2 then someint when 7 then somei-
+nt when 12 then someint when 24 then someint else someint/2 end <=case when someint -
+< 100 then someint else someint-70 end or case when somename = 'years' then 'years' -
+else 'nothing' end = case somename when somename then somename end group by someint,-
+ somename, somechar having case someint when 2 then 2 when 5 then 5 else 6 end >=   -
+case someint when someint then someint end or case when somechar = 'weekend' then   -
+somechar when somechar = 'weekdays' then 'weekdays' when somechar = 'day' then somec-
+har else 'not good' end = case when somechar <> 'century' then somechar when somecha-
+r <> 'years' then somechar else 'too long' end\g
+<<
+(3 rows)
+>>
+* select * from tableinsert order by 1\g
+<<
+
++-------------+------------------------------+------------------------------+
+|age          |name                          |hobby                         |
++-------------+------------------------------+------------------------------+
+|            2|days                          |weekend                       |
+|            5|days                          |weekdays                      |
+|           25|one day                       |does not matter               |
++-------------+------------------------------+------------------------------+
+(3 rows)
+>>
+* delete from tableinsert where case name when 'days' then name when 'hours' then   -
+name when 'years' then name else 'happy days' end = case when hobby = 'weekdays' the-
+n 'days' else 'some other day' end\g
+<<
+(1 row)
+>>
+* select * from tableinsert order by 1\g
+<<
+
++-------------+--------------------+--------------------+
+|age          |name                |hobby               |
++-------------+--------------------+--------------------+
+|            2|days                |weekend             |
+|           25|one day             |does not matter     |
++-------------+--------------------+--------------------+
+(2 rows)
+>>
+* update tableinsert set hobby = case hobby when 'day 1' then 'one day' when 'day 2'-
+ then 'two days' when 'day 3' then 'three days' when 'day 4' then 'four days' when  -
+'does not matter' then 'easy day' else 'ignor day' end where case when age >= 1 then-
+ age else 0 end > case age when 2 then age when 25 then 24 else 0 end and case when -
+hobby = 'does not matter' then hobby when hobby = 'weekend' then hobby else 'no week-
+end' end = case name when 'days' then 'weekend' when 'one day' then 'does not matter-
+' else 'not a weekend' end\g
+<<
+(1 row)
+>>
+* select * from tableinsert order by 1\g
+<<
+
++-------------+--------------------+--------------------+
+|age          |name                |hobby               |
++-------------+--------------------+--------------------+
+|            2|days                |weekend             |
+|           25|one day             |easy day            |
++-------------+--------------------+--------------------+
+(2 rows)
+>>
+* create integrity on tableinsert is case age when 0 then 1 when 1 then 2 when 3 the-
+n 4 else age end < case when age > 4 then age+1 when age = 2 then 22 else age end\g
+<<
+
+>>
+* insert into tableinsert values(0, 'always', 'should not work')\g
+<<
+(0 rows)
+>>
+* insert into tableinsert values(2, 'should always', 'work')\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+
+
+Ending at: Wed Jul 25 03:56:29 2001

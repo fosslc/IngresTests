@@ -1,0 +1,681 @@
+/*
+	Test Name:dba43.sep 
+	Time:  9-SEP-1991
+	User Name: testenv     
+	Terminal type: septerm
+	Test ID : dba43
+	Module  : 
+	Filename:
+	Purpose	: to test default groups
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB3
+	Tables       : dba43t
+	Synopsis     : assign default groups to pvusr1,2,3 and then
+		give them permits to tables for each type of grant,
+		select, update, delete, insert, and all. Then reconnect
+		as pvusr and see if they get the grant. also connect 
+		with a role to make sure they don't lose the grant.
+
+	History:  9-SEP-1991	Created	 by Troy Camacho
+          28-May-1992	(Author)
+          15-Nov-1993	(garys) Updated test to use 'qasetusertm' and sql's 
+				'alter user' instead of 'qasetuserfe' and 
+				'accessdb'.  Also updated canon to accept 
+				double quote delimiters for table dba and 
+				expanded help table permit info.
+				alter user stmnts.
+          31-Jan-1995  (holla02) Minor modifications
+           2-Feb-1995	(Oertel) Added syntax 'default privileges=all' to
+				 alter user stmnts and took ALT canon for new
+				 privileges copy_into, copy_from.
+	  28-Feb-1995 (oerde01)  Added privilege 'maintain_users' to alter
+                                 user pvusr1 stmnt.
+	  16-Mar-1999   (vande02) Hard-coded VPG_SZ to 4K
+*/
+? qasetusertm ingres sql -s iidbdb 
+<<
+>>
+* alter user pvusr1 with group = pvusr1_group, default_privileges=all, privileges = -
+(createdb,operator,security,trace,maintain_locations, maintain_users);\g
+<<
+>>
+* alter user pvusr2 with group=pvusr2_group, privileges=(createdb,trace),default_privilege-
+s=all;\g
+<<
+>>
+* alter user pvusr3 with group=pvusr3_group, privileges=(createdb,trace),default_privilege-
+s=all;\g
+<<
+>>
+* grant pvusr3_role to public;\g
+<<
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop table dba43t;\g
+<<
+~
+>>
+* create table dba43t(col1 i2, col2 f4) with page_size=4096;\g
+<<
+>>
+* insert into dba43t values (100,200);\g
+<<
+(1 row)
+>>
+* insert into dba43t values (300,400);\g
+<<
+(1 row)
+>>
+* insert into dba43t values (500,600);\g
+<<
+(1 row)
+>>
+* grant select on dba43t to group pvusr3_group;\g
+<<
+>>
+* help permit dba43t;\g
+<<
+Permissions on dba43t are:
+
+
+Permission 2:
+grant select on "pvusr1".dba43t to group pvusr3_group                 
+
+
+
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 
+<<
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* select dbmsinfo('group');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_group                    |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('username');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3                          |
++--------------------------------+
+(1 row)
+>>
+* \q 
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr3_role" 
+<<
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop permit on dba43t all;\g
+<<
+>>
+* help permit dba43t;\g
+<<
+Table dba43t has no permissions granted on it
+
+
+>>
+* grant insert on dba43t to group pvusr3_group;\g
+<<
+>>
+* help permit dba43t;\g
+<<
+Permissions on dba43t are:
+
+
+Permission 2:
+grant insert on "pvusr1".dba43t to group pvusr3_group                 
+
+
+
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 
+<<
+>>
+* insert into dba43t values(700,800)\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr3_role" 
+<<
+>>
+* insert into dba43t values(1,2)\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
+|   700|    800.000|
+|     1|      2.000|
++------+-----------+
+(5 rows)
+>>
+* drop permit on dba43t all;\g
+<<
+>>
+* help permit dba43t;\g
+<<
+Table dba43t has no permissions granted on it
+
+
+>>
+* grant update on dba43t to group pvusr3_group;\g
+<<
+>>
+* help permit dba43t;\g
+<<
+Permissions on dba43t are:
+
+
+Permission 2:
+grant update on "pvusr1".dba43t to group pvusr3_group                 
+
+
+
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 
+<<
+>>
+* update dba43t set col1 = 5;\g
+<<
+(5 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr3_role" 
+<<
+>>
+* update dba43t set col2 = 6;\g
+<<
+(5 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|     5|      6.000|
+|     5|      6.000|
+|     5|      6.000|
+|     5|      6.000|
+|     5|      6.000|
++------+-----------+
+(5 rows)
+>>
+* drop permit on dba43t all;\g
+<<
+>>
+* help permit dba43t;\g
+<<
+Table dba43t has no permissions granted on it
+
+
+>>
+* grant delete on dba43t to group pvusr3_group;\g
+<<
+>>
+* help permit dba43t;\g
+<<
+Permissions on dba43t are:
+
+
+Permission 2:
+grant delete on "pvusr1".dba43t to group pvusr3_group                 
+
+
+
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 
+<<
+>>
+* delete from dba43t;\g
+<<
+(5 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
++------+-----------+
+(0 rows)
+>>
+* insert into dba43t values (1,5);\g
+<<
+(1 row)
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|     1|      5.000|
++------+-----------+
+(1 row)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr3_role" 
+<<
+>>
+* delete from dba43t;\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
++------+-----------+
+(0 rows)
+>>
+* insert into dba43t values (100,200);\g
+<<
+(1 row)
+>>
+* insert into dba43t values (300,400);\g
+<<
+(1 row)
+>>
+* insert into dba43t values (500,600);\g
+<<
+(1 row)
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* drop permit on dba43t all;\g
+<<
+>>
+* help permit dba43t;\g
+<<
+Table dba43t has no permissions granted on it
+
+
+>>
+* grant all on dba43t to group pvusr3_group;\g
+<<
+>>
+* help permit dba43t;\g
+<<
+Permissions on dba43t are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dba43t to group pvusr3_group             
+
+Permission 3:
+grant   update   on "pvusr1".dba43t to group pvusr3_group             
+
+Permission 4:
+grant   delete   on "pvusr1".dba43t to group pvusr3_group             
+
+Permission 5:
+grant   insert   on "pvusr1".dba43t to group pvusr3_group             
+
+Permission 6:
+grant references on "pvusr1".dba43t to group pvusr3_group             
+
+
+
+>>
+<<
+Permissions on dba43t are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dba43t to group pvusr3_group             
+
+Permission 3:
+grant   update   on "pvusr1".dba43t to group pvusr3_group             
+
+Permission 4:
+grant   delete   on "pvusr1".dba43t to group pvusr3_group             
+
+Permission 5:
+grant   insert   on "pvusr1".dba43t to group pvusr3_group             
+
+Permission 6:
+grant references on "pvusr1".dba43t to group pvusr3_group             
+
+Permission 7:
+grant  copy_into on "pvusr1".dba43t to group pvusr3_group             
+
+Permission 8:
+grant  copy_from on "pvusr1".dba43t to group pvusr3_group             
+
+
+
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 
+<<
+>>
+* select dbmsinfo('group');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_group                    |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('username');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3                          |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('role');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|                                |
++--------------------------------+
+(1 row)
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* insert into dba43t values(70,80)\g
+<<
+(1 row)
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
+|    70|     80.000|
++------+-----------+
+(4 rows)
+>>
+* update dba43t set col1 = 15 where col2 = 80;\g
+<<
+(1 row)
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
+|    15|     80.000|
++------+-----------+
+(4 rows)
+>>
+* delete from dba43t where col2 = 80;\g
+<<
+(1 row)
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr3_role" 
+<<
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* select dbmsinfo('group');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_group                    |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('username');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3                          |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('role');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_role                     |
++--------------------------------+
+(1 row)
+>>
+* insert into dba43t values(70,80)\g
+<<
+(1 row)
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
+|    70|     80.000|
++------+-----------+
+(4 rows)
+>>
+* update dba43t set col1 = 15 where col2 = 80;\g
+<<
+(1 row)
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
+|    15|     80.000|
++------+-----------+
+(4 rows)
+>>
+* delete from dba43t where col2 = 80;\g
+<<
+(1 row)
+>>
+* select * from dba43t;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop table dba43t;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? qasetusertm ingres sql -s iidbdb 
+<<
+>>
+* alter user pvusr1 with nogroup;\g
+<<
+>>
+* alter user pvusr2 with nogroup;\g
+<<
+>>
+* alter user pvusr3 with nogroup;\g
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: Thu Feb  2 09:54:14 1995

@@ -1,0 +1,350 @@
+/*
+	Test Name: dtu02.sep
+	Time: Fri Nov  9 21:27:06 2001
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : dtu02.sep
+	Module  : be/datatypes
+	Filename: dtu02.sep
+	Purpose	: To test the new unicode data types first available with
+                  II 2.6/0106 and later releases.
+	Input Files  : dtu02.sc
+	Output Files : dtu02.exe
+	Database     : unidb
+	Tables       : test_nchar, test_nchar2, test_nchar3, test_nvarchar,
+                       test_nvarchar2, test_lnvarchar, test_lnvarchar2
+	Synopsis     : This test is to select from tables using these string
+                       functions: length(), size(), and charextract(). 
+
+ History:  9-Nov-2001	(wu$ca01)	Created
+          13-Nov-2001	(sarjo01) Issue 11246748 resolved.
+          14-Dec-2001	(devjo01)
+	      Change expected results for length(nchar).
+	      Add col1 (row ordinal) to assist result checking.
+          28-May-2002   (sarjo01) Change %ls to %S, modularize canon.
+*/
+? fill dtu02.sc 
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1,i2,i3,i4,i5;
+  wchar_t wc1[9], wc3[9],
+          wc4[9], wc5[9], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, k2;
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|===============================================================-
+==============|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void clrvars()
+{
+  memset(wc1, '\0', 9 * sizeof(wchar_t));
+  memset(wc2, '\0', 65 * sizeof(wchar_t));
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+  clrvars();
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint; 
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Selecting size(nchar), length(nchar)...");
+         EXEC SQL SELECT distinct col1,
+	    size(col2),size(col3),length(col2),length(col3)
+         INTO :i1, :i2, :i3, :i4, :i5 FROM test_nchar order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%3d|%3d|%3d|%3d|\n", i1, i2, i3, i4, i5);
+         EXEC SQL END;
+         break;
+
+      case 2:
+         print_header("Selecting size(nvarchar), length(nvarchar)...");
+         EXEC SQL SELECT distinct col1,
+	    size(col2),size(col3),length(col2),length(col3)
+         INTO :i1, :i2, :i3, :i4, :i5 FROM test_nvarchar order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%3d|%3d|%3d|%3d|\n", i1, i2, i3, i4, i5);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("Selecting charextract(nchar) (1st,2nd,5th)...");
+         EXEC SQL SELECT col1, col2,
+                   charextract(col2,1),
+                   charextract(col2,2),
+                   charextract(col2,5)
+         INTO :i1, :wc1, :wc3, :wc4, :wc5 FROM test_nchar order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|%S|%S|\n", i1, wc1, wc3, wc4, wc5);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         print_header("Selecting charextract(nvarchar) (1st,2nd,5th)..");
+         EXEC SQL SELECT col1, col2,
+                   charextract(col2,1),
+                   charextract(col2,2),
+                   charextract(col2,5)
+         INTO :i1, :wc1, :wc3, :wc4, :wc5 FROM test_nvarchar order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|%S|%S|\n", i1, wc1, wc3, wc4, wc5);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("Selecting size(nchar), length(nchar) (not nullable)...");
+         EXEC SQL SELECT distinct col1,
+	    size(col2),size(col3),length(col2),length(col3)
+         INTO :i1, :i2, :i3, :i4, :i5 FROM test_nchar2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%3d|%3d|%3d|%3d|\n", i1, i2, i3, i4, i5);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header(
+            "Selecting size(nvarchar), length(nvarchar) (not nullable)...");
+         EXEC SQL SELECT distinct col1, 
+	    size(col2),size(col3),length(col2),length(col3)
+         INTO :i1, :i2, :i3, :i4, :i5 FROM test_nvarchar2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%3d|%3d|%3d|%3d|\n", i1, i2, i3, i4, i5);
+         EXEC SQL END;
+         break;
+
+      case 7:
+         print_header("Selecting charextract(nchar) (not nullable)...");
+         EXEC SQL SELECT col1, col2,
+                   charextract(col2,1),
+                   charextract(col2,2),
+                   charextract(col2,5)
+         INTO :i1, :wc1, :wc3, :wc4, :wc5 FROM test_nchar2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|%S|%S|\n", i1, wc1, wc3, wc4, wc5);
+         EXEC SQL END;
+         break;
+
+      case 8:
+         print_header("Selecting charextract(nvarchar) (not nullable)...");
+         EXEC SQL SELECT col1, col2,
+                   charextract(col2,1),
+                   charextract(col2,2),
+                   charextract(col2,5)
+         INTO :i1, :wc1, :wc3, :wc4, :wc5 FROM test_nvarchar2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|%S|%S|\n", i1, wc1, wc3, wc4, wc5);
+         EXEC SQL END;
+         break;
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu02.sc 
+<<
+~
+>>
+? sepcc dtu02 
+<<
+~
+>>
+? seplnk dtu02 
+<<
+~
+>>
+? run dtu02.exe SEPPARAMDB3 1
+<<
+Selecting size(nchar), length(nchar)...
+|=============================================================================|
+|  0|  8| 64|  3| 44|
+|  1|  8| 64|  8| 64|
+|  2|  8| 64|  3| 51|
+|  3|  8| 64|  8| 64|
+|  4|  8| 64|  3| 50|
+|  5|  8| 64|  8| 64|
+|  6|  8| 64|  5| 37|
+|  7|  8| 64|  1|  1|
+|=============================================================================|
+>>
+? run dtu02.exe SEPPARAMDB3 2
+<<
+Selecting size(nvarchar), length(nvarchar)...
+|=============================================================================|
+|  0|  8| 64|  3| 44|
+|  1|  8| 64|  8| 64|
+|  2|  8| 64|  3| 51|
+|  3|  8| 64|  8| 64|
+|  4|  8| 64|  3| 50|
+|  5|  8| 64|  8| 64|
+|  6|  8| 64|  8| 64|
+|  7|  8| 64|  4|  1|
+|=============================================================================|
+>>
+? run dtu02.exe SEPPARAMDB3 3
+<<
+Selecting charextract(nchar) (1st,2nd,5th)...
+|=============================================================================|
+|  0|ABC     |A|B| |
+|  0|ABC     |A|B| |
+|  1|STUVWXYZ|S|T|W|
+|  1|STUVWXYZ|S|T|W|
+|  2|DEF     |D|E| |
+|  2|DEF     |D|E| |
+|  3|stuvwxyz|s|t|w|
+|  3|stuvwxyz|s|t|w|
+|  4|GHI     |G|H| |
+|  4|GHI     |G|H| |
+|  5|LMNOPQRS|L|M|P|
+|  5|LMNOPQRS|L|M|P|
+|  6|ABCDE   |A|B|E|
+|  6|ABCDE   |A|B|E|
+|  7|Z       |Z| | |
+|  7|Z       |Z| | |
+|=============================================================================|
+>>
+? run dtu02.exe SEPPARAMDB3 4
+<<
+Selecting charextract(nvarchar) (1st,2nd,5th)..
+|=============================================================================|
+|  0|ABC|A|B| |
+|  0|ABC|A|B| |
+|  1|STUVWXYZ|S|T|W|
+|  1|STUVWXYZ|S|T|W|
+|  2|DEF|D|E| |
+|  2|DEF|D|E| |
+|  3|stuvwxyz|s|t|w|
+|  3|stuvwxyz|s|t|w|
+|  4|GHI|G|H| |
+|  4|GHI|G|H| |
+|  5|LMNOPQRS|L|M|P|
+|  5|LMNOPQRS|L|M|P|
+|  6|ABCDE   |A|B|E|
+|  6|ABCDE   |A|B|E|
+|  7|Z   |Z| | |
+|  7|Z   |Z| | |
+|=============================================================================|
+>>
+? run dtu02.exe SEPPARAMDB3 5
+<<
+Selecting size(nchar), length(nchar) (not nullable)...
+|=============================================================================|
+|  0|  8| 64|  3| 44|
+|  1|  8| 64|  8| 64|
+|  2|  8| 64|  3| 51|
+|  3|  8| 64|  8| 64|
+|  4|  8| 64|  3| 50|
+|  5|  8| 64|  8| 64|
+|  6|  8| 64|  5| 37|
+|  7|  8| 64|  1|  1|
+|=============================================================================|
+>>
+? run dtu02.exe SEPPARAMDB3 6
+<<
+Selecting size(nvarchar), length(nvarchar) (not nullable)...
+|=============================================================================|
+|  0|  8| 64|  3| 44|
+|  1|  8| 64|  8| 64|
+|  2|  8| 64|  3| 51|
+|  3|  8| 64|  8| 64|
+|  4|  8| 64|  3| 50|
+|  5|  8| 64|  8| 64|
+|  6|  8| 64|  8| 64|
+|  7|  8| 64|  4|  1|
+|=============================================================================|
+>>
+? run dtu02.exe SEPPARAMDB3 7
+<<
+Selecting charextract(nchar) (not nullable)...
+|=============================================================================|
+|  0|ABC     |A|B| |
+|  0|ABC     |A|B| |
+|  1|STUVWXYZ|S|T|W|
+|  1|STUVWXYZ|S|T|W|
+|  2|DEF     |D|E| |
+|  2|DEF     |D|E| |
+|  3|stuvwxyz|s|t|w|
+|  3|stuvwxyz|s|t|w|
+|  4|GHI     |G|H| |
+|  4|GHI     |G|H| |
+|  5|LMNOPQRS|L|M|P|
+|  5|LMNOPQRS|L|M|P|
+|  6|ABCDE   |A|B|E|
+|  6|ABCDE   |A|B|E|
+|  7|Z       |Z| | |
+|  7|Z       |Z| | |
+|=============================================================================|
+>>
+? run dtu02.exe SEPPARAMDB3 8
+<<
+Selecting charextract(nvarchar) (not nullable)...
+|=============================================================================|
+|  0|ABC|A|B| |
+|  0|ABC|A|B| |
+|  1|STUVWXYZ|S|T|W|
+|  1|STUVWXYZ|S|T|W|
+|  2|DEF|D|E| |
+|  2|DEF|D|E| |
+|  3|stuvwxyz|s|t|w|
+|  3|stuvwxyz|s|t|w|
+|  4|GHI|G|H| |
+|  4|GHI|G|H| |
+|  5|LMNOPQRS|L|M|P|
+|  5|LMNOPQRS|L|M|P|
+|  6|ABCDE   |A|B|E|
+|  6|ABCDE   |A|B|E|
+|  7|Z   |Z| | |
+|  7|Z   |Z| | |
+|=============================================================================|
+>>
+? delete dtu02.c 
+<<
+~
+>>
+? delete dtu02.o 
+<<
+~
+>>
+? delete dtu02.obj 
+<<
+~
+>>
+? delete dtu02.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Dec 14 16:47:56 2001

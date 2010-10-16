@@ -1,0 +1,382 @@
+/*
+	Test Name: paa09.sep
+	Time: 19-MAR-1994 14:32:04
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : paa09
+	Module  : 4gl
+	Filename: paa09.sep
+	Purpose	: To test 4gl calling ADA and passing parameters
+	Input Files  : paa09.app, paa09uf.osq, linfile.opt, paa09ada.ada,
+                       paa09lnk.dat
+	Output Files : paa09.exe, ada$lib.dat, adalib.alb, paa09ada.acu,
+                       paa09ada.adc, paa09ada.obj
+	Database     : SEPPARAMDB
+	Tables       : none
+        Port Note    : This test is only supported for VMS, it will abort if
+                       run against other platforms.
+	Synopsis     : This test passes integer, float, and decimal variables
+by value to an ADA procedure and the procedure returns a string.  An image of
+the application is built and run.  Verify that the results are correct.
+ History: 19-MAR-1994	(brenda)	Created
+                  06-Jan-1995   changed deleter to delobj and edit into
+                                correct format.                 (QA)
+		  12-Apr-1995	(ciodi01)	Modified
+				Remove 'else' condition so that test will
+				complete with no diffs if the platform is
+				not VMS.
+          24-Apr-1996	(clate01)
+		Modified for NT
+		 1-May-2001	(rogch01)
+			Need IEEE floats for AXM.
+*/
+.if (VMS) 
+? delobj SEPPARAMDB -application paa09 
+<<
+~
+>>
+? delobj SEPPARAMDB -form paa09uf 
+<<
+~
+>>
+? fill PAA09.APP 
+!!
+COPYAPP	6	5	1994_02_19 03:04:56 GMT  
+OC_APPL:	0	paa09	4GL calling ADA function	
+	$2$DUA18:[TESTENV.PEOPLE.BRENDA.ADA]		0		0	0	3		paa09uf	linkfile.opt	SQL			0
+CUC_ADEPEND:
+	DUMMY		0	0		0
+OC_AFORMREF:	1	paa09uf		
+	10418	II03paa09uf	0		0	0	3							0
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_OSLFRAME:	1	paa09uf		
+	paa09uf.osq	II02call_ada	0	none	0	0	3	dynamic						0
+CUC_AODEPEND:
+	paa09ada	testenv	2021	3504		0
+	paa09uf	testenv	3001	3502		0
+OC_HLPROC:	1	paa09ada		
+		paa09ada	20	char(20)	20	0	3	ADA						2304
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_AFORMREF:	1	call_ada		
+	10814	II03call_ada	0		0	0	3							0
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_FORM:	0	paa09uf		
+	80	23	0	0	0	0	0	9	0	0	0	0	0	0	0	0
+CUC_FIELD:
+CUC_TRIM:
+!!
+? fill PAA09UF.OSQ 
+!!
+initialize(
+            sret = char(20) not null,  
+            intval = integer not null,
+            floatval = float8 not null,
+            decval = decimal(8,3) not null
+          ) =
+{
+     intval = 10;
+     floatval = 10.1;
+     decval = 10.55;
+}
+     
+'Call_ADA' =
+{
+     sret = callproc paa09ada(intval, floatval, decval);    
+     callproc paa09ada(intval, floatval, decval);
+     message 'intval = ' + varchar(intval) with style = popup;
+     message 'floatval = ' + varchar(floatval) with style = popup;
+     message 'decval = ' + varchar(decval) with style = popup;
+     message 'The procedure returned: ' + sret with style = popup;
+}
+
+'End' =
+{
+     return;
+}
+
+!!
+? fill PAA09LNK.DAT 
+!!
+$ acs create library ING_TST:[FE.4GL.SEP.ADALIB]
+$ acs set library ING_TST:[FE.4GL.SEP.ADALIB]
+$! Use IEEE floats on AXM
+$ if f$getsyi("hw_model") .ge. 1024
+$ then
+$	acs set pragma/FLOAT_REPRESENTATION=IEEE_FLOAT
+$ else
+$	acs set pragma/long_float=d_float
+$ endif
+$ ada paa09ada.ada
+$ acs export paa09ada
+!!
+? fill LINKFILE.OPT 
+!!
+ING_TST:[FE.4GL.SEP.ADALIB]paa09ada.obj
+
+!!
+? fill PAA09ADA.ADA 
+!!
+with system, lib, text_io;
+use text_io;
+
+function paa09ada (int_val : in integer;
+	float_val : in long_float;
+	dec_val : in long_float) return string is
+ret_val : string(1..15);
+begin
+	ret_val(1..15) := "ADA String here";
+	return string(ret_val);
+end paa09ada;
+
+pragma export_function(paa09ada);
+
+
+!!
+? delete @file(ing_tst,fe,4gl,sep,adalib,ada$lib.dat) 
+<<
+~
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,adalib.alb) 
+<<
+~
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,paa09ada.acu) 
+<<
+~
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,paa09ada.adc) 
+<<
+~
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,paa09ada.obj) 
+<<
+~
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,) 
+<<
+~
+>>
+? source PAA09LNK.DAT 
+<<
+%ACS-I-CL_LIBCRE, Library ING_TST:[FE.4GL.SEP.ADALIB] created
+%ACS-I-CL_LIBIS, Current program library is ING_TST:[FE.4GL.SEP.ADALIB]
+>>
+? copyapp in -a -r SEPPARAMDB paa09.app 
+<<
+~
+>>
+? imageapp SEPPARAMDB paa09 -opaa09.exe 
+<<
+~
+>>
+? ferun paa09.exe 
+<<
+~
+>>
+^^ call_ada`CR'`CR'`CR'`CR'`CR'end`CR'
+<<
+
+%% MENU RESPONSE: Call_ADA
+%% MENU:   Call_ADA  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Call_ADA"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | intval = 10                                                                | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | floatval = 10.100                                                          | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | decval = 10.550                                                            | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The procedure returned: ADA String here                                    | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_ADA  End_                                                                 |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: End
+%% MENU:   Call_ADA  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "End"
+
+%% 
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,ada$lib.dat)
+<<
+~
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,adalib.alb)
+<<
+~
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,paa09ada.acu)
+<<
+~
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,paa09ada.adc)
+<<
+~
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,paa09ada.obj)
+<<
+~
+>>
+? delete @file(ing_tst,fe,4gl,sep,adalib,)
+<<
+~
+>>
+? delete paa09.exe
+<<
+~
+>>
+? delete paa09ada.obj
+<<
+~
+>>
+? delobj SEPPARAMDB -application paa09 
+<<
+~
+>>
+? delobj SEPPARAMDB -form paa09uf 
+<<
+~
+>>
+.endif 
+
+
+Ending at: Thu Apr 25 09:54:19 1996

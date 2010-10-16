@@ -1,0 +1,571 @@
+/*
+	Copyright (c) 2006 Ingres Corporation
+
+	Test Name: lar12.sep, formerly pckp01.sep
+	Time: Thu Sep 10 14:49:58 1998
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : lar12.sep
+	Module  : be/lar
+	Filename: lar12.sep
+	Purpose	: Test partial backup & recovery
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB which is 'lar_ckp_table'
+	Tables       : pbr_tab1, pbr_tab2
+	Synopsis     : Tries several scenarios with table-level ckpdb's
+	               followed by table-level rollforwarddb's
+
+ History: 17-Jan-1995	(holla02)   Created
+          24-Jan-1995	(holla02)  Added tests, took canons
+          25-Apr-1995	(Author)
+          30-Nov-1995	(gauje02)  Took new canons to reflect current behavior 
+			of "rollforwarddb SEPPARAMDB -table=pbr_tab1,pbr_tab2",
+			which now restores the FIRST (full database) checkpoint,
+			and applies journaled tx's.
+dd
+          27-Aug-1996	(clate01)
+		cleanup the unnecessary diffs
+	  05-Mar-1998	(vande02)   Add the procedure syntax iiqef_add_location
+			to extend database 'lardb' to locations loc1, loc2, loc3			loc4, and loc5 due to the fact that tests further down
+			starting with lar47.sep have canons expecting 'lardb'
+			to be extended to 5 additional locations. 
+          10-Sep-1998   (vande02) Added ckpdb with table_recovery_disallowed
+                        to check that bug 91356 has been fully implemented,
+                        followed by turning table_recovery_allowed on along
+                        with ckpdb +j to verify ckpdb SEPPARAMDB -table=xxxx
+                        is successful.
+			Removed destroydb/createdb/iiqef_add_location to extend
+			'lardb' because the 'initlar.sep' performs these steps.
+	  14-Apr-1999	(vande02)  Hard-coded VPG_SZ to 4K
+	  20-Mar-2001	(sheco02)  Add destroydb to clean up database.
+	22-Sep-2006	(rogch01)
+		Add +w to ckpdb and rollforwarddb in case the database is
+		momentarily unavailable following the previous command.
+*/
+? setenv SEPPARAMDB lar_ckp_table
+<<
+environment variable was defined
+>>
+? destroydb SEPPARAMDB
+<<
+Destroying database 'lar_ckp_table' . . .
+
+E_US0010 Database does not exist: 'lar_ckp_table'.
+    (Thu Sep 10 12:42:38 1998)
+Destruction of database 'lar_ckp_table' abnormally terminated.
+
+>>
+<<
+Destroying database 'lar_ckp_table' . . .
+
+
+Destruction of database 'lar_ckp_table' completed successfully.
+
+>>
+? createdb SEPPARAMDB
+<<
+Creating database 'lar_ckp_table' . . .
+
+  Creating DBMS System Catalogs . . .
+  Modifying DBMS System Catalogs . . .
+  Creating Standard Catalog Interface . . .
+  Creating Front-end System Catalogs . . .
+
+Creation of database 'lar_ckp_table' completed successfully.
+
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table pbr_tab1\g
+<<
+~
+>>
+* create table pbr_tab1 (num i4, ch varchar (32)) with journaling, page_size=4096;\g 
+<<
+>>
+* drop table pbr_tab2\g
+<<
+~
+>>
+* create table pbr_tab2 (num i4, ch varchar (32)) with journaling, page_size=4096;\g 
+<<
+>>
+* insert into pbr_tab1 values (1, 'Before ckp 1');\g 
+<<
+(1 row)
+>>
+* insert into pbr_tab2 values (1, 'Before ckp 1');\g 
+<<
+(1 row)
+>>
+* select * from pbr_tab1;\g
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
++-------------+--------------------------------+
+(1 row)
+
+>>
+* select * from pbr_tab2;\g
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
++-------------+--------------------------------+
+(1 row)
+
+>>
+* \q 
+<<
+>>
+? ckpdb -d +j +w SEPPARAMDB 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* insert into pbr_tab1 values (2, 'After ckp 1');\g 
+<<
+(1 row)
+>>
+* insert into pbr_tab2 values (2, 'After ckp 1');\g 
+<<
+(1 row)
+>>
+* select * from pbr_tab1;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
++-------------+--------------------------------+
+(2 rows)
+>>
+* select * from pbr_tab2;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
++-------------+--------------------------------+
+(2 rows)
+>>
+* select relid, relstat2 from iirelation where relid like 'pbr_tab%'
+<<
+>>
+*      order by relid;\g
+<<
++--------------------------------+-------------+
+|relid                           |relstat2     |
++--------------------------------+-------------+
+|pbr_tab1                        |            0|
+|pbr_tab2                        |            0|
++--------------------------------+-------------+
+(2 rows)
+
+>>
+* \q 
+<<
+>>
+? ckpdb +j +w SEPPARAMDB 
+<<
+~
+>>
+? ckpdb +w SEPPARAMDB -table=pbr_tab1
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* insert into pbr_tab1 values (3, 'After ckp 3 (-t=1)');\g 
+<<
+(1 row)
+>>
+* insert into pbr_tab2 values (3, 'After ckp 3 (-t=1)');\g
+<<
+(1 row)
+>>
+* select * from pbr_tab1;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            3|After ckp 3 (-t=1)              |
++-------------+--------------------------------+
+(3 rows)
+>>
+* select * from pbr_tab2;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            3|After ckp 3 (-t=1)              |
++-------------+--------------------------------+
+(3 rows)
+>>
+* select relid, relstat2 from iirelation where relid like 'pbr_tab%'
+<<
+>>
+*      order by relid;\g
+<<
++--------------------------------+-------------+
+|relid                           |relstat2     |
++--------------------------------+-------------+
+|pbr_tab1                        |            0|
+|pbr_tab2                        |            0|
++--------------------------------+-------------+
+(2 rows)
+
+>>
+* \q 
+<<
+>>
+? rollforwarddb -j +w SEPPARAMDB -table=pbr_tab1 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from pbr_tab1;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
++-------------+--------------------------------+
+(2 rows)
+>>
+* select * from pbr_tab2;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            3|After ckp 3 (-t=1)              |
++-------------+--------------------------------+
+(3 rows)
+>>
+* insert into pbr_tab1 values (4, 'After ckp 4, rfdb -t=1');\g 
+<<
+(1 row)
+>>
+* insert into pbr_tab2 values (4, 'After ckp 4, rfdb -t=1');\g 
+<<
+(1 row)
+>>
+* select * from pbr_tab1;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            4|After ckp 4, rfdb -t=1          |
++-------------+--------------------------------+
+(3 rows)
+>>
+* select * from pbr_tab2;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            3|After ckp 3 (-t=1)              |
+|            4|After ckp 4, rfdb -t=1          |
++-------------+--------------------------------+
+(4 rows)
+>>
+* \q 
+<<
+>>
+? ckpdb +j +w SEPPARAMDB
+<<
+~
+>>
+? ckpdb +w SEPPARAMDB -table=pbr_tab2
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* delete from pbr_tab2 where num=4;\g
+<<
+(1 row)            
+>>
+* select * from pbr_tab2;\g
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            3|After ckp 3 (-t=1)              |
++-------------+--------------------------------+
+(3 rows)
+>>
+* \q
+<<
+>>
+? rollforwarddb -j +w SEPPARAMDB -table=pbr_tab2 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from pbr_tab1;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            4|After ckp 4, rfdb -t=1          |
++-------------+--------------------------------+
+(3 rows)
+>>
+* select * from pbr_tab2;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            3|After ckp 3 (-t=1)              |
+|            4|After ckp 4, rfdb -t=1          |
++-------------+--------------------------------+
+(4 rows)
+>>
+* insert into pbr_tab1 values (5, 'After rfdb -t=1 and -t=2');\g 
+<<
+(1 row)
+>>
+* insert into pbr_tab2 values (5, 'After rfdb -t=1 and -t=2');\g 
+<<
+(1 row)
+>>
+* select * from pbr_tab1;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            4|After ckp 4, rfdb -t=1          |
+|            5|After rfdb -t=1 and -t=2        |
++-------------+--------------------------------+
+(4 rows)
+
+>>
+* select * from pbr_tab2;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            3|After ckp 3 (-t=1)              |
+|            4|After ckp 4, rfdb -t=1          |
+|            5|After rfdb -t=1 and -t=2        |
++-------------+--------------------------------+
+(5 rows)
+
+>>
+* \q 
+<<
+>>
+? ckpdb +w SEPPARAMDB -table=pbr_tab1,pbr_tab2
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* delete from pbr_tab1;\g
+<<
+(4 rows)
+>>
+* delete from pbr_tab2;\g
+<<
+(5 rows)
+>>
+* select * from pbr_tab1;\g
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
++-------------+--------------------------------+
+(0 rows)
+>>
+* select * from pbr_tab2;\g
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
++-------------+--------------------------------+
+(0 rows)
+>>
+*\q
+<<
+>>
+? rollforwarddb -j +w SEPPARAMDB -table=pbr_tab1,pbr_tab2 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from pbr_tab1;\g 
+<<
+
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            4|After ckp 4, rfdb -t=1          |
+|            5|After rfdb -t=1 and -t=2        |
++-------------+--------------------------------+
+(4 rows)
+>>
+* select * from pbr_tab2;\g 
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            3|After ckp 3 (-t=1)              |
+|            4|After ckp 4, rfdb -t=1          |
+|            5|After rfdb -t=1 and -t=2        |
++-------------+--------------------------------+
+(5 rows)
+>>
+* \q 
+<<
+>>
+? sql -s SEPPARAMDB
+<<
+>>
+* delete from pbr_tab1;\g
+<<
+(4 rows)
+>>
+* delete from pbr_tab2;\g
+<<
+(5 rows)
+>>
+* select * from pbr_tab1;\g
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
++-------------+--------------------------------+
+(0 rows)
+>>
+* select * from pbr_tab2;\g
+<<
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
++-------------+--------------------------------+
+(0 rows)
+>>
+*\q
+<<
+>>
+? ckpdb +j +w SEPPARAMDB 
+<<
+~
+>>
+* \q 
+<<
+>>
+? rollforwarddb -j +w SEPPARAMDB -table=pbr_tab1,pbr_tab2  #c4
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from pbr_tab1;\g 
+<<
+
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            4|After ckp 4, rfdb -t=1          |
++-------------+--------------------------------+
+(3 rows)
+>>
+* select * from pbr_tab2;\g 
+<<
+
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
+|            3|After ckp 3 (-t=1)              |
+|            4|After ckp 4, rfdb -t=1          |
++-------------+--------------------------------+
+(4 rows)
+>>
+* \q
+<<
+>>
+? rollforwarddb -j +w SEPPARAMDB -table=pbr_tab1  #c3
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from pbr_tab1;\g 
+<<
+
++-------------+--------------------------------+
+|num          |ch                              |
++-------------+--------------------------------+
+|            1|Before ckp 1                    |
+|            2|After ckp 1                     |
++-------------+--------------------------------+
+(2 rows)
+>>
+* drop pbr_tab1;\g 
+<<
+>>
+* drop pbr_tab2;\g 
+<<
+>>
+* \q 
+<<
+>>
+? destroydb SEPPARAMDB
+<<
+~
+>>
+
+
+Ending at: Thu Sep 10 14:49:58 1998

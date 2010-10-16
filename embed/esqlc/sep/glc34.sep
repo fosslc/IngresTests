@@ -1,0 +1,658 @@
+/*
+
+  Copyright (c) 2007 Ingres Corporation
+
+  Test Name     : glc34.sep
+  Suite         : embed/esqlc 
+  Focus         : Ingres 2006 Release 2 New Feature:
+                : DESCRIBE INPUT Statement 
+
+  Databases     : SEPPARAMDB
+  Tables        : glc34_t1,glc34_t2,glc34_t3
+  Filled Files  : glc34_p1.sc
+  Copied Files  : 
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Basic feature test.
+                : 
+
+  Exp. DIFFs    : None 
+  History       : 15-Sep-2006 (sarjo01) Created.
+                : 28-Sep-2006 (sarjo01) Added ansidate type.
+		: 31-Aug-2007 (rogch01) Add alternate canon for esqlc on VMS
+
+*/
+? fill glc34_p1.sc
+!!
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+EXEC SQL begin declare section;
+   char  *dbname;
+   char  *stmtstr;
+EXEC SQL end declare section;
+
+IISQLDA _sqlda;
+IISQLDA *sqlda = &_sqlda;
+
+#define NUMCMDS 20
+
+#define TESTEDTYPES 50
+
+static int res1[TESTEDTYPES][2] = {
+   {-20, 300},    /* c(300) */
+   {-20, 301},    /* char(301) */
+   {-21, 302},    /* text(302) */
+   {-21, 303},    /* varchar(303) */
+   {-22, 0},      /* long varchar */
+   {-26, 304*sizeof(wchar_t)},   /* nchar(304) */
+   {-27, 305*sizeof(wchar_t)},   /* nvarchar(305) */
+   {-28, 0},      /* long nvarchar */
+   {-30, 4},      /* integer */
+   {-30, 2},      /* smallint */
+   {-30, 8},      /* bigint */
+   {-30, 1},      /* tinyint */
+   {-10, 0},      /* decimal(7,2) */
+   {-31, 8},      /* float */
+   {-31, 4},      /* float4 */
+   {-3, 0},       /* INGRES date */
+   {-6, 0},       /* time */
+   {-9, 0},       /* timestamp */
+   {-5, 0},       /* money */
+   {-11, 16},     /* object_key */
+   {-12, 8},      /* table_key */
+   {-23, 306},    /* byte(306) */
+   {-24, 307},    /* byte varying(307) */
+   {-25, 32},     /* long byte */
+   {-4, 0},       /* ANSI date */
+   {20, 300},
+   {20, 301},
+   {21, 302},
+   {21, 303},
+   {22, 0},
+   {26, 304*sizeof(wchar_t)},   /* nchar(304) */
+   {27, 305*sizeof(wchar_t)},   /* nvarchar(305) */
+   {28, 0},
+   {30, 4},
+   {30, 2},
+   {30, 8},
+   {30, 1},
+   {10, 0},
+   {31, 8},
+   {31, 4},
+   {3, 0},
+   {6, 0},
+   {9, 0},
+   {5, 0},
+   {11, 16},
+   {12, 8},
+   {23, 306},
+   {24, 307},
+   {25, 32},
+   {4, 0}
+};
+
+static int descinp(int cmd)
+{
+   int i;
+
+   EXEC SQL whenever sqlerror call sqlprint;
+
+   EXEC SQL prepare s1 from :stmtstr;
+   EXEC SQL describe input s1 using descriptor :sqlda;
+
+   if (sqlda->sqld != TESTEDTYPES)
+   {
+      printf("ERROR on command %d: expected %d vars, got %d\n",
+             cmd, TESTEDTYPES, sqlda->sqld);
+      return -1;
+   }
+   for (i = 0; i < sqlda->sqld; i++)
+   {
+      if (sqlda->sqlvar[i].sqltype != res1[i][0] ||
+          sqlda->sqlvar[i].sqllen  != res1[i][1])
+      {
+         printf("ERROR on var %d, cmd %d:\n"
+                "Expected type: %d, Len: %d\n" 
+                "Got      type: %d, Len: %d\n",
+                i, cmd,
+                res1[i][0],
+                res1[i][1],
+                sqlda->sqlvar[i].sqltype,
+                sqlda->sqlvar[i].sqllen);
+         return -1;
+      }
+   }
+   return 0;
+}
+static int descinp1(int cmd)
+{
+   int i;
+
+   EXEC SQL whenever sqlerror call sqlprint;
+
+   EXEC SQL prepare s1 from :stmtstr;
+   EXEC SQL describe input s1 using descriptor :sqlda;
+
+   for (i = 0; i < sqlda->sqld; i++)
+   {
+      printf("type: %d, len: %d\n",
+               sqlda->sqlvar[i].sqltype,
+               sqlda->sqlvar[i].sqllen);
+   }
+   return 0;
+}
+int main(int argc, char *argv[])
+{
+   int i, c1st, clast, cmd;
+
+   dbname = argv[1];
+   if (strcmp(argv[2], "all") == 0)
+   {
+      c1st = 0;
+      clast = NUMCMDS - 1;
+   }
+   else
+   {
+      c1st = clast = atoi(argv[2]); 
+   }
+   
+   sqlda->sqln = 1024;
+   EXEC SQL whenever sqlerror stop;
+   EXEC SQL connect :dbname;
+   EXEC SQL whenever sqlerror call sqlprint;
+
+   for (cmd = c1st; cmd <= clast; cmd++)
+   {
+   printf("Cmd: %d\n", cmd);
+   switch (cmd)
+   {
+      case 0:
+         EXEC SQL describe input badstmt using descriptor :sqlda;
+         break;
+      case 1:
+         stmtstr = "insert into glc34_t1 values"
+                   " (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+                     "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+         descinp(cmd);
+         break;
+      case 2:
+         stmtstr = "update glc34_t1 set "
+             "a1=?,a2=?,a3=?,a4=?,a5=?,a6=?,a7=?,a8=?,"
+             "a9=?,a10=?,a11=?,a12=?,a13=?,a14=?,a15=?,a16=?,"
+             "a17=?,a18=?,a19=?,a20=?,a21=?,a22=?,a23=?,a24=?,a25=?,"
+             "a1nn=?,a2nn=?,a3nn=?,a4nn=?,a5nn=?,a6nn=?,a7nn=?,a8nn=?,"
+             "a9nn=?,a10nn=?,a11nn=?,a12nn=?,a13nn=?,a14nn=?,a15nn=?,a16nn=?,"
+             "a17nn=?,a18nn=?,a19nn=?,a20nn=?,a21nn=?,a22nn=?,a23nn=?,"
+             "a24nn=?,a25nn=?";
+         descinp(cmd);
+         break;
+      case 3:
+         stmtstr = "select * from  glc34_t1 where "
+             "a1=? and a2=? and a3=? and a4=? and a5=? and a6=? and a7=? and "
+             "a8=? and a9=? and a10=? and a11=? and a12=? and a13=? and "
+             "a14=? and a15=? and a16=? and a17=? and a18=? and a19=? and "
+             "a20=? and a21=? and a22=? and a23=? and a24=? and a25=? and "
+             "a1nn=? and "
+             "a2nn=? and a3nn=? and a4nn=? and a5nn=? and a6nn=? and "
+             "a7nn=? and a8nn=? and a9nn=? and a10nn=? and a11nn=? and "
+             "a12nn=? and a13nn=? and a14nn=? and a15nn=? and a16nn=? and "
+             "a17nn=? and a18nn=? and a19nn=? and a20nn=? and a21nn=? and "
+             "a22nn=? and a23nn=? and a24nn=? and a25nn=?";
+         descinp(cmd);
+         break;
+      case 4:
+         stmtstr = "select * from  glc34_t1 where "
+             "?=a1 and ?=a2 and ?=a3 and ?=a4 and ?=a5 and ?=a6 and ?=a7 and "
+             "?=a8 and ?=a9 and ?=a10 and ?=a11 and ?=a12 and ?=a13 and "
+             "?=a14 and ?=a15 and ?=a16 and ?=a17 and ?=a18 and ?=a19 and "
+             "?=a20 and ?=a21 and ?=a22 and ?=a23 and ?=a24 and ?=a25 and "
+             "?=a1nn and "
+             "?=a2nn and ?=a3nn and ?=a4nn and ?=a5nn and ?=a6nn and "
+             "?=a7nn and ?=a8nn and ?=a9nn and ?=a10nn and ?=a11nn and "
+             "?=a12nn and ?=a13nn and ?=a14nn and ?=a15nn and ?=a16nn and "
+             "?=a17nn and ?=a18nn and ?=a19nn and ?=a20nn and ?=a21nn and "
+             "?=a22nn and ?=a23nn and ?=a24nn and ?=a25nn";
+         descinp(cmd);
+         break;
+      case 5:
+         stmtstr = "select * from  glc34_t1 where "
+       "a1<>? and a2<>? and a3<>? and a4<>? and a5<>? and a6<>? and a7<>? and "
+       "a8<>? and a9<>? and a10<>? and a11<>? and a12<>? and a13<>? and "
+       "a14<>? and a15<>? and a16<>? and a17<>? and a18<>? and a19<>? and "
+       "a20<>? and a21<>? and a22<>? and a23<>? and a24<>? and a25<>? and "
+       "a1nn<>? and "
+             "a2nn<>? and a3nn<>? and a4nn<>? and a5nn<>? and a6nn<>? and "
+             "a7nn<>? and a8nn<>? and a9nn<>? and a10nn<>? and a11nn<>? and "
+             "a12nn<>? and a13nn<>? and a14nn<>? and a15nn<>? and a16nn<>? and "
+             "a17nn<>? and a18nn<>? and a19nn<>? and a20nn<>? and a21nn<>? and "
+             "a22nn<>? and a23nn<>? and a24nn<>? and a25nn<>?";
+         descinp(cmd);
+         break;
+      case 6:
+         stmtstr = "select * from  glc34_t1 where "
+       "a1>? and a2>? and a3>? and a4>? and a5>? and a6>? and a7>? and "
+       "a8>? and a9>? and a10>? and a11>? and a12>? and a13>? and "
+       "a14>? and a15>? and a16>? and a17>? and a18>? and a19>? and "
+      "a20>? and a21>? and a22>? and a23>? and a24>? and a25>? and a1nn>? and "
+             "a2nn>? and a3nn>? and a4nn>? and a5nn>? and a6nn>? and "
+             "a7nn>? and a8nn>? and a9nn>? and a10nn>? and a11nn>? and "
+             "a12nn>? and a13nn>? and a14nn>? and a15nn>? and a16nn>? and "
+             "a17nn>? and a18nn>? and a19nn>? and a20nn>? and a21nn>? and "
+             "a22nn>? and a23nn>? and a24nn>? and a25nn>?";
+         descinp(cmd);
+         break;
+      case 7:
+         stmtstr = "update glc34_t1 set a1 = 'testval'";
+         EXEC SQL prepare s1 from :stmtstr;
+         EXEC SQL describe input s1 using descriptor :sqlda;
+         if (sqlda->sqld != 0)
+         {
+            printf("ERROR on command 5: expected 0 vars, got %d\n",
+                   sqlda->sqld);
+         }
+         break;
+      case 8:
+         stmtstr = "create view glc34_v1 as select * from  glc34_t1 where "
+             "a1=? and a2=? and a3=? and a4=? and a5=? and a6=? and a7=? and "
+             "a8=? and a9=? and a10=? and a11=? and a12=? and a13=? and "
+             "a14=? and a15=? and a16=? and a17=? and a18=? and a19=? and "
+             "a20=? and a21=? and a22=? and a23=? and a24=? and a25=? and "
+             "a1nn=? and "
+             "a2nn=? and a3nn=? and a4nn=? and a5nn=? and a6nn=? and "
+             "a7nn=? and a8nn=? and a9nn=? and a10nn=? and a11nn=? and "
+             "a12nn=? and a13nn=? and a14nn=? and a15nn=? and a16nn=? and "
+             "a17nn=? and a18nn=? and a19nn=? and a20nn=? and a21nn=? and "
+             "a22nn=? and a23nn=? and a24nn=? and a25nn=?";
+         descinp(cmd);
+         break;
+      case 9:
+         stmtstr = "select * from (select * from glc34_t1 where "
+             "a1=? and a2=? and a3=? and a4=? and a5=? and a6=? and a7=? and "
+             "a8=? and a9=? and a10=? and a11=? and a12=? and a13=? and "
+             "a14=? and a15=? and a16=? and a17=? and a18=? and a19=? and "
+             "a20=? and a21=? and a22=? and a23=? and a24=? and a25=? and "
+             "a1nn=? and "
+             "a2nn=? and a3nn=? and a4nn=? and a5nn=? and a6nn=? and "
+             "a7nn=? and a8nn=? and a9nn=? and a10nn=? and a11nn=? and "
+             "a12nn=? and a13nn=? and a14nn=? and a15nn=? and a16nn=? and "
+             "a17nn=? and a18nn=? and a19nn=? and a20nn=? and a21nn=? and "
+             "a22nn=? and a23nn=? and a24nn=? and a25nn=?) t1";
+         descinp(cmd);
+         break;
+      case 10:
+         stmtstr = "select * from  glc34_t1 where a1 > "
+                   "(select a1 from  glc34_t1 where "
+       "a1<>? and a2<>? and a3<>? and a4<>? and a5<>? and a6<>? and a7<>? and "
+       "a8<>? and a9<>? and a10<>? and a11<>? and a12<>? and a13<>? and "
+       "a14<>? and a15<>? and a16<>? and a17<>? and a18<>? and a19<>? and "
+       "a20<>? and a21<>? and a22<>? and a23<>? and a24<>? and a25<>? and "
+       "a1nn<>? and "
+             "a2nn<>? and a3nn<>? and a4nn<>? and a5nn<>? and a6nn<>? and "
+             "a7nn<>? and a8nn<>? and a9nn<>? and a10nn<>? and a11nn<>? and "
+             "a12nn<>? and a13nn<>? and a14nn<>? and a15nn<>? and a16nn<>? and "
+             "a17nn<>? and a18nn<>? and a19nn<>? and a20nn<>? and a21nn<>? and "
+             "a22nn<>? and a23nn<>? and a24nn<>? and a25nn<>?)";
+         descinp(cmd);
+         break;
+       case 11:
+         stmtstr = "select case a1 when a1 then ? end , "
+                          "case a2 when a2 then ? end , "
+                          "case a3 when a3 then ? end , "
+                          "case a4 when a4 then ? end , "
+                          "case a5 when a5 then ? end , "
+                          "case a6 when a6 then ? end , "
+                          "case a7 when a7 then ? end , "
+                          "case a8 when a8 then ? end , "
+                          "case a9 when a9 then ? end , "
+                          "case a10 when a10 then ? end , "
+                          "case a11 when a11 then ? end , "
+                          "case a12 when a12 then ? end , "
+                          "case a13 when a13 then ? end , "
+                          "case a14 when a14 then ? end , "
+                          "case a15 when a15 then ? end , "
+                          "case a16 when a16 then ? end , "
+                          "case a17 when a17 then ? end , "
+                          "case a18 when a18 then ? end , "
+                          "case a19 when a19 then ? end , "
+                          "case a20 when a20 then ? end , "
+                          "case a21 when a21 then ? end , "
+                          "case a22 when a22 then ? end , "
+                          "case a23 when a23 then ? end , "
+                          "case a24 when a24 then ? end , "
+                          "case a25 when a25 then ? end , "
+                          "case a1nn when a1nn then ? end , "
+                          "case a2nn when a2nn then ? end , "
+                          "case a3nn when a3nn then ? end , "
+                          "case a4nn when a4nn then ? end , "
+                          "case a5nn when a5nn then ? end , "
+                          "case a6nn when a6nn then ? end , "
+                          "case a7nn when a7nn then ? end , "
+                          "case a8nn when a8nn then ? end , "
+                          "case a9nn when a9nn then ? end , "
+                          "case a10nn when a10nn then ? end , "
+                          "case a11nn when a11nn then ? end , "
+                          "case a12nn when a12nn then ? end , "
+                          "case a13nn when a13nn then ? end , "
+                          "case a14nn when a14nn then ? end , "
+                          "case a15nn when a15nn then ? end , "
+                          "case a16nn when a16nn then ? end , "
+                          "case a17nn when a17nn then ? end , "
+                          "case a18nn when a18nn then ? end , "
+                          "case a19nn when a19nn then ? end , "
+                          "case a20nn when a20nn then ? end , "
+                          "case a21nn when a21nn then ? end , "
+                          "case a22nn when a22nn then ? end , "
+                          "case a23nn when a23nn then ? end , "
+                          "case a24nn when a24nn then ? end , "
+                          "case a25nn when a25nn then ? end  "
+                   "from  glc34_t1";
+         break;
+       case 12:
+         stmtstr = "select case a1 when ? then a1 end , "
+                          "case a2 when ? then a2 end , "
+                          "case a3 when ? then a3 end , "
+                          "case a4 when ? then a4 end , "
+                          "case a5 when ? then a5 end , "
+                          "case a6 when ? then a6 end , "
+                          "case a7 when ? then a7 end , "
+                          "case a8 when ? then a8 end , "
+                          "case a9 when ? then a9 end , "
+                          "case a10 when ? then a10 end , "
+                          "case a11 when ? then a11 end , "
+                          "case a12 when ? then a12 end , "
+                          "case a13 when ? then a13 end , "
+                          "case a14 when ? then a14 end , "
+                          "case a15 when ? then a15 end , "
+                          "case a16 when ? then a16 end , "
+                          "case a17 when ? then a17 end , "
+                          "case a18 when ? then a18 end , "
+                          "case a19 when ? then a19 end , "
+                          "case a20 when ? then a20 end , "
+                          "case a21 when ? then a21 end , "
+                          "case a22 when ? then a22 end , "
+                          "case a23 when ? then a23 end , "
+                          "case a24 when ? then a24 end , "
+                          "case a25 when ? then a25 end , "
+                          "case a1nn when ? then a1nn end , "
+                          "case a2nn when ? then a2nn end , "
+                          "case a3nn when ? then a3nn end , "
+                          "case a4nn when ? then a4nn end , "
+                          "case a5nn when ? then a5nn end , "
+                          "case a6nn when ? then a6nn end , "
+                          "case a7nn when ? then a7nn end , "
+                          "case a8nn when ? then a8nn end , "
+                          "case a9nn when ? then a9nn end , "
+                          "case a10nn when ? then a10nn end , "
+                          "case a11nn when ? then a11nn end , "
+                          "case a12nn when ? then a12nn end , "
+                          "case a13nn when ? then a13nn end , "
+                          "case a14nn when ? then a14nn end , "
+                          "case a15nn when ? then a15nn end , "
+                          "case a16nn when ? then a16nn end , "
+                          "case a17nn when ? then a17nn end , "
+                          "case a18nn when ? then a18nn end , "
+                          "case a19nn when ? then a19nn end , "
+                          "case a20nn when ? then a20nn end , "
+                          "case a21nn when ? then a21nn end , "
+                          "case a22nn when ? then a22nn end , "
+                          "case a23nn when ? then a23nn end , "
+                          "case a24nn when ? then a24nn end , "
+                          "case a25nn when ? then a25nn end  "
+                   "from  glc34_t1";
+         break;
+       case 13:
+         stmtstr = "select ifnull(a1, ?), "
+                          "ifnull(a2, ?), "
+                          "ifnull(a3, ?), "
+                          "ifnull(a4, ?), "
+                          "ifnull(a5, ?), "
+                          "ifnull(a6, ?), "
+                          "ifnull(a7, ?), "
+                          "ifnull(a8, ?), "
+                          "ifnull(a9, ?), "
+                          "ifnull(a10, ?), "
+                          "ifnull(a11, ?), "
+                          "ifnull(a12, ?), "
+                          "ifnull(a13, ?), "
+                          "ifnull(a14, ?), "
+                          "ifnull(a15, ?), "
+                          "ifnull(a16, ?), "
+                          "ifnull(a17, ?), "
+                          "ifnull(a18, ?), "
+                          "ifnull(a19, ?), "
+                          "ifnull(a20, ?), "
+                          "ifnull(a21, ?), "
+                          "ifnull(a22, ?), "
+                          "ifnull(a23, ?), "
+                          "ifnull(a24, ?), "
+                          "ifnull(a25, ?), "
+                          "ifnull(a1nn, ?), "
+                          "ifnull(a2nn, ?), "
+                          "ifnull(a3nn, ?), "
+                          "ifnull(a4nn, ?), "
+                          "ifnull(a5nn, ?), "
+                          "ifnull(a6nn, ?), "
+                          "ifnull(a7nn, ?), "
+                          "ifnull(a8nn, ?), "
+                          "ifnull(a9nn, ?), "
+                          "ifnull(a10nn, ?), "
+                          "ifnull(a11nn, ?), "
+                          "ifnull(a12nn, ?), "
+                          "ifnull(a13nn, ?), "
+                          "ifnull(a14nn, ?), "
+                          "ifnull(a15nn, ?), "
+                          "ifnull(a16nn, ?), "
+                          "ifnull(a17nn, ?), "
+                          "ifnull(a18nn, ?), "
+                          "ifnull(a19nn, ?), "
+                          "ifnull(a20nn, ?), "
+                          "ifnull(a21nn, ?), "
+                          "ifnull(a22nn, ?), "
+                          "ifnull(a23nn, ?), "
+                          "ifnull(a24nn, ?), "
+                          "ifnull(a25nn, ?) "
+                   "from  glc34_t1";
+         break;
+      case 14:
+         stmtstr = "select * from  glc34_t1 where "
+         "a1 in(?) and a2 in(?) and a3 in(?) and a4 in(?) and a5 in(?) and "
+         "a6 in(?) and a7 in(?) and a8 in(?) and a9 in(?) and a10 in(?) and "
+         "a11 in(?) and a12 in(?) and a13 in(?) and a14 in(?) and "
+         "a15 in(?) and a16 in(?) and a17 in(?) and a18 in(?) and "
+         "a19 in(?) and a20 in(?) and a21 in(?) and a22 in(?) and "
+         "a23 in(?) and a24 in(?) and a25 in(?) and a1nn in(?) and "
+         "a2nn in(?) and "
+         "a3nn in(?) and a4nn in(?) and a5nn in(?) and a6nn in(?) and "
+         "a7nn in(?) and a8nn in(?) and a9nn in(?) and a10nn in(?) and "
+         "a11nn in(?) and a12nn in(?) and a13nn in(?) and a14nn in(?) and "
+         "a15nn in(?) and a16nn in(?) and a17nn in(?) and a18nn in(?) and "
+         "a19nn in(?) and a20nn in(?) and a21nn in(?) and "
+         "a22nn in(?) and a23nn in(?) and a24nn in(?) and a25nn in(?)";
+         descinp(cmd);
+         break;
+      case 15:
+         stmtstr = "select a1+?, a2+?, a3+?, a4+?, a5+?, a6+?, a7+?, "
+              "a8+?, a9+?, a10+?, a11+?, a12+?, a13+?, a14+?, a15+?, "
+              "a16+?, a17+?, a18+?, a19+?, a20+?, a21+?, a22+?, a23+?, "
+              "a24+?, a25+?, a1nn+?, a2nn+?, a3nn+?, a4nn+?, a5nn+?, a6nn+?, "
+              "a7nn+?, a8nn+?, a9nn+?, a10nn+?, a11nn+?, a12nn+?, a13nn+?, "
+              "a14nn+?, a15nn+?, a16nn+?, a17nn+?, a18nn+?, a19nn+?, a20nn+?, "
+              "a21nn+?, a22nn+?, a23nn+?, a24nn+?, a25nn+? "
+              " from glc34_t1";
+         descinp(cmd);
+         break;
+      case 16:
+         stmtstr = "select * from  glc34_t1 where "
+                   "a9 between ? and ? and a14nn between ? and ?";
+         descinp1(cmd);
+         break;
+      case 17:
+         stmtstr = "select * from  glc34_t1 where "
+                   "a2 like ? and a4 like ?";
+         descinp1(cmd);
+         break;
+      case 18:
+         stmtstr = "create view glc34_v1 as select * from  glc34_t1 where "
+             "a1=? and a2=? and a3=? and a4=? and a5=? and a6=? and a7=? and "
+             "a8=? and a9=? and a10=? and a11=? and a12=? and a13=? and "
+             "a14=? and a15=? and a16=? and a17=? and a18=? and a19=? and "
+             "a20=? and a21=? and a22=? and a23=? and a24=? and a25=? and "
+             "a1nn=? and "
+             "a2nn=? and a3nn=? and a4nn=? and a5nn=? and a6nn=? and "
+             "a7nn=? and a8nn=? and a9nn=? and a10nn=? and a11nn=? and "
+             "a12nn=? and a13nn=? and a14nn=? and a15nn=? and a16nn=? and "
+             "a17nn=? and a18nn=? and a19nn=? and a20nn=? and a21nn=? and "
+             "a22nn=? and a23nn=? and a24nn=? and a25nn=?";
+         descinp(cmd);
+         break;
+      case 19:
+         stmtstr = "select substring (a4 from ? for 5) from  glc34_t1";
+         descinp1(cmd);
+         break;
+      default:
+         break;
+   }
+   printf("Done\n");
+   }
+
+   EXEC SQL disconnect;
+}
+!!
+? esqlc glc34_p1 
+<<
+ESQL glc34_p1:
+>>
+<<
+ESQL glc34_p1:
+
+>>
+<<
+>>
+? sepcc glc34_p1
+<<
+
+>>
+<<
+glc34_p1.c
+>>
+? seplnk glc34_p1
+<<
+
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+/*
+** Clean up tables 
+*/
+* drop glc34_t1, glc34_t2, glc34_t3\g
+<<
+~
+>>
+/*
+** Create tables 
+*/
+* create table glc34_t1-
+  (a1 c(300), a2 char(301), a3 text(302), a4 varchar(303), a5 long varchar,-
+   a6 nchar(304), a7 nvarchar(305), a8 long nvarchar, a9 integer,-
+   a10 smallint, a11 bigint, a12 tinyint, a13 decimal(7,2),-
+   a14 float, a15 float4, a16 ingresdate, a17 time, a18 timestamp, a19 money,-
+   a20 object_key, a21 table_key, a22 byte(306),-
+   a23 byte varying(307), a24 long byte, a25 ansidate,-
+   a1nn c(300) not null, a2nn char(301) not null, a3nn text(302) not null,-
+   a4nn varchar(303) not null, a5nn long varchar not null,-
+   a6nn nchar(304) not null, a7nn nvarchar(305) not null,-
+   a8nn long nvarchar not null, a9nn integer not null,-
+   a10nn smallint not null, a11nn bigint not null, a12nn tinyint not null,-
+   a13nn decimal(7,2) not null,a14nn float not null, a15nn float4 not null,-
+   a16nn ingresdate not null, a17nn time not null, a18nn timestamp not null,-
+   a19nn money not null,a20nn object_key not null, a21nn table_key not null,-
+   a22nn byte(306) not null, a23nn byte varying(307) not null,-
+   a24nn long byte not null, a25nn ansidate not null-
+  )\g
+<<
+
+>>
+* create table glc34_t2 as select * from glc34_t1\g
+<<
+(0 rows)
+>>
+* \q
+<<
+~
+>>
+? run glc34_p1.exe SEPPARAMDB all
+<<
+Cmd: 0
+E_US0900 line 1, The dynamically defined statement 'badstmt' not found.
+    Perhaps a PREPARE or DESCRIBE wasn't successful.
+    (Tue Sep 12 13:33:56 2006)
+Done
+Cmd: 1
+Done
+Cmd: 2
+Done
+Cmd: 3
+Done
+Cmd: 4
+Done
+Cmd: 5
+Done
+Cmd: 6
+Done
+Cmd: 7
+Done
+Cmd: 8
+Done
+Cmd: 9
+Done
+Cmd: 10
+Done
+Cmd: 11
+Done
+Cmd: 12
+Done
+Cmd: 13
+Done
+Cmd: 14
+Done
+Cmd: 15
+Done
+Cmd: 16
+type: -30, len: 4
+type: -30, len: 4
+type: 31, len: 8
+type: 31, len: 8
+Done
+Cmd: 17
+type: -20, len: 301
+type: -21, len: 303
+Done
+Cmd: 18
+Done
+Cmd: 19
+type: 0, len: 0
+Done
+>>
+? delete glc34_p1.c
+<<
+~
+>>
+? delete glc34_p1.exe
+<<
+~
+>>
+? delete glc34_p1.obj
+<<
+~
+>>
+? delete glc34_p1.o
+<<
+~
+>>

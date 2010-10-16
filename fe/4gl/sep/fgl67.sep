@@ -1,0 +1,1864 @@
+/*
+	Test Name: paa05.sep
+	Time: Tue Sep  7 14:42:59 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : paa05
+	Module  : 4gl
+	Filename: paa05.sep
+	Purpose	: To test 4gl calling a C procedure and passing parameters
+	Input Files  : paa05_uf.osq, paa05_c.sc, c_unix.app, c_vms.app,
+                       linkfile.opt
+	Output Files : paa05.exe
+	Database     : SEPPARAMDB
+	Tables       : none
+	Synopsis     : From the 4gl frame, string, integer, float and decimal
+values are passed from fields on the form to the C procedure by value and by
+reference, and a string is returned by the procedure.  Short and long strings
+are passed byref returning long and short strings respectively.  Since a link
+options file is required for VMS, there are 2 copyapp files.
+1.  Run the application using 'Go'.  Enter values in the fields on the form and
+    select 'Call_C'. 
+2.  A popup displays the values received by the C procedure.  Verify that these
+    values are the same as the values in the fields.  Hit return. 
+3.  A popup displays the string returned by the C procedure.  Verify that this
+    value is correct.  Hit return.
+4.  Verify that the values in the fields on the form are correct - ie. the
+    values passed by value have not changed and the values passed byref are
+    correct. 
+5.  Create an image of the application and run it.  You should get the same
+    results as with 'Go'.
+
+ History:  7-Sep-1993	(brenda)	Created
+           7-Oct-1993   (brenda) Added a .else statement and a canon to abort
+                        the test if the test is not run against VMS or UNIX.
+          06-Jan-1995   changed deleter to delobj and edit into correct format.
+          05-Feb-1997	(clate01)
+			Modified to run on NT; added app file for NT
+          20-Aug-1997	(cheis01)	add alternate canons for NT.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -application paa05 
+<<
+~
+>>
+? delobj SEPPARAMDB -form paa05_uf 
+<<
+~
+>>
+? fill paa05_uf.osq 
+!!
+initialize (
+              sret = char(25) not null,
+              strpassed = char(200) not null
+           ) =
+{
+}
+
+'Call_C' =
+   {
+     /*  str1, str2, str3 are all varchar fields internally     */
+
+     sret = callproc paa05_c(str1, ival1, fval1, dec1, byref(str2), byref(str3),
+                     byref(ival2), byref(fval2), byref(dec2), byref(strpassed));
+
+     message 'The procedure received: ' + strpassed with style = popup;
+     message 'The procedure returned: ' + sret with style = popup;
+   }
+
+'End' =
+   {
+     return;
+   }
+
+!!
+? fill paa05_c.sc 
+!!
+char *  paa05_c (s1, int1, flt1, d1, s2, s3, int2, flt2, d2, passed)
+char    *s1;
+char    *s2;
+char    *s3;
+int     int1;
+int     *int2;
+double  flt1;
+double  *flt2;
+double  d1;
+double  *d2;
+char    *passed;
+{
+        static char    sret[25];
+
+        sprintf(passed,"%s %d %lf %lf %s %s %d %lf %lf",s1,int1,flt1,d1,s2,
+                s3,*int2,*flt2,*d2);
+
+        strcpy (s1, "By Value");
+        strcpy (s2, "Hello There");
+        strcpy (s3, "Hi");
+        int1 = int1 + 99;
+        *int2 += 10;
+        flt1 += 99.99;
+        *flt2 = *flt2 + 10.1;
+        d1 += 99.99;
+        *d2 += 10.5;
+        strcpy (sret, "I am a c string");
+
+	return (sret);
+}
+!!
+.if (UNIX) 
+? fill c_unix.app 
+!!
+COPYAPP	6	5	1993_09_07 19:23:15 GMT  
+OC_APPL:	0	paa05	Tests calling C proc from 4GL	
+	/qa/testenv/people/brenda/c		0		0	0	3		paa05_uf		SQL			0
+CUC_ADEPEND:
+	DUMMY		0	0		0
+OC_AFORMREF:	1	paa05_uf		
+	10174	II03paa05_uf	0		0	0	3							0
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_OSLFRAME:	1	paa05_uf		
+	paa05_uf.osq	II02call_c	0	none	0	0	3	dynamic						0
+CUC_AODEPEND:
+	paa05_c		2021	3504		0
+	paa05_uf		3001	3502		0
+OC_HLPROC:	1	paa05_c		
+	paa05_c.sc	paa05_c	20	char(25)	25	0	3	C						4
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_FORM:	0	paa05_uf		
+	80	20	0	0	9	0	11	9	0	0	0	0	0	0	0	9
+CUC_FIELD:
+	0	str1	-21	23	0	20	1	26	5	0	20	0	6	str1:	0	0	0	0	0	0	0		c20			0	0
+	1	ival1	-30	5	0	4	1	11	11	0	4	0	7	ival1:	0	0	0	0	0	0	0		-i4			0	1
+	2	fval1	-31	9	0	15	1	22	13	0	15	0	7	fval1:	0	0	0	0	0	0	0		-f15.4			0	2
+	3	dec1	-10	6	2051	10	1	16	15	0	10	0	6	dec1:	0	0	0	0	0	0	0		-f10.3			0	3
+	4	str2	-21	23	0	20	1	26	5	36	20	0	6	str2:	0	0	0	0	0	0	0		c20			0	4
+	5	str3	-21	23	0	20	1	26	8	36	20	0	6	str3:	0	0	0	0	0	0	0		c20			0	5
+	6	ival2	-30	5	0	4	1	11	11	36	4	0	7	ival2:	0	0	0	0	0	0	0		-i4			0	6
+	7	fval2	-31	9	0	15	1	22	13	36	15	0	7	fval2:	0	0	0	0	0	0	0		-f15.4			0	7
+	8	dec2	-10	6	2051	10	1	16	15	36	10	0	6	dec2:	0	0	0	0	0	0	0		-f10.3			0	8
+CUC_TRIM:
+	0	1	BY VALUE	0	0	0	0
+	0	2	--------	0	0	0	0
+	36	1	BYREF	0	0	0	0
+	36	2	-----	0	0	0	0
+	43	6	(enter < 10 chars)	0	0	0	0
+	43	9	(enter > 2 chars)	0	0	0	0
+	64	5	= Hello There	0	0	0	0
+	64	8	= Hi	0	0	0	0
+	64	11	= ival2 + 10	0	0	0	0
+	64	13	= fval2 + 10.1	0	0	0	0
+	64	15	= dec2 + 10.5	0	0	0	0
+!!
+.else 
+.if (NT_GENERIC) 
+? fill c_nt.app 
+!!
+COPYAPP	6	5	1993_09_07 19:23:15 GMT  
+OC_APPL:	0	paa05	Tests calling C proc from 4GL	
+	c:\tmp		0		0	0	3		paa05_uf		SQL			0
+CUC_ADEPEND:
+	DUMMY		0	0		0
+OC_AFORMREF:	1	paa05_uf		
+	10174	II03paa05_uf	0		0	0	3							0
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_OSLFRAME:	1	paa05_uf		
+	paa05_uf.osq	II02call_c	0	none	0	0	3	dynamic						0
+CUC_AODEPEND:
+	paa05_c		2021	3504		0
+	paa05_uf		3001	3502		0
+OC_HLPROC:	1	paa05_c		
+	paa05_c.sc	paa05_c	20	char(25)	25	0	3	C						4
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_FORM:	0	paa05_uf		
+	80	20	0	0	9	0	11	9	0	0	0	0	0	0	0	9
+CUC_FIELD:
+	0	str1	-21	23	0	20	1	26	5	0	20	0	6	str1:	0	0	0	0	0	0	0		c20			0	0
+	1	ival1	-30	5	0	4	1	11	11	0	4	0	7	ival1:	0	0	0	0	0	0	0		-i4			0	1
+	2	fval1	-31	9	0	15	1	22	13	0	15	0	7	fval1:	0	0	0	0	0	0	0		-f15.4			0	2
+	3	dec1	-10	6	2051	10	1	16	15	0	10	0	6	dec1:	0	0	0	0	0	0	0		-f10.3			0	3
+	4	str2	-21	23	0	20	1	26	5	36	20	0	6	str2:	0	0	0	0	0	0	0		c20			0	4
+	5	str3	-21	23	0	20	1	26	8	36	20	0	6	str3:	0	0	0	0	0	0	0		c20			0	5
+	6	ival2	-30	5	0	4	1	11	11	36	4	0	7	ival2:	0	0	0	0	0	0	0		-i4			0	6
+	7	fval2	-31	9	0	15	1	22	13	36	15	0	7	fval2:	0	0	0	0	0	0	0		-f15.4			0	7
+	8	dec2	-10	6	2051	10	1	16	15	36	10	0	6	dec2:	0	0	0	0	0	0	0		-f10.3			0	8
+CUC_TRIM:
+	0	1	BY VALUE	0	0	0	0
+	0	2	--------	0	0	0	0
+	36	1	BYREF	0	0	0	0
+	36	2	-----	0	0	0	0
+	43	6	(enter < 10 chars)	0	0	0	0
+	43	9	(enter > 2 chars)	0	0	0	0
+	64	5	= Hello There	0	0	0	0
+	64	8	= Hi	0	0	0	0
+	64	11	= ival2 + 10	0	0	0	0
+	64	13	= fval2 + 10.1	0	0	0	0
+	64	15	= dec2 + 10.5	0	0	0	0
+!!
+.else 
+.if (VMS) 
+? fill c_vms.app 
+!!
+COPYAPP	6	5	1993_09_07 19:34:13 GMT  
+OC_APPL:	0	paa05	Tests calling C proc from 4GL	
+	$2$DUA18:[TESTENV.PEOPLE.BRENDA.C]		0		0	0	3		paa05_uf	linkfile.opt	SQL			0
+CUC_ADEPEND:
+	DUMMY		0	0		0
+OC_OSLFRAME:	1	paa05_uf		
+	paa05_uf.osq	II02call_c	0	none	0	0	3	dynamic						0
+CUC_AODEPEND:
+	paa05_c		2021	3504		0
+	paa05_uf		3001	3502		0
+OC_AFORMREF:	1	paa05_uf		
+	10174	II03paa05_uf	0		0	0	3							0
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_HLPROC:	1	paa05_c		
+	paa05_c.sc	paa05_c	20	char(25)	25	0	3	C						4
+CUC_AODEPEND:
+	DUMMY		0	0		0
+OC_FORM:	0	paa05_uf		
+	80	20	0	0	9	0	11	9	0	0	0	0	0	0	0	9
+CUC_FIELD:
+	0	str1	-21	23	0	20	1	26	5	0	20	0	6	str1:	0	0	0	0	0	0	0		c20			0	0
+	1	ival1	-30	5	0	4	1	11	11	0	4	0	7	ival1:	0	0	0	0	0	0	0		-i4			0	1
+	2	fval1	-31	9	0	15	1	22	13	0	15	0	7	fval1:	0	0	0	0	0	0	0		-f15.4			0	2
+	3	dec1	-10	6	2051	10	1	16	15	0	10	0	6	dec1:	0	0	0	0	0	0	0		-f10.3			0	3
+	4	str2	-21	23	0	20	1	26	5	36	20	0	6	str2:	0	0	0	0	0	0	0		c20			0	4
+	5	str3	-21	23	0	20	1	26	8	36	20	0	6	str3:	0	0	0	0	0	0	0		c20			0	5
+	6	ival2	-30	5	0	4	1	11	11	36	4	0	7	ival2:	0	0	0	0	0	0	0		-i4			0	6
+	7	fval2	-31	9	0	15	1	22	13	36	15	0	7	fval2:	0	0	0	0	0	0	0		-f15.4			0	7
+	8	dec2	-10	6	2051	10	1	16	15	36	10	0	6	dec2:	0	0	0	0	0	0	0		-f10.3			0	8
+CUC_TRIM:
+	0	1	BY VALUE	0	0	0	0
+	0	2	--------	0	0	0	0
+	36	1	BYREF	0	0	0	0
+	36	2	-----	0	0	0	0
+	43	6	(enter < 10 chars)	0	0	0	0
+	43	9	(enter > 2 chars)	0	0	0	0
+	64	5	= Hello There	0	0	0	0
+	64	8	= Hi	0	0	0	0
+	64	11	= ival2 + 10	0	0	0	0
+	64	13	= fval2 + 10.1	0	0	0	0
+	64	15	= dec2 + 10.5	0	0	0	0
+!!
+.endif 
+.endif 
+? fill linkfile.opt 
+!!
+sys$library:vaxcrtl.olb/lib
+!!
+.if (VMS)
+? copyapp in SEPPARAMDB -a -r c_vms.app 
+<<
+INGRES COPYAPP Copyright (c) 1984, 1993 Ingres Corporation
+Copied Application `paa05' to the database.
+Copied Frame `paa05_uf' to the database.
+Copied Procedure `paa05_c' to the database.
+Copied Form `paa05_uf' to the database.
+>>
+.else 
+.if (UNIX) 
+? copyapp in SEPPARAMDB -a -r c_unix.app 
+<<
+INGRES COPYAPP Copyright (c) 1984, 1993 Ingres Corporation
+Copied Application `paa05' to the database.
+Copied Frame `paa05_uf' to the database.
+Copied Procedure `paa05_c' to the database.
+Copied Form `paa05_uf' to the database.
+>>
+.else 
+.if (NT_GENERIC) 
+? copyapp in SEPPARAMDB -a -r c_nt.app 
+<<
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYAPP Copyright (c) 1984, 1991 Ingres Corporation
+Copied Application `paa05' to the database.
+Copied Frame `paa05_uf' to the database.
+Copied Procedure `paa05_c' to the database.
+Copied Form `paa05_uf' to the database.
+>>
+.else 
+? echo "Case not covered"
+<<
+Case not covered
+>> ABORT
+.endif 
+.endif 
+.endif 
+? abf SEPPARAMDB -e paa05 
+<<
+~
+>>
+^^ `CR'`^J'`ESC'
+<<
+~
+>>
+^^ go`CR'
+<<
+~
+>>
+^^ by value`TAB'100`TAB'101.11`TAB'102.22`TAB'byref`TAB'byref`TAB'100`TAB'101.11`TAB-
+'102.22`ESC'
+<<
+
+%% CHANGED FIELD str1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value_                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1:                              ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1:                              fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD ival1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100_                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1:                              fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD fval1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.11_                       fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD dec1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.22_                        dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD str2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref_                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD str3:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref_                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD ival2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100_                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD fval2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.11_               = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD dec2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22_                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+>>
+<< IF (NT_GENERIC) 
+
+%% CHANGED FIELD str1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value_                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1:                              ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1:                              fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD ival1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100_                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1:                              fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD fval1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.11_                       fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD dec1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.22_                        dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD str2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref_                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD str3:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref_                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD ival2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100_                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD fval2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.11_               = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD dec2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22_                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+>>
+^^ Call_C`CR'`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Call_C
+%% MENU:   Call_C  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Call_C"
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The procedure received: by value 100 101.110000 102.220000 byref byref 100 | |
+| | 101.110000 102.220000                                                      | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The procedure returned: I am a c string                                    | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: Hello There           = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: Hi                    = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 110                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 111.2100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: _112.720               = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Call_C
+%% MENU:   Call_C  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Call_C"
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The procedure received: by value 100 101.110000 102.220000 byref byref 100 | |
+| | 101.110000 102.220000                                                      | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The procedure returned: I am a c string                                    | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: Hello There           = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: Hi                    = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 110                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 111.2100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: _112.720               = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ End`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ Utilities`CR'Image`CR'paa05.exe`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ quit`CR'
+<<
+~
+>>
+
+? ferun paa05.exe 
+<<
+~
+>>
+^^ by value`TAB'100`TAB'101.11`TAB'102.22`TAB'byref`TAB'byref`TAB'100`TAB'101.11`TAB-
+'102.22`ESC'
+<<
+
+%% CHANGED FIELD str1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value_                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1:                              ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1:                              fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD ival1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100_                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1:                              fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD fval1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.11_                       fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD dec1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.22_                        dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD str2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref_                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD str3:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref_                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD ival2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100_                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD fval2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.11_               = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD dec2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22_                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+>>
+<< IF (NT_GENERIC) 
+
+%% CHANGED FIELD str1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value_                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1:                              ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1:                              fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD ival1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100_                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1:                              fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD fval1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.11_                       fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1:                               dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD dec1:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2:                       = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.22_                        dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD str2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref_                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3:                       = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD str3:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref_                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2:                      = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD ival2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100_                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2:                      = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD fval2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.11_               = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2:                       = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD dec2:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22_                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+>>
+^^ Call_C`CR'`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Call_C
+%% MENU:   Call_C  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Call_C"
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The procedure received: by value 100 101.110000 102.220000 byref byref 100 | |
+| | 101.110000 102.220000                                                      | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The procedure returned: I am a c string                                    | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: Hello There           = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: Hi                    = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 110                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 111.2100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: _112.720               = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Call_C
+%% MENU:   Call_C  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Call_C"
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The procedure received: by value 100 101.110000 102.220000 byref byref 100 | |
+| | 101.110000 102.220000                                                      | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: byref                 = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: byref                 = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 100                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 101.1100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: 102.22                = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The procedure returned: I am a c string                                    | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|BY VALUE                            BYREF                                       |
+|--------                            -----                                       |
+|                                                                                |
+|                                                                                |
+|str1: by value                      str2: Hello There           = Hello There   |
+|                                           (enter < 10 chars)                   |
+|                                                                                |
+|                                    str3: Hi                    = Hi            |
+|                                           (enter > 2 chars)                    |
+|                                                                                |
+|ival1: 100                          ival2: 110                  = ival2 + 10    |
+|                                                                                |
+|fval1: 101.1100                     fval2: 111.2100             = fval2 + 10.1  |
+|                                                                                |
+|dec1: 102.220                       dec2: _112.720               = dec2 + 10.5   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Call_C  End                                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'
+<<
+~
+>>
+? delete paa05.exe 
+<<
+~
+>>
+? delobj SEPPARAMDB -application paa05 
+<<
+~
+>>
+? delobj SEPPARAMDB -form paa05_uf 
+<<
+~
+>>
+
+
+Ending at: Wed Aug 20 12:26:28 1997

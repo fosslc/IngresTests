@@ -1,0 +1,320 @@
+/*
+	Test Name: efa25.sep
+	Time: Tue May  8 19:30:44 1990
+	User Name: testenv
+ 
+	Test ID : efa25
+	Module  : 
+	Filename: efa25.sep
+	Purpose	: Testing that procedures that don't return values, when
+		   run and stored into a variable, do reset that variable to 
+		   0.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : none
+	Synopsis     : Create two procedures, first returns a value.
+		Execute 2nd into retstate(a variable). Then execute
+		the 1st without a place to store the return state, and then 
+		execute the 2nd into retstate again. Last execute the 1st into
+		retstate and then re-execute the 2nd into retstate again to 
+		make sure restate gets set back to 0.
+
+	History	: xx-xxx-1989	Created				Author
+		  7-MAR-1997    (vissu01) Modified for NT
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa25.sc 
+!!
+/*
+**	efa25.sc
+**
+**	basic functionality: return
+**
+**		possible bug: persistant return vals
+**
+**	history:
+**		oct 10/89 sgp
+**			- created.
+*/
+
+#define EFA25
+
+#include "driverefstub.h"
+
+#include <stdio.h>
+
+exec sql include sqlca;
+
+/************/
+/* efa25() */
+/************/
+
+efa25()
+{
+	exec sql begin declare section;
+	int	retstat;
+	exec sql end declare section;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa25: bug return vals persist rather than cleared\n");
+
+	/*******************************************/
+	/* procedure that returns the passed value */
+	/*******************************************/
+
+	printf("    create procedure that returns a value\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa25_01;
+
+	/* create the proc */
+	exec sql create procedure efa25_01 ( 
+		passval	integer	not null with default
+	) as
+	begin
+
+		message :passval 'return message number';
+		return :passval;
+
+	end;
+
+
+	/********************************/
+	/* procedure that has no return */
+	/********************************/
+
+	printf("    create procedure w/ no return\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa25_02;
+
+	/* create the proc */
+	exec sql create procedure efa25_02 as
+	begin
+
+		message 'no return';
+
+	end;
+
+
+	/**********/
+	/* test 1 */
+	/**********/
+
+	printf("\n    test 1: no prev exec proc, exec proc w/out return w/into\n");
+	exec sql execute procedure efa25_02 into :retstat;
+	printf("    returned %d\n",retstat);
+
+	/**********/
+	/* test 2 */
+	/**********/
+
+	printf("\n    test 2: exec proc w/ return w/out into, exec proc w/out return w/ into\n");
+	exec sql execute procedure efa25_01 ( passval = 2 );
+	exec sql execute procedure efa25_02 into :retstat;
+	printf("    returned %d\n",retstat);
+
+	/**********/
+	/* test 3 */
+	/**********/
+
+	printf("\n    test 3: exec proc w/ return w/ into, exec proc w/out return w/ into\n");
+	exec sql execute procedure efa25_01 ( passval = 3 ) into :retstat;
+	printf("    returned %d\n",retstat);
+	exec sql execute procedure efa25_02 into :retstat;
+	printf("    returned %d\n",retstat);
+
+
+
+} /* efa25() */
+!!
+? sepesqlc efa25.sc 
+<<
+ESQL efa25.sc:
+>>
+? sepcc efa25.c 
+<<
+>>
+<<
+efa25.c
+>>
+? sepesqlc driver.sc
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa25 
+<<
+>>
+? sql SEPPARAMDB -s
+<<
+~
+>>
+* drop procedure efa25_01;\g
+<<
+~
+>>
+* drop procedure efa25_02;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa25 
+<<
+TEST DRIVER
+source : driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa25
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa25 XX
+
+  efa25: bug return vals persist rather than cleared
+    create procedure that returns a value
+E_US0965 Procedure 'efa25_01' not found.
+    (Tue May  8 19:30:49 1990)
+    create procedure w/ no return
+E_US0965 Procedure 'efa25_02' not found.
+    (Tue May  8 19:30:49 1990)
+
+    test 1: no prev exec proc, exec proc w/out return w/into
+MESSAGE 0: no return
+    returned 0
+
+    test 2: exec proc w/ return w/out into, exec proc w/out return w/ into
+MESSAGE 2: return message number
+MESSAGE 0: no return
+    returned 0
+
+    test 3: exec proc w/ return w/ into, exec proc w/out return w/ into
+MESSAGE 3: return message number
+    returned 3
+MESSAGE 0: no return
+    returned 0
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~  
+>>
+? delete driver.obj 
+<<
+~  
+>>
+? delete driver.o
+<<
+~
+>>
+? delete driver.sc
+<<
+~  
+>>
+? delete driver.c
+<<
+~  
+>>
+? delete driverefstub.h 
+<<
+~  
+>>
+? delete driveref.c 
+<<
+~  
+>>
+? delete driveref.obj 
+<<
+~  
+>>
+? delete driveref.o
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~  
+>>
+? delete dbph.c 
+<<
+~  
+>>
+? delete dbpmisc.sc 
+<<
+~  
+>>
+? delete dbpmisc.c 
+<<
+~  
+>>
+? delete dbpmisc.obj 
+<<
+~  
+>>
+? delete dbpmisc.o
+<<
+~
+>>
+? delete efa25.c 
+<<
+~  
+>>
+? delete efa25.obj 
+<<
+~  
+>>
+? delete efa25.o
+<<
+~
+>>
+
+
+Ending at: Tue May  8 19:30:57 1990

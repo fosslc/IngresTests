@@ -1,0 +1,237 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name: utl44.sep
+	Time: Tue Dec 11 11:37:26 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl44.sep 
+	Module  : be/util
+	Filename: utl44.sep
+	Purpose	: To test the new copydb flags first available with Ingres
+                  II 2.6/0106 and later releases.
+	Input Files  : copy.in
+	Output Files : copy.out
+	Database     : utildb3, utildb4
+	Tables       : utl44_table
+	Synopsis     : Test the new copydb -order_ccm flag. When this flag is
+                       specified, it will copy first and then modify. And it 
+                       will write min-max pages in the modify statements for
+                       hash tables.
+
+ History: 11-Dec-2001	(wu$ca01) Created
+           8-May-2003	(wu$ca01) Updated test due to schema has changed -
+                        ('utl44_table.tes' to utl44_table.testenv'). Added
+                         a fill file to clean out database 'util3'.
+          12-Jun-2006   (hanal04) create table statements are terminated
+                         with a GO statement not a semi-colon after change
+                         for bug 116045.
+	  08-May-2007	(vande02) Added temporary file cleanup, removed \p,
+			 header corrections.
+*/
+? fill utl44_drop.sql 
+!!
+drop table utl44_table\g
+drop table util_alongtablename\g
+drop table util_copydb_table\g
+drop index util_idx1\g
+drop index util_idx2\g
+drop index util_idx3\g
+!!
+? fill utl44.in 
+!!
+drop table utl44_table\g
+create table utl44_tabLe(col1 varchar(3), col2 int)\g
+insert into utl44_table values('ABC', 7)\g
+insert into utl44_table values('CBS', 2)\g
+insert into utl44_table values('FOX', 12)\g
+insert into utl44_table values('NBC', 5)\g
+!!
+? fill cleanup.in
+!!
+drop table util_copydb_table\g
+drop table util_alongtablenameforingres\g
+drop table util_alongtablename\g
+drop table util_blob_table\g
+drop table utl44_table\g
+drop index util_idx1\g
+drop index util_idx2\g
+drop index util_idx3\g
+drop view util_view1\g
+drop dbevent util_event1\g
+drop synonym util_maintable\g
+drop synonym util_shortname\g
+drop procedure util_proc1\g
+drop rule util_rule1\g
+drop security_alarm on util_alongtablename\g
+alter table util_copydb_table drop constraint util_const1 restrict\g
+alter table util_copydb_table drop constraint util_const2 restrict\g
+!!
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* \i utl44.in
+<<
+~
+>>
+* select * from utl44_table order by col1\g
+<<
+
++------+-------------+
+|col1  |col2         |
++------+-------------+
+|ABC   |            7|
+|CBS   |            2|
+|FOX   |           12|
+|NBC   |            5|
++------+-------------+
+(4 rows)
+>>
+* modify utl44_table to hash\g 
+<<
+(4 rows)
+>>
+* \q 
+<<
+
+>>
+? copydb utildb3 -with_tables -with_modify -with_data -order_ccm -relpath -noint utl44_table 
+<<
+~
+>>
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* \i copy.out 
+<<
+~
+>>
+* \q 
+<<
+
+>>
+? sql -s SEPPARAMDB4 
+<<
+
+>>
+* \i utl44_drop.sql 
+<<
+~
+>>
+* commit\g
+<<
+~
+>>
+* \i copy.in 
+<<
+set autocommit on
+set nojournaling
+set session with privileges=all
+
+	/* TABLES */
+create table utl44_table(
+	col1 varchar(3),
+	col2 integer
+)
+with duplicates,
+nojournaling,
+location = (ii_database),
+security_audit=(table,norow)
+copy utl44_table () from 'utl44_table.testenv'
+with row_estimate = 4
+(4 rows)
+modify utl44_table to hash on
+	col1
+with minpages = 10,
+	fillfactor = 50,
+	extend = 16,
+	allocation = 4
+(4 rows)
+set journaling on utl44_table
+>>
+* help table utl44_table\g 
+<<
+Name:                 utl44_table
+Owner:                testenv
+Created:              12-dec-2001 11:30:30     
+Location:             ii_database
+Type:                 user table
+Version:              II2.6
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 11
+Row width:            11
+Number of rows:       4
+Storage structure:    hash
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      18
+Overflow data pages:  0
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             varchar         3  yes    null     1 
+col2                             integer         4  yes    null       
+
+Secondary indexes:    none
+
+
+
+>>
+* drop table utl44_table\g
+<<
+
+>>
+* \q 
+<<
+~
+>>
+? sql -s SEPPARAMDB3
+<<
+
+>>
+* \i cleanup.in
+<<
+~
+>>
+* \q
+<<
+
+>>
+? delete utl44_table.testenv
+<<
+~
+>>
+? delete copy.in 
+<<
+~
+>>
+? delete copy.out 
+<<
+~
+>>
+? delete util_alongtablename.testenv
+<<
+~
+>>
+? delete util_alongtablenameforingres.testenv
+<<
+~
+>>
+? delete util_blob_table.testenv
+<<
+~
+>>
+
+
+Ending at: Wed Dec 12 11:31:43 2001

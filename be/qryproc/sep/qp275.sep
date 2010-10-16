@@ -1,0 +1,102 @@
+/*
+	Test Name: qp275.sep
+	Time: Wed May 14 11:20:17 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :	runme.sql
+	Output Files :
+	Database     :	SEPPARAMDB
+	Tables       :	t1, t2
+	Synopsis     :	AFTER a statement level rule is fired, if the 
+			invoked procedure create with "set of" is invoked
+			using "execute procedure" statement alone, in 
+			returning error msg E_US098A, ingres should NOT
+			lose the parameter name being pass to the error
+			msg.  In another word, E_US098A should contain
+			<procedure_name> instead of 'NULL'.
+			(Bug 82298)
+
+ History: 14-May-1997	(cheis01)	Created
+					Need to be modified.
+          29-Jul-1997	(cheis01)	Modified the test to adjust the
+					fix of bug 82298.
+          26-March-1999  (kamra01) modified VPG_SZ to 8192
+*/
+? fill runme.sql 
+!!
+create table t1 (a int) with page_size=8192\p\g
+create table t2 (b int) with page_size=8192\p\g
+
+create procedure p1 (pt1 set of (col int))
+as begin insert into t2 select * from pt1 end\p\g
+
+execute procedure p1 (pt1=9)\p\g
+create rule r1 after insert into t1 for each statement
+execute procedure p1 (col=new.a)\p\g
+
+execute procedure p1 (pt1=9)\p\g
+insert into t1 values (1)\p\g
+
+execute procedure p1 (pt1=9)\p\g
+drop rule r1\p\g
+drop procedure p1\p\g
+drop t1, t2\p\g\q
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop rule r1\g 
+<<
+~
+>>
+* drop procedure p1\g 
+<<
+~
+>>
+* drop table t1, t2\g 
+<<
+~
+>>
+* \i runme.sql 
+<<
+ 
+ create table t1 (a int) with page_size=8192
+create table t2 (b int) with page_size=8192
+
+create procedure p1 (pt1 set of (col int))
+as begin insert into t2 select * from pt1 end
+
+execute procedure p1 (pt1=9)
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Tue Jul 29 16:35:13 1997)
+
+create rule r1 after insert into t1 for each statement
+execute procedure p1 (col=new.a)
+
+execute procedure p1 (pt1=9)
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Tue Jul 29 16:35:14 1997)
+
+insert into t1 values (1)
+(1 row)
+
+execute procedure p1 (pt1=9)
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Tue Jul 29 16:35:14 1997)
+
+drop rule r1
+drop procedure p1
+drop t1, t2
+>>
+
+
+Ending at: Tue Jul 29 13:35:27 1997

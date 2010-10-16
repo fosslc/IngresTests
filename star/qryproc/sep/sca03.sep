@@ -1,0 +1,118 @@
+/*
+	Test Name: fe004.sep
+	Time: 29-JUN-1989 15:22:21
+	User Name: qatest      
+ 
+	Test ID : fe004
+	Module  : 
+	Filename: fe004.sep
+	Purpose	: Test of the various queries in the 'mappings' document
+	Input Files  : fe000a.dat, fe000b.dat, fe000c.dat
+	Output Files :
+	Database     : betstdb1
+	Tables       : s, p, sp
+	Synopsis     : selects including some that have caused problems
+			in the past and WHERE/aggregate embedding tests
+
+	History	: xx-xxx-1989	Created				Author
+	Modified on 9-May-1991 by Stever
+		Fixed CANON for \q command
+		Changed sepparam_ddb to SEPPARAM_DDB
+		Added ORDER BY clause to the 4th select statement.
+        5-MAR-1993   mod     malee
+                update error message (65 only)
+
+	  16-09-93     barbh
+		       Changed SEPPARAM_DDB to SEPPARAMDB. This makes the
+		       star test consistent with testkit standards.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from qpr_sp1 where sno in (select sno from qpr_s1 where city='Lon') and p-
+no in (select pno from qpr_p2 where color='re*'); \g 
+/*
+this SELECT statement has caused problems/bugs somewhere along the development
+path in the SQL translator
+*/
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
++------+------+------+
+(0 rows)
+>>
+* select sno from qpr_s1 where not exists (select distinct pno from qpr_sp1) ; \g 
+/*
+this SELECT statement has caused problems/bugs somewhere along the development
+path in the SQL translator
+*/
+<<
+
++------+
+|sno   |
++------+
++------+
+(0 rows)
+>>
+* select distinct pno, max(qty) from qpr_sp1 where qty > 200 group by pno having sum-
+(qty) > 300 order by 2, pno desc; \g 
+/*
+this query demonstrates that the WHERE clause must be embedded in BOTH
+aggregates in the target list and aggregates in the having clause.  The
+right answer (DATE-INTRO p. 134) does not include pno p4 - and that is what
+you get if you don't embed the WHERE clause in the having aggregate
+*/
+<<
+
++------+------+
+|pno   |col2  |
++------+------+
+|p1    |   300|
+|p5    |   400|
+|p3    |   400|
+|p2    |   400|
++------+------+
+(4 rows)
+>>
+* select pno from qpr_p2 px where px.weight *5 >any (select sum(weight) from qpr_p2 -
+py where py.city=px.city) order by pno; \g 
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p3    |
+|p4    |
+|p5    |
+|p6    |
++------+
+(6 rows)
+>>
+* select pno, qty from qpr_sp1 where avg(qty) in (select spz.qty from qpr_sp1 spz wh-
+ere pno='p1'); \g 
+<<
+E_US0B72 line 1.  Illegal use of aggregate function in a WHERE clause.
+    ( 9-FEB-1993 15:11:19)
+
+>>
+* select avg(qty) from qpr_sp1 where sno =any (select sno from qpr_s1 where city = '-
+Paris'); \g 
+<<
+
++-----------+
+|col1       |
++-----------+
+|    300.000|
++-----------+
+(1 row)
+>>
+* \q 
+<<
+>>
+
+
+Ending at: 10-DEC-1990 10:02:10

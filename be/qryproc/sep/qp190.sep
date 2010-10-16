@@ -1,0 +1,365 @@
+/*
+	Test Name: ela18.sep
+	Time     : 24-May-1993 18:26:22
+	User Name: testenv
+
+	Test ID  : ela18.sep
+	Module   : 
+	Filename : 
+	Purpose  : test bug #50825
+	Input Files  : 
+	Output Files : 
+	Database     : 
+	Tables       : 
+	Synopsis     : 
+	History      : 4-Aug-1993	(jpark)
+	  12-Aug-1993   (garys) added '? delete' statement to delete ela18.c,
+				ela18.exe and ela18.o before test exits.
+ 	  7-MAR-1997    (vissu01) Modified for NT
+	   26-March-1999  (kamra01) modified VPG_SZ to 8192	
+	  10-oct-2003	(somsa01)	Updated to delete .obj file on Windows.
+*/
+? fill drp.sql 
+!!
+drop bug_view;
+drop bug_tbl;
+drop procedure bug_tbl_rule_proc;
+drop rule bug_tbl_rule;
+drop procedure bug_tbl_rule_proc2;
+drop rule bug_tbl_rule2;\g
+!!
+? fill ela18.sc 
+!!
+/*
+** bug <dbname>
+**
+*/
+
+typedef struct sqlvar_ {
+	short	sqltype;
+	short 	sqllen;
+	char	*sqldata;
+	short	*sqlind;
+	struct {
+	    short sqlnamel;
+	    char  sqlnamec[34];
+	} sqlname;
+} IISQLVAR;
+
+    struct sq_struct_tag {			 
+	char		sqldaid[8];		 
+	long		sqldabc;		 
+	short		sqln;			 
+	short		sqld;			 
+	IISQLVAR	sqlvar[3];	 
+    } sq_sqlda_name;
+
+
+main(argc, argv)
+int	argc;
+char	*argv[];
+{
+    exec sql include sqlca;
+    exec sql begin declare section;
+	int   v1, v2, v3, v4, v5;
+	char  *dbname;
+    exec sql end declare section;
+    struct sq_struct_tag *sqlda = &sq_sqlda_name;
+
+    if (argc != 2)
+    {
+	printf("Usage: B50825 dbname\n\n\t better luck next time...\n");
+	exit(-1);
+    }
+
+    dbname = argv[1];
+
+    exec sql whenever sqlerror stop;
+    exec sql connect :dbname;
+    exec sql whenever sqlerror call sqlprint;
+
+    exec sql drop bug_view;
+    exec sql drop bug_tbl;
+    
+    exec sql create table bug_tbl(c1 i, c2 i, c3 i, c4 i, c5 i) with page_size=8192;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Failure trying to create table bug_tbl\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+
+    exec sql create view bug_view as select c1,c2 from bug_tbl;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Failure trying to create view bug_view\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+
+    exec sql drop procedure bug_tbl_rule_proc;
+    exec sql create procedure bug_tbl_rule_proc as
+    begin
+	message 0 'decreased c1 or c2';
+	raise error 999;
+    end;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Failure trying to create dbproc bug_tbl_rule_proc\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+    exec sql drop rule bug_tbl_rule;
+    exec sql create rule bug_tbl_rule after update of bug_tbl
+	where old.c1 > new.c1 or old.c2 > new.c2
+		execute procedure bug_tbl_rule_proc;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Failure trying to create rule bug_rule\n\
+will skip the remainder of the tests\n");
+	exit(-1);
+    }
+
+    exec sql drop procedure bug_tbl_rule_proc2;
+    exec sql create procedure bug_tbl_rule_proc2 as
+    begin
+	message 0 'delete from bug_tbl';
+	raise error 1111;
+    end;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Failure trying to create dbproc bug_tbl_rule_proc2\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+    exec sql drop rule bug_tbl_rule2;
+    exec sql create rule bug_tbl_rule2 after delete of bug_tbl
+		execute procedure bug_tbl_rule_proc2;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Failure trying to create rule bug_tbl_rule2\n\
+will skip the remainder of the tests\n");
+	exit(-1);
+    }
+
+    exec sql insert into bug_tbl values(1,2,3,4,5);
+
+    exec sql commit;
+
+    /*
+    ** declare cursor that will be used to read bug_tbl
+    */
+    exec sql declare ordered cursor for select * from bug_tbl;
+
+    /* display contents of the table before we start messing with it */
+    exec sql open ordered for readonly;
+
+    exec sql fetch ordered into :v1, :v2, :v3, :v4, :v5;
+    if (sqlca.sqlcode != 0)
+    {
+	printf("Failure trying to read  bug_tbl using a cursor\n");
+	printf("sqlcode = %d; skip the rest of the tests\n", sqlca.sqlcode);
+	exit(-1);
+    }
+
+    printf("\n\ncontents of the table before we start messing with it:\n");
+    printf("\t\tc1: %d, c2: %d, c3: %d, c4: %d, c5: %d\n", v1, v2, v3, v4, v5);
+
+    exec sql close ordered;
+
+    exec sql declare c1 cursor for select c1,c2 from bug_view
+	for update of c1,c2;
+    exec sql open c1;
+
+    exec sql fetch c1 into :v1, :v2;
+    if (sqlca.sqlcode < 0)
+    {
+	printf("Failure trying to read bug_view using a cursor\n");
+	printf("sqlcode = %d; skip the rest of the test \n", sqlca.sqlcode);
+	exit(-5);
+    }
+    else if (sqlca.sqlcode==100)
+    {
+	printf("no rows\n skip the rest of the test \n");
+	exit(-5);
+    }
+
+    exec sql update bug_view set c1=-c1, c2=-c2 where current of c1;
+    if (sqlca.sqlcode == 0)
+    {
+	printf("\n\nthat's not good - we were supposed to fail because of the\n\
+rule on the base table\n");
+
+	/* display contents of the table after we appareantly updated it */
+	exec sql open ordered for readonly;
+
+	exec sql fetch ordered into :v1, :v2, :v3, :v4, :v5;
+	if (sqlca.sqlcode != 0)
+	{
+	    printf("Failure trying to read  bug_tbl using a cursor\n");
+	    printf("sqlcode = %d; skip the rest of the tests\n", sqlca.sqlcode);
+	    exit(-1);
+	}
+
+	printf("\n\nIf the rule were applied correctly, contents of the table \n\
+after we tried to update it would be:\n\
+\t\tc1: 1, c2: 2, c3: 3, c4: 4, c5: 5\n");
+
+	printf("\n\nas it is, they are:\n\
+\t\tc1: %d, c2: %d, c3: %d, c4: %d, c5: %d\n", v1, v2, v3, v4, v5);
+
+	exec sql close c1;
+    }
+    else
+    {
+	printf("\n\nRule appears to have been applied correctly.\n");
+
+	/* display contents of the table after we tried to update it */
+	exec sql open ordered for readonly;
+
+	exec sql fetch ordered into :v1, :v2, :v3, :v4, :v5;
+	if (sqlca.sqlcode != 0)
+	{
+	    printf("Failure trying to read  bug_tbl using a cursor\n");
+	    printf("sqlcode = %d; skip the rest of the tests\n", sqlca.sqlcode);
+	    exit(-1);
+	}
+
+	printf("\n\nContents of the table after we unsuccessfully tried to \n\
+update it are:\n\
+\t\tc1: %d, c2: %d, c3: %d, c4: %d, c5: %d\n", v1, v2, v3, v4, v5);
+
+    }
+
+    exec sql close ordered;
+
+    exec sql open c1;
+
+    exec sql fetch c1 into :v1, :v2;
+    if (sqlca.sqlcode < 0)
+    {
+	printf("Failure trying to read bug_view using a cursor\n");
+	printf("sqlcode = %d; skip the rest of the test \n", sqlca.sqlcode);
+	exit(-5);
+    }
+    else if (sqlca.sqlcode==100)
+    {
+	printf("no rows\n skip the rest of the test \n");
+	exit(-5);
+    }
+
+    exec sql delete from bug_view where current of c1;
+    if (sqlca.sqlcode == 0)
+    {
+	printf("that's not good - delete was supposed to fail because of the\n\
+rule on the base table\n");
+
+	exec sql close c1;
+    }
+	
+    /* display contents of the table after we tried to delete from it */
+    exec sql open ordered for readonly;
+
+    exec sql fetch ordered into :v1, :v2, :v3, :v4, :v5;
+    if (sqlca.sqlcode == 100)
+    {
+	printf("row got deleted even though a rule has been defined on \n\
+bug_tbl which should prevent any delete from succeeding\n");
+    }
+    else if (sqlca.sqlcode != 0)
+    {
+	printf("Failure trying to read  bug_tbl using a cursor\n");
+	printf("sqlcode = %d; skip the rest of the tests\n", sqlca.sqlcode);
+	exit(-1);
+    }
+    else
+    {
+	printf("\n\nrule got applied correctly - the row did not get deleted.\n");
+	printf("values are:\n\
+\t\tc1: %d, c2: %d, c3: %d, c4: %d, c5: %d\n", v1, v2, v3, v4, v5);
+    }
+
+    exec sql close ordered;
+
+    exec sql disconnect;
+
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* \i drp.sql
+<<
+~
+>>
+* \q
+<<
+>>
+? esqlc ela18.sc 
+<<
+>>
+<<
+ESQL ela18.sc:
+>>
+? sepcc ela18.c 
+<<
+>>
+<< IF (NT_GENERIC)
+ela18.c
+>>
+? seplnk ela18 
+<<
+>>
+? run ela18.exe SEPPARAMDB 
+<<
+E_US0AC1 DROP: 'bug_view' does not exist or is not owned by you.
+    (Fri Jun  4 11:32:37 1993)
+E_US0AC1 DROP: 'bug_tbl' does not exist or is not owned by you.
+    (Fri Jun  4 11:32:37 1993)
+E_US0965 Procedure 'bug_tbl_rule_proc' not found.
+    (Fri Jun  4 11:32:39 1993)
+E_US189D DROP RULE: Rule 'bug_tbl_rule' does not exist.
+    (Fri Jun  4 11:32:40 1993)
+E_US0965 Procedure 'bug_tbl_rule_proc2' not found.
+    (Fri Jun  4 11:32:41 1993)
+E_US189D DROP RULE: Rule 'bug_tbl_rule2' does not exist.
+    (Fri Jun  4 11:32:41 1993)
+
+
+contents of the table before we start messing with it:
+		c1: 1, c2: 2, c3: 3, c4: 4, c5: 5
+RAISE ERROR 999
+
+
+Rule appears to have been applied correctly.
+
+
+Contents of the table after we unsuccessfully tried to 
+update it are:
+		c1: 1, c2: 2, c3: 3, c4: 4, c5: 5
+RAISE ERROR 1111
+
+
+rule got applied correctly - the row did not get deleted.
+values are:
+		c1: 1, c2: 2, c3: 3, c4: 4, c5: 5
+>>
+? delete ela18.c
+<<
+~
+>>
+? delete ela18.exe
+<<
+~
+>>
+? delete ela18.o
+<<
+~
+>>
+? delete ela18.obj
+<<
+~
+>>
+
+
+Ending at: Wed Aug  4 14:39:56 1993

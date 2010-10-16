@@ -1,0 +1,317 @@
+/*
+	Test Name: qp281.sep
+	Time: Mon Mar 24 11:31:17 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :	in1.sql, in2.sql, setup.sql, runme.sc, pr_msg.sc
+	Output Files :	pr_msg.c, runme.c, runme.o, runme.exe
+	Database     :	SEPPARAMDB
+	Tables       :	t0, t1
+	Synopsis     :	A procedure should not be executed by a 
+			statement level rule, when the rule's where
+			clause did not qualify any rows.
+			(bug 80968)
+			ESQL version of qp272.sep.
+
+ History: 24-Mar-1997	(cheis01)	Created
+          15-Sep-1998   (kinte01)
+                        Add delete for files left around after test completes
+	  23-Mar-1999  (vande02)  Hard-coded VPG_SZ to 8K
+
+*/
+? fill in1.sql 
+!!
+/*
+ROW level, as an sample 
+*/
+create procedure p1 (enum integer, dept varchar(15) not null) as
+declare name varchar(10) not null;
+begin
+        select emp into name from t0 where enum = :enum;
+        message name; message 'who works in'; message :dept;
+        message 'earns more than $35,000.';
+end;
+\p\g
+
+create rule r1 after update (salary) of t1 where new.salary > 35000
+execute procedure p1 (enum=old.enum, dept=old.dept)\p\g
+!!
+? fill in2.sql 
+!!
+/*
+STATEMENT level
+*/
+create procedure p1 (tt1 set of (enum integer, dept varchar(15))) as
+declare	name	varchar(10) not null;
+	dept	varchar(15) not null;
+begin
+	select emp into name from t0 
+	where enum in (select enum from tt1 where t0.enum=tt1.enum);
+	select dept into dept from tt1;
+	message name; message 'who works in'; message dept;
+	message 'earns more than $35,000.';
+end;
+\p\g
+
+create rule r1 after update (salary) of t1
+where new.salary > 35000 for each statement
+execute procedure p1 (enum=old.enum, dept=old.dept)\p\g
+!!
+? fill setup.sql 
+!!
+create table t0 (enum int, emp varchar(20)) with page_size=8192\p\g
+insert into t0 values (1, 'Albert')\p\g
+insert into t0 values (2, 'Bob')\p\g
+insert into t0 values (3, 'Cathy')\p\g
+
+create table t1 (enum int, dept varchar(15), salary money)
+	with page_size=8192\p\g
+insert into t1 values (1, 'accounting', 30000)\p\g
+insert into t1 values (2, 'development', 46000)\p\g
+insert into t1 values (3, 'marketing', 26500)\p\g
+!!
+? fill runme.sc 
+!!
+#include <stdio.h>
+
+exec sql include sqlca;
+exec sql include 'pr_msg.sc';
+
+main(argc, argv)
+int argc;
+char **argv;
+{
+	exec sql begin declare section;
+	char	dbname[20];
+	exec sql end declare section;
+
+	strcpy(dbname, argv[1]);
+	exec sql connect :dbname;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql set_sql (messagehandler = pr_msg);
+
+	printf("update t1 set salary=35000 where enum=3;\n\n");
+	exec sql update t1 set salary=35000 where enum=3;
+	printf("\nupdate t1 set salary=35001 where enum=3;\n\n");
+	exec sql update t1 set salary=35001 where enum=3;
+
+	exec sql commit;
+	exec sql disconnect;
+}
+!!
+? fill pr_msg.sc 
+!!
+void pr_msg()
+{
+        exec sql begin declare section;
+                char    msg[100];
+        exec sql end declare section;
+ 
+        exec sql inquire_sql (:msg = messagetext);
+        printf("%s\n", msg);
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop rule r1\g 
+<<
+~
+>>
+* drop procedure p1\g 
+<<
+~
+>>
+* drop table t0, t1\g 
+<<
+~
+>>
+* \i setup.sql 
+<<
+ 
+create table t0 (enum int, emp varchar(20)) with page_size=8192
+insert into t0 values (1, 'Albert')
+(1 row)
+insert into t0 values (2, 'Bob')
+(1 row)
+insert into t0 values (3, 'Cathy')
+(1 row)
+
+create table t1 (enum int, dept varchar(15), salary money)
+	with page_size=8192
+insert into t1 values (1, 'accounting', 30000)
+(1 row)
+insert into t1 values (2, 'development', 46000)
+(1 row)
+insert into t1 values (3, 'marketing', 26500)
+(1 row)
+>>
+* \i in1.sql
+<<
+/*
+ROW level, as an sample 
+*/
+create procedure p1 (enum integer, dept varchar(15) not null) as
+declare name varchar(10) not null;
+begin
+        select emp into name from t0 where enum = :enum;
+        message name; message 'who works in'; message :dept;
+        message 'earns more than $35,000.';
+end;
+
+create rule r1 after update (salary) of t1 where new.salary > 35000
+execute procedure p1 (enum=old.enum, dept=old.dept)
+>>
+* select * from t0\g
+<<
+
++-------------+--------------------+
+|enum         |emp                 |
++-------------+--------------------+
+|            1|Albert              |
+|            2|Bob                 |
+|            3|Cathy               |
++-------------+--------------------+
+(3 rows)
+>>
+* select * from t1\g\q
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|accounting     |           $30000.00|
+|            2|development    |           $46000.00|
+|            3|marketing      |           $26500.00|
++-------------+---------------+--------------------+
+(3 rows)
+>>
+? sepesqlc runme 
+<<
+ESQL runme.sc:
+>>
+? sepcc runme 
+<<
+>>
+<<
+runme.c
+>>
+? seplnk runme 
+<<
+>>
+? run runme.exe SEPPARAMDB 
+<<
+update t1 set salary=35000 where enum=3;
+
+
+update t1 set salary=35001 where enum=3;
+
+Cathy
+who works in
+marketing
+earns more than $35,000.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from t1\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|accounting     |           $30000.00|
+|            2|development    |           $46000.00|
+|            3|marketing      |           $35001.00|
++-------------+---------------+--------------------+
+(3 rows)
+>>
+* drop rule r1\g
+<<
+>>
+* drop procedure p1\g
+<<
+
+>>
+* \i in2.sql
+<<
+/*
+STATEMENT level
+*/
+create procedure p1 (tt1 set of (enum integer, dept varchar(15))) as
+declare	name	varchar(10) not null;
+	dept	varchar(15) not null;
+begin
+	select emp into name from t0 
+	where enum in (select enum from tt1 where t0.enum=tt1.enum);
+	select dept into dept from tt1;
+	message name; message 'who works in'; message dept;
+	message 'earns more than $35,000.';
+end;
+
+create rule r1 after update (salary) of t1
+where new.salary > 35000 for each statement
+execute procedure p1 (enum=old.enum, dept=old.dept)
+>>
+* \q
+<<
+>>
+? run runme.exe SEPPARAMDB 
+<<
+update t1 set salary=35000 where enum=3;
+
+
+update t1 set salary=35001 where enum=3;
+
+Cathy
+who works in
+marketing
+earns more than $35,000.
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from t1\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|accounting     |           $30000.00|
+|            2|development    |           $46000.00|
+|            3|marketing      |           $35001.00|
++-------------+---------------+--------------------+
+(3 rows)
+>>
+* drop rule r1\g
+<<
+>>
+* drop procedure p1\g
+<<
+>>
+* drop table t0, t1\g\q
+<<
+>>
+? run rm pr_msg.c runme* 
+<<
+~
+>>
+? delete pr_msg.c
+<<
+~
+>>
+? delete runme.*
+<<
+~
+>>
+
+
+Ending at: Fri Aug 15 14:35:26 1997

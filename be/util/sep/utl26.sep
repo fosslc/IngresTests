@@ -1,0 +1,421 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name: utl26.sep
+	Time: Fri Nov 12 09:09:18 1999
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :
+	Output Files :
+	Database     :  SEPPARAMDB (utildb)
+	Tables       :  t1_blob
+	Synopsis     :  Test verifydb enhancements for peripheral data-types.
+			Table with blob datatype will be created and some large
+			data inserted into it.  Then the internal structure
+			of the peripheral data type will be broken, so that
+                        warning messages will be displayed when the verifydb
+                        command is issued.  4 different warning messages are
+                        checked:
+			     W_DM505F_TOO_MANY_BAD_SEGS
+                             W_DM5060_NO_TABLE
+			     W_DM505E_NO_ETAB_TABLE
+                             W_DM5061_WRONG_BLOB_LENGHT.
+			Update the blob table is done within the esqlc steps 1-5
+
+ History:  7-Jul-2000	(linvi02) Created
+	  28-Sep-2000	(vande02) Removing the final drop table t1_blob because
+				  the steps program does this cleanup
+				  automatically.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+          24-Jan-2007   (vande02) Corrected sedfile.cmds, steps.sc program
+				  errors and improved steps.sc based on 
+				  development's suggestions in SD 114749. Added
+				  a real binary file to util/data and named it
+				  utl26.tar so blobstor has something to insert.				  	  Header corrections.
+          08-May-2007	(vande02) Added NT_GENERIC canon for blobstor output.
+	04-Feb-2007	(smeke01) b118877
+		Added -n flag to verifydb because testenv does not have write
+		permissions to the II_CONFIG directory.
+*/
+? cp @file(ing_tst,be,util,data,utl26.tar) utl26.tar 
+<<
+>>
+? fill sedfile.cmds 
+!!
+s/W_DM5060_NO_ETAB_SEGMENT*/&__ERROR/g;s/__ERROR.*/ Warning message/g
+s/W_DM505F_TOO_MANY_BAD_SEGS*/&__ERROR/g;s/__ERROR.*/ Warning message/g
+s/W_DM505E_NO_ETAB_TABLE*/&__ERROR/g;s/__ERROR.*/ Warning message/g
+s/W_DM5061_WRONG_BLOB_LENGTH*/&__ERROR/g;s/__ERROR.*/ Warning message/g
+!!
+? fill steps.sc 
+!!
+#include    <stdio.h>
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char *argv[])
+{
+   int steps;
+   EXEC SQL BEGIN DECLARE SECTION;
+        char    act[15];
+        char    s_stmt[150]; 
+        int     err, n;
+	char    *dbname;
+   EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   EXEC SQL CONNECT :dbname options='+U';
+
+   exec sql declare c cursor for SELECT I1.RELID 
+	FROM IIRELATION I1, IIEXTENDED_RELATION E, IIRELATION I2
+	WHERE E.ETAB_EXTENSION=I1.RELTID 
+	AND E.ETAB_BASE=I2.RELTID 
+	AND I2.RELID='t1_blob';
+
+   EXEC SQL OPEN C;
+
+   exec sql fetch c into :act;
+
+   EXEC SQL CLOSE c;
+
+   if (argc == 3)
+	steps = argv[2][0] - '0';
+   else return -1;
+
+   switch (steps) {
+   case 1: sprintf(s_stmt, "update %s set per_next=0 where per_segment1 < 2", act);
+	   break;
+   case 2: sprintf(s_stmt, "update %s set per_key='11111111' where per_segment1 < 3"-
+, act);
+           break;
+   case 3: sprintf(s_stmt, "delete from %s where per_segment1 < 10", act);
+	   break;
+   case 4: sprintf(s_stmt, "delete from %s where per_segment1 < 12", act);
+	   break;
+   case 5: sprintf(s_stmt, "drop table %s", act);
+	   break;
+   }
+
+   if (strlen(s_stmt) > sizeof(s_stmt))
+	{ printf("buffer overflow\n"); exit(0); }
+
+   EXEC SQL EXECUTE IMMEDIATE :s_stmt;
+   n =0;
+   EXEC SQL INQUIRE_SQL (:err=errorno, :n=rowcount);
+
+   if (err > 0)
+          printf("There is error in operation");
+       else
+          printf ("\n%d row process", n);
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+ 
+>>
+* drop t1_blob\g
+<<
+~
+>>
+* create table t1_blob(col1 varchar(20), col2 long varchar with null);\g
+<<
+>>
+* \q
+<<
+>>
+? blobstor -t t1_blob -b col2 -n col1 SEPPARAMDB utl26.tar 
+<<
+INGRES BLOBSTORE Copyright 2007 Ingres Corporation
+
+DBConnect: utildb
+StoreImage: utl26.tar
+
+Each hash mark represents 32768 bytes of saved data or part thereof.
+
+################################################
+
+	row count = 1
+	readonly = FALSE
+>>
+<< IF (NT_GENERIC) 
+INGRES BLOBSTORE Copyright 2007 Ingres Corporation
+
+DBConnect: utildb
+StoreImage: utl26.tar
+
+Each hash mark represents 32768 bytes of saved data or part thereof.
+
+##################################################
+
+	row count = 1
+	readonly = FALSE
+>>
+? sepset sed sedfile.cmds 
+<<
+>>
+? verifydb -n -mreport -sdbname SEPPARAMDB -otable t1_blob 
+<<
+S_DU17FC_TABLE_PATCH_WARNING	WARNING:
+
+   VERIFYDB operation TABLE (or XTABLE) can result in loss of user data when
+   run in any mode except REPORT.  It will also modify the table to a heap
+   and remove all secondary indices on the table.  This program is designed as
+   a last-ditch attempt to recover a user table.  It is intended only for use
+   by Computer Associates technical support representatives.
+   It is NOT supported.  You assume all risk if you use the program.
+
+   If you do use the TABLE or XTABLE operation, it is recommended that you
+   backup the table's disk file before continuing. 
+S_DU04CB_START_TABLE_OP	VERIFYDB: beginning TABLE/XTABLE operation on table
+ t1_blob from database utildb. 
+S_DU04CC_TABLE_OP_DONE	VERIFYDB: TABLE/XTABLE operation on table
+ t1_blob, database utildb is complete. 
+>>
+? esqlc steps.sc 
+<<
+ESQL steps.sc:
+>>
+? sepcc steps 
+<<
+steps.c
+>>
+<< IF (UNIX)
+>>
+? seplnk steps 
+<<
+>>
+? run steps.exe SEPPARAMDB 1 
+<<
+
+1 row process
+>>
+? verifydb -n -mreport -sdbname SEPPARAMDB -otable t1_blob 
+<<
+S_DU17FC_TABLE_PATCH_WARNING	WARNING:
+
+   VERIFYDB operation TABLE (or XTABLE) can result in loss of user data when
+   run in any mode except REPORT.  It will also modify the table to a heap
+   and remove all secondary indices on the table.  This program is designed as
+   a last-ditch attempt to recover a user table.  It is intended only for use
+   by Computer Associates technical support representatives.
+   It is NOT supported.  You assume all risk if you use the program.
+
+   If you do use the TABLE or XTABLE operation, it is recommended that you
+   backup the table's disk file before continuing. 
+S_DU04CB_START_TABLE_OP	VERIFYDB: beginning TABLE/XTABLE operation on table
+ t1_blob from database utildb. 
+ W_DM5061_WRONG_BLOB_LENGTH	WARNING: The coupon for attribute col2 in record with tu-
+ple ID 0 contains a length of 5306880, the combined length of all it's segments is 1-
+978.
+S_DU04CC_TABLE_OP_DONE	VERIFYDB: TABLE/XTABLE operation on table
+ t1_blob, database utildb is complete. 
+>>
+? run steps.exe SEPPARAMDB 2 
+<<
+
+2 row process
+>>
+? verifydb -n -mreport -sdbname SEPPARAMDB -otable t1_blob 
+<<
+S_DU17FC_TABLE_PATCH_WARNING	WARNING:
+
+   VERIFYDB operation TABLE (or XTABLE) can result in loss of user data when
+   run in any mode except REPORT.  It will also modify the table to a heap
+   and remove all secondary indices on the table.  This program is designed as
+   a last-ditch attempt to recover a user table.  It is intended only for use
+   by Computer Associates technical support representatives.
+   It is NOT supported.  You assume all risk if you use the program.
+
+   If you do use the TABLE or XTABLE operation, it is recommended that you
+   backup the table's disk file before continuing. 
+S_DU04CB_START_TABLE_OP	VERIFYDB: beginning TABLE/XTABLE operation on table
+ t1_blob from database utildb. 
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 1 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 2 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5061_WRONG_BLOB_LENGTH	WARNING: The coupon for attribute col2 in record with tu-
+ple ID 0 contains a length of 5306880, the combined length of all it's segments is 5-
+302924.
+S_DU04CC_TABLE_OP_DONE	VERIFYDB: TABLE/XTABLE operation on table
+ t1_blob, database utildb is complete. 
+>>
+? run steps.exe SEPPARAMDB 3 
+<<
+
+9 row process
+>>
+? verifydb -n -mreport -sdbname SEPPARAMDB -otable t1_blob 
+<<
+S_DU17FC_TABLE_PATCH_WARNING	WARNING:
+
+   VERIFYDB operation TABLE (or XTABLE) can result in loss of user data when
+   run in any mode except REPORT.  It will also modify the table to a heap
+   and remove all secondary indices on the table.  This program is designed as
+   a last-ditch attempt to recover a user table.  It is intended only for use
+   by Computer Associates technical support representatives.
+   It is NOT supported.  You assume all risk if you use the program.
+
+   If you do use the TABLE or XTABLE operation, it is recommended that you
+   backup the table's disk file before continuing. 
+S_DU04CB_START_TABLE_OP	VERIFYDB: beginning TABLE/XTABLE operation on table
+ t1_blob from database utildb. 
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 1 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 2 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 3 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 4 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 5 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 6 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 7 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 8 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 9 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5061_WRONG_BLOB_LENGTH	WARNING: The coupon for attribute col2 in record with tu-
+ple ID 0 contains a length of 5306880, the combined length of all it's segments is 5-
+289078.
+S_DU04CC_TABLE_OP_DONE	VERIFYDB: TABLE/XTABLE operation on table
+ t1_blob, database utildb is complete. 
+>>
+? run steps.exe SEPPARAMDB 4 
+<<
+
+2 row process
+>>
+? verifydb -n -mreport -sdbname SEPPARAMDB -otable t1_blob 
+<<
+S_DU17FC_TABLE_PATCH_WARNING	WARNING:
+
+   VERIFYDB operation TABLE (or XTABLE) can result in loss of user data when
+   run in any mode except REPORT.  It will also modify the table to a heap
+   and remove all secondary indices on the table.  This program is designed as
+   a last-ditch attempt to recover a user table.  It is intended only for use
+   by Computer Associates technical support representatives.
+   It is NOT supported.  You assume all risk if you use the program.
+
+   If you do use the TABLE or XTABLE operation, it is recommended that you
+   backup the table's disk file before continuing. 
+S_DU04CB_START_TABLE_OP	VERIFYDB: beginning TABLE/XTABLE operation on table
+ t1_blob from database utildb. 
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 1 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 2 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 3 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 4 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 5 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 6 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 7 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 8 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 9 in extension table with index 25-
+2 was not found when looking for extension segments for peripheral data-type in fiel-
+d col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 10 in extension table with index 2-
+52 was not found when looking for extension segments for peripheral data-type in fie-
+ld col2 for record with Tuple ID 0.
+ W_DM5060_NO_ETAB_SEGMENT	WARNING: Segment number 11 in extension table with index 2-
+52 was not found when looking for extension segments for peripheral data-type in fie-
+ld col2 for record with Tuple ID 0.
+ W_DM505F_TOO_MANY_BAD_SEGS	WARNING: Verifydb was unable to find a peripheral segmen-
+t that matches the current coupon after more than 252 tries, checking on this coupon-
+ will be terminated, and verifydb will skip to the next coupon.
+S_DU04CC_TABLE_OP_DONE	VERIFYDB: TABLE/XTABLE operation on table
+ t1_blob, database utildb is complete. 
+>>
+? run steps.exe SEPPARAMDB 5 
+<<
+
+-1 row process
+>>
+? verifydb -n -mreport -sdbname SEPPARAMDB -otable t1_blob 
+<<
+S_DU17FC_TABLE_PATCH_WARNING	WARNING:
+
+   VERIFYDB operation TABLE (or XTABLE) can result in loss of user data when
+   run in any mode except REPORT.  It will also modify the table to a heap
+   and remove all secondary indices on the table.  This program is designed as
+   a last-ditch attempt to recover a user table.  It is intended only for use
+   by Computer Associates technical support representatives.
+   It is NOT supported.  You assume all risk if you use the program.
+
+   If you do use the TABLE or XTABLE operation, it is recommended that you
+   backup the table's disk file before continuing. 
+S_DU04CB_START_TABLE_OP	VERIFYDB: beginning TABLE/XTABLE operation on table
+ t1_blob from database utildb. 
+ W_DM505E_NO_ETAB_TABLE	WARNING: The extension table with index 252, refferenced by -
+coupon in attribute col2 of record with tuple ID 0 does not exist.
+Aborting because of error
+E_US16D5 Table specified no longer exists.
+    (Fri Nov 12 14:14:13 1999)
+>>
+? unsepset sed 
+<<
+>>
+? delete steps.obj 
+<<
+~
+>>
+? delete steps.c 
+<<
+~
+>>
+? delete steps.exe 
+<<
+~
+>>
+? delete steps.o 
+<<
+~
+>>
+? delete utl26.tar 
+<<
+~
+>>
+
+
+Ending at: Tue May 08 19:09:21 2007

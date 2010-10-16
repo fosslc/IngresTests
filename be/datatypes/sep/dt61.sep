@@ -1,0 +1,476 @@
+/*
+        Test Name: dt61.sep
+        Time: Wed Jul  7 08:20:53 2004
+        User Name: ingres
+        Terminal type: septerm
+ 
+        Test ID : dt61
+        Module  : BE/DATATYPES
+        Filename: dt61.sep
+        Purpose : To test bigint/tinyint with SQL predicates and basic
+                  updates.
+        Input Files  : dt61.sql
+        Output Files :
+        Database     : SEPPARAMDB
+        Tables       : dt61_tsttbl1
+        Synopsis     : This will test the bigint/tinyint datatypes with
+                       both equality and non-equality predicates and also
+                       test basic SQL updates.
+
+ History:  7-Jul-2004   (marwi08)       Created
+	  14-Sep-2004	(marwi08)	Corrected bad canon because correct
+					data now gets returned.
+*/
+/*
+        First create fill file
+*/
+? fill dt61.sql 
+!!
+create table dt61_tsttbl1 (bint_col bigint, tint_col tinyint)\g
+insert into dt61_tsttbl1 values(444444, 23)\g
+insert into dt61_tsttbl1 values(-99999, -32)\g
+insert into dt61_tsttbl1 values(7777, null)\g
+insert into dt61_tsttbl1 values(null, 35)\g
+insert into dt61_tsttbl1 select bint_col+5, tint_col+2 from dt61_tsttbl1\g
+insert into dt61_tsttbl1 select bint_col-7, tint_col-4 from dt61_tsttbl1\g
+insert into dt61_tsttbl1 select bint_col*2, tint_col/3 from dt61_tsttbl1\g
+insert into dt61_tsttbl1 select bint_col/4, tint_col*2 from dt61_tsttbl1\g
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+/*
+        Now load data into table
+*/
+* \i dt61.sql 
+<<
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(4 rows)
+(8 rows)
+(16 rows)
+(32 rows)
+>>
+/*
+        First test equality predicates on both bigint and tinyint columns
+*/
+* select * from dt61_tsttbl1 where bint_col = 444444\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|                444444|    23|
++----------------------+------+
+(1 row)
+>>
+* select * from dt61_tsttbl1 where tint_col = 66\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|                      |    66|
++----------------------+------+
+(1 row)
+>>
+/*
+        Now test non-equality predicates on bigint column
+*/
+* select * from dt61_tsttbl1 where bint_col > 400000 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|                444437|    19|
+|                444442|    21|
+|                444444|    23|
+|                444449|    25|
+|                888874|     6|
+|                888884|     7|
+|                888888|     7|
+|                888898|     8|
++----------------------+------+
+(8 rows)
+>>
+* select * from dt61_tsttbl1 where bint_col < 0 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|               -200012|   -12|
+|               -200002|   -11|
+|               -199998|   -10|
+|               -199988|   -10|
+|               -100006|   -36|
+|               -100001|   -34|
+|                -99999|   -32|
+|                -99994|   -30|
+|                -50003|   -24|
+|                -50000|   -22|
+|                -49999|   -20|
+|                -49997|   -20|
+|                -25001|   -72|
+|                -25000|   -68|
+|                -24999|   -64|
+|                -24998|   -60|
++----------------------+------+
+(16 rows)
+>>
+* select * from dt61_tsttbl1 where bint_col >= 222221 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|                222221|    14|
+|                222222|    14|
+|                222224|    16|
+|                444437|    19|
+|                444442|    21|
+|                444444|    23|
+|                444449|    25|
+|                888874|     6|
+|                888884|     7|
+|                888888|     7|
+|                888898|     8|
++----------------------+------+
+(11 rows)
+>>
+* select * from dt61_tsttbl1 where bint_col <= -24999 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|               -200012|   -12|
+|               -200002|   -11|
+|               -199998|   -10|
+|               -199988|   -10|
+|               -100006|   -36|
+|               -100001|   -34|
+|                -99999|   -32|
+|                -99994|   -30|
+|                -50003|   -24|
+|                -50000|   -22|
+|                -49999|   -20|
+|                -49997|   -20|
+|                -25001|   -72|
+|                -25000|   -68|
+|                -24999|   -64|
++----------------------+------+
+(15 rows)
+>>
+* select * from dt61_tsttbl1 where bint_col between 0 and 4000 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|                  1942|      |
+|                  1943|      |
+|                  1944|      |
+|                  1945|      |
+|                  3885|      |
+|                  3887|      |
+|                  3888|      |
+|                  3891|      |
++----------------------+------+
+(8 rows)
+>>
+* select * from dt61_tsttbl1 where bint_col in (-25000,0,1945) order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|                -25000|   -68|
+|                  1945|      |
++----------------------+------+
+(2 rows)
+>>
+/*
+        This one just tests that it doesn't find anything
+*/
+* select * from dt61_tsttbl1 where bint_col in (-200,150, 30000) order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
++----------------------+------+
+(0 rows)
+>>
+/*
+        Now test non-equality predicates on tinyint column
+*/
+* select * from dt61_tsttbl1 where tint_col > 24 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|                111109|    38|
+|                111110|    42|
+|                111111|    46|
+|                111112|    50|
+|                444449|    25|
+|                      |    31|
+|                      |    33|
+|                      |    35|
+|                      |    37|
+|                      |    62|
+|                      |    66|
+|                      |    70|
+|                      |    74|
++----------------------+------+
+(13 rows)
+>>
+* select * from dt61_tsttbl1 where tint_col < -24 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|               -100006|   -36|
+|               -100001|   -34|
+|                -99999|   -32|
+|                -99994|   -30|
+|                -25001|   -72|
+|                -25000|   -68|
+|                -24999|   -64|
+|                -24998|   -60|
++----------------------+------+
+(8 rows)
+>>
+* select * from dt61_tsttbl1 where tint_col >= 30 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|                111109|    38|
+|                111110|    42|
+|                111111|    46|
+|                111112|    50|
+|                      |    31|
+|                      |    33|
+|                      |    35|
+|                      |    37|
+|                      |    62|
+|                      |    66|
+|                      |    70|
+|                      |    74|
++----------------------+------+
+(12 rows)
+>>
+* select * from dt61_tsttbl1 where tint_col <= -32 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|               -100006|   -36|
+|               -100001|   -34|
+|                -99999|   -32|
+|                -25001|   -72|
+|                -25000|   -68|
+|                -24999|   -64|
+|                -24998|   -60|
++----------------------+------+
+(7 rows)
+>>
+* select * from dt61_tsttbl1 where tint_col between -32 and 50 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|               -200012|   -12|
+|               -200002|   -11|
+|               -199998|   -10|
+|               -199988|   -10|
+|                -99999|   -32|
+|                -99994|   -30|
+|                -50003|   -24|
+|                -50000|   -22|
+|                -49999|   -20|
+|                -49997|   -20|
+|                111109|    38|
+|                111110|    42|
+|                111111|    46|
+|                111112|    50|
+|                222218|    12|
+|                222221|    14|
+|                222222|    14|
+|                222224|    16|
+|                444437|    19|
+|                444442|    21|
+|                444444|    23|
+|                444449|    25|
+|                888874|     6|
+|                888884|     7|
+|                888888|     7|
+|                888898|     8|
+|                      |    10|
+|                      |    11|
+|                      |    11|
+|                      |    12|
+|                      |    20|
+|                      |    22|
+|                      |    22|
+|                      |    24|
+|                      |    31|
+|                      |    33|
+|                      |    35|
+|                      |    37|
++----------------------+------+
+(38 rows)
+>>
+* select * from dt61_tsttbl1 where tint_col in (-32,0,15,66) order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|                -99999|   -32|
+|                      |    66|
++----------------------+------+
+(2 rows)
+>>
+/*
+        This one just tests that it doesn't find anything
+*/
+* select * from dt61_tsttbl1 where tint_col in (-40,1,71) order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
++----------------------+------+
+(0 rows)
+>>
+/*
+        Now test basic updates to both bigint and tinyint columns
+*/
+* update dt61_tsttbl1 set bint_col=66666 where bint_col=15550\g 
+<<
+(1 row)
+>>
+* select * from dt61_tsttbl1 where bint_col=66666\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|                 66666|      |
++----------------------+------+
+(1 row)
+>>
+* update dt61_tsttbl1 set tint_col=17 where tint_col= -10\g 
+<<
+(2 rows)
+>>
+* select * from dt61_tsttbl1 where tint_col=17 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|               -199998|    17|
+|               -199988|    17|
++----------------------+------+
+(2 rows)
+>>
+/*
+        One last check of table data
+*/
+* select * from dt61_tsttbl1 order by 1,2\g 
+<<
+
++----------------------+------+
+|bint_col              |tint_c|
++----------------------+------+
+|               -200012|   -12|
+|               -200002|   -11|
+|               -199998|    17|
+|               -199988|    17|
+|               -100006|   -36|
+|               -100001|   -34|
+|                -99999|   -32|
+|                -99994|   -30|
+|                -50003|   -24|
+|                -50000|   -22|
+|                -49999|   -20|
+|                -49997|   -20|
+|                -25001|   -72|
+|                -25000|   -68|
+|                -24999|   -64|
+|                -24998|   -60|
+|                  1942|      |
+|                  1943|      |
+|                  1944|      |
+|                  1945|      |
+|                  3885|      |
+|                  3887|      |
+|                  3888|      |
+|                  3891|      |
+|                  7770|      |
+|                  7775|      |
+|                  7777|      |
+|                  7782|      |
+|                 15540|      |
+|                 15554|      |
+|                 15564|      |
+|                 66666|      |
+|                111109|    38|
+|                111110|    42|
+|                111111|    46|
+|                111112|    50|
+|                222218|    12|
+|                222221|    14|
+|                222222|    14|
+|                222224|    16|
+|                444437|    19|
+|                444442|    21|
+|                444444|    23|
+|                444449|    25|
+|                888874|     6|
+|                888884|     7|
+|                888888|     7|
+|                888898|     8|
+|                      |    10|
+|                      |    11|
+|                      |    11|
+|                      |    12|
+|                      |    20|
+|                      |    22|
+|                      |    22|
+|                      |    24|
+|                      |    31|
+|                      |    33|
+|                      |    35|
+|                      |    37|
+|                      |    62|
+|                      |    66|
+|                      |    70|
+|                      |    74|
++----------------------+------+
+(64 rows)
+>>
+/*
+        Drop table and exit test
+*/
+* drop dt61_tsttbl1\g 
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Wed Jul  7 08:31:25 2004

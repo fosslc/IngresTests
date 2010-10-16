@@ -1,0 +1,2731 @@
+/*
+	Test Name: jfa00.sep
+	Time: Fri Nov 10 10:08:16 1989
+	User Name: testenv
+ 
+	Test ID : jfa00
+	Module  : FRS
+	Filename: jfa00.sep
+	Purpose	: Test entry activations.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     : Verify that the entry activations are triggered as the
+		cursor is moved around between the fields and within the table
+		field, including table field scrolls.  Verify that going to the
+		menu line and resuming to the same location doesn't trigger an
+		activation.  Then verify the result of a "resume entry".  Make
+		sure that movement within a display submenu containing no entry
+		activations does not trigger an entry activation on return to
+		the parent display loop.  Finally, verify that entry activations
+		operate when the table field and form are changed to read mode.
+
+	INGRES version: 6.4
+
+	History	: 10-nov-1989	Created				Bruce Badash
+	18-FEB-1993  (jeremyb)  inserted -s flag after SQL and COPYFORM
+			commands where needed to eliminate duplicate CANONs
+			and DIFFs when run over HETNET and STAR.
+           8-Dec-1994	(motje01) replace deleter with delobj
+          19-Jan-1995	(qiuji01)  Taking new canon for delobj
+          17-Jan-1996	(parmi04)  Added an alternate canon for NT_GENERIC.
+          11-Apr-1996	(clate01)
+		Modified canons to work with Windows NT
+          30-Aug-1996	(Author)
+          30-Aug-1996	(Author)
+          11-Mar-1997	(Author)
+           7-Aug-2000	(wu$ca01)New canon.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -form jfa00 
+<<
+INGRES DELOBJ Copyright (c) 1992, 1991 Ingres Corporation
+E_DE0010 No form named jfa00 and owned by testenv was found.
+
+
+E_DE000C No form matching the supplied name(s) and/or pattern(s) was
+    found.
+ Execution ends.
+
+
+>>
+<<
+INGRES DELOBJ Copyright (c) 1992, 1991 Ingres Corporation
+Deleting form jfa00 with owner testenv from database...
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+E_DE0010 No form named jfa00 and owned by testenv was found.
+
+
+E_DE000C No form matching the supplied name(s) and/or pattern(s) was
+    found.
+ Execution ends.
+
+
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+E_DE0010 No form named jfa00 and owned by testenv was found.
+
+
+E_DE000C No form matching the supplied name(s) and/or pattern(s) was
+    found.
+ Execution ends.
+
+
+>>
+<<
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jfa00 with owner testenv from database...
+
+>>
+<<
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+E_DE0010 No form named jfa00 and owned by testenv was found.
+
+
+E_DE000C No form matching the supplied name(s) and/or pattern(s) was
+    found.
+ Execution ends.
+
+
+>>
+? fill jfa00.frm 
+!!
+COPYFORM:	6.0	1989_11_10 03:15:10 GMT  
+FORM:	jfa00	Used for entry activation testing	
+	80	17	0	0	4	0	1	8	0	0	0	0	0	0	0	7
+FIELD:
+	0	a	-30	5	0	10	1	13	2	4	10	0	3	A:	0	0	0	0	0	0	0		-i10			0	0
+	1	b	-30	5	0	10	1	13	2	24	10	0	3	B:	0	0	0	0	0	0	0		-i10			0	1
+	2	tbl	0	4	0	3	8	34	5	4	1	3	0		1	1	0	33	0	0	0					1	2
+	0	a	-30	5	0	10	1	10	0	1	10	0	1	A	1	1	0	0	0	0	0		-i10			2	3
+	1	b	-30	5	0	10	1	10	0	12	10	0	12	B	12	1	0	0	0	0	0		-i10			2	4
+	2	c	-30	5	0	10	1	10	0	23	10	0	23	C	23	1	0	0	0	0	0		-i10			2	5
+	3	c	-30	5	0	10	1	13	15	24	10	0	3	C:	0	0	0	0	0	0	0		-i10			0	6
+TRIM:
+	4	0	Form used for entry activation testing	0	0	0	0
+!!
+? copyform -s -i SEPPARAMDB jfa00.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+? fill jfa00.sc 
+!!
+# define	FE_MAXNAME	32
+
+main(argc, argv)
+int	argc;
+char	**argv;
+{
+    exec sql begin declare section;
+    int		error;
+    char	*dbname;
+    char	*formname = "jfa00";
+    char	fldnm[FE_MAXNAME + 1];
+    char	colnm[FE_MAXNAME + 1];
+    int		i = 1;
+    exec sql end declare section;
+
+    exec frs forms;
+        if (argc < 2)
+        {
+exec frs        message 'No database name on command line.  Test exiting.'
+                        with style = popup;
+exec frs        endforms;
+                return;
+        }
+        else
+        {
+                argv++;
+                dbname = *argv;
+        }
+ 
+ 
+    exec sql connect :dbname;
+ 
+    exec sql inquire_ingres (:error = errorno);
+ 
+        if (error != 0)
+        {
+exec frs        message 'Error connecting to database.  Test exiting.'
+                        with style = popup;
+exec frs        endforms;
+                return;
+        }
+ 
+    exec frs forminit :formname;
+    exec frs inittable :formname tbl;
+
+    exec frs display :formname;
+    exec frs activate before field all;
+    exec frs begin;
+	exec frs inquire_frs field '' (:fldnm = name);
+	exec frs putform :formname (:fldnm = :i);
+	i++;
+    exec frs end;
+
+    exec frs activate before column tbl all;
+    exec frs begin;
+	exec frs inquire_frs column :formname '' (:colnm = name);
+	exec frs putrow :formname tbl (:colnm = :i);
+	i++;
+    exec frs end;
+
+    exec frs activate menuitem 'disp_submenu';
+    exec frs begin;
+	exec frs display submenu;
+	exec frs activate menuitem 'end';
+	exec frs begin;
+	    exec frs breakdisplay;
+	exec frs end;
+    exec frs end;
+
+    exec frs activate menuitem 'resume';
+    exec frs begin;
+	exec frs resume;
+    exec frs end;
+
+    exec frs activate menuitem 'resume_entry';
+    exec frs begin;
+	exec frs resume entry;
+    exec frs end;
+
+    exec frs activate menuitem 'Ftf_read';
+    exec frs begin;
+	exec frs set_frs form (mode(:formname) = 'read');
+	exec frs inittable :formname tbl read;
+	exec frs loadtable :formname tbl (a = 0);
+    exec frs end;
+
+    exec frs activate menuitem 'end';
+    exec frs begin;
+	exec frs breakdisplay;
+    exec frs end;
+
+    exec frs endforms;
+
+    exec sql disconnect;
+}
+!!
+? sepesqlc jfa00 
+<<
+ESQL jfa00.sc:
+>>
+<<
+>>
+? sepcc jfa00 
+<<
+>>
+<< IF (NT_GENERIC) 
+jfa00.c
+>>
+? seplnk jfa00 
+<<
+>>
+<< IF (NT_GENERIC) 
+   Creating library jfa00.lib and object jfa00.exp ...
+>>
+<<
+Microsoft (R) 32-Bit Executable Linker Version 2.50.4245
+Copyright (C) Microsoft Corp 1992-94. All rights reserved.
+
+-debug:none 
+-out:jfa00.exe 
+jfa00.obj 
+e:\qa\ingres\lib\ingres.lib 
+msvcrt.lib 
+kernel32.lib 
+user32.lib 
+advapi32.lib 
+>>
+? ferun jfa00.exe SEPPARAMDB 
+<<
+
+%%     
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: _                 B:                                                      |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%%     
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: _1                B:                                                      |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+>>
+<< IF (NT_GENERIC) 
+
+%%     
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: _1                B:                                                      |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+>>
+^^ `TAB'`TAB'`TAB'`TAB'`TAB'`^P'`BEL'`^F'`BEL'`TAB'`CR'`^J'`^K'`^P'`ESC'
+<<
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: _2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_3         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |_4         |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |4         |_5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |4         |5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: _6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_7         |4         |5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% Out of data
+%% FT(s)winerr: WAIT = '0'; SILENT = '1'.
+Message was "Out of data"
+
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_7         |4         |5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |7         |4         |5         |                                          |
+|    |_8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% Out of data
+%% FT(s)winerr: WAIT = '0'; SILENT = '1'.
+Message was "Out of data"
+
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_9         |4         |5         |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_4         |5         |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD B
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_4         |5         |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |          |_11        |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |          |11        |                                          |
+|    |8         |          |_12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |          |_13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_14        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: _2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_3         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |_4         |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |4         |_5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |4         |5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: _6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_7         |4         |5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% Out of data
+%% FT(s)winerr: WAIT = '0'; SILENT = '1'.
+Message was "Out of data"
+
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_7         |4         |5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |7         |4         |5         |                                          |
+|    |_8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% Out of data
+%% FT(s)winerr: WAIT = '0'; SILENT = '1'.
+Message was "Out of data"
+
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_9         |4         |5         |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_10        |5         |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD B
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_10        |5         |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |          |_11        |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |          |11        |                                          |
+|    |8         |          |_12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |          |_13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_14        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: _2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_3         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |_4         |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |4         |_5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |4         |5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: _6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_7         |4         |5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% Out of data
+%% FT(s)winerr: WAIT = '0'; SILENT = '1'.
+Message was "Out of data"
+
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_7         |4         |5         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |7         |4         |5         |                                          |
+|    |_8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% Out of data
+%% FT(s)winerr: WAIT = '0'; SILENT = '1'.
+Message was "Out of data"
+
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_9         |4         |5         |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_10        |5         |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD B
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_10        |5         |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |          |_11        |                                          |
+|    |8         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |          |11        |                                          |
+|    |8         |          |_12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |          |_13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_14        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ resume`CR'`ESC'
+<<
+
+%% MENU RESPONSE: resume
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "resume"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_14        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: resume
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "resume"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_14        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ resume_entry`CR'`ESC'
+<<
+
+%% MENU RESPONSE: resume_entry
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "resume_entry"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_14        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: resume_entry
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "resume_entry"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_15        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: resume_entry
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "resume_entry"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_15        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ disp_submenu`CR'`TAB'`TAB'`TAB'`^P'`^P'`ESC'
+<<
+
+%% MENU RESPONSE: disp_submenu
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "disp_submenu"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_15        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: disp_submenu
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "disp_submenu"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_15        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'`TAB'`ESC'
+<<
+
+%% MENU RESPONSE: end
+%% MENU:   end
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "end"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_9         |15        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_16        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: end
+%% MENU:   end
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "end"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_9         |15        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |9         |_16        |13        |                                          |
+|    |8         |          |12        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ ftf_read`CR'`TAB'`TAB'`TAB'`TAB'`ESC'
+<<
+
+%% MENU RESPONSE: Ftf_read
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Ftf_read"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_0         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |_18        |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |18        |_19        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |18        |19        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: _20                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: _21               B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |18        |19        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 20                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Ftf_read
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Ftf_read"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_17        |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |_18        |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |18        |_19        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |18        |19        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: _20                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: _21               B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |18        |19        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 20                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Ftf_read
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Ftf_read"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_17        |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |_18        |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |18        |_19        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 6                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |18        |19        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: _20                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: _21               B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |17        |18        |19        |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 20                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  disp_submenu  resume  resume_entry  Ftf_read  end                             |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'
+<<
+
+%% MENU RESPONSE: end
+%% MENU:   disp_submenu  resume  resume_entry  Ftf_read  end
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "end"
+>>
+? delete jfa00.c 
+<<
+file was deleted
+>>
+? delete jfa00.o 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete jfa00.obj 
+<<
+file was not found
+>>
+<<
+file was deleted
+>>
+? delete jfa00.exe 
+<<
+file was deleted
+>>
+? delobj SEPPARAMDB -form jfa00 
+<<
+INGRES DELOBJ Copyright (c) 1992, 1991 Ingres Corporation
+Deleting form jfa00 with owner testenv from database...
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jfa00 with owner testenv from database...
+
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jfa00 with owner testenv from database...
+
+>>
+<< IF (unix) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jfa00 with owner testenv from database...
+
+>>
+
+
+Ending at: Mon Aug  7 16:43:12 2000

@@ -1,0 +1,388 @@
+/*
+	Test Name: sza11.sep
+	Time: Thu Apr  8 15:04:12 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : sza11.sep 
+	Module  : Star 
+	Filename: sza11.sep
+	Purpose	: Test recursive dbprocs that are registered to Star database.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     : Create two dbprocs that call each other and passing
+		       byref and nonbyref parameters. Execute the dbprocs
+		       with nested depth 20 and 21 and check that correct 
+		       values are returned.
+
+ History:  8-Apr-1993	(malee)	Created
+           3-Sep-1993	(barbh) Made changes to previously created dbproc so
+				it could be used against a Star database.
+
+          25-Oct-1993	(Author)
+          10-Jan-1994	(Author)
+          17-Jan-1994	(Author)
+	   4-Apr-1996   (clate01)
+			Modified canons to ignore sepcc
+           3-Aug-1998	(popri01) Move "remove"'s out of main processing to
+			eliminate spurious DIFS; especially on re-run. Use
+			new SEPPARAM settings (see runstar).
+	  27-Dec-1999 (vande02)
+                        Added empty canon to confirm db sql connection
+	  19-Sep-2007 	(boija02)
+			Trying to reduce compiler warnings. Renamed sdrstub.c to
+			better reflect its content & changed return type to void
+			when functions don't return anything.
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,star,qryproc,src,sdrstub.c) sdrstub.c 
+<<
+>>
+? cp @file(ing_tst,star,qryproc,src,sdbproch.sc) sdbproch.sc 
+<<
+>>
+? cp @file(ing_tst,star,qryproc,src,sdbproc.sc) sdbproc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,ingclude.sc) ingclude.sc 
+<<
+>>
+? cp @file(ing_tst,star,qryproc,src,sdrel.c) sdrel.c 
+<<
+>>
+? fill sza11.sc 
+!!
+/*
+**      sza11.sc
+*/
+
+#define SZA11
+
+#include "sdrstub.c"
+
+#include <stdio.h>
+
+exec sql include 'sdbproch.sc';
+
+/***********/
+/* sza11() */
+/***********/
+
+void
+sza11()
+{
+
+exec sql begin declare section;
+  int  x, y, maxdepth;
+exec sql end declare section;
+
+	printf ("\ntest 1:  test recursive nested dbproc\n\n");
+
+        exec sql commit;
+        exec sql direct connect with node = snode1, database = ldb1;
+
+	create_sza11_1_proc();
+
+	exec sql commit;
+	exec sql direct disconnect;
+
+	exec sql commit;
+	exec sql direct connect with node = snode1, database = ldb1;
+
+	create_sza11_2_proc();
+	create_sza11_3_proc();
+
+	exec sql commit;
+	exec sql direct disconnect;
+
+	exec sql register procedure sza11_1 as link from sza11_1 with node = snode1, databa-
+se = ldb1;
+
+	exec sql register procedure sza11_2 as link from sza11_2 with node = snode1, databa-
+se = ldb1;
+
+	x = 0;
+	y = 0;
+	maxdepth = 20;
+	printf ("passing x  = %d\n", x);
+	printf ("passing y  = %d\n", y);
+	exec sql execute procedure sza11_1 (x = byref(:x), 
+					    y = :y,
+					    maxdepth = :maxdepth);
+	printf ("returned x = %d\n", x);
+	printf ("returned y = %d\n", y);
+}  /* sza11() */
+
+!!
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+~
+>>
+? sepesqlc sza11.sc 
+<<
+ESQL sza11.sc:
+>>
+? sepcc sza11.c 
+<<
+~
+>>
+? sepesqlc sdbproc.sc 
+<<
+ESQL sdbproc.sc:
+>>
+? sepcc sdbproc.c 
+<<
+~
+>>
+? sepcc sdrel.c 
+<<
+~
+>>
+? seplnk driver sdrel sdbproc sza11 
+<<
+>>
+? sql SEPPARAMDB -s
+<<
+
+>>
+* remove procedure sza11_1 \g
+<<
+~
+>>
+* remove procedure sza11_2 \g
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? sql SEPPARAMDB1 -s
+<<
+
+>>
+* drop procedure sza11_1 \g
+<<
+~
+>>
+* drop procedure sza11_2 \g
+<<
+~
+>>
+* drop procedure sza11_3 \g
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? run driver.exe SEPPARAMDRIVERDB -tsza11 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+dbproc star tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   sza11
+XX-----------------XX
+
+connecting with database...
+
+XX running test sza11 XX
+
+
+test 1:  test recursive nested dbproc
+
+E_US0965 Procedure 'sza11_1' not found.
+    (Mon Jan 17 17:37:22 1994)
+E_US0965 Procedure 'sza11_2' not found.
+    (Mon Jan 17 17:37:25 1994)
+
+passing x  = 0
+passing y  = 0
+MESSAGE 0: new sza11_1
+MESSAGE 0:  <-  x
+MESSAGE 0:  <-  y
+MESSAGE 0: in sza11_2
+MESSAGE 1:  <-  x
+MESSAGE 1:  <-  y
+MESSAGE 0: new sza11_1
+MESSAGE 2:  <-  x
+MESSAGE 2:  <-  y
+MESSAGE 0: in sza11_2
+MESSAGE 3:  <-  x
+MESSAGE 3:  <-  y
+MESSAGE 0: new sza11_1
+MESSAGE 4:  <-  x
+MESSAGE 4:  <-  y
+MESSAGE 0: in sza11_2
+MESSAGE 5:  <-  x
+MESSAGE 5:  <-  y
+MESSAGE 0: new sza11_1
+MESSAGE 6:  <-  x
+MESSAGE 6:  <-  y
+MESSAGE 0: in sza11_2
+MESSAGE 7:  <-  x
+MESSAGE 7:  <-  y
+MESSAGE 0: new sza11_1
+MESSAGE 8:  <-  x
+MESSAGE 8:  <-  y
+MESSAGE 0: in sza11_2
+MESSAGE 9:  <-  x
+MESSAGE 9:  <-  y
+MESSAGE 0: new sza11_1
+MESSAGE 10:  <-  x
+MESSAGE 10:  <-  y
+MESSAGE 0: in sza11_2
+MESSAGE 11:  <-  x
+MESSAGE 11:  <-  y
+MESSAGE 0: new sza11_1
+MESSAGE 12:  <-  x
+MESSAGE 12:  <-  y
+MESSAGE 0: in sza11_2
+MESSAGE 13:  <-  x
+MESSAGE 13:  <-  y
+MESSAGE 0: new sza11_1
+MESSAGE 14:  <-  x
+MESSAGE 14:  <-  y
+MESSAGE 0: in sza11_2
+MESSAGE 15:  <-  x
+MESSAGE 15:  <-  y
+MESSAGE 0: new sza11_1
+MESSAGE 16:  <-  x
+MESSAGE 16:  <-  y
+MESSAGE 0: in sza11_2
+MESSAGE 17:  <-  x
+MESSAGE 17:  <-  y
+MESSAGE 0: new sza11_1
+MESSAGE 18:  <-  x
+MESSAGE 18:  <-  y
+MESSAGE 0: in sza11_2
+MESSAGE 19:  <-  x
+MESSAGE 19:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 19:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 18:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 17:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 16:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 15:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 14:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 13:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 12:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 11:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 10:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 9:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 8:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 7:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 6:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 5:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 4:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 3:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 2:  <-  y
+MESSAGE 20:  <-  x
+MESSAGE 1:  <-  y
+returned x = 20
+returned y = 0
+
+disconnecting with database...
+>>
+? delete sza11.c 
+<<
+~
+>>
+? delete sza11.o 
+<<
+~
+>>
+? delete sza11.obj 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driver.exe* 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete ingclude.c 
+<<
+~
+>>
+? delete ingclude.sc 
+<<
+~
+>>
+? delete sdbproc.c 
+<<
+~
+>>
+? delete sdbproc.o 
+<<
+~
+>>
+? delete sdbproc.sc 
+<<
+~
+>>
+? delete sdbproch.c 
+<<
+~
+>>
+? delete sdbproch.sc 
+<<
+~
+>>
+? delete sdrel.c 
+<<
+~
+>>
+? delete sdrel.o 
+<<
+~
+>>
+? delete sdrstub.c 
+<<
+~
+>>
+
+
+Ending at: Tue Jan 18 10:01:25 1994

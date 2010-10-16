@@ -1,0 +1,777 @@
+/*
+	Test Name: pha16.sep
+	Time: Tue Jun 19 11:12:52 1990
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : pha16
+	Module  : 4gl
+	Filename: pha16.sep
+	Purpose	: Confirmatory Indepth test using a complex hiddenfield
+                  based on a database table.
+	Input Files  : (none)
+	Output Files : (none)
+	Database     : SEPPARAMDB
+	Tables       : pha16_tbl
+	Synopsis     : Table pha16_tbl has 4 rows: the table contains one 
+                       column each of integer, float, char(10) and varchar(10)
+                       datatypes. Create an application with 1 user frame, 1
+                       4gl procedure, and 1 qbf frame. Invoke the user frame,
+                       which is built on a form based on the database table.
+                       Display the contents of the underlying table. Call the 
+                       procedure, passing it the content of the tablefield via 
+                       a hiddenfield defined as CLASS OF TABLE pha16_tbl. The 
+                       procedure unloads the array and adds one record, then 
+                       returns. Call the QBF frame, and query the database 
+                       table to confirm that the record was added correctly.
+		       Clean up and exit.
+
+	History	: 19-jun-1989	Created			www
+		  26-jul-1991   (dufour) Removed table drops and creates
+				required for initialization to a separate 
+				initilization script in basis/fe.
+	          23-Jun-1992	(doans)  Accepted as an only canon due to
+				 bug fixed # 41111.  The status message
+				 for forced recompilation for a procedure
+				 is now called procedure instead of
+				 frame's definition has changed.
+	          21-Jun-1993	(sandhya)  changed filename to 8
+				 characters to make the test more
+				 portable.
+		  28-Jun-1993   (sandhya)  Changed the Notes section below
+                                 to refer to the right init script.
+                                 Also moved earlier two change
+				 descriptions to proper place.
+********************************************************************************
+				     Notes
+1.	The ingtest!basis!init!init4gl.sep script for the 4GL tests must
+	be run prior to execution of this script.
+2.	A SEPPARAMDB logical/variable must be assigned.
+********************************************************************************
+                  06-Jan-1995   changed deleter to delobj and edit into
+                                correct format.                 (QA)
+          24-Apr-1996	(clate01)
+		Modified for NT
+          26-Aug-1996	(li$to01) Added caono for new version of OpenIngres.  
+	23-Nov-2001	(rogch01)
+		Removed NT canons to allow test to run clean in 24 lines.
+           02-Oct-2003	(Sinra04)  Results of "Go" command are diffing because
+				  sep fetching is captured at different lines.
+				  So compilation of "Go" command are ignored and
+				  `ESC'`CR' command added, which displays the
+				  fteching screen and confirms successful 
+				  compilation.
+				  Removed extra copyright year canons, & removed
+				  all NT conditional canons.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -application pha16 
+<<
+~
+>>
+? delobj SEPPARAMDB -form pha16uf1 
+<<
+~
+>>
+? fill pha16.frm 
+!!
+COPYFORM:	6.4	1990_06_19 22:30:36 GMT  
+FORM:	pha16uf1		
+	80	22	0	0	1	0	1	8	0	0	0	0	0	0	0	5
+FIELD:
+	0	pha16_tbl	0	6	0	4	10	60	2	10	1	3	0		0	0	0	1073741857	0	0	0					1	0
+	0	col1_integer	30	4	0	13	1	13	0	1	13	0	1	Col1 Integer	1	1	0	65552	512	0	0		-f13			2-
+	1
+	1	col2_float	-31	9	0	20	1	20	0	15	20	0	15	Col2 Float	15	1	0	65536	512	0	0		-n20.3		-
+	2	2
+	2	col3_char	-20	11	0	10	1	10	0	36	10	0	36	Col3 Char	36	1	0	65536	512	0	0		c10			2	3
+	3	col4_varchar	-21	13	0	10	1	12	0	47	10	0	47	Col4 Varchar	47	1	0	65536	512	0	0		c10-
+			2	4
+TRIM:
+	0	0	PHA16_TBL TABLE:	0	0	0	0
+!!
+? fill pha16uf1.osq 
+!!
+initialize (passrec=array of type of table pha16_tbl, rowno=integer) = {
+   inittable pha16_tbl;
+   pha16_tbl := select * from pha16_tbl order by col1_integer;
+}
+
+'CallProc' = {
+   rowno=0;
+   unloadtable pha16_tbl {
+      rowno = rowno + 1;
+      passrec[rowno].col1_integer = pha16_tbl.col1_integer;
+      passrec[rowno].col2_float = pha16_tbl.col2_float;
+      passrec[rowno].col3_char = pha16_tbl.col3_char;
+      passrec[rowno].col4_varchar = pha16_tbl.col4_varchar;
+   };
+   callproc pha16_4p1(passrec = passrec);
+   redisplay;
+}
+
+'CallQBF' = {
+   callframe pha16_qf1;
+}
+
+'End', key frskey3 = {
+   clear screen;
+   return;
+}
+!!
+? fill pha16_4p1.osq 
+!!
+procedure pha16_4p1 (passrec = array of type of table pha16_tbl,
+                     rowno = integer) = {
+
+   rowno = 0;
+   unloadtable passrec {
+      rowno = rowno + 1;
+   };
+   insert into pha16_tbl (col1_integer,col2_float,col3_char,col4_varchar)
+               values (:rowno, :rowno + .1, 'Added','ADDED');
+}
+!!
+? copyform -s -i SEPPARAMDB pha16.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+>>
+? abf SEPPARAMDB 
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ create`CR'pha16`CR'`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`ESC'
+<<
+~
+>>
+^^ select`CR'pha16uf1`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`^J'`^J'`ESC'
+<<
+~
+>>
+^^ select`CR'pha16_qf1`ESC'
+<<
+~
+>>
+^^ ok`CR'table`CR'pha16_tbl`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`^J'`CR'`ESC'
+<<
+~
+>>
+^^ select`CR'pha16_4p1`ESC'
+<<
+~
+>>
+^^ ok`CR'`TAB'none`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`^J'`^J'`ESC'
+<<
+~
+>>
+^^ go`CR'yes`CR'
+<<
+~
+>>
+^^ `ESC'`CR'
+<<
+
+%% MENU KEY selected
+
+%% MENU RESPONSE: 
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|PHA16_TBL TABLE:                                                                |
+|                                                                                |
+|          +----------------------------------------------------------+          |
+|          |Col1 Integer |Col2 Float          |Col3 Char |Col4 Varchar|          |
+|          |-------------+--------------------+----------+------------|          |
+|          |_1            |1.100               |One       |ONE         |          |
+|          |2            |2.200               |Two       |TWO         |          |
+|          |3            |3.300               |Three     |THREE       |          |
+|          |4            |4.400               |Four      |FOUR        |          |
+|          |             |                    |          |            |          |
+|          |             |                    |          |            |          |
+|          +----------------------------------------------------------+          |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CallProc  CallQBF  End                                                        |
+__________________________________________________________________________________
+@@
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ callqbf`CR'
+<<
+~
+>>
+^^ retrieve`CR'`ESC'
+<<
+~
+>>
+^^ go`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   Go  Blank  LastQuery  Order  ListChoices  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Go"
+
+%% Retrieving data . . .
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _1                           Col2 Float: 1.100                     |
+|   Col3 Char: One                       Col4 Varchar: ONE                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Query  Help  End                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Query  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _2                           Col2 Float: 2.200                     |
+|   Col3 Char: Two                       Col4 Varchar: TWO                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Query  Help  End                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Query  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _3                           Col2 Float: 3.300                     |
+|   Col3 Char: Three                     Col4 Varchar: THREE                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Query  Help  End                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Query  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _4                           Col2 Float: 4.400                     |
+|   Col3 Char: Four                      Col4 Varchar: FOUR                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Query  Help  End                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Query  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% No more rows in query
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _                            Col2 Float:                           |
+|   Col3 Char:                           Col4 Varchar:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Go  Blank  LastQuery  Order  ListChoices  Help  End                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ quit`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ callproc`CR'`ESC'
+<<
+~
+>>
+^^ callqbf`CR'
+<<
+~
+>>
+^^ retrieve`CR'`ESC'
+<<
+~
+>>
+^^ go`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   Go  Blank  LastQuery  Order  ListChoices  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Go"
+
+%% Retrieving data . . .
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _1                           Col2 Float: 1.100                     |
+|   Col3 Char: One                       Col4 Varchar: ONE                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Query  Help  End                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Query  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _2                           Col2 Float: 2.200                     |
+|   Col3 Char: Two                       Col4 Varchar: TWO                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Query  Help  End                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Query  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _3                           Col2 Float: 3.300                     |
+|   Col3 Char: Three                     Col4 Varchar: THREE                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Query  Help  End                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Query  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _4                           Col2 Float: 4.400                     |
+|   Col3 Char: Four                      Col4 Varchar: FOUR                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Query  Help  End                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Query  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _4                           Col2 Float: 4.100                     |
+|   Col3 Char: Added                     Col4 Varchar: ADDED                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Next  Query  Help  End                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  Query  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% No more rows in query
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                PHA16_TBL Table                                 |
+|                                                                                |
+|Col1 Integer: _                            Col2 Float:                           |
+|   Col3 Char:                           Col4 Varchar:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Go  Blank  LastQuery  Order  ListChoices  Help  End                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'quit`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ end`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ quit`CR'
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* delete from pha16_tbl where col3_char = 'Added';\g\q
+<<
+~
+>>
+? delobj SEPPARAMDB -application pha16 
+<<
+~
+>>
+? delobj SEPPARAMDB -form pha16uf1 
+<<
+~
+>>
+
+
+Ending at: Thu Oct 02 10:49:16 2003

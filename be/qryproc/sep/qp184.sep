@@ -1,0 +1,1641 @@
+/*
+	Test Name: ela09.sep
+	Time: Wed May 23 18:02:13 1990
+	User Name: testenv
+ 
+	Test ID : ela09
+	Module  : 
+	Filename: ela09.sep
+	Purpose	: Test a bunch of rules of type referential integrity
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : small_01 to small_09
+	Synopsis     : Define a bunch of rules and then try to do
+			things that trigger the rules and look
+			at the result.
+	Setup        : ela00.sep
+
+	History	: xx-xxx-1989	Created				Author
+		  7-MAR-1997    (vissu01) Modified for NT
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverelstub.h) driverelstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,rulesh.sc) rulesh.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,rulestest.sc) rulestest.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,ingclude.sc) ingclude.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverel.c) driverel.c 
+<<
+>>
+? fill ela09.sc 
+!!
+/*
+**	ela09.sc
+*/
+
+#define ELA09
+
+#include "driverelstub.h"
+
+#include <stdio.h>
+
+exec sql include 'ingclude.sc';
+exec sql include 'rulesh.sc';
+
+/***********/
+/* ela09() */
+/***********/
+
+ela09()
+{
+	printf("ela09: referential integrity.\n");
+	printf("\n");
+	printf("  rules and procedures for referential integrity.\n");
+	printf("  this test creates a small database with several\n");
+	printf("  referential integrity style rules.\n");
+	printf("\n");
+
+	build_tables("small_1");
+	build_tables("small_2");
+	build_tables("small_3");
+	build_tables("small_4");
+	build_tables("small_5");
+	build_tables("small_6");
+	build_tables("small_7");
+	build_tables("small_8");
+	build_tables("small_9");
+	build_tables("log");
+
+	printf("  =============================\n");
+	printf("  how the tables look initially\n");
+	printf("  =============================\n");
+	print_tables(SMALL_1);
+	print_tables(SMALL_2);
+	print_tables(SMALL_3);
+	print_tables(SMALL_4);
+	print_tables(SMALL_5);
+	print_tables(SMALL_6);
+	print_tables(SMALL_7);
+	print_tables(SMALL_8);
+	print_tables(SMALL_9);
+	print_tables(LOG);
+	printf("\n");
+
+	exec sql commit;
+
+	create_small_rules(FALSE);
+
+	printf("  delete idc 22 on small_9...\n");
+	exec sql delete from small_9 where idc = 22;
+	exec sql commit;
+
+	printf("  delete ida 1 on small_2...\n");
+	exec sql delete from small_2 where ida = 1;
+	exec sql commit;
+
+	printf("  delete ida 2 on small_2...\n");
+	exec sql delete from small_2 where ida = 2;
+	exec sql commit;
+
+	printf("  delete ida 3 on small_2...\n");
+	exec sql delete from small_2 where ida = 3;
+	exec sql commit;
+
+	printf("  delete ida 5 on small_2...\n");
+	exec sql delete from small_2 where ida = 5;
+	exec sql commit;
+
+	printf("  delete ida 6 on small_2...\n");
+	exec sql delete from small_2 where ida = 6;
+	exec sql commit;
+
+	printf("  delete idc 21 on small_9...\n");
+	exec sql delete from small_9 where idc = 21;
+	exec sql commit;
+
+	printf("  delete idc 24 on small_9...\n");
+	exec sql delete from small_9 where idc = 24;
+	exec sql commit;
+
+	printf("  insert idb 51 on small_5...\n");
+	exec sql insert into small_5 ( idb ) values ( 51 );
+	exec sql commit;
+
+	printf("  delete idb 12 on small_5...\n");
+	exec sql delete from small_5 where idb = 12;
+	exec sql commit;
+
+	printf("  delete idb 15 on small_5...\n");
+	exec sql delete from small_5 where idb = 15;
+	exec sql commit;
+
+	printf("  ==============================\n");
+	printf("  how the tables look afterwards\n");
+	printf("  ==============================\n");
+	print_tables(SMALL_1);
+	print_tables(SMALL_2);
+	print_tables(SMALL_3);
+	print_tables(SMALL_4);
+	print_tables(SMALL_5);
+	print_tables(SMALL_6);
+	print_tables(SMALL_7);
+	print_tables(SMALL_8);
+	print_tables(SMALL_9);
+	printf("\n");
+	printf("the log table will not include entries from things\n");
+	printf("that were rolled back.\n");
+	printf("\n");
+	print_tables(LOG);
+	printf("\n");
+
+	exec sql commit;
+
+} /* ela09() */
+
+/************************/
+/* create_small_rules() */
+/************************/
+
+create_small_rules(do_drop)
+short	do_drop;
+{
+	exec sql set autocommit on;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small01_r01:\n");
+	exec sql drop procedure small01_r01;
+	exec sql create procedure small01_r01 (
+		ida	integer		not null with default
+	) as
+	declare
+		Lida	integer		not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		select ida into :Lida from small_1 where ida = :ida;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small01_r01 fail';
+		endif;
+
+		msg_buf = 'select ida ' 
+			+ varchar(:ida) 
+			+ ' from small_1, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small01_r01 fail';
+		endif;
+
+		if ( Lrows > 0 )
+		then
+			raise error 1 'restrict on small_1';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small01_d01:\n");
+	exec sql drop procedure small01_d01;
+	exec sql create procedure small01_d01 (
+		ida	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		delete from small_1 where ida = :ida;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small01_d01 fail';
+		endif;
+
+		msg_buf = 'delete ida ' 
+			+ varchar(:ida) 
+			+ ' from small_1, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small01_d01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small01_d02:\n");
+	exec sql drop procedure small01_d02;
+	exec sql create procedure small01_d02 (
+		idb	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		delete from small_1 where idb = :idb;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small01_d02 fail';
+		endif;
+
+		msg_buf = 'delete idb ' 
+			+ varchar(:idb) 
+			+ ' from small_1, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small01_d02 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small03_u01:\n");
+	exec sql drop procedure small03_u01;
+	exec sql create procedure small03_u01 (
+		old_ida	integer		not null with default,
+		new_ida	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		update small_3 set ida = :new_ida where ida = :old_ida;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small03_u01 fail';
+		endif;
+
+		msg_buf = 'update small_3.ida from ' 
+			+ varchar(:old_ida) 
+			+ ' to '
+			+ varchar(:new_ida) 
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small03_u01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small03_d01:\n");
+	exec sql drop procedure small03_d01;
+	exec sql create procedure small03_d01 (
+		ida	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		delete from small_3 where ida = :ida;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small03_d01 fail';
+		endif;
+
+		msg_buf = 'delete ida ' 
+			+ varchar(:ida) 
+			+ ' from small_3, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small03_d01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small04_u01:\n");
+	exec sql drop procedure small04_u01;
+	exec sql create procedure small04_u01 (
+		old_ida	integer		not null with default,
+		new_ida	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		update small_4 set ida = :new_ida where ida = :old_ida;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small04_u01 fail';
+		endif;
+
+		msg_buf = 'update small_4.ida from ' 
+			+ varchar(:old_ida) 
+			+ ' to '
+			+ varchar(:new_ida) 
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small04_u01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small04_d01:\n");
+	exec sql drop procedure small04_d01;
+	exec sql create procedure small04_d01 (
+		ida	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		delete from small_4 where ida = :ida;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small04_d01 fail';
+		endif;
+
+		msg_buf = 'delete ida ' 
+			+ varchar(:ida) 
+			+ ' from small_4, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small04_d01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small04_d02:\n");
+	exec sql drop procedure small04_d02;
+	exec sql create procedure small04_d02 (
+		ida	integer		not null with default,
+		ida_sub	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		delete from small_4 where ida = :ida and ida_sub = :ida_sub;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small04_d02 fail';
+		endif;
+
+		msg_buf = 'delete ida ' 
+			+ varchar(:ida) 
+			+ ' and ida_sub '
+			+ varchar(:ida_sub) 
+			+ ' from small_4, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small04_d02 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small05_r01:\n");
+	exec sql drop procedure small05_r01;
+	exec sql create procedure small05_r01 (
+		idb	integer		not null with default
+	) as
+	declare
+		Lidb	integer		not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		select idb into :Lidb from small_5 where idb = :idb;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small05_r01 fail';
+		endif;
+
+		msg_buf = 'select idb ' 
+			+ varchar(:idb) 
+			+ ' from small_5, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small05_r01 fail';
+		endif;
+
+		if ( Lrows > 0 )
+		then
+			raise error 1 'restrict on small_5';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small06_d01:\n");
+	exec sql drop procedure small06_d01;
+	exec sql create procedure small06_d01 (
+		idb	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		delete from small_6 where idb = :idb;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small06_d01 fail';
+		endif;
+
+		msg_buf = 'delete idb ' 
+			+ varchar(:idb) 
+			+ ' from small_6, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small06_d01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small06_n01:\n");
+	exec sql drop procedure small06_n01;
+	exec sql create procedure small06_n01 (
+		idc	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		update small_6 set idc = 0 where idc = :idc;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small06_n01 fail';
+		endif;
+
+		Lrows = iirowcount;
+
+		msg_buf = 'nullify idc ' 
+			+ varchar(:idc) 
+			+ ' from small_6, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small06_n01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small06_i01:\n");
+	exec sql drop procedure small06_i01;
+	exec sql create procedure small06_i01 (
+		idb	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		insert into small_6 ( idb, idc ) values ( :idb, 0 );
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small06_i01 fail';
+		endif;
+
+		msg_buf = 'insert idb ' 
+			+ varchar(:idb) 
+			+ ' into small_6, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small06_i01 fail';
+		elseif ( Lrows != 1 )
+		then
+			raise error 3 'small06_i01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small07_d01:\n");
+	exec sql drop procedure small07_d01;
+	exec sql create procedure small07_d01 (
+		idc	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		delete from small_7 where idc = :idc;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small07_d01 fail';
+		endif;
+
+		msg_buf = 'delete idc ' 
+			+ varchar(:idc) 
+			+ ' from small_7, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small07_d01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small08_r01:\n");
+	exec sql drop procedure small08_r01;
+	exec sql create procedure small08_r01 (
+		ida	integer		not null with default
+	) as
+	declare
+		Lida	integer		not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		select ida into :Lida from small_8 where ida = :ida;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small08_r01 fail';
+		endif;
+
+		msg_buf = 'select ida ' 
+			+ varchar(:ida) 
+			+ ' from small_8, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small08_r01 fail';
+		endif;
+
+		if ( Lrows > 0 )
+		then
+			raise error 1 'restrict on small_8';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small08_r02:\n");
+	exec sql drop procedure small08_r02;
+	exec sql create procedure small08_r02 (
+		idc	integer		not null with default
+	) as
+	declare
+		Lidc	integer		not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		select idc into :Lidc from small_8 where idc = :idc;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small08_r02 fail';
+		endif;
+
+		msg_buf = 'select idc ' 
+			+ varchar(:idc) 
+			+ ' from small_8, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small08_r02 fail';
+		endif;
+
+		if ( Lrows > 0 )
+		then
+			raise error 1 'restrict on small_8';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small08_u01:\n");
+	exec sql drop procedure small08_u01;
+	exec sql create procedure small08_u01 (
+		old_ida	integer		not null with default,
+		new_ida	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		update small_8 set ida = :new_ida where ida = :old_ida;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small08_u01 fail';
+		endif;
+
+		msg_buf = 'update small_8.ida from ' 
+			+ varchar(:old_ida) 
+			+ ' to '
+			+ varchar(:new_ida) 
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small08_u01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure small08_d01:\n");
+	exec sql drop procedure small08_d01;
+	exec sql create procedure small08_d01 (
+		idc	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		delete from small_8 where idc = :idc;
+		select iirowcount, iierrornumber into Lrows, Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small08_d01 fail';
+		endif;
+
+		msg_buf = 'delete idc ' 
+			+ varchar(:idc) 
+			+ ' from small_8, rows: '
+			+ varchar(Lrows);
+
+		message msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( Lerr > 0 )
+		then
+			raise error Lerr 'small08_d01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  create rule small02_u01:\n");
+	if ( do_drop ) 
+	{ 
+		exec sql drop rule small02_u01; 
+	}
+	exec sql create rule small02_u01 after update on small_2
+		execute procedure small01_r01 (
+			ida = old.ida
+		);
+
+	printf("  create rule small02_u02:\n");
+	if ( do_drop ) 
+	{ 
+		exec sql drop rule small02_u02; 
+	}
+	exec sql create rule small02_u02 after update on small_2
+		execute procedure small03_u01 (
+			ida = old.ida,
+			ida = new.ida
+		);
+
+	printf("  create rule small02_u03:\n");
+	if ( do_drop ) 
+	{ 
+		exec sql drop rule small02_u03; 
+	}
+	exec sql create rule small02_u03 after update on small_2
+		execute procedure small04_u01 (
+			ida = old.ida,
+			ida = new.ida
+		);
+
+	printf("  create rule small02_u04:\n");
+	if ( do_drop ) 
+	{ 
+		exec sql drop rule small02_u04; 
+	}
+	exec sql create rule small02_u04 after update on small_2
+		execute procedure small08_u01 (
+			ida = old.ida,
+			ida = new.ida
+		);
+
+	printf("  create rule small02_d01:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small02_d01; 
+	}
+	exec sql create rule small02_d01 after delete on small_2
+		execute procedure small01_d01 (
+			ida = old.ida
+		);
+
+	printf("  create rule small02_d02:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small02_d02; 
+	}
+	exec sql create rule small02_d02 after delete on small_2
+		execute procedure small08_r01 (
+			ida = old.ida
+		);
+
+	printf("  create rule small02_d03:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small02_d03; 
+	}
+	exec sql create rule small02_d03 after delete on small_2
+		execute procedure small03_d01 (
+			ida = old.ida
+		);
+
+	printf("  create rule small02_d04:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small02_d04; 
+	}
+	exec sql create rule small02_d04 after delete on small_2
+		execute procedure small04_d01 (
+			ida = old.ida
+		);
+
+	printf("  create rule small02_d05:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small02_d05; 
+	}
+	exec sql create rule small02_d05 after delete on small_3
+		execute procedure small04_d02 (
+			ida	= old.ida,
+			ida_sub	= old.ida_sub
+		);
+
+	printf("  create rule small05_i01:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small05_i01; 
+	}
+	exec sql create rule small05_i01 after insert on small_5
+		execute procedure small06_i01 (
+			idb = new.idb
+		);
+
+	printf("  create rule small05_i02:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small05_i02; 
+	}
+	exec sql create rule small05_i02 after insert on small_5
+		execute procedure small05_r01 (
+			idb = new.idb
+		);
+
+	printf("  create rule small05_d01:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small05_d01; 
+	}
+	exec sql create rule small05_d01 after delete on small_5
+		execute procedure small06_d01 (
+			idb = old.idb
+		);
+
+	printf("  create rule small05_d02:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small05_d02; 
+	}
+	exec sql create rule small05_d02 after delete on small_5
+		execute procedure small01_d02 (
+			idb = old.idb
+		);
+
+	printf("  create rule small07_i01:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small07_i01; 
+	}
+	exec sql create rule small07_i01 after insert on small_7
+		execute procedure small06_n01 (
+			idc = new.idc
+		);
+
+	printf("  create rule small09_u01:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small09_u01; 
+	}
+	exec sql create rule small09_u01 after update on small_9
+		execute procedure small06_n01 (
+			idc = old.idc
+		);
+
+	printf("  create rule small09_u02:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small09_u02; 
+	}
+	exec sql create rule small09_u02 after update on small_9
+		execute procedure small08_d01 (
+			idc = old.idc
+		);
+
+	printf("  create rule small09_u03:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small09_u03; 
+	}
+	exec sql create rule small09_u03 after update on small_9
+		execute procedure small07_d01 (
+			idc = old.idc
+		);
+
+	printf("  create rule small09_d01:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small09_d01; 
+	}
+	exec sql create rule small09_d01 after delete on small_9
+		execute procedure small06_n01 (
+			idc = old.idc
+		);
+
+	printf("  create rule small09_d02:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small09_d02; 
+	}
+	exec sql create rule small09_d02 after delete on small_9
+		execute procedure small08_r02 (
+			idc = old.idc
+		);
+
+	printf("  create rule small09_d03:\n");
+	if ( do_drop ) 
+	{
+		exec sql drop rule small09_d03; 
+	}
+	exec sql create rule small09_d03 after delete on small_9
+		execute procedure small07_d01 (
+			idc = old.idc
+		);
+
+	exec sql set autocommit off;
+
+} /* create_small_rules() */
+
+/****************************/
+/* drop_small_rules_procs() */
+/****************************/
+
+drop_small_rules_procs()
+{
+	exec sql drop procedure small01_r01;
+	exec sql drop procedure small01_d01;
+	exec sql drop procedure small01_d02;
+	exec sql drop procedure small03_u01;
+	exec sql drop procedure small03_d01;
+	exec sql drop procedure small04_u01;
+	exec sql drop procedure small04_d01;
+	exec sql drop procedure small04_d02;
+	exec sql drop procedure small05_r01;
+	exec sql drop procedure small06_d01;
+	exec sql drop procedure small06_n01;
+	exec sql drop procedure small06_i01;
+	exec sql drop procedure small07_d01;
+	exec sql drop procedure small08_r01;
+	exec sql drop procedure small08_r02;
+	exec sql drop procedure small08_u01;
+	exec sql drop procedure small08_d01;
+
+} /* drop_small_rules_procs() */
+
+/****************************************************************************/
+/*                                                                          */
+/*  small database with some insert rules.                 +-ir (unique)-+  */
+/*                                                         |             |  */
+/*           SMALL_2                       SMALL_1         |             v  */
+/*           ida                           ida             |        SMALL_5 */
+/*                                         idb             +------< idb     */
+/*           SMALL_3                                       |                */
+/*           ida                                           |        SMALL_6 */
+/*           ida_sub                                       \---ic-> idb     */
+/*                                                         /---in-> idc     */
+/*           SMALL_4                       SMALL_8         |                */
+/*           ida                           ida             |        SMALL_7 */
+/*           ida_sub                       idc             +------< idc     */
+/*                                                                  idc_sub */
+/*                                                                          */
+/*                                                                  SMALL_9 */
+/*                                                                  idc     */
+/*                                                                          */
+/****************************************************************************/
+
+/****************************************************************************/
+/*                                                                          */
+/*  small database with some update rules.                                  */
+/*                                                                          */
+/*           SMALL_2                       SMALL_1                          */
+/*           ida     >----------+-----ur-> ida                      SMALL_5 */
+/*                              |          idb                      idb     */
+/*           SMALL_3            |                                           */
+/*           ida     <-uc-------+                                   SMALL_6 */
+/*           ida_sub            |                                   idb     */
+/*                              |                          /---un-> idc     */
+/*           SMALL_4            |          SMALL_8         |                */
+/*           ida     <-uc-------+-----uc-> ida             |        SMALL_7 */
+/*           ida_sub                       idc     <-ud----+---ud-> idc     */
+/*                                                         |        idc_sub */
+/*                                                         |                */
+/*                                                         |        SMALL_9 */
+/*                                                         \------< idc     */
+/*                                                                          */
+/****************************************************************************/
+
+/****************************************************************************/
+/*                                                                          */
+/*  small database with some delete rules.                                  */
+/*                                                                          */
+/*           SMALL_2                       SMALL_1                          */
+/*           ida     >----------+-----dc-> ida                      SMALL_5 */
+/*                              |          idb     <-dc----+------< idb     */
+/*           SMALL_3            |                          |                */
+/*  +------< ida     <-dc-------+                          |        SMALL_6 */
+/*  +------< ida_sub            |                          \---dc-> idb     */
+/*  |                           |                          /---dn-> idc     */
+/*  |        SMALL_4            |          SMALL_8         |                */
+/*  +---dc-> ida     <-dc-------+-----dr-> ida             |        SMALL_7 */
+/*  +---dc-> ida_sub                       idc     <-dr----+---dc-> idc     */
+/*                                                         |        idc_sub */
+/*                                                         |                */
+/*                                                         |        SMALL_9 */
+/*                                                         \------< idc     */
+/*                                                                          */
+/****************************************************************************/
+
+/****************************************************************************/
+/*                                                                          */
+/*  small database.                                                         */
+/*                                                                          */
+/*           SMALL_2                       SMALL_1                          */
+/*           ida     -----------+--------- ida                      SMALL_5 */
+/*                              |          idb     --------+------- idb     */
+/*           SMALL_3            |                          |                */
+/*  +------- ida     -----------+                          |        SMALL_6 */
+/*  +------- ida_sub            |                          \------- idb     */
+/*  |                           |                          /------- idc     */
+/*  |        SMALL_4            |          SMALL_8         |                */
+/*  +------- ida     -----------+--------- ida             |        SMALL_7 */
+/*  +------- ida_sub                       idc     --------+------- idc     */
+/*                                                         |        idc_sub */
+/*                                                         |                */
+/*                                                         |        SMALL_9 */
+/*                                                         \------- idc     */
+/*                                                                          */
+/****************************************************************************/
+!!
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc ela09.sc 
+<<
+ESQL ela09.sc:
+>>
+? sepcc ela09.c 
+<<
+>>
+<<
+ela09.c
+>>
+? sepesqlc rulestest.sc 
+<<
+ESQL rulestest.sc:
+>>
+? sepcc rulestest.c 
+<<
+>>
+<<
+rulestest.c
+>>
+? sepcc driverel.c 
+<<
+>>
+<<
+driverel.c
+>>
+? seplnk driver driverel rulestest ela09 
+<<
+>>
+? sql SEPPARAMDB -s
+<<
+~
+>>
+* drop table small_1, small_2, small_3, small_4, small_5;\g
+<<
+~
+>>
+* drop table small_6, small_7, small_8, small_9, log;\g
+<<
+~
+>>
+* drop procedure small01_r01;\g
+<<
+~
+>>
+* drop procedure small01_d01;\g
+<<
+~
+>>
+* drop procedure small01_d02;\g
+<<
+~
+>>
+* drop procedure small03_u01;\g
+<<
+~
+>>
+* drop procedure small03_d01;\g
+<<
+~
+>>
+* drop procedure small04_u01;\g
+<<
+~
+>>
+* drop procedure small04_d01;\g
+<<
+~
+>>
+* drop procedure small04_d02;\g
+<<
+~
+>>
+* drop procedure small05_r01;\g
+<<
+~
+>>
+* drop procedure small06_d01;\g
+<<
+~
+>>
+* drop procedure small06_n01;\g
+<<
+~
+>>
+* drop procedure small06_i01;\g
+<<
+~
+>>
+* drop procedure small07_d01;\g
+<<
+~
+>>
+* drop procedure small08_r01;\g
+<<
+~
+>>
+* drop procedure small08_r02;\g
+<<
+~
+>>
+* drop procedure small08_u01;\g
+<<
+~
+>>
+* drop procedure small08_d01;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tela09 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+rules tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   ela09
+XX-----------------XX
+
+connecting with database...
+
+XX running test ela09 XX
+
+ela09: referential integrity.
+
+  rules and procedures for referential integrity.
+  this test creates a small database with several
+  referential integrity style rules.
+
+  dropping small_1 table...
+E_US0AC1 DROP: 'small_1' does not exist or is not owned by you.
+    (Thu May 23 16:09:18 1991)
+  creating small_1 table...
+  dropping small_2 table...
+E_US0AC1 DROP: 'small_2' does not exist or is not owned by you.
+    (Thu May 23 16:09:19 1991)
+  creating small_2 table...
+  dropping small_3 table...
+E_US0AC1 DROP: 'small_3' does not exist or is not owned by you.
+    (Thu May 23 16:09:20 1991)
+  creating small_3 table...
+  dropping small_4 table...
+E_US0AC1 DROP: 'small_4' does not exist or is not owned by you.
+    (Thu May 23 16:09:21 1991)
+  creating small_4 table...
+  dropping small_5 table...
+E_US0AC1 DROP: 'small_5' does not exist or is not owned by you.
+    (Thu May 23 16:09:22 1991)
+  creating small_5 table...
+  dropping small_6 table...
+E_US0AC1 DROP: 'small_6' does not exist or is not owned by you.
+    (Thu May 23 16:09:24 1991)
+  creating small_6 table...
+  dropping small_7 table...
+E_US0AC1 DROP: 'small_7' does not exist or is not owned by you.
+    (Thu May 23 16:09:25 1991)
+  creating small_7 table...
+  dropping small_8 table...
+E_US0AC1 DROP: 'small_8' does not exist or is not owned by you.
+    (Thu May 23 16:09:26 1991)
+  creating small_8 table...
+  dropping small_9 table...
+E_US0AC1 DROP: 'small_9' does not exist or is not owned by you.
+    (Thu May 23 16:09:27 1991)
+  creating small_9 table...
+  dropping log table...
+E_US0AC1 DROP: 'log' does not exist or is not owned by you.
+    (Thu May 23 16:09:29 1991)
+  creating log table...
+  =============================
+  how the tables look initially
+  =============================
+contents of small_1:
+--------------------
+ ida = 1, idb = 11
+ ida = 2, idb = 11
+ ida = 3, idb = 11
+ ida = 4, idb = 12
+ ida = 5, idb = 13
+--------------------
+contents of small_2:
+--------------------
+ ida = 1
+ ida = 2
+ ida = 3
+ ida = 4
+ ida = 5
+ ida = 6
+--------------------
+contents of small_3:
+--------------------
+ ida = 1, ida_sub = 1
+ ida = 1, ida_sub = 2
+ ida = 2, ida_sub = 1
+ ida = 2, ida_sub = 2
+ ida = 2, ida_sub = 3
+ ida = 3, ida_sub = 1
+--------------------
+contents of small_4:
+--------------------
+ ida = 1, ida_sub = 2
+ ida = 2, ida_sub = 3
+--------------------
+contents of small_5:
+--------------------
+ idb = 11
+ idb = 12
+ idb = 13
+ idb = 14
+ idb = 15
+ idb = 16
+ idb = 17
+ idb = 18
+ idb = 19
+--------------------
+contents of small_6:
+--------------------
+ idb = 11, idc = 21
+ idb = 12, idc = 22
+ idb = 13, idc = 23
+ idb = 14, idc = 23
+--------------------
+contents of small_7:
+--------------------
+ idc = 21, idc_sub = 1
+ idc = 22, idc_sub = 1
+ idc = 22, idc_sub = 2
+ idc = 22, idc_sub = 3
+--------------------
+contents of small_8:
+--------------------
+ idc = 22, ida = 2
+ idc = 23, ida = 3
+--------------------
+contents of small_9:
+--------------------
+ idc = 21
+ idc = 22
+ idc = 23
+ idc = 24
+ idc = 25
+ idc = 26
+ idc = 27
+ idc = 28
+ idc = 29
+--------------------
+contents of log:
+----------------
+----------------
+
+  drop and create procedure small01_r01:
+E_US0965 Procedure 'small01_r01' not found.
+    (Thu May 23 16:09:31 1991)
+  drop and create procedure small01_d01:
+E_US0965 Procedure 'small01_d01' not found.
+    (Thu May 23 16:09:31 1991)
+  drop and create procedure small01_d02:
+E_US0965 Procedure 'small01_d02' not found.
+    (Thu May 23 16:09:31 1991)
+  drop and create procedure small03_u01:
+E_US0965 Procedure 'small03_u01' not found.
+    (Thu May 23 16:09:32 1991)
+  drop and create procedure small03_d01:
+E_US0965 Procedure 'small03_d01' not found.
+    (Thu May 23 16:09:32 1991)
+  drop and create procedure small04_u01:
+E_US0965 Procedure 'small04_u01' not found.
+    (Thu May 23 16:09:32 1991)
+  drop and create procedure small04_d01:
+E_US0965 Procedure 'small04_d01' not found.
+    (Thu May 23 16:09:33 1991)
+  drop and create procedure small04_d02:
+E_US0965 Procedure 'small04_d02' not found.
+    (Thu May 23 16:09:33 1991)
+  drop and create procedure small05_r01:
+E_US0965 Procedure 'small05_r01' not found.
+    (Thu May 23 16:09:33 1991)
+  drop and create procedure small06_d01:
+E_US0965 Procedure 'small06_d01' not found.
+    (Thu May 23 16:09:34 1991)
+  drop and create procedure small06_n01:
+E_US0965 Procedure 'small06_n01' not found.
+    (Thu May 23 16:09:34 1991)
+  drop and create procedure small06_i01:
+E_US0965 Procedure 'small06_i01' not found.
+    (Thu May 23 16:09:35 1991)
+  drop and create procedure small07_d01:
+E_US0965 Procedure 'small07_d01' not found.
+    (Thu May 23 16:09:35 1991)
+  drop and create procedure small08_r01:
+E_US0965 Procedure 'small08_r01' not found.
+    (Thu May 23 16:09:35 1991)
+  drop and create procedure small08_r02:
+E_US0965 Procedure 'small08_r02' not found.
+    (Thu May 23 16:09:36 1991)
+  drop and create procedure small08_u01:
+E_US0965 Procedure 'small08_u01' not found.
+    (Thu May 23 16:09:36 1991)
+  drop and create procedure small08_d01:
+E_US0965 Procedure 'small08_d01' not found.
+    (Thu May 23 16:09:39 1991)
+  create rule small02_u01:
+  create rule small02_u02:
+  create rule small02_u03:
+  create rule small02_u04:
+  create rule small02_d01:
+  create rule small02_d02:
+  create rule small02_d03:
+  create rule small02_d04:
+  create rule small02_d05:
+  create rule small05_i01:
+  create rule small05_i02:
+  create rule small05_d01:
+  create rule small05_d02:
+  create rule small07_i01:
+  create rule small09_u01:
+  create rule small09_u02:
+  create rule small09_u03:
+  create rule small09_d01:
+  create rule small09_d02:
+  create rule small09_d03:
+  delete idc 22 on small_9...
+restrict on small_8
+  delete ida 1 on small_2...
+  delete ida 2 on small_2...
+restrict on small_8
+  delete ida 3 on small_2...
+restrict on small_8
+  delete ida 5 on small_2...
+  delete ida 6 on small_2...
+  delete idc 21 on small_9...
+  delete idc 24 on small_9...
+  insert idb 51 on small_5...
+restrict on small_5
+  delete idb 12 on small_5...
+  delete idb 15 on small_5...
+  ==============================
+  how the tables look afterwards
+  ==============================
+contents of small_1:
+--------------------
+ ida = 2, idb = 11
+ ida = 3, idb = 11
+--------------------
+contents of small_2:
+--------------------
+ ida = 2
+ ida = 3
+ ida = 4
+--------------------
+contents of small_3:
+--------------------
+ ida = 2, ida_sub = 1
+ ida = 2, ida_sub = 2
+ ida = 2, ida_sub = 3
+ ida = 3, ida_sub = 1
+--------------------
+contents of small_4:
+--------------------
+ ida = 2, ida_sub = 3
+--------------------
+contents of small_5:
+--------------------
+ idb = 11
+ idb = 13
+ idb = 14
+ idb = 16
+ idb = 17
+ idb = 18
+ idb = 19
+--------------------
+contents of small_6:
+--------------------
+ idb = 11, idc = 0
+ idb = 13, idc = 23
+ idb = 14, idc = 23
+--------------------
+contents of small_7:
+--------------------
+ idc = 22, idc_sub = 1
+ idc = 22, idc_sub = 2
+ idc = 22, idc_sub = 3
+--------------------
+contents of small_8:
+--------------------
+ idc = 22, ida = 2
+ idc = 23, ida = 3
+--------------------
+contents of small_9:
+--------------------
+ idc = 22
+ idc = 23
+ idc = 25
+ idc = 26
+ idc = 27
+ idc = 28
+ idc = 29
+--------------------
+
+the log table will not include entries from things
+that were rolled back.
+
+contents of log:
+----------------
+ entry = delete ida 1 and ida_sub 1 from small_4, rows: 0
+ entry = delete ida 1 and ida_sub 2 from small_4, rows: 1
+ entry = delete ida 1 from small_1, rows: 1
+ entry = delete ida 1 from small_3, rows: 2
+ entry = delete ida 1 from small_4, rows: 0
+ entry = delete ida 5 from small_1, rows: 1
+ entry = delete ida 5 from small_3, rows: 0
+ entry = delete ida 5 from small_4, rows: 0
+ entry = delete ida 6 from small_1, rows: 0
+ entry = delete ida 6 from small_3, rows: 0
+ entry = delete ida 6 from small_4, rows: 0
+ entry = delete idb 12 from small_1, rows: 1
+ entry = delete idb 12 from small_6, rows: 1
+ entry = delete idb 15 from small_1, rows: 0
+ entry = delete idb 15 from small_6, rows: 0
+ entry = delete idc 21 from small_7, rows: 1
+ entry = delete idc 24 from small_7, rows: 0
+ entry = nullify idc 21 from small_6, rows: 1
+ entry = nullify idc 24 from small_6, rows: 1
+ entry = select ida 1 from small_8, rows: 0
+ entry = select ida 5 from small_8, rows: 0
+ entry = select ida 6 from small_8, rows: 0
+ entry = select idc 21 from small_8, rows: 0
+ entry = select idc 24 from small_8, rows: 0
+----------------
+
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driverelstub.h 
+<<
+~
+>>
+? delete driverel.c 
+<<
+~
+>>
+? delete driverel.o 
+<<
+~
+>>
+? delete driverel.obj 
+<<
+~
+>>
+? delete ingclude.sc 
+<<
+~
+>>
+? delete ingclude.c 
+<<
+~
+>>
+? delete rulesh.sc 
+<<
+~
+>>
+? delete rulesh.c 
+<<
+~
+>>
+? delete rulestest.sc 
+<<
+~
+>>
+? delete rulestest.c 
+<<
+~
+>>
+? delete rulestest.o 
+<<
+~
+>>
+? delete rulestest.obj 
+<<
+~
+>>
+? delete ela09.c 
+<<
+~
+>>
+? delete ela09.obj 
+<<
+~
+>>
+? delete ela09.o 
+<<
+~
+>>
+
+
+Ending at: Thu Aug 29 12:48:25 1991

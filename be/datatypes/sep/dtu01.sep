@@ -1,0 +1,446 @@
+/*
+	Test Name: dtu01.sep
+	Time: Fri Nov  9 21:14:34 2001
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : dtu01.sep 
+	Module  : be/datatypes
+	Filename: dtu01.sep
+	Purpose	: To test the new unicode data types first available with
+                  II 2.6/0106 and later releases.
+	Input Files  : dtu01.sc
+	Output Files : dtu01.exe
+	Database     : unidb
+	Tables       : test_nchar, test_nchar2, test_nchar3, test_nvarchar,
+                       test_nvarchar2, test_lnvarchar, test_lnvarchar2
+	Synopsis     : This test will select all from tables, and simple 
+                       keyed select from tables on unicode data types. 
+
+ History:  9-Nov-2001	(wu$ca01)	Created
+          28-May-2002   (sarjo01) Change %ls to %S, modularize canon.
+*/
+? fill dtu01.sc
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  wchar_t wc1[9], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, k2;
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|===============================================================-
+==============|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void clrvars()
+{
+  memset(wc1, '\0', 9 * sizeof(wchar_t));
+  memset(wc2, '\0', 65 * sizeof(wchar_t));
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+  clrvars();
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint; 
+   
+   switch (testid)
+   {
+      case 1:
+         print_header("Selecting nchar...");
+         EXEC SQL SELECT * 
+            INTO :i1, :wc1, :wc2
+         FROM test_nchar order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 2:
+         print_header("Selecting nchar (not nullable)...");
+         EXEC SQL SELECT * 
+            INTO :i1, :wc1, :wc2
+         FROM test_nchar2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("Selecting nvarchar...");
+         EXEC SQL SELECT * 
+            INTO :i1, :wc1, :wc2
+         FROM test_nvarchar order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         print_header("Selecting nvarchar (not nullable)...");
+         EXEC SQL SELECT * 
+            INTO :i1, :wc1, :wc2
+         FROM test_nvarchar2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("Selecting long nvarchar...");
+         EXEC SQL SELECT * 
+            INTO :i1, :wc1, :wc2
+         FROM test_lnvarchar order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header("Selecting long nvarchar (not nullable)...");
+         EXEC SQL SELECT * 
+            INTO :i1, :wc1, :wc2
+         FROM test_lnvarchar2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 7:
+         print_header("Selecting nchar into nvarchar...");
+         EXEC SQL SELECT *
+            INTO :i1, :nv1, :nv2
+         FROM test_nchar order by 1;
+         EXEC SQL BEGIN;
+            UC_TERM(nv1);
+            UC_TERM(nv2);
+            printf("|%3d|%S|%S|\n", i1, nv1.text, nv2.text);
+         EXEC SQL END;
+         break;
+
+      case 8:
+         print_header("Selecting nvarchar into nvarchar...");
+         EXEC SQL SELECT *
+            INTO :i1, :nv1, :nv2
+         FROM test_nvarchar order by 1;
+         EXEC SQL BEGIN;
+            UC_TERM(nv1);
+            UC_TERM(nv2);
+            printf("|%3d|%S|%S|\n", i1, nv1.text, nv2.text);
+         EXEC SQL END;
+         break;
+
+      case 9:
+         print_header("Selecting long nvarchar into nvarchar...");
+         EXEC SQL SELECT *
+            INTO :i1, :nv1, :nv2
+         FROM test_lnvarchar order by 1;
+         EXEC SQL BEGIN;
+            UC_TERM(nv1);
+            UC_TERM(nv2);
+            printf("|%3d|%S|%S|\n", i1, nv1.text, nv2.text);
+         EXEC SQL END;
+         break;
+
+      case 10:
+         wcscpy(k1, L"ABC");
+         print_header("Nchar key lookup...");
+         EXEC SQL SELECT *
+            INTO :i1, :wc1, :wc2
+         FROM test_nchar WHERE col2 = :k1 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 11:
+         wcscpy(k1, L"ABC");
+         print_header("Nvarchar key lookup...");
+         EXEC SQL SELECT *
+            INTO :i1, :wc1, :wc2
+         FROM test_nvarchar WHERE col2 = :k1 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+   }
+
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu01.sc 
+<<
+~
+>>
+? sepcc dtu01 
+<<
+~
+>>
+? seplnk dtu01 
+<<
+~
+>>
+? run dtu01.exe SEPPARAMDB3 1
+<<
+Selecting nchar...
+|=============================================================================|
+|  0|ABC     |This is a string to be inserted for testing.                    |
+|  0|ABC     |This is a string to be inserted for testing.                    |
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  2|DEF     |This is a second string to be inserted for testing.             |
+|  2|DEF     |This is a second string to be inserted for testing.             |
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  4|GHI     |This is a third string to be inserted for testing.              |
+|  4|GHI     |This is a third string to be inserted for testing.              |
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  7|Z       |Z                                                               |
+|  7|Z       |Z                                                               |
+|=============================================================================|
+>>
+? run dtu01.exe SEPPARAMDB3 2
+<<
+Selecting nchar (not nullable)...
+|=============================================================================|
+|  0|ABC     |This is a string to be inserted for testing.                    |
+|  0|ABC     |This is a string to be inserted for testing.                    |
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  2|DEF     |This is a second string to be inserted for testing.             |
+|  2|DEF     |This is a second string to be inserted for testing.             |
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  4|GHI     |This is a third string to be inserted for testing.              |
+|  4|GHI     |This is a third string to be inserted for testing.              |
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  7|Z       |Z                                                               |
+|  7|Z       |Z                                                               |
+|=============================================================================|
+>>
+? run dtu01.exe SEPPARAMDB3 3
+<<
+Selecting nvarchar...
+|=============================================================================|
+|  0|ABC|This is a string to be inserted for testing.|
+|  0|ABC|This is a string to be inserted for testing.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  7|Z   |Z|
+|  7|Z   |Z|
+|=============================================================================|
+>>
+? run dtu01.exe SEPPARAMDB3 4
+<<
+Selecting nvarchar (not nullable)...
+|=============================================================================|
+|  0|ABC|This is a string to be inserted for testing.|
+|  0|ABC|This is a string to be inserted for testing.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  7|Z   |Z|
+|  7|Z   |Z|
+|=============================================================================|
+>>
+? run dtu01.exe SEPPARAMDB3 5
+<<
+Selecting long nvarchar...
+|=============================================================================|
+|  0|ABC|This is a string to be inserted for testing.|
+|  0|ABC|This is a string to be inserted for testing.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  7|Z   |Z|
+|  7|Z   |Z|
+|=============================================================================|
+>>
+? run dtu01.exe SEPPARAMDB3 6
+<<
+Selecting long nvarchar (not nullable)...
+|=============================================================================|
+|  0|ABC|This is a string to be inserted for testing.|
+|  0|ABC|This is a string to be inserted for testing.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  7|Z   |Z|
+|  7|Z   |Z|
+|=============================================================================|
+>>
+? run dtu01.exe SEPPARAMDB3 7
+<<
+Selecting nchar into nvarchar...
+|=============================================================================|
+|  0|ABC     |This is a string to be inserted for testing.                    |
+|  0|ABC     |This is a string to be inserted for testing.                    |
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  2|DEF     |This is a second string to be inserted for testing.             |
+|  2|DEF     |This is a second string to be inserted for testing.             |
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  4|GHI     |This is a third string to be inserted for testing.              |
+|  4|GHI     |This is a third string to be inserted for testing.              |
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  7|Z       |Z                                                               |
+|  7|Z       |Z                                                               |
+|=============================================================================|
+>>
+? run dtu01.exe SEPPARAMDB3 8
+<<
+Selecting nvarchar into nvarchar...
+|=============================================================================|
+|  0|ABC|This is a string to be inserted for testing.|
+|  0|ABC|This is a string to be inserted for testing.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  7|Z   |Z|
+|  7|Z   |Z|
+|=============================================================================|
+>>
+? run dtu01.exe SEPPARAMDB3 9
+<<
+Selecting long nvarchar into nvarchar...
+|=============================================================================|
+|  0|ABC|This is a string to be inserted for testing.|
+|  0|ABC|This is a string to be inserted for testing.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  1|STUVWXYZ|Max fit 1 123456789 123456789 123456789 123456789 123456789 end.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  2|DEF|This is a second string to be inserted for testing.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  3|stuvwxyz|Max fit 2 123456789 123456789 123456789 123456789 123456789 end.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  4|GHI|This is a third string to be inserted for testing.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  5|LMNOPQRS|Max fit 3 123456789 123456789 123456789 123456789 123456789 end.|
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  6|ABCDE   |Contains 37 chars, padded with spaces                           |
+|  7|Z   |Z|
+|  7|Z   |Z|
+|=============================================================================|
+>>
+? run dtu01.exe SEPPARAMDB3 10
+<<
+Nchar key lookup...
+|=============================================================================|
+|  0|ABC     |This is a string to be inserted for testing.                    |
+|  0|ABC     |This is a string to be inserted for testing.                    |
+|=============================================================================|
+>>
+? run dtu01.exe SEPPARAMDB3 11
+<<
+Nvarchar key lookup...
+|=============================================================================|
+|  0|ABC|This is a string to be inserted for testing.|
+|  0|ABC|This is a string to be inserted for testing.|
+|=============================================================================|
+>>
+? delete dtu01.c 
+<<
+~
+>>
+? delete dtu01.o 
+<<
+~
+>>
+? delete dtu01.obj 
+<<
+~
+>>
+? delete dtu01.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Nov  9 21:20:24 2001

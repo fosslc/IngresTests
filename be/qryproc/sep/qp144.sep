@@ -1,0 +1,632 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name: qp144.sep (formerly eia10.sep) (former db000.com)
+	Time: 24-JUL-1989 17:50:20
+	User Name: testenv
+ 
+	Test ID : qp144
+	Module  : 
+	Filename: qp144.sep
+	Purpose	: Comparison. In 6.0 duplicates not automatically removed.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : appendr, appendr1
+	Synopsis     : Create a table. Default is 0 for numeric attributes, 
+		blank for char attributes. Test include: change apd.all to
+		appendr.all because in 6.0 duplicates are not automatically
+		removed, and the cartesian product generated will contain
+		many more rows during sort and  then the append will contain
+		2508  rows instead of 76. After modifying query, 32 rows are
+		appended instead of 76. True even in 5.0 because qry now
+		only appends rows in appendr when qualification is met.
+		Before, due to rnage variable being used, semantics seeme
+		to treat apd and appendr as 2 separate objects, so no matter
+		what happened to appendr.weight, it'll still append apd.all
+		which had 76 rows into appendr.  If the qry had been
+		changed to apd.weight < 10 it would get 32 rows instead.
+
+	History	: xx-xxx-1989	  Created
+          12-Aug-1993	(garys)   update canon to accept correct number of
+				  pages and overflow data pages for 65.
+          23-Nov-1993	(camacho) accepted new canons for the new default of
+				  with journaling.
+          20-Mar-1995	(gauje01) changed canons to contain current Ingres
+				  version, "OPING1.1", replacing old "ING6.0"
+          20-Jun-1995	(ciodi01) Updated canons for SQL "append" statements
+				  that intentionally cause a syntax error:
+				  syntax for APPEND has been updated.
+          18-Dec-1995	(raora02) Accepted alternate canon to show Ingres
+				  version OpING 1.2.
+           9-Oct-1996	(Author)
+          07-Jan-1999	(hanch04) Replace table version with TBL_VER
+	  23-Mar-1999	(vande02) Hard-coded VPG_SZ to 8K and changed
+                                  'quel -s SEPPARAMDB' canon to be empty,
+                                  in order to catch the msg. "TM could not
+				  connect ..." if the test database did not
+				  exist.   Also, removed TBL_VER (grammar.lex
+				  masks table vers).
+	   2-Nov-2006	(vande02) Changed test to keep it consistent with
+                                  existing canons - "123" is now "abc", related
+                                  to implementation of SIR 116208.  Copyright,
+                                  header cleanup.
+	   1-oct-2007   (kibro01) b119191 - Updated message for US0B61
+          13-Dec-2007   (vande02) Changing 'help table' commands to a query of
+                                  iitables checking the storage_structure and
+                                  num_rows. See issue 122073.  This will avoid
+                                  insignificant table structure differences as
+                                  seen in II 9.3.0.
+*/
+? fill partsa.dat 
+!!
+1	central processor	pink	10	1
+2	memory	gray	20	32
+3	disk drive	black	685	2
+4	tape drive	black	450	4
+5	tapes	gray	1	250
+6	line printer	yellow	578	3
+7	l-p paper	white	15	95
+8	terminals	blue	19	15
+13	paper tape reader	black	107	0
+14	paper tape punch	black	147	0
+9	terminal paper	white	2	350
+10	byte-soap	clear	0	143
+11	card reader	gray	327	0
+12	card punch	gray	427	0
+!!
+? quel -s SEPPARAMDB 
+<<
+
+>>
+* destroy appendr\g
+<<
+~
+>>
+* destroy appendr1\g
+<<
+~
+>>
+* create appendr (pnum=i2, pname=c20, color=c8, weight=i2, qoh=i2) with page_size=81-
+92 \g
+<<
+>>
+* copy appendr (pnum=c0tab, pname=c0tab, color=c0tab, weight=c0tab,qoh=c0nl)
+<<
+>>
+*	from "partsa.dat"  save appendr until 12 31 1978\g
+<<
+(14 rows)
+>>
+* range of r is iitables\g
+<<
+>>
+* retrieve (r.table_name, r.storage_structure, r.num_rows, r.is_compressed) where r.-
+table_name="appendr"\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|appendr                         |HEAP            |           14|N     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* print appendr\g
+<<
+
+appendr table
+
++------+--------------------+--------+------+------+
+|pnum  |pname               |color   |weight|qoh   |
++------+--------------------+--------+------+------+
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
++------+--------------------+--------+------+------+
+(14 rows)
+>>
+* range of apd is appendr\g
+<<
+>>
+* append to appendr (weight=apd.weight, pnum is 100+apd.pnum,  apd.pname) 
+<<
+>>
+*	where apd.qoh>100 \g
+/*
+ default is zero for numeric attributes, blank for character attributes 
+*/
+<<
+(3 rows)
+>>
+*  print appendr\g
+<<
+appendr table
+
++------+--------------------+--------+------+------+
+|pnum  |pname               |color   |weight|qoh   |
++------+--------------------+--------+------+------+
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
++------+--------------------+--------+------+------+
+(17 rows)
+>>
+* append appendr (dum=0)\g
+/*
+ attribute not in relation 
+*/
+<<
+E_US0834 line 1, Table 'appendr' owned by 'testenv' does not contain
+    column 'dum'.
+    (15-JAN-1990 17:48:07)
+
+>>
+* create appendr1 (a1=i2, a2=i4) with page_size=8192 \g
+<<
+>>
+* range of apd1 is appendr1 \g  
+<<
+>>
+* append appendr (apd1.a2)\g
+<<
+E_US0834 line 1, Table 'appendr' owned by 'testenv' does not contain
+    column 'a2'.
+    (15-JAN-1990 17:48:21)
+
+>>
+* append appendr (apd1.all)\g
+<<
+E_US0834 line 1, Table 'appendr' owned by 'testenv' does not contain
+    column 'a1'.
+    (15-JAN-1990 17:48:32)
+
+>>
+* destroy appendr1\g
+<<
+~
+>>
+* append appendr (pnum=15, pnum=16)\g
+/*
+ domain listed twice 
+*/
+<<
+(1 row)
+>>
+* print appendr\g
+<<
+
+appendr table
+
++------+--------------------+--------+------+------+
+|pnum  |pname               |color   |weight|qoh   |
++------+--------------------+--------+------+------+
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
++------+--------------------+--------+------+------+
+(18 rows)
+>>
+* append to appendr (apd.all) \g
+/*
+ duplicate tuples appended to a paged-heap are not removed 
+*/
+<<
+(18 rows)
+>>
+*   print appendr\g
+<<
+
+appendr table
+
++------+--------------------+--------+------+------+
+|pnum  |pname               |color   |weight|qoh   |
++------+--------------------+--------+------+------+
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
++------+--------------------+--------+------+------+
+(36 rows)
+>>
+* destroy apd\g
+<<
+E_US1452 DESTROY: apd does not exist or is not owned by you.
+    (25-JUL-1989 09:54:59)
+
+>>
+* append apd (apd.all)\g
+/*
+ invalid result relation 
+*/
+<<
+E_US083C line 1, Result table 'apd' for APPEND does not exist or cannot be
+    accessed by you.
+    (Thu Dec  5 13:15:03 1991)
+
+>>
+* append to appendr(pnum is "abc") where apd.pnum=1\g
+/*
+ diagnostic, numeric type domain set to character value 
+*/
+<<
+E_US0B61 line 1, You cannot assign this 'varchar' value to a column of
+type 'integer'. Explicitly convert the value to the required type or check
+it is in the valid range for the target datatype.
+    (25-JUL-1989 09:39:51)
+
+>>
+* append appendr (color=123) where apd.pnum=1\g
+/*
+ diagnostic, character domain set to numeric value 
+*/
+<<
+E_US0B61 line 1, You cannot assign this 'integer' value to a column of
+type 'c'. Explicitly convert the value to the required type or check
+it is in the valid range for the target datatype.
+    (25-JUL-1989 09:41:07)
+
+>>
+* append appendr(color=ascii(apd.pnum)) where apd.pnum=1 \g
+<<
+(2 rows)
+>>
+* append appendr(color=text(apd.pnum)) where apd.pnum=1 \g
+<<
+(2 rows)
+>>
+* print appendr \g
+<<
+
+appendr table
+
++------+--------------------+--------+------+------+
+|pnum  |pname               |color   |weight|qoh   |
++------+--------------------+--------+------+------+
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
++------+--------------------+--------+------+------+
+(40 rows)
+>>
+* append appendr ()\g
+/*
+ parser 
+*/
+<<
+E_US0A2B line 1, Syntax error on ')'.  The correct syntax is: 
+    [repeat] APPEND [to] tablename  
+                     ( column = expression {, column = expression} ) 
+                     [WHERE qualification]
+    (Tue Jun 20 16:29:32 1995)
+
+>>
+* append to appendr\g
+/*
+ parser 
+*/
+<<
+E_US0A2B line 1, Syntax error on 'EOF'.  The correct syntax is: 
+    [repeat] APPEND [to] tablename  
+                     ( column = expression {, column = expression} ) 
+                     [WHERE qualification]
+    (Tue Jun 20 16:29:36 1995)
+
+>>
+* append to appendr (appendr.all)\g
+/*
+ parser 
+*/
+<<
+(40 rows)
+>>
+* retrieve (appendr.all) where appendr.weight <10\g
+/*
+ added a retrieve for diagnostic purpose 
+*/
+<<
+
++------+--------------------+--------+------+------+
+|pnum  |pname               |color   |weight|qoh   |
++------+--------------------+--------+------+------+
+|     5|tapes               |gray    |     1|   250|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     5|tapes               |gray    |     1|   250|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     5|tapes               |gray    |     1|   250|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     5|tapes               |gray    |     1|   250|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
++------+--------------------+--------+------+------+
+(36 rows)
+>>
+* append to appendr (appendr.all) where appendr.weight<10\g
+/*
+ change apd.all to appendr.all because in 6.0, duplicates are not automatically
+ removed, and the cartesian product generated will contain many more rows 
+ during sort and hence the resulting append will contain 2508 rows instead of 
+ 76 rows .
+ Note:  After modifying the query, 36 rows are appended instead of 84 rows. 
+	This is true even in 5.0.  This is because the qry now only appends 
+	the rows in appendr when the qualification is met.  Before, since the 
+	range variable was used, the semantics seemed to treat apd and appendr 
+	as 2 seperate objects, so no matter what happen to appendr.weight, 
+	it'll still append apd.all which had 84 rows into appendr.  If the 
+	qry had been changed to apd.weight<10, it will get 36 rows instead.
+*/
+<<
+(36 rows)
+>>
+* print appendr \g
+<<
+
+appendr table
+
++------+--------------------+--------+------+------+
+|pnum  |pname               |color   |weight|qoh   |
++------+--------------------+--------+------+------+
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     5|tapes               |gray    |     1|   250|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     5|tapes               |gray    |     1|   250|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     5|tapes               |gray    |     1|   250|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     5|tapes               |gray    |     1|   250|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|   105|tapes               |        |     1|     0|
+|   109|terminal paper      |        |     2|     0|
+|   110|byte-soap           |        |     0|     0|
+|    16|                    |        |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
+|     0|                    |1       |     0|     0|
++------+--------------------+--------+------+------+
+(116 rows)
+>>
+* destroy appendr \g
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Thu Dec 13 19:38:42 2007

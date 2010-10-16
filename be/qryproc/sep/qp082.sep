@@ -1,0 +1,552 @@
+/*
+Copyright (c) 2005 Ingres Corporation
+
+
+	Test Name: qp082.sep
+	Time: Fri May 18 17:40:27 1990
+	User Name: testenv
+ 
+	Test ID : qp082
+	Module  : 
+	Filename: qp082.sep
+	Purpose	: Test dbprocs using rollback and commit in various 
+		  combinations.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : all_types_simple_table
+	Synopsis     : Test the ability to run an uncommitted and
+			rolled back dbproc.
+	Setup   : efa00.sep
+
+	History	:
+	   5-Dec-1995	(belar01) Created
+	   7-MAR-1997   (vissu01) Modified for NT
+           2-Aug-2005	(vande02) Replacing canon due to fix for bug 112376
+				  changes the behavior for test case 3 below.
+				  E_US0965 Procedure 'efa09_03' not found is
+				  expected to be returned a second time.  This
+				  behavior is in patches for 2.6 but not in r3.
+				  Minor header corrections, aligned history
+				  and some cleanup corrections.
+           30-Jan-2006 (boija02) Updated copyright info for Ingres Corp.
+
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa09.sc 
+!!
+/*
+**	efa09.sc
+**
+**	basic functionality: commit, rollback
+**
+**	history:
+**		oct 10/89 sgp
+**			- created.
+*/
+
+#define EFA09
+
+#include "driverefstub.h"
+
+exec sql include 'dbph.sc';
+#include <stdio.h>
+
+exec sql include sqlca;
+
+/************/
+/* efa09() */
+/************/
+
+efa09()
+{
+	exec sql begin declare section;
+	exec sql end declare section;
+
+	exec sql set autocommit off;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa09: commit and rollback within proc\n");
+	drop_tables(ALL_TYPES_SIMPLE_TABLE);
+	build_tables(ALL_TYPES_SIMPLE_TABLE);
+
+	/**********/
+	/* test 1 */
+	/**********/
+
+	printf("\n    test 1: commit and rollback w/in procedure\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa09_01;
+
+	/* create the proc */
+	exec sql create procedure efa09_01 (
+		do_it		integer1	not null with default,
+		varchar10	varchar(10)	not null with default
+	) as
+	begin
+
+		if ( do_it = 1 )
+		then
+			message 'committing transaction';
+		else
+			message 'not committing transaction';
+		endif;
+
+		update all_types_simple
+			set
+				varchar10	= :varchar10
+			where i4 = 1;
+
+		if ( do_it = 1 )
+		then
+			commit;
+		else
+			rollback;
+		endif;
+
+	end;
+	exec sql commit;
+
+	dump_tables(ALL_TYPES_SIMPLE_TABLE);
+
+	exec sql execute procedure efa09_01(
+		do_it		= 0,
+		varchar10	= 'wallop'
+	);
+	dump_tables(ALL_TYPES_SIMPLE_TABLE);
+
+	exec sql execute procedure efa09_01(
+		do_it		= 1,
+		varchar10	= 'gallumph'
+	);
+	dump_tables(ALL_TYPES_SIMPLE_TABLE);
+
+	/**********/
+	/* test 2 */
+	/**********/
+
+	printf("\n    test 2: execute proc before committing the create proc\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa09_02;
+
+	/* create the proc */
+	exec sql create procedure efa09_02 as
+	begin
+
+		message 'successfully executing uncommitted procedure';
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa09_02;
+
+	exec sql commit;
+
+	/**********/
+	/* test 3 */
+	/**********/
+
+	printf("\n    test 3: create, exec, rollback, exec procedure\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa09_03;
+
+	/* create the proc */
+	exec sql create procedure efa09_03 (
+		rolled_back	integer1
+	) as
+	begin
+
+		if ( rolled_back = 0 )
+		then
+			message 'successfully executing uncommitted procedure';
+		else
+			message 'successfully executing rolled back procedure';
+		endif;
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa09_03 (rolled_back = 0);
+
+	exec sql rollback;
+
+	exec sql execute procedure efa09_03 (rolled_back = 1);
+
+	/**********/
+	/* test 4 */
+	/**********/
+
+	printf("\n    test 4: create, rollback and execute proc\n");
+	printf("\n            demo bug 8504.\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa09_04;
+
+	/* create the proc */
+	exec sql create procedure efa09_04 as
+	begin
+
+		message 'successfully executing rolled-back procedure';
+
+	end;
+	exec sql rollback;
+
+	/* run the proc */
+	exec sql execute procedure efa09_04;
+
+	exec sql commit;
+
+	/***********/
+	/* wrap up */
+	/***********/
+
+	exec sql commit;
+	exec sql set autocommit on;
+
+} /* efa09() */
+!!
+? sepesqlc efa09.sc 
+<<
+ESQL efa09.sc:
+>>
+? sepcc efa09.c 
+<<
+>>
+<<
+efa09.c
+>>
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa09 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+~
+>>
+* drop table all_types_simple;\g
+<<
+~
+>>
+* drop procedure efa09_01;\g
+<<
+~
+>>
+* drop procedure efa09_02;\g
+<<
+~
+>>
+* drop procedure efa09_03;\g
+<<
+~
+>>
+* drop procedure efa09_04;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+/*
+	Test 3 below will diff in Ingres r3 by not getting
+	a second error E_US0965 Procedure efa09_03 not found. But
+	when fix for bug b112376 is crossed from ingres26 to main
+	this test should not diff.
+*/
+? run driver.exe SEPPARAMDRIVERDB -tefa09 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa09
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa09 XX
+
+  efa09: commit and rollback within proc
+  dropping all_types_simple table...
+E_US0AC1 DROP: 'all_types_simple' does not exist or is not owned by you.
+    (Tue Aug  2 13:59:54 2005)
+  creating all_types_simple table...
+
+    test 1: commit and rollback w/in procedure
+E_US0965 Procedure 'efa09_01' not found.
+    (Tue Aug  2 13:59:54 2005)
+contents of all_types_simple:
+-----------------------------
+ i1 = 1, i2 = 1, i4 = 1, f4 = 1.000000, f8 = 1.000000,
+ c10 = 000000001 , char10 = 000000001 , vchar10 = 000000001, varchar10 = 000000001,
+ d = 01-jan-1582              , m = 1.000000
+-----------------------------
+ i1 = 2, i2 = 2, i4 = 2, f4 = 2.000000, f8 = 2.000000,
+ c10 = 000000002 , char10 = 000000002 , vchar10 = 000000002, varchar10 = 000000002,
+ d = 03-mar-1583              , m = 2.000000
+-----------------------------
+ i1 = 3, i2 = 3, i4 = 3, f4 = 3.000000, f8 = 3.000000,
+ c10 = 000000003 , char10 = 000000003 , vchar10 = 000000003, varchar10 = 000000003,
+ d = 05-may-1584              , m = 3.000000
+-----------------------------
+ i1 = 4, i2 = 4, i4 = 4, f4 = 4.000000, f8 = 4.000000,
+ c10 = 000000004 , char10 = 000000004 , vchar10 = 000000004, varchar10 = 000000004,
+ d = 07-jul-1585              , m = 4.000000
+-----------------------------
+ i1 = 5, i2 = 5, i4 = 5, f4 = 5.000000, f8 = 5.000000,
+ c10 = 000000005 , char10 = 000000005 , vchar10 = 000000005, varchar10 = 000000005,
+ d = 09-sep-1586              , m = 5.000000
+-----------------------------
+ i1 = 6, i2 = 6, i4 = 6, f4 = 6.000000, f8 = 6.000000,
+ c10 = 000000006 , char10 = 000000006 , vchar10 = 000000006, varchar10 = 000000006,
+ d = 11-nov-1587              , m = 6.000000
+-----------------------------
+ i1 = 7, i2 = 7, i4 = 7, f4 = 7.000000, f8 = 7.000000,
+ c10 = 000000007 , char10 = 000000007 , vchar10 = 000000007, varchar10 = 000000007,
+ d = 13-jan-1589              , m = 7.000000
+-----------------------------
+ i1 = 8, i2 = 8, i4 = 8, f4 = 8.000000, f8 = 8.000000,
+ c10 = 000000008 , char10 = 000000008 , vchar10 = 000000008, varchar10 = 000000008,
+ d = 15-mar-1590              , m = 8.000000
+-----------------------------
+ i1 = 9, i2 = 9, i4 = 9, f4 = 9.000000, f8 = 9.000000,
+ c10 = 000000009 , char10 = 000000009 , vchar10 = 000000009, varchar10 = 000000009,
+ d = 17-may-1591              , m = 9.000000
+-----------------------------
+ i1 = 10, i2 = 10, i4 = 10, f4 = 10.000000, f8 = 10.000000,
+ c10 = 000000010 , char10 = 000000010 , vchar10 = 000000010, varchar10 = 000000010,
+ d = 19-jul-1592              , m = 10.000000
+-----------------------------
+MESSAGE 0: not committing transaction
+contents of all_types_simple:
+-----------------------------
+ i1 = 1, i2 = 1, i4 = 1, f4 = 1.000000, f8 = 1.000000,
+ c10 = 000000001 , char10 = 000000001 , vchar10 = 000000001, varchar10 = 000000001,
+ d = 01-jan-1582              , m = 1.000000
+-----------------------------
+ i1 = 2, i2 = 2, i4 = 2, f4 = 2.000000, f8 = 2.000000,
+ c10 = 000000002 , char10 = 000000002 , vchar10 = 000000002, varchar10 = 000000002,
+ d = 03-mar-1583              , m = 2.000000
+-----------------------------
+ i1 = 3, i2 = 3, i4 = 3, f4 = 3.000000, f8 = 3.000000,
+ c10 = 000000003 , char10 = 000000003 , vchar10 = 000000003, varchar10 = 000000003,
+ d = 05-may-1584              , m = 3.000000
+-----------------------------
+ i1 = 4, i2 = 4, i4 = 4, f4 = 4.000000, f8 = 4.000000,
+ c10 = 000000004 , char10 = 000000004 , vchar10 = 000000004, varchar10 = 000000004,
+ d = 07-jul-1585              , m = 4.000000
+-----------------------------
+ i1 = 5, i2 = 5, i4 = 5, f4 = 5.000000, f8 = 5.000000,
+ c10 = 000000005 , char10 = 000000005 , vchar10 = 000000005, varchar10 = 000000005,
+ d = 09-sep-1586              , m = 5.000000
+-----------------------------
+ i1 = 6, i2 = 6, i4 = 6, f4 = 6.000000, f8 = 6.000000,
+ c10 = 000000006 , char10 = 000000006 , vchar10 = 000000006, varchar10 = 000000006,
+ d = 11-nov-1587              , m = 6.000000
+-----------------------------
+ i1 = 7, i2 = 7, i4 = 7, f4 = 7.000000, f8 = 7.000000,
+ c10 = 000000007 , char10 = 000000007 , vchar10 = 000000007, varchar10 = 000000007,
+ d = 13-jan-1589              , m = 7.000000
+-----------------------------
+ i1 = 8, i2 = 8, i4 = 8, f4 = 8.000000, f8 = 8.000000,
+ c10 = 000000008 , char10 = 000000008 , vchar10 = 000000008, varchar10 = 000000008,
+ d = 15-mar-1590              , m = 8.000000
+-----------------------------
+ i1 = 9, i2 = 9, i4 = 9, f4 = 9.000000, f8 = 9.000000,
+ c10 = 000000009 , char10 = 000000009 , vchar10 = 000000009, varchar10 = 000000009,
+ d = 17-may-1591              , m = 9.000000
+-----------------------------
+ i1 = 10, i2 = 10, i4 = 10, f4 = 10.000000, f8 = 10.000000,
+ c10 = 000000010 , char10 = 000000010 , vchar10 = 000000010, varchar10 = 000000010,
+ d = 19-jul-1592              , m = 10.000000
+-----------------------------
+MESSAGE 0: committing transaction
+contents of all_types_simple:
+-----------------------------
+ i1 = 2, i2 = 2, i4 = 2, f4 = 2.000000, f8 = 2.000000,
+ c10 = 000000002 , char10 = 000000002 , vchar10 = 000000002, varchar10 = 000000002,
+ d = 03-mar-1583              , m = 2.000000
+-----------------------------
+ i1 = 3, i2 = 3, i4 = 3, f4 = 3.000000, f8 = 3.000000,
+ c10 = 000000003 , char10 = 000000003 , vchar10 = 000000003, varchar10 = 000000003,
+ d = 05-may-1584              , m = 3.000000
+-----------------------------
+ i1 = 4, i2 = 4, i4 = 4, f4 = 4.000000, f8 = 4.000000,
+ c10 = 000000004 , char10 = 000000004 , vchar10 = 000000004, varchar10 = 000000004,
+ d = 07-jul-1585              , m = 4.000000
+-----------------------------
+ i1 = 5, i2 = 5, i4 = 5, f4 = 5.000000, f8 = 5.000000,
+ c10 = 000000005 , char10 = 000000005 , vchar10 = 000000005, varchar10 = 000000005,
+ d = 09-sep-1586              , m = 5.000000
+-----------------------------
+ i1 = 6, i2 = 6, i4 = 6, f4 = 6.000000, f8 = 6.000000,
+ c10 = 000000006 , char10 = 000000006 , vchar10 = 000000006, varchar10 = 000000006,
+ d = 11-nov-1587              , m = 6.000000
+-----------------------------
+ i1 = 7, i2 = 7, i4 = 7, f4 = 7.000000, f8 = 7.000000,
+ c10 = 000000007 , char10 = 000000007 , vchar10 = 000000007, varchar10 = 000000007,
+ d = 13-jan-1589              , m = 7.000000
+-----------------------------
+ i1 = 8, i2 = 8, i4 = 8, f4 = 8.000000, f8 = 8.000000,
+ c10 = 000000008 , char10 = 000000008 , vchar10 = 000000008, varchar10 = 000000008,
+ d = 15-mar-1590              , m = 8.000000
+-----------------------------
+ i1 = 9, i2 = 9, i4 = 9, f4 = 9.000000, f8 = 9.000000,
+ c10 = 000000009 , char10 = 000000009 , vchar10 = 000000009, varchar10 = 000000009,
+ d = 17-may-1591              , m = 9.000000
+-----------------------------
+ i1 = 10, i2 = 10, i4 = 10, f4 = 10.000000, f8 = 10.000000,
+ c10 = 000000010 , char10 = 000000010 , vchar10 = 000000010, varchar10 = 000000010,
+ d = 19-jul-1592              , m = 10.000000
+-----------------------------
+ i1 = 1, i2 = 1, i4 = 1, f4 = 1.000000, f8 = 1.000000,
+ c10 = 000000001 , char10 = 000000001 , vchar10 = 000000001, varchar10 = gallumph,
+ d = 01-jan-1582              , m = 1.000000
+-----------------------------
+
+    test 2: execute proc before committing the create proc
+E_US0965 Procedure 'efa09_02' not found.
+    (Tue Aug  2 13:59:54 2005)
+MESSAGE 0: successfully executing uncommitted procedure
+
+    test 3: create, exec, rollback, exec procedure
+E_US0965 Procedure 'efa09_03' not found.
+    (Tue Aug  2 13:59:54 2005)
+MESSAGE 0: successfully executing uncommitted procedure
+E_US0965 Procedure 'efa09_03' not found.
+    (Tue Aug  2 13:59:54 2005)
+
+    test 4: create, rollback and execute proc
+
+            demo bug 8504.
+E_US0965 Procedure 'efa09_04' not found.
+    (Tue Aug  2 13:59:54 2005)
+E_US0965 Procedure 'efa09_04' not found.
+    (Tue Aug  2 13:59:54 2005)
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driverefstub.h 
+<<
+~
+>>
+? delete driveref.c 
+<<
+~
+>>
+? delete driveref.obj 
+<<
+~
+>>
+? delete driveref.o 
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~
+>>
+? delete dbph.c 
+<<
+~
+>>
+? delete dbpmisc.sc 
+<<
+~
+>>
+? delete dbpmisc.c 
+<<
+~
+>>
+? delete dbpmisc.obj 
+<<
+~
+>>
+? delete dbpmisc.o 
+<<
+~
+>>
+? delete efa09.c 
+<<
+~
+>>
+? delete efa09.obj 
+<<
+~
+>>
+? delete efa09.o 
+<<
+~
+>>
+
+
+Ending at: Tue Aug  2 14:00:53 2005

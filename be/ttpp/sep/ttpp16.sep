@@ -1,0 +1,135 @@
+/*
+	Test Name: ttpp16.sep
+	Time: Wed Apr 30 14:05:55 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : ttpp16.sep
+	Module  : 
+	Filename:
+	Purpose : The purpose of this test is to test that the SET OF parameters 
+     		  exactly match the table definition, when a Global Temporary
+  		  table is passed to a procedure.
+	Input Files  :
+	Output Files :
+	Database     :	ttppdb
+	Tables       :	session.t1
+	Synopsis     :	Entries in <set of element list> must be
+			identical to the corresponding column
+			definitions (even in the name itself) and must
+			even be in the same sequence.
+
+ History: 30-Apr-1997	(cheis01)	Created
+			The name of the formal parameter should be the
+			same as the one of the actual parameter.  Thus,
+			'execute procedure p1 (yahoo=session.t1)'
+			should return error msg. (bug 82223)
+	01-Arp-1999     (yu$pe02)       Hard code page size to 4K.
+	05-Jul-2002   (shafa01) Test cleanup Bug: 108167
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop session.t1\g 
+<<
+~
+>>
+* drop procedure p1\g 
+<<
+~
+>>
+* declare global temporary table session.t1 (c1 int, c2 float, c3 varchar(3))  on commit preserve rows with norecovery, page_size=4096\g 
+<<
+
+>>
+* insert into session.t1 values (1, 1, '1')\g 
+<<
+(1 row)
+>>
+* select * from session.t1\g 
+<<
+
++-------------+-----------+------+
+|c1           |c2         |c3    |
++-------------+-----------+------+
+|            1|      1.000|1     |
++-------------+-----------+------+
+(1 row)
+>>
+* create procedure p1 (test set of (c1 int, c2 float, c3 varchar(3))) as begin update test set c1=c1+1, c2=c2+1; end\g 
+<<
+
+>>
+* execute procedure p1 (test=session.t1)\g 
+<<
+
+>>
+* select * from session.t1\g 
+<<
+
++-------------+-----------+------+
+|c1           |c2         |c3    |
++-------------+-----------+------+
+|            2|      2.000|1     |
++-------------+-----------+------+
+(1 row)
+>>
+* execute procedure p1 (yahoo=session.t1)\g 
+/*
+this shouldn't work
+*/
+<<
+
+>>
+* select * from session.t1\g 
+<<
+
++-------------+-----------+------+
+|c1           |c2         |c3    |
++-------------+-----------+------+
+|            3|      3.000|1     |
++-------------+-----------+------+
+(1 row)
+>>
+* drop procedure p1\g 
+<<
+
+>>
+* create procedure p1 (test set of (c1 int, c2 integer, c3 varchar(3))) as begin update test set c1=c1+1, c2=c2+1; end\g 
+<<
+
+>>
+* execute procedure p1 (test=session.t1)\g 
+<<
+E_OP08AF Global temporary table parameter: t1, was passed to procedure:
+    p1, whose  SET OF parameter doesn't exactly match the table definition.
+    (Wed Apr 30 14:14:20 1997)
+
+>>
+* drop procedure p1\g 
+<<
+
+>>
+* create procedure p1 (test set of (c1 int, c2 float, c3 char(3))) as begin update test set c1=c1+1, c2=c2+1; end\g 
+<<
+
+>>
+* execute procedure p1 (test=session.t1)\g 
+<<
+E_OP08AF Global temporary table parameter: t1, was passed to procedure:
+    p1, whose  SET OF parameter doesn't exactly match the table definition.
+    (Wed Apr 30 14:23:58 1997)
+
+>>
+* drop session.t1\g 
+<<
+
+>>
+* drop procedure p1\g\q 
+<<
+
+>>
+
+
+Ending at: Wed Apr 30 14:34:48 1997

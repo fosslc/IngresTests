@@ -1,0 +1,2083 @@
+/*
+Copyright (c) 2004 Ingres Corporation
+ 
+
+	Test Name: lar09.sep
+	Time: 27-AUG-1990 16:35:36
+	User Name: testenv     
+	Terminal type: septerm
+ 
+	Test ID : lar09.sep
+	Module  : be/lar
+	Filename: lar09.sep
+	Purpose	: Test ckpdb and rollforward with destroy stmt 
+	Input Files  : allt500.dat
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : heap500,isam500,hash500,chash500,btree500,ubtree500,
+	               cbtree500
+	Synopsis     : Create tables of varying structures and fill each
+	               with 500 rows.  Do a ckpdb -j.  Drop the tables.
+	               Do a rollforwarddb, and then query the tables.
+	               Since journaling was off, the tables should be restored
+	               to their state at checkpoint time.
+
+	History:	Author		Created
+	 01-OCT-1991	John B. Park	Sepized test
+	 27-JUL-1992	Jerome Fong	removed hard coded pathnames  
+					and add comments to the canons
+					that will always diff.
+					Sleep commands were also added after
+					termination of TM sessions to handle
+					an architecture and timing problem
+					in SEP.
+          25-Jun-1993   (judi) Accepted new canons for the ckpdb commands.
+                        The syntax of the returned messages changed so new
+                        canons needed to be accepted.
+          6-Aug-1993	(sandhya) Accepted new canons for ckpdb and rollforward
+			db for 6.5
+	  1-Feb-1995    motje01  Convert to sql, replace cp(path) files with
+			fill files.
+          27-Feb-1995   (holla02)  Modified: added synopsis, switched to using
+                        SEPPARAMDB, etc.
+          04-Apr-1996	(clate01)
+			Added alternate canon to accept a Window NT path when 
+			doing checkpointdb
+         09-Sep-1998    (vande02)
+                        Replaced canon for rollforwarddb now that 'lardb' has
+                        been extended to 5 addtional db locations.
+	 14-Apr-1999	(vande02)
+			Hard-coded 4096 to 4K
+       30-Jan-2003 (hanch04)
+               Updated canons to match Ingres 2.6/0303
+               Service Pack 2
+       04-Feb-2003 (hanch04)
+                update to run again 2.6/0303 and previous SP
+       01-Apr-2003 (somsa01)
+                Added missing "\q" for Terminal Monitor end.
+          15-Aug-2003	(rogch01)
+		Add +w to all ckpdb and rollforwarddb statements.  On Unixware,
+		at least, the database was sometimes not ready following the
+		previous statements.  Use larmasks for checkpoint numbers.
+		Removed the rollforwarddb canon for 2.6/0303 as it was no
+		different to earlier canons with larmasks in place.  Vary the
+		page sizes and locations for all the tables simply for a bit
+		more coverage.  The +w flag removes the need for the sleep.
+		Reorganised the table create statements to single command /
+		canon pairs rather than several canons for each statement.
+		Added a canon for Windows rollforwarddb.
+          20-Oct-2004	(wu$ca01) Update NT_GENERIC rollfowarddb result.
+                Miscellaneous updates to sep header.
+          22-Mar-2005	(vande02) Update NT_GENERIC canons, one less file needed
+		during ckpdb/or rollforwarddb processing as of r3.0.2.  Replaced
+		SEDCKPFILE with actual checkpoint file names.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? sepset sed @file(ing_tst,be,lar,data,larmasks) 
+<<
+>>
+? fill allt500.dat 
+!!
+     0	     0	            0	      0.000	      0.000	               $0.00	01-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc0ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     1	     1	            1	      0.010	      0.010	               $1.00	02-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc0ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     2	     2	            2	      0.020	      0.020	               $2.00	03-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc0ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     3	     3	            3	      0.030	      0.030	               $3.00	04-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc0ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     4	     4	            4	      0.040	      0.040	               $4.00	05-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc0ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     5	     5	            5	      0.050	      0.050	               $5.00	06-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc0ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     6	     6	            6	      0.060	      0.060	               $6.00	07-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc0ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     7	     7	            7	      0.070	      0.070	               $7.00	08-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc0ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     8	     8	            8	      0.080	      0.080	               $8.00	09-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc0ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     9	     9	            9	      0.090	      0.090	               $9.00	10-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc0ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    10	    10	           10	      0.100	      0.100	              $10.00	11-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc1ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    11	    11	           11	      0.110	      0.110	              $11.00	12-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc1ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    12	    12	           12	      0.120	      0.120	              $12.00	13-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc1ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    13	    13	           13	      0.130	      0.130	              $13.00	14-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc1ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    14	    14	           14	      0.140	      0.140	              $14.00	15-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc1ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    15	    15	           15	      0.150	      0.150	              $15.00	16-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc1ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    16	    16	           16	      0.160	      0.160	              $16.00	17-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc1ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    17	    17	           17	      0.170	      0.170	              $17.00	18-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc1ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    18	    18	           18	      0.180	      0.180	              $18.00	19-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc1ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    19	    19	           19	      0.190	      0.190	              $19.00	20-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc1ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    20	    20	           20	      0.200	      0.200	              $20.00	21-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc2ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    21	    21	           21	      0.210	      0.210	              $21.00	22-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc2ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    22	    22	           22	      0.220	      0.220	              $22.00	23-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc2ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    23	    23	           23	      0.230	      0.230	              $23.00	24-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc2ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    24	    24	           24	      0.240	      0.240	              $24.00	25-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc2ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    25	    25	           25	      0.250	      0.250	              $25.00	26-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc2ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    26	    26	           26	      0.260	      0.260	              $26.00	27-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc2ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    27	    27	           27	      0.270	      0.270	              $27.00	28-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc2ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    28	    28	           28	      0.280	      0.280	              $28.00	29-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc2ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    29	    29	           29	      0.290	      0.290	              $29.00	30-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc2ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    30	    30	           30	      0.300	      0.300	              $30.00	31-jan-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc3ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    31	    31	           31	      0.310	      0.310	              $31.00	01-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc3ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    32	    32	           32	      0.320	      0.320	              $32.00	02-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc3ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    33	    33	           33	      0.330	      0.330	              $33.00	03-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc3ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    34	    34	           34	      0.340	      0.340	              $34.00	04-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc3ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    35	    35	           35	      0.350	      0.350	              $35.00	05-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc3ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    36	    36	           36	      0.360	      0.360	              $36.00	06-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc3ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    37	    37	           37	      0.370	      0.370	              $37.00	07-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc3ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    38	    38	           38	      0.380	      0.380	              $38.00	08-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc3ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    39	    39	           39	      0.390	      0.390	              $39.00	09-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc3ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    40	    40	           40	      0.400	      0.400	              $40.00	10-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc4ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    41	    41	           41	      0.410	      0.410	              $41.00	11-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc4ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    42	    42	           42	      0.420	      0.420	              $42.00	12-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc4ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    43	    43	           43	      0.430	      0.430	              $43.00	13-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc4ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    44	    44	           44	      0.440	      0.440	              $44.00	14-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc4ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    45	    45	           45	      0.450	      0.450	              $45.00	15-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc4ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    46	    46	           46	      0.460	      0.460	              $46.00	16-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc4ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    47	    47	           47	      0.470	      0.470	              $47.00	17-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc4ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    48	    48	           48	      0.480	      0.480	              $48.00	18-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc4ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    49	    49	           49	      0.490	      0.490	              $49.00	19-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc4ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    50	    50	           50	      0.500	      0.500	              $50.00	20-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc5ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    51	    51	           51	      0.510	      0.510	              $51.00	21-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc5ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    52	    52	           52	      0.520	      0.520	              $52.00	22-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc5ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    53	    53	           53	      0.530	      0.530	              $53.00	23-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc5ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    54	    54	           54	      0.540	      0.540	              $54.00	24-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc5ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    55	    55	           55	      0.550	      0.550	              $55.00	25-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc5ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    56	    56	           56	      0.560	      0.560	              $56.00	26-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc5ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    57	    57	           57	      0.570	      0.570	              $57.00	27-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc5ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    58	    58	           58	      0.580	      0.580	              $58.00	28-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc5ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    59	    59	           59	      0.590	      0.590	              $59.00	29-feb-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc5ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    60	    60	           60	      0.600	      0.600	              $60.00	01-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc6ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    61	    61	           61	      0.610	      0.610	              $61.00	02-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc6ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    62	    62	           62	      0.620	      0.620	              $62.00	03-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc6ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    63	    63	           63	      0.630	      0.630	              $63.00	04-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc6ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    64	    64	           64	      0.640	      0.640	              $64.00	05-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc6ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    65	    65	           65	      0.650	      0.650	              $65.00	06-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc6ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    66	    66	           66	      0.660	      0.660	              $66.00	07-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc6ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    67	    67	           67	      0.670	      0.670	              $67.00	08-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc6ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    68	    68	           68	      0.680	      0.680	              $68.00	09-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc6ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    69	    69	           69	      0.690	      0.690	              $69.00	10-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc6ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    70	    70	           70	      0.700	      0.700	              $70.00	11-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc7ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    71	    71	           71	      0.710	      0.710	              $71.00	12-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc7ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    72	    72	           72	      0.720	      0.720	              $72.00	13-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc7ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    73	    73	           73	      0.730	      0.730	              $73.00	14-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc7ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    74	    74	           74	      0.740	      0.740	              $74.00	15-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc7ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    75	    75	           75	      0.750	      0.750	              $75.00	16-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc7ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    76	    76	           76	      0.760	      0.760	              $76.00	17-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc7ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    77	    77	           77	      0.770	      0.770	              $77.00	18-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc7ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    78	    78	           78	      0.780	      0.780	              $78.00	19-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc7ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    79	    79	           79	      0.790	      0.790	              $79.00	20-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc7ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    80	    80	           80	      0.800	      0.800	              $80.00	21-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc8ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    81	    81	           81	      0.810	      0.810	              $81.00	22-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc8ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    82	    82	           82	      0.820	      0.820	              $82.00	23-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc8ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    83	    83	           83	      0.830	      0.830	              $83.00	24-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc8ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    84	    84	           84	      0.840	      0.840	              $84.00	25-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc8ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    85	    85	           85	      0.850	      0.850	              $85.00	26-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc8ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    86	    86	           86	      0.860	      0.860	              $86.00	27-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc8ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    87	    87	           87	      0.870	      0.870	              $87.00	28-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc8ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    88	    88	           88	      0.880	      0.880	              $88.00	29-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc8ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    89	    89	           89	      0.890	      0.890	              $89.00	30-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc8ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    90	    90	           90	      0.900	      0.900	              $90.00	31-mar-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc9ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    91	    91	           91	      0.910	      0.910	              $91.00	01-apr-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc9ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    92	    92	           92	      0.920	      0.920	              $92.00	02-apr-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc9ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    93	    93	           93	      0.930	      0.930	              $93.00	03-apr-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc9ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    94	    94	           94	      0.940	      0.940	              $94.00	04-apr-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc9ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    95	    95	           95	      0.950	      0.950	              $95.00	05-apr-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc9ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    96	    96	           96	      0.960	      0.960	              $96.00	06-apr-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc9ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    97	    97	           97	      0.970	      0.970	              $97.00	07-apr-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc9ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    98	    98	           98	      0.980	      0.980	              $98.00	08-apr-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc9ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    99	    99	           99	      0.990	      0.990	              $99.00	09-apr-1960-
+              	   61aaaaaaa0bbbbbbb0ccccccc9ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   100	   100	          100	      1.000	      1.000	             $100.00	10-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc0ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   101	   101	          101	      1.010	      1.010	             $101.00	11-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc0ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   102	   102	          102	      1.020	      1.020	             $102.00	12-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc0ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   103	   103	          103	      1.030	      1.030	             $103.00	13-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc0ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   104	   104	          104	      1.040	      1.040	             $104.00	14-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc0ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   105	   105	          105	      1.050	      1.050	             $105.00	15-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc0ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   106	   106	          106	      1.060	      1.060	             $106.00	16-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc0ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   107	   107	          107	      1.070	      1.070	             $107.00	17-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc0ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   108	   108	          108	      1.080	      1.080	             $108.00	18-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc0ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   109	   109	          109	      1.090	      1.090	             $109.00	19-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc0ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   110	   110	          110	      1.100	      1.100	             $110.00	20-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc1ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   111	   111	          111	      1.110	      1.110	             $111.00	21-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc1ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   112	   112	          112	      1.120	      1.120	             $112.00	22-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc1ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   113	   113	          113	      1.130	      1.130	             $113.00	23-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc1ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   114	   114	          114	      1.140	      1.140	             $114.00	24-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc1ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   115	   115	          115	      1.150	      1.150	             $115.00	25-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc1ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   116	   116	          116	      1.160	      1.160	             $116.00	26-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc1ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   117	   117	          117	      1.170	      1.170	             $117.00	27-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc1ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   118	   118	          118	      1.180	      1.180	             $118.00	28-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc1ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   119	   119	          119	      1.190	      1.190	             $119.00	29-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc1ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   120	   120	          120	      1.200	      1.200	             $120.00	30-apr-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc2ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   121	   121	          121	      1.210	      1.210	             $121.00	01-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc2ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   122	   122	          122	      1.220	      1.220	             $122.00	02-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc2ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   123	   123	          123	      1.230	      1.230	             $123.00	03-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc2ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   124	   124	          124	      1.240	      1.240	             $124.00	04-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc2ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   125	   125	          125	      1.250	      1.250	             $125.00	05-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc2ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   126	   126	          126	      1.260	      1.260	             $126.00	06-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc2ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   127	   127	          127	      1.270	      1.270	             $127.00	07-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc2ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     0	   128	          128	      1.280	      1.280	             $128.00	08-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc2ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     1	   129	          129	      1.290	      1.290	             $129.00	09-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc2ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     2	   130	          130	      1.300	      1.300	             $130.00	10-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc3ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     3	   131	          131	      1.310	      1.310	             $131.00	11-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc3ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     4	   132	          132	      1.320	      1.320	             $132.00	12-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc3ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     5	   133	          133	      1.330	      1.330	             $133.00	13-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc3ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     6	   134	          134	      1.340	      1.340	             $134.00	14-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc3ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     7	   135	          135	      1.350	      1.350	             $135.00	15-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc3ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     8	   136	          136	      1.360	      1.360	             $136.00	16-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc3ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     9	   137	          137	      1.370	      1.370	             $137.00	17-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc3ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    10	   138	          138	      1.380	      1.380	             $138.00	18-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc3ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    11	   139	          139	      1.390	      1.390	             $139.00	19-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc3ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    12	   140	          140	      1.400	      1.400	             $140.00	20-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc4ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    13	   141	          141	      1.410	      1.410	             $141.00	21-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc4ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    14	   142	          142	      1.420	      1.420	             $142.00	22-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc4ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    15	   143	          143	      1.430	      1.430	             $143.00	23-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc4ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    16	   144	          144	      1.440	      1.440	             $144.00	24-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc4ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    17	   145	          145	      1.450	      1.450	             $145.00	25-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc4ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    18	   146	          146	      1.460	      1.460	             $146.00	26-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc4ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    19	   147	          147	      1.470	      1.470	             $147.00	27-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc4ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    20	   148	          148	      1.480	      1.480	             $148.00	28-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc4ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    21	   149	          149	      1.490	      1.490	             $149.00	29-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc4ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    22	   150	          150	      1.500	      1.500	             $150.00	30-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc5ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    23	   151	          151	      1.510	      1.510	             $151.00	31-may-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc5ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    24	   152	          152	      1.520	      1.520	             $152.00	01-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc5ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    25	   153	          153	      1.530	      1.530	             $153.00	02-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc5ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    26	   154	          154	      1.540	      1.540	             $154.00	03-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc5ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    27	   155	          155	      1.550	      1.550	             $155.00	04-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc5ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    28	   156	          156	      1.560	      1.560	             $156.00	05-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc5ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    29	   157	          157	      1.570	      1.570	             $157.00	06-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc5ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    30	   158	          158	      1.580	      1.580	             $158.00	07-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc5ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    31	   159	          159	      1.590	      1.590	             $159.00	08-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc5ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    32	   160	          160	      1.600	      1.600	             $160.00	09-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc6ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    33	   161	          161	      1.610	      1.610	             $161.00	10-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc6ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    34	   162	          162	      1.620	      1.620	             $162.00	11-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc6ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    35	   163	          163	      1.630	      1.630	             $163.00	12-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc6ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    36	   164	          164	      1.640	      1.640	             $164.00	13-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc6ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    37	   165	          165	      1.650	      1.650	             $165.00	14-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc6ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    38	   166	          166	      1.660	      1.660	             $166.00	15-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc6ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    39	   167	          167	      1.670	      1.670	             $167.00	16-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc6ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    40	   168	          168	      1.680	      1.680	             $168.00	17-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc6ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    41	   169	          169	      1.690	      1.690	             $169.00	18-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc6ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    42	   170	          170	      1.700	      1.700	             $170.00	19-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc7ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    43	   171	          171	      1.710	      1.710	             $171.00	20-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc7ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    44	   172	          172	      1.720	      1.720	             $172.00	21-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc7ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    45	   173	          173	      1.730	      1.730	             $173.00	22-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc7ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    46	   174	          174	      1.740	      1.740	             $174.00	23-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc7ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    47	   175	          175	      1.750	      1.750	             $175.00	24-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc7ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    48	   176	          176	      1.760	      1.760	             $176.00	25-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc7ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    49	   177	          177	      1.770	      1.770	             $177.00	26-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc7ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    50	   178	          178	      1.780	      1.780	             $178.00	27-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc7ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    51	   179	          179	      1.790	      1.790	             $179.00	28-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc7ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    52	   180	          180	      1.800	      1.800	             $180.00	29-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc8ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    53	   181	          181	      1.810	      1.810	             $181.00	30-jun-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc8ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    54	   182	          182	      1.820	      1.820	             $182.00	01-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc8ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    55	   183	          183	      1.830	      1.830	             $183.00	02-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc8ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    56	   184	          184	      1.840	      1.840	             $184.00	03-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc8ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    57	   185	          185	      1.850	      1.850	             $185.00	04-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc8ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    58	   186	          186	      1.860	      1.860	             $186.00	05-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc8ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    59	   187	          187	      1.870	      1.870	             $187.00	06-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc8ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    60	   188	          188	      1.880	      1.880	             $188.00	07-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc8ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    61	   189	          189	      1.890	      1.890	             $189.00	08-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc8ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    62	   190	          190	      1.900	      1.900	             $190.00	09-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc9ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    63	   191	          191	      1.910	      1.910	             $191.00	10-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc9ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    64	   192	          192	      1.920	      1.920	             $192.00	11-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc9ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    65	   193	          193	      1.930	      1.930	             $193.00	12-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc9ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    66	   194	          194	      1.940	      1.940	             $194.00	13-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc9ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    67	   195	          195	      1.950	      1.950	             $195.00	14-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc9ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    68	   196	          196	      1.960	      1.960	             $196.00	15-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc9ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    69	   197	          197	      1.970	      1.970	             $197.00	16-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc9ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    70	   198	          198	      1.980	      1.980	             $198.00	17-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc9ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    71	   199	          199	      1.990	      1.990	             $199.00	18-jul-1960-
+              	   61aaaaaaa0bbbbbbb1ccccccc9ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    72	   200	          200	      2.000	      2.000	             $200.00	19-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc0ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    73	   201	          201	      2.010	      2.010	             $201.00	20-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc0ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    74	   202	          202	      2.020	      2.020	             $202.00	21-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc0ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    75	   203	          203	      2.030	      2.030	             $203.00	22-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc0ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    76	   204	          204	      2.040	      2.040	             $204.00	23-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc0ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    77	   205	          205	      2.050	      2.050	             $205.00	24-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc0ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    78	   206	          206	      2.060	      2.060	             $206.00	25-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc0ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    79	   207	          207	      2.070	      2.070	             $207.00	26-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc0ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    80	   208	          208	      2.080	      2.080	             $208.00	27-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc0ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    81	   209	          209	      2.090	      2.090	             $209.00	28-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc0ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    82	   210	          210	      2.100	      2.100	             $210.00	29-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc1ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    83	   211	          211	      2.110	      2.110	             $211.00	30-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc1ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    84	   212	          212	      2.120	      2.120	             $212.00	31-jul-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc1ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    85	   213	          213	      2.130	      2.130	             $213.00	01-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc1ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    86	   214	          214	      2.140	      2.140	             $214.00	02-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc1ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    87	   215	          215	      2.150	      2.150	             $215.00	03-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc1ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    88	   216	          216	      2.160	      2.160	             $216.00	04-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc1ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    89	   217	          217	      2.170	      2.170	             $217.00	05-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc1ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    90	   218	          218	      2.180	      2.180	             $218.00	06-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc1ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    91	   219	          219	      2.190	      2.190	             $219.00	07-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc1ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    92	   220	          220	      2.200	      2.200	             $220.00	08-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc2ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    93	   221	          221	      2.210	      2.210	             $221.00	09-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc2ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    94	   222	          222	      2.220	      2.220	             $222.00	10-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc2ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    95	   223	          223	      2.230	      2.230	             $223.00	11-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc2ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    96	   224	          224	      2.240	      2.240	             $224.00	12-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc2ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    97	   225	          225	      2.250	      2.250	             $225.00	13-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc2ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    98	   226	          226	      2.260	      2.260	             $226.00	14-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc2ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    99	   227	          227	      2.270	      2.270	             $227.00	15-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc2ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   100	   228	          228	      2.280	      2.280	             $228.00	16-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc2ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   101	   229	          229	      2.290	      2.290	             $229.00	17-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc2ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   102	   230	          230	      2.300	      2.300	             $230.00	18-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc3ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   103	   231	          231	      2.310	      2.310	             $231.00	19-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc3ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   104	   232	          232	      2.320	      2.320	             $232.00	20-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc3ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   105	   233	          233	      2.330	      2.330	             $233.00	21-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc3ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   106	   234	          234	      2.340	      2.340	             $234.00	22-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc3ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   107	   235	          235	      2.350	      2.350	             $235.00	23-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc3ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   108	   236	          236	      2.360	      2.360	             $236.00	24-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc3ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   109	   237	          237	      2.370	      2.370	             $237.00	25-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc3ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   110	   238	          238	      2.380	      2.380	             $238.00	26-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc3ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   111	   239	          239	      2.390	      2.390	             $239.00	27-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc3ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   112	   240	          240	      2.400	      2.400	             $240.00	28-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc4ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   113	   241	          241	      2.410	      2.410	             $241.00	29-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc4ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   114	   242	          242	      2.420	      2.420	             $242.00	30-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc4ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   115	   243	          243	      2.430	      2.430	             $243.00	31-aug-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc4ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   116	   244	          244	      2.440	      2.440	             $244.00	01-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc4ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   117	   245	          245	      2.450	      2.450	             $245.00	02-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc4ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   118	   246	          246	      2.460	      2.460	             $246.00	03-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc4ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   119	   247	          247	      2.470	      2.470	             $247.00	04-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc4ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   120	   248	          248	      2.480	      2.480	             $248.00	05-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc4ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   121	   249	          249	      2.490	      2.490	             $249.00	06-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc4ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   122	   250	          250	      2.500	      2.500	             $250.00	07-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc5ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   123	   251	          251	      2.510	      2.510	             $251.00	08-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc5ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   124	   252	          252	      2.520	      2.520	             $252.00	09-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc5ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   125	   253	          253	      2.530	      2.530	             $253.00	10-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc5ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   126	   254	          254	      2.540	      2.540	             $254.00	11-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc5ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   127	   255	          255	      2.550	      2.550	             $255.00	12-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc5ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     0	   256	          256	      2.560	      2.560	             $256.00	13-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc5ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     1	   257	          257	      2.570	      2.570	             $257.00	14-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc5ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     2	   258	          258	      2.580	      2.580	             $258.00	15-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc5ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     3	   259	          259	      2.590	      2.590	             $259.00	16-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc5ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     4	   260	          260	      2.600	      2.600	             $260.00	17-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc6ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     5	   261	          261	      2.610	      2.610	             $261.00	18-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc6ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     6	   262	          262	      2.620	      2.620	             $262.00	19-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc6ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     7	   263	          263	      2.630	      2.630	             $263.00	20-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc6ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     8	   264	          264	      2.640	      2.640	             $264.00	21-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc6ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     9	   265	          265	      2.650	      2.650	             $265.00	22-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc6ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    10	   266	          266	      2.660	      2.660	             $266.00	23-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc6ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    11	   267	          267	      2.670	      2.670	             $267.00	24-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc6ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    12	   268	          268	      2.680	      2.680	             $268.00	25-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc6ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    13	   269	          269	      2.690	      2.690	             $269.00	26-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc6ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    14	   270	          270	      2.700	      2.700	             $270.00	27-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc7ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    15	   271	          271	      2.710	      2.710	             $271.00	28-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc7ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    16	   272	          272	      2.720	      2.720	             $272.00	29-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc7ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    17	   273	          273	      2.730	      2.730	             $273.00	30-sep-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc7ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    18	   274	          274	      2.740	      2.740	             $274.00	01-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc7ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    19	   275	          275	      2.750	      2.750	             $275.00	02-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc7ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    20	   276	          276	      2.760	      2.760	             $276.00	03-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc7ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    21	   277	          277	      2.770	      2.770	             $277.00	04-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc7ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    22	   278	          278	      2.780	      2.780	             $278.00	05-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc7ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    23	   279	          279	      2.790	      2.790	             $279.00	06-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc7ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    24	   280	          280	      2.800	      2.800	             $280.00	07-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc8ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    25	   281	          281	      2.810	      2.810	             $281.00	08-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc8ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    26	   282	          282	      2.820	      2.820	             $282.00	09-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc8ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    27	   283	          283	      2.830	      2.830	             $283.00	10-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc8ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    28	   284	          284	      2.840	      2.840	             $284.00	11-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc8ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    29	   285	          285	      2.850	      2.850	             $285.00	12-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc8ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    30	   286	          286	      2.860	      2.860	             $286.00	13-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc8ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    31	   287	          287	      2.870	      2.870	             $287.00	14-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc8ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    32	   288	          288	      2.880	      2.880	             $288.00	15-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc8ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    33	   289	          289	      2.890	      2.890	             $289.00	16-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc8ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    34	   290	          290	      2.900	      2.900	             $290.00	17-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc9ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    35	   291	          291	      2.910	      2.910	             $291.00	18-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc9ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    36	   292	          292	      2.920	      2.920	             $292.00	19-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc9ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    37	   293	          293	      2.930	      2.930	             $293.00	20-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc9ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    38	   294	          294	      2.940	      2.940	             $294.00	21-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc9ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    39	   295	          295	      2.950	      2.950	             $295.00	22-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc9ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    40	   296	          296	      2.960	      2.960	             $296.00	23-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc9ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    41	   297	          297	      2.970	      2.970	             $297.00	24-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc9ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    42	   298	          298	      2.980	      2.980	             $298.00	25-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc9ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    43	   299	          299	      2.990	      2.990	             $299.00	26-oct-1960-
+              	   61aaaaaaa0bbbbbbb2ccccccc9ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    44	   300	          300	      3.000	      3.000	             $300.00	27-oct-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc0ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    45	   301	          301	      3.010	      3.010	             $301.00	28-oct-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc0ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    46	   302	          302	      3.020	      3.020	             $302.00	29-oct-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc0ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    47	   303	          303	      3.030	      3.030	             $303.00	30-oct-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc0ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    48	   304	          304	      3.040	      3.040	             $304.00	31-oct-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc0ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    49	   305	          305	      3.050	      3.050	             $305.00	01-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc0ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    50	   306	          306	      3.060	      3.060	             $306.00	02-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc0ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    51	   307	          307	      3.070	      3.070	             $307.00	03-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc0ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    52	   308	          308	      3.080	      3.080	             $308.00	04-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc0ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    53	   309	          309	      3.090	      3.090	             $309.00	05-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc0ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    54	   310	          310	      3.100	      3.100	             $310.00	06-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc1ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    55	   311	          311	      3.110	      3.110	             $311.00	07-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc1ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    56	   312	          312	      3.120	      3.120	             $312.00	08-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc1ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    57	   313	          313	      3.130	      3.130	             $313.00	09-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc1ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    58	   314	          314	      3.140	      3.140	             $314.00	10-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc1ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    59	   315	          315	      3.150	      3.150	             $315.00	11-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc1ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    60	   316	          316	      3.160	      3.160	             $316.00	12-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc1ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    61	   317	          317	      3.170	      3.170	             $317.00	13-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc1ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    62	   318	          318	      3.180	      3.180	             $318.00	14-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc1ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    63	   319	          319	      3.190	      3.190	             $319.00	15-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc1ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    64	   320	          320	      3.200	      3.200	             $320.00	16-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc2ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    65	   321	          321	      3.210	      3.210	             $321.00	17-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc2ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    66	   322	          322	      3.220	      3.220	             $322.00	18-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc2ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    67	   323	          323	      3.230	      3.230	             $323.00	19-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc2ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    68	   324	          324	      3.240	      3.240	             $324.00	20-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc2ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    69	   325	          325	      3.250	      3.250	             $325.00	21-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc2ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    70	   326	          326	      3.260	      3.260	             $326.00	22-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc2ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    71	   327	          327	      3.270	      3.270	             $327.00	23-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc2ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    72	   328	          328	      3.280	      3.280	             $328.00	24-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc2ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    73	   329	          329	      3.290	      3.290	             $329.00	25-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc2ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    74	   330	          330	      3.300	      3.300	             $330.00	26-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc3ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    75	   331	          331	      3.310	      3.310	             $331.00	27-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc3ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    76	   332	          332	      3.320	      3.320	             $332.00	28-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc3ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    77	   333	          333	      3.330	      3.330	             $333.00	29-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc3ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    78	   334	          334	      3.340	      3.340	             $334.00	30-nov-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc3ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    79	   335	          335	      3.350	      3.350	             $335.00	01-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc3ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    80	   336	          336	      3.360	      3.360	             $336.00	02-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc3ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    81	   337	          337	      3.370	      3.370	             $337.00	03-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc3ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    82	   338	          338	      3.380	      3.380	             $338.00	04-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc3ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    83	   339	          339	      3.390	      3.390	             $339.00	05-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc3ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    84	   340	          340	      3.400	      3.400	             $340.00	06-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc4ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    85	   341	          341	      3.410	      3.410	             $341.00	07-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc4ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    86	   342	          342	      3.420	      3.420	             $342.00	08-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc4ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    87	   343	          343	      3.430	      3.430	             $343.00	09-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc4ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    88	   344	          344	      3.440	      3.440	             $344.00	10-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc4ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    89	   345	          345	      3.450	      3.450	             $345.00	11-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc4ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    90	   346	          346	      3.460	      3.460	             $346.00	12-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc4ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    91	   347	          347	      3.470	      3.470	             $347.00	13-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc4ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    92	   348	          348	      3.480	      3.480	             $348.00	14-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc4ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    93	   349	          349	      3.490	      3.490	             $349.00	15-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc4ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    94	   350	          350	      3.500	      3.500	             $350.00	16-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc5ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    95	   351	          351	      3.510	      3.510	             $351.00	17-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc5ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    96	   352	          352	      3.520	      3.520	             $352.00	18-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc5ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    97	   353	          353	      3.530	      3.530	             $353.00	19-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc5ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    98	   354	          354	      3.540	      3.540	             $354.00	20-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc5ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    99	   355	          355	      3.550	      3.550	             $355.00	21-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc5ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   100	   356	          356	      3.560	      3.560	             $356.00	22-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc5ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   101	   357	          357	      3.570	      3.570	             $357.00	23-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc5ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   102	   358	          358	      3.580	      3.580	             $358.00	24-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc5ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   103	   359	          359	      3.590	      3.590	             $359.00	25-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc5ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   104	   360	          360	      3.600	      3.600	             $360.00	26-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc6ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   105	   361	          361	      3.610	      3.610	             $361.00	27-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc6ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   106	   362	          362	      3.620	      3.620	             $362.00	28-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc6ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   107	   363	          363	      3.630	      3.630	             $363.00	29-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc6ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   108	   364	          364	      3.640	      3.640	             $364.00	30-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc6ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   109	   365	          365	      3.650	      3.650	             $365.00	31-dec-1960-
+              	   61aaaaaaa0bbbbbbb3ccccccc6ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   110	   366	          366	      3.660	      3.660	             $366.00	01-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc6ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   111	   367	          367	      3.670	      3.670	             $367.00	02-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc6ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   112	   368	          368	      3.680	      3.680	             $368.00	03-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc6ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   113	   369	          369	      3.690	      3.690	             $369.00	04-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc6ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   114	   370	          370	      3.700	      3.700	             $370.00	05-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc7ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   115	   371	          371	      3.710	      3.710	             $371.00	06-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc7ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   116	   372	          372	      3.720	      3.720	             $372.00	07-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc7ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   117	   373	          373	      3.730	      3.730	             $373.00	08-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc7ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   118	   374	          374	      3.740	      3.740	             $374.00	09-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc7ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   119	   375	          375	      3.750	      3.750	             $375.00	10-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc7ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   120	   376	          376	      3.760	      3.760	             $376.00	11-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc7ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   121	   377	          377	      3.770	      3.770	             $377.00	12-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc7ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   122	   378	          378	      3.780	      3.780	             $378.00	13-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc7ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   123	   379	          379	      3.790	      3.790	             $379.00	14-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc7ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   124	   380	          380	      3.800	      3.800	             $380.00	15-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc8ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   125	   381	          381	      3.810	      3.810	             $381.00	16-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc8ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   126	   382	          382	      3.820	      3.820	             $382.00	17-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc8ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   127	   383	          383	      3.830	      3.830	             $383.00	18-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc8ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     0	   384	          384	      3.840	      3.840	             $384.00	19-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc8ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     1	   385	          385	      3.850	      3.850	             $385.00	20-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc8ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     2	   386	          386	      3.860	      3.860	             $386.00	21-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc8ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     3	   387	          387	      3.870	      3.870	             $387.00	22-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc8ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     4	   388	          388	      3.880	      3.880	             $388.00	23-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc8ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     5	   389	          389	      3.890	      3.890	             $389.00	24-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc8ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     6	   390	          390	      3.900	      3.900	             $390.00	25-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc9ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     7	   391	          391	      3.910	      3.910	             $391.00	26-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc9ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     8	   392	          392	      3.920	      3.920	             $392.00	27-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc9ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+     9	   393	          393	      3.930	      3.930	             $393.00	28-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc9ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    10	   394	          394	      3.940	      3.940	             $394.00	29-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc9ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    11	   395	          395	      3.950	      3.950	             $395.00	30-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc9ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    12	   396	          396	      3.960	      3.960	             $396.00	31-jan-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc9ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    13	   397	          397	      3.970	      3.970	             $397.00	01-feb-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc9ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    14	   398	          398	      3.980	      3.980	             $398.00	02-feb-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc9ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    15	   399	          399	      3.990	      3.990	             $399.00	03-feb-1961-
+              	   61aaaaaaa0bbbbbbb3ccccccc9ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    16	   400	          400	      4.000	      4.000	             $400.00	04-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc0ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    17	   401	          401	      4.010	      4.010	             $401.00	05-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc0ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    18	   402	          402	      4.020	      4.020	             $402.00	06-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc0ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    19	   403	          403	      4.030	      4.030	             $403.00	07-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc0ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    20	   404	          404	      4.040	      4.040	             $404.00	08-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc0ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    21	   405	          405	      4.050	      4.050	             $405.00	09-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc0ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    22	   406	          406	      4.060	      4.060	             $406.00	10-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc0ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    23	   407	          407	      4.070	      4.070	             $407.00	11-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc0ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    24	   408	          408	      4.080	      4.080	             $408.00	12-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc0ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    25	   409	          409	      4.090	      4.090	             $409.00	13-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc0ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    26	   410	          410	      4.100	      4.100	             $410.00	14-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc1ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    27	   411	          411	      4.110	      4.110	             $411.00	15-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc1ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    28	   412	          412	      4.120	      4.120	             $412.00	16-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc1ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    29	   413	          413	      4.130	      4.130	             $413.00	17-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc1ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    30	   414	          414	      4.140	      4.140	             $414.00	18-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc1ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    31	   415	          415	      4.150	      4.150	             $415.00	19-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc1ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    32	   416	          416	      4.160	      4.160	             $416.00	20-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc1ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    33	   417	          417	      4.170	      4.170	             $417.00	21-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc1ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    34	   418	          418	      4.180	      4.180	             $418.00	22-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc1ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    35	   419	          419	      4.190	      4.190	             $419.00	23-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc1ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    36	   420	          420	      4.200	      4.200	             $420.00	24-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc2ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    37	   421	          421	      4.210	      4.210	             $421.00	25-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc2ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    38	   422	          422	      4.220	      4.220	             $422.00	26-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc2ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    39	   423	          423	      4.230	      4.230	             $423.00	27-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc2ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    40	   424	          424	      4.240	      4.240	             $424.00	28-feb-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc2ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    41	   425	          425	      4.250	      4.250	             $425.00	01-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc2ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    42	   426	          426	      4.260	      4.260	             $426.00	02-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc2ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    43	   427	          427	      4.270	      4.270	             $427.00	03-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc2ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    44	   428	          428	      4.280	      4.280	             $428.00	04-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc2ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    45	   429	          429	      4.290	      4.290	             $429.00	05-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc2ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    46	   430	          430	      4.300	      4.300	             $430.00	06-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc3ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    47	   431	          431	      4.310	      4.310	             $431.00	07-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc3ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    48	   432	          432	      4.320	      4.320	             $432.00	08-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc3ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    49	   433	          433	      4.330	      4.330	             $433.00	09-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc3ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    50	   434	          434	      4.340	      4.340	             $434.00	10-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc3ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    51	   435	          435	      4.350	      4.350	             $435.00	11-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc3ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    52	   436	          436	      4.360	      4.360	             $436.00	12-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc3ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    53	   437	          437	      4.370	      4.370	             $437.00	13-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc3ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    54	   438	          438	      4.380	      4.380	             $438.00	14-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc3ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    55	   439	          439	      4.390	      4.390	             $439.00	15-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc3ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    56	   440	          440	      4.400	      4.400	             $440.00	16-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc4ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    57	   441	          441	      4.410	      4.410	             $441.00	17-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc4ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    58	   442	          442	      4.420	      4.420	             $442.00	18-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc4ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    59	   443	          443	      4.430	      4.430	             $443.00	19-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc4ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    60	   444	          444	      4.440	      4.440	             $444.00	20-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc4ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    61	   445	          445	      4.450	      4.450	             $445.00	21-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc4ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    62	   446	          446	      4.460	      4.460	             $446.00	22-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc4ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    63	   447	          447	      4.470	      4.470	             $447.00	23-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc4ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    64	   448	          448	      4.480	      4.480	             $448.00	24-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc4ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    65	   449	          449	      4.490	      4.490	             $449.00	25-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc4ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    66	   450	          450	      4.500	      4.500	             $450.00	26-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc5ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    67	   451	          451	      4.510	      4.510	             $451.00	27-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc5ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    68	   452	          452	      4.520	      4.520	             $452.00	28-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc5ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    69	   453	          453	      4.530	      4.530	             $453.00	29-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc5ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    70	   454	          454	      4.540	      4.540	             $454.00	30-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc5ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    71	   455	          455	      4.550	      4.550	             $455.00	31-mar-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc5ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    72	   456	          456	      4.560	      4.560	             $456.00	01-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc5ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    73	   457	          457	      4.570	      4.570	             $457.00	02-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc5ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    74	   458	          458	      4.580	      4.580	             $458.00	03-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc5ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    75	   459	          459	      4.590	      4.590	             $459.00	04-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc5ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    76	   460	          460	      4.600	      4.600	             $460.00	05-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc6ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    77	   461	          461	      4.610	      4.610	             $461.00	06-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc6ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    78	   462	          462	      4.620	      4.620	             $462.00	07-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc6ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    79	   463	          463	      4.630	      4.630	             $463.00	08-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc6ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    80	   464	          464	      4.640	      4.640	             $464.00	09-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc6ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    81	   465	          465	      4.650	      4.650	             $465.00	10-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc6ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    82	   466	          466	      4.660	      4.660	             $466.00	11-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc6ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    83	   467	          467	      4.670	      4.670	             $467.00	12-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc6ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    84	   468	          468	      4.680	      4.680	             $468.00	13-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc6ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    85	   469	          469	      4.690	      4.690	             $469.00	14-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc6ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    86	   470	          470	      4.700	      4.700	             $470.00	15-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc7ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    87	   471	          471	      4.710	      4.710	             $471.00	16-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc7ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    88	   472	          472	      4.720	      4.720	             $472.00	17-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc7ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    89	   473	          473	      4.730	      4.730	             $473.00	18-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc7ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    90	   474	          474	      4.740	      4.740	             $474.00	19-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc7ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    91	   475	          475	      4.750	      4.750	             $475.00	20-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc7ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    92	   476	          476	      4.760	      4.760	             $476.00	21-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc7ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    93	   477	          477	      4.770	      4.770	             $477.00	22-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc7ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    94	   478	          478	      4.780	      4.780	             $478.00	23-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc7ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    95	   479	          479	      4.790	      4.790	             $479.00	24-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc7ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    96	   480	          480	      4.800	      4.800	             $480.00	25-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc8ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    97	   481	          481	      4.810	      4.810	             $481.00	26-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc8ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    98	   482	          482	      4.820	      4.820	             $482.00	27-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc8ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    99	   483	          483	      4.830	      4.830	             $483.00	28-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc8ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   100	   484	          484	      4.840	      4.840	             $484.00	29-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc8ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   101	   485	          485	      4.850	      4.850	             $485.00	30-apr-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc8ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   102	   486	          486	      4.860	      4.860	             $486.00	01-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc8ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   103	   487	          487	      4.870	      4.870	             $487.00	02-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc8ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   104	   488	          488	      4.880	      4.880	             $488.00	03-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc8ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   105	   489	          489	      4.890	      4.890	             $489.00	04-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc8ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   106	   490	          490	      4.900	      4.900	             $490.00	05-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc9ddddddd0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   107	   491	          491	      4.910	      4.910	             $491.00	06-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc9ddddddd1xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   108	   492	          492	      4.920	      4.920	             $492.00	07-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc9ddddddd2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   109	   493	          493	      4.930	      4.930	             $493.00	08-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc9ddddddd3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   110	   494	          494	      4.940	      4.940	             $494.00	09-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc9ddddddd4xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   111	   495	          495	      4.950	      4.950	             $495.00	10-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc9ddddddd5xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   112	   496	          496	      4.960	      4.960	             $496.00	11-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc9ddddddd6xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   113	   497	          497	      4.970	      4.970	             $497.00	12-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc9ddddddd7xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   114	   498	          498	      4.980	      4.980	             $498.00	13-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc9ddddddd8xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+   115	   499	          499	      4.990	      4.990	             $499.00	14-may-1961-
+              	   61aaaaaaa0bbbbbbb4ccccccc9ddddddd9xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* set autocommit on;\g
+<<
+>>
+* drop table heap500 \g
+<<
+~
+>>
+* create table heap500(i1 integer1 not null with default, i2 integer2 not null with -
+default, i4 integer4 not null with default, f4 float4 not null with default, f8 floa-
+t not null with default, money money not null with default, date date not null with -
+default, char61 char(61) not null with default) with noduplicates, location = (ii_da-
+tabase), page_size=2048 \g
+<<
+>>
+* copy table heap500(i1= c0tab, i2= c0tab, i4= c0tab, f4= c0tab, f8= c0tab, money= c-
+0tab, date= c0tab, char61= varchar(0)nl, nl= d1) from 'allt500.dat'; \g
+<<
+(500 rows)
+>>
+* drop table isam500 \g
+<<
+~
+>>
+* create table isam500(i1 integer1 not null with default, i2 integer2 not null with -
+default, i4 integer4 not null with default, f4 float4 not null with default, f8 floa-
+t not null with default, money money not null with default, date date not null with -
+default, char61 char(61) not null with default) with noduplicates, location = (loc1)-
+, page_size=4096 \g
+<<
+>>
+* modify isam500 to isam  with page_size=4096\g
+<<
+(0 rows)
+>>
+* copy table isam500(i1= c0tab, i2= c0tab, i4= c0tab, f4= c0tab, f8= c0tab, money= c-
+0tab, date= c0tab, char61= varchar(0)nl, nl= d1) from 'allt500.dat'; \g
+<<
+(500 rows)
+>>
+* drop table hash500 \g
+<<
+~
+>>
+* create table hash500(i1 integer1 not null with default, i2 integer2 not null with -
+default, i4 integer4 not null with default, f4 float4 not null with default, f8 floa-
+t not null with default, money money not null with default, date date not null with -
+default, char61 char(61) not null with default) with noduplicates, location = (loc2)-
+, page_size=8192 \g
+<<
+>>
+* modify hash500 to hash on i4 with page_size=8192; \g
+<<
+(0 rows)
+>>
+* copy table hash500(i1= c0tab, i2= c0tab, i4= c0tab, f4= c0tab, f8= c0tab, money= c-
+0tab, date= c0tab, char61= varchar(0)nl, nl= d1) from 'allt500.dat'; \g
+<<
+(500 rows)
+>>
+* drop table chash500 \g
+<<
+~
+>>
+* create table chash500(i1 integer1 not null with default, i2 integer2 not null with-
+ default, i4 integer4 not null with default, f4 float4 not null with default, f8 flo-
+at not null with default, money money not null with default, date date not null with-
+ default, char61 char(61) not null with default) with noduplicates, location = (loc3-
+), page_size=16384 \g
+<<
+>>
+* modify chash500 to chash with page_size=16384; \g
+<<
+(0 rows)
+>>
+* copy table chash500(i1= c0tab, i2= c0tab, i4= c0tab, f4= c0tab, f8= c0tab, money= -
+c0tab, date= c0tab, char61= varchar(0)nl, nl= d1) from 'allt500.dat'; \g
+<<
+(500 rows)
+>>
+* drop table btree500 \g
+<<
+~
+>>
+* create table btree500(i1 integer1 not null with default, i2 integer2 not null with-
+ default, i4 integer4 not null with default, f4 float4 not null with default, f8 flo-
+at not null with default, money money not null with default, date date not null with-
+ default, char61 char(61) not null with default) with noduplicates, location = (loc4-
+), page_size=32768 \g
+<<
+>>
+* modify btree500 to btree on f8 with page_size=32768; \g
+<<
+(0 rows)
+>>
+* copy table btree500(i1= c0tab, i2= c0tab, i4= c0tab, f4= c0tab, f8= c0tab, money= -
+c0tab, date= c0tab, char61= varchar(0)nl, nl= d1) from 'allt500.dat'; \g
+<<
+(500 rows)
+>>
+* drop table ubtree500 \g
+<<
+~
+>>
+* create table ubtree500(i1 integer1 not null with default, i2 integer2 not null wit-
+h default, i4 integer4 not null with default, f4 float4 not null with default, f8 fl-
+oat not null with default, money money not null with default, date date not null wit-
+h default, char61 char(61) not null with default) with noduplicates, location = (loc-
+5), page_size=65536 \g
+<<
+>>
+* modify ubtree500 to btree unique on i4 with page_size=65536 \g
+<<
+(0 rows)
+>>
+* copy table ubtree500(i1= c0tab, i2= c0tab, i4= c0tab, f4= c0tab, f8= c0tab, money=-
+ c0tab, date= c0tab, char61= varchar(0)nl, nl= d1) from 'allt500.dat'; \g
+<<
+(500 rows)
+>>
+* drop table cbtree500 \g
+<<
+~
+>>
+* create table cbtree500(i1 integer1 not null with default, i2 integer2 not null wit-
+h default, i4 integer4 not null with default, f4 float4 not null with default, f8 fl-
+oat not null with default, money money not null with default, date date not null wit-
+h default, char61 char(61) not null with default) with noduplicates, location = (ii_-
+database), page_size=2048 \g
+<<
+>>
+* modify cbtree500 to cbtree on char61 with page_size=2048 \g
+<<
+(0 rows)
+>>
+* copy table cbtree500(i1= c0tab, i2= c0tab, i4= c0tab, f4= c0tab, f8= c0tab, money=-
+ c0tab, date= c0tab, char61= varchar(0)nl, nl= d1) from 'allt500.dat'; \g
+<<
+(500 rows)
+>>
+* \q
+<<
+>>
+? ckpdb +w -j -d SEPPARAMDB 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table heap500; \g
+<<
+>>
+* drop table isam500; \g
+<<
+>>
+* drop table hash500 ; \g
+<<
+>>
+* drop table chash500; \g
+<<
+>>
+* drop table  btree500 ; \g
+<<
+>>
+* drop table  ubtree500; \g
+<<
+>>
+* drop table cbtree500 ; \g
+<<
+>>
+* \q
+<<
+>>
+? rollforwarddb +w SEPPARAMDB 
+<<
+Thu Sep  3 17:16:36 1998 RFP: Preparing for database rollforward on : lardb         -
+                  
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+beginning restore of disk /test/oi209806_vande02/ingres/ckp/default/lardb of 6 locat-
+ions
+Thu Sep  3 17:16:37 1998 RFP: Deleting files at root location : ii_database:
+Thu Sep  3 17:16:37 1998 RFP: Start restore of location: ii_database from disk:
+    path = '/test/oi209806_vande02/ingres/ckp/default/lardb'
+    file = 'c0001001.ckp'
+executing restore to disk /test/oi209806_vande02/ingres/ckp/default/lardb of 6 locat-
+ions
+deleting files in location /test/oi209806_vande02/loc1/ingres/data/default/lardb
+Thu Sep  3 17:16:45 1998 RFP: Start restore of location: loc1 from disk:
+    path = '/test/oi209806_vande02/ingres/ckp/default/lardb'
+    file = 'c0001002.ckp'
+executing restore to disk /test/oi209806_vande02/ingres/ckp/default/lardb of 6 locat-
+ions
+deleting files in location /test/oi209806_vande02/loc2/ingres/data/default/lardb
+Thu Sep  3 17:16:46 1998 RFP: Start restore of location: loc2 from disk:
+    path = '/test/oi209806_vande02/ingres/ckp/default/lardb'
+    file = 'c0001003.ckp'
+executing restore to disk /test/oi209806_vande02/ingres/ckp/default/lardb of 6 locat-
+ions
+deleting files in location /test/oi209806_vande02/loc3/ingres/data/default/lardb
+Thu Sep  3 17:16:46 1998 RFP: Start restore of location: loc3 from disk:
+    path = '/test/oi209806_vande02/ingres/ckp/default/lardb'
+    file = 'c0001004.ckp'
+executing restore to disk /test/oi209806_vande02/ingres/ckp/default/lardb of 6 locat-
+ions
+deleting files in location /test/oi209806_vande02/loc4/ingres/data/default/lardb
+Thu Sep  3 17:16:46 1998 RFP: Start restore of location: loc4 from disk:
+    path = '/test/oi209806_vande02/ingres/ckp/default/lardb'
+    file = 'c0001005.ckp'
+executing restore to disk /test/oi209806_vande02/ingres/ckp/default/lardb of 6 locat-
+ions
+deleting files in location /test/oi209806_vande02/loc5/ingres/data/default/lardb
+Thu Sep  3 17:16:47 1998 RFP: Start restore of location: loc5 from disk:
+    path = '/test/oi209806_vande02/ingres/ckp/default/lardb'
+    file = 'c0001006.ckp'
+executing restore to disk /test/oi209806_vande02/ingres/ckp/default/lardb of 6 locat-
+ions
+done with disk operations
+Thu Sep  3 17:16:47 1998 Rollforward completed successfully.
+
+>>
+<< IF (NT_GENERIC) 
+Fri Aug 15 14:18:20 2003 RFP: Preparing for database rollforward on : lardb         -
+                  
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Beginning restore of disk F:\IngresWA\ingres\ckp\default\lardb of 6 locations.
+Fri Aug 15 14:18:20 2003 RFP: Deleting files at root location : ii_database:
+Fri Aug 15 14:18:20 2003 RFP: Start restore of location: ii_database from disk:
+    path = 'F:\IngresWA\ingres\ckp\default\lardb'
+    file = 'c0001001.ckp'
+executing restore from disk
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaaa.cnf
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaab.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaac.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaad.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaae.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaai.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabe.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabf.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabg.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabh.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabi.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabj.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabk.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabl.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabm.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabn.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaabp.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaca.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaacb.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaacc.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaacd.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaace.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaacf.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaacg.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaach.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaadf.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaadg.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaadh.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaadi.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaadj.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaadk.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaadl.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaadm.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaadn.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaado.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaadp.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaef.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaeh.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaei.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaej.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaif.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaig.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaij.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaala.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaalb.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaalc.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaald.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaale.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaalf.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaalg.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaalh.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaali.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaalj.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaalk.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaall.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaalm.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaln.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaalo.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaalp.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaama.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamb.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamc.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamd.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaame.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamf.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamg.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaami.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamj.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamk.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaml.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamm.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamn.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamo.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaamp.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaana.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaanb.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaanc.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaand.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaane.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaanf.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaang.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaanh.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaani.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaanj.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaank.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaanl.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaanm.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaann.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaano.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaanp.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaoa.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaob.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaoc.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaod.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaoe.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaof.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaog.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaoh.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaoi.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaoj.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaabbm.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaabcc.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaok.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaol.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\aaaaaaom.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001001.ckp\zzzz0020.ali
+106 File(s) copied
+deleting files in location F:\IngresWA\loc1\ingres\data\default\lardb
+Fri Aug 15 14:18:21 2003 RFP: Start restore of location: loc1 from disk:
+    path = 'F:\IngresWA\ingres\ckp\default\lardb'
+    file = 'c0001002.ckp'
+executing restore from disk
+F:\IngresWA\ingres\ckp\default\lardb\c0001002.ckp\aaaaabbn.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001002.ckp\zzzz0020.ali
+2 File(s) copied
+deleting files in location F:\IngresWA\loc2\ingres\data\default\lardb
+Fri Aug 15 14:18:21 2003 RFP: Start restore of location: loc2 from disk:
+    path = 'F:\IngresWA\ingres\ckp\default\lardb'
+    file = 'c0001003.ckp'
+executing restore from disk
+F:\IngresWA\ingres\ckp\default\lardb\c0001003.ckp\aaaaabbo.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001003.ckp\zzzz0020.ali
+2 File(s) copied
+deleting files in location F:\IngresWA\loc3\ingres\data\default\lardb
+Fri Aug 15 14:18:21 2003 RFP: Start restore of location: loc3 from disk:
+    path = 'F:\IngresWA\ingres\ckp\default\lardb'
+    file = 'c0001004.ckp'
+executing restore from disk
+F:\IngresWA\ingres\ckp\default\lardb\c0001004.ckp\aaaaabbp.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001004.ckp\zzzz0020.ali
+2 File(s) copied
+deleting files in location F:\IngresWA\loc4\ingres\data\default\lardb
+Fri Aug 15 14:18:21 2003 RFP: Start restore of location: loc4 from disk:
+    path = 'F:\IngresWA\ingres\ckp\default\lardb'
+    file = 'c0001005.ckp'
+executing restore from disk
+F:\IngresWA\ingres\ckp\default\lardb\c0001005.ckp\aaaaabca.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001005.ckp\zzzz0020.ali
+2 File(s) copied
+deleting files in location F:\IngresWA\loc5\ingres\data\default\lardb
+Fri Aug 15 14:18:21 2003 RFP: Start restore of location: loc5 from disk:
+    path = 'F:\IngresWA\ingres\ckp\default\lardb'
+    file = 'c0001006.ckp'
+executing restore from disk
+F:\IngresWA\ingres\ckp\default\lardb\c0001006.ckp\aaaaabcb.t00
+F:\IngresWA\ingres\ckp\default\lardb\c0001006.ckp\zzzz0020.ali
+2 File(s) copied
+Done with disk checkpoint operations.
+Fri Aug 15 14:18:21 2003 Rollforward completed successfully.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select count(*) as x from heap500;\g
+<<
++-------------+
+|x            |
++-------------+
+|          500|
++-------------+
+(1 row)
+>>
+* select count(*) as x from isam500;\g
+<<
++-------------+
+|x            |
++-------------+
+|          500|
++-------------+
+(1 row)
+>>
+* select count(*) as x from hash500;\g
+<<
+
++-------------+
+|x            |
++-------------+
+|          500|
++-------------+
+(1 row)
+>>
+* select count(*) as x from btree500; \g
+<<
++-------------+
+|x            |
++-------------+
+|          500|
++-------------+
+(1 row)
+>>
+* select count(*) as x from ubtree500; \g
+<<
++-------------+
+|x            |
++-------------+
+|          500|
++-------------+
+(1 row)
+>>
+* select count(*) as x from cbtree500; \g
+<<
++-------------+
+|x            |
++-------------+
+|          500|
++-------------+
+(1 row)
+>>
+* \q
+<<
+~
+>>
+? ckpdb +w -d +j SEPPARAMDB 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table ubtree500; \g
+<<
+>>
+* drop table cbtree500; \g
+<<
+>>
+* drop table heap500; \g
+<<
+>>
+* drop table isam500; \g
+<<
+>>
+* drop table hash500 ; \g
+<<
+>>
+* drop table chash500; \g
+<<
+>>
+* drop table  btree500 ; \g
+<<
+>>
+* \q
+<<
+~
+>>
+? ckpdb +w -d +j SEPPARAMDB 
+<<
+~
+>>
+? rollforwarddb +w SEPPARAMDB 
+<<
+~
+>>
+
+
+Ending at: Fri Aug 15 14:24:19 2003

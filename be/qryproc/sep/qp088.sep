@@ -1,0 +1,425 @@
+/*
+	Test Name: efa16.sep
+	Time: Tue May  8 19:26:47 1990
+	User Name: testenv
+ 
+	Test ID : efa16
+	Module  : 
+	Filename: efa16.sep
+	Purpose	: test the errors of getting bad parameters passed to a dbproc.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : none
+	Synopsis     : create a few procedures that take in one parameter 
+			of different types. Then pass bad parameters to
+			the dbproc to see what errors are given.
+
+	History	: xx-xxx-1989	Created				Author
+           6-Oct-1993	(garys) Updated canon to accept integer overflow error 
+				message.  Integer overflow is no longer ignored
+				on table integer columns.
+		  7-MAR-1997    (vissu01) Modified for NT
+           6-Nov-1997	(zhaqi01)	User can pass float into a char parmeter
+          29-Oct-2007	(kiria01) 117790
+		Updating canons reflecting string-number coercion changes.
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa16.sc 
+!!
+/*
+**	efa16.sc
+**
+**	parameters: bad parameters
+**
+**	history:
+**		oct 16/89 sgp
+**			- created.
+*/
+
+#define EFA16
+
+#include "driverefstub.h"
+
+#include <stdio.h>
+
+exec sql include sqlca;
+
+/***********/
+/* efa16() */
+/***********/
+
+efa16()
+{
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa16: bad parameters\n");
+
+	/**********/
+	/* test 1 */
+	/**********/
+
+	printf("\n    test 1:\n");
+
+	/* drop the message */
+	exec sql drop procedure efa16_01;
+
+	/* create the message */
+	printf("      creating procedure efa16_01 (i4 integer)...\n");
+	exec sql create procedure efa16_01 (
+		i4	integer	not null with default
+	) as
+	declare
+		mesg_buf	varchar(100)	not null with default;
+	begin
+		mesg_buf = 'efa16_01 passed var i4 = ' + varchar(i4);
+		message mesg_buf;
+	end;
+
+	/* run */
+	printf("      passing integer to procedure efa16_01...\n");
+	exec sql execute procedure efa16_01 ( i4 = 1 );
+
+	printf("      passing float to procedure efa16_01...\n");
+	exec sql execute procedure efa16_01 ( i4 = 1.1 );
+
+	printf("      passing char to procedure efa16_01...\n");
+	exec sql execute procedure efa16_01 ( i4 = 'a' );
+
+	/**********/
+	/* test 2 */
+	/**********/
+
+	printf("\n    test 2:\n");
+
+	/* drop the message */
+	exec sql drop procedure efa16_02;
+
+	/* create the message */
+	printf("      creating procedure efa16_02 (c1 c(1))...\n");
+	exec sql create procedure efa16_02 (
+		c1	c(1)	not null with default
+	) as
+	declare
+		mesg_buf	varchar(100)	not null with default;
+	begin
+		mesg_buf = 'efa16_02 passed var c1 = ' + c1;
+		message mesg_buf;
+	end;
+
+	/* run */
+	printf("      passing char to procedure efa16_02...\n");
+	exec sql execute procedure efa16_02 ( c1 = 'a' );
+
+	printf("      passing too many char to procedure efa16_02...\n");
+	exec sql execute procedure efa16_02 ( c1 = 'ab' );
+
+	printf("      passing integer to procedure efa16_02...\n");
+	exec sql execute procedure efa16_02 ( c1 = 2 );
+
+	printf("      passing float to procedure efa16_02...\n");
+	exec sql execute procedure efa16_02 ( c1 = 2.2 );
+
+	/**********/
+	/* test 3 */
+	/**********/
+
+	printf("\n    test 3:\n");
+
+	/* drop the message */
+	exec sql drop procedure efa16_03;
+
+	/* create the message */
+	printf("      creating procedure efa16_03 (f8 float)...\n");
+	exec sql create procedure efa16_03 (
+		f8	float	not null with default
+	) as
+	declare
+		mesg_buf	varchar(100)	not null with default;
+	begin
+		mesg_buf = 'efa16_03 passed var f8 = ' + varchar(f8);
+		message mesg_buf;
+	end;
+
+	/* run */
+	printf("      passing float to procedure efa16_03...\n");
+	exec sql execute procedure efa16_03 ( f8 = 3.3 );
+
+	printf("      passing char to procedure efa16_03...\n");
+	exec sql execute procedure efa16_03 ( f8 = 'a' );
+
+	printf("      passing too many char to procedure efa16_03...\n");
+	exec sql execute procedure efa16_03 ( f8 = 'ab' );
+
+	printf("      passing too many char to procedure efa16_03...\n");
+	exec sql execute procedure efa16_03 ( f8 = 'abc' );
+
+	printf("      passing integer to procedure efa16_03...\n");
+	exec sql execute procedure efa16_03 ( f8 = 3 );
+
+	/**********/
+	/* test 4 */
+	/**********/
+
+	printf("\n    test 4:\n");
+
+	/* drop the message */
+	exec sql drop procedure efa16_04;
+
+	/* create the message */
+	printf("      creating procedure efa16_04 (i1 i1)...\n");
+	exec sql create procedure efa16_04 (
+		i1	i1	not null with default
+	) as
+	declare
+		mesg_buf	varchar(100)	not null with default;
+	begin
+		mesg_buf = 'efa16_04 passed var i1 = ' + varchar(i1);
+		message mesg_buf;
+	end;
+
+	/* run */
+	printf("      passing small number to procedure efa16_04...\n");
+	exec sql execute procedure efa16_04 ( i1 = 4 );
+
+	printf("      passing big number to procedure efa16_04...\n");
+	exec sql execute procedure efa16_04 ( i1 = 200 );
+
+} /* efa16() */
+!!
+? sepesqlc efa16.sc 
+<<
+ESQL efa16.sc:
+>>
+? sepcc efa16.c 
+<<
+>>
+<<
+efa16.c
+>>
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa16 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+~
+>>
+* drop procedure efa16_01;\g
+<<
+~
+>>
+* drop procedure efa16_02;\g
+<<
+~
+>>
+* drop procedure efa16_03;\g
+<<
+~
+>>
+* drop procedure efa16_04;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa16 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa16
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa16 XX
+
+  efa16: bad parameters
+
+    test 1:
+E_US0965 Procedure 'efa16_01' not found.
+    (Mon Oct 29 16:10:26 2007)
+      creating procedure efa16_01 (i4 integer)...
+      passing integer to procedure efa16_01...
+MESSAGE 0: efa16_01 passed var i4 = 1
+      passing float to procedure efa16_01...
+MESSAGE 0: efa16_01 passed var i4 = 1
+      passing char to procedure efa16_01...
+E_QE0113 Error converting value for the database procedure parameter 'i4'.
+    The formal and actual parameter types referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation are not compatible.
+    (Mon Oct 29 16:10:26 2007)
+
+    test 2:
+E_US0965 Procedure 'efa16_02' not found.
+    (Mon Oct 29 16:10:26 2007)
+      creating procedure efa16_02 (c1 c(1))...
+      passing char to procedure efa16_02...
+MESSAGE 0: efa16_02 passed var c1 = a
+      passing too many char to procedure efa16_02...
+MESSAGE 0: efa16_02 passed var c1 = a
+      passing integer to procedure efa16_02...
+MESSAGE 0: efa16_02 passed var c1 = 2
+      passing float to procedure efa16_02...
+MESSAGE 0: efa16_02 passed var c1 = 2
+
+    test 3:
+E_US0965 Procedure 'efa16_03' not found.
+    (Mon Oct 29 16:10:26 2007)
+      creating procedure efa16_03 (f8 float)...
+      passing float to procedure efa16_03...
+MESSAGE 0: efa16_03 passed var f8 = 3.300
+      passing char to procedure efa16_03...
+E_QE0113 Error converting value for the database procedure parameter 'f8'.
+    The formal and actual parameter types referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation are not compatible.
+    (Mon Oct 29 16:10:26 2007)
+      passing too many char to procedure efa16_03...
+E_QE0113 Error converting value for the database procedure parameter 'f8'.
+    The formal and actual parameter types referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation are not compatible.
+    (Mon Oct 29 16:10:26 2007)
+      passing too many char to procedure efa16_03...
+E_QE0113 Error converting value for the database procedure parameter 'f8'.
+    The formal and actual parameter types referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation are not compatible.
+    (Mon Oct 29 16:10:26 2007)
+      passing integer to procedure efa16_03...
+MESSAGE 0: efa16_03 passed var f8 = 3.000
+
+    test 4:
+E_US0965 Procedure 'efa16_04' not found.
+    (Mon Oct 29 16:10:26 2007)
+      creating procedure efa16_04 (i1 i1)...
+      passing small number to procedure efa16_04...
+MESSAGE 0: efa16_04 passed var i1 = 4
+      passing big number to procedure efa16_04...
+E_US1068 Integer overflow detected in query.
+    (Mon Oct 29 16:10:26 2007)
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driverefstub.h 
+<<
+~
+>>
+? delete driveref.c 
+<<
+~
+>>
+? delete driveref.obj 
+<<
+~
+>>
+? delete driveref.o 
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~
+>>
+? delete dbph.c 
+<<
+~
+>>
+? delete dbpmisc.sc 
+<<
+~
+>>
+? delete dbpmisc.c 
+<<
+~
+>>
+? delete dbpmisc.obj 
+<<
+~
+>>
+? delete dbpmisc.o 
+<<
+~
+>>
+? delete efa16.c 
+<<
+~
+>>
+? delete efa16.obj 
+<<
+~
+>>
+? delete efa16.o 
+<<
+~
+>>
+
+
+Ending at: Mon Oct 29 16:10:57 2007

@@ -1,0 +1,323 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: qp303.sep
+	Time: Wed Dec 11 12:53:08 2002
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : qp303.sep
+	Module  : be/qryproc
+	Filename: qp303.sep
+	Purpose	: Test hash join feature, first available with Ingres
+                  2.6/0106 and later releases.
+	Input Files  : 
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : qp303_c, qp303_char, qp303_text, qp303_vchar
+	Synopsis     : This test is designed to the assumption that hash join
+                       is OFF by default(as of 2.6/0207 SP1 hash join is OFF by
+                       default in the installation). This test will create
+                       four tables with the character data types of C, CHAR,
+                       TEXT, and VARCHAR with big row length(up to the
+                       maximum row length of 32000). Querying against the 
+                       tables is successful. Turn hash join ON. Execute
+                       queries again, failed with errors: E_SC0206,
+                       E_OP0791_ADE_INSTRGEN, and E_AD2005. 
+
+                       As of 2.6/0303 SP2 hash join is ON by default in the
+                       installation with a default configuration.
+	Known Issues : 131167 - OPF/ADF errors with some joins in UTF8.
+
+
+ History: 11-Dec-2002	(wu$ca01) Created
+          11-Mar-2003   (vande02) Removed command 'set trace point op162' which
+                        now (as of SP2) turns hash join OFF in a single session
+                        and we want the default which is ON.  And removed the 
+			redundant execution of the queries as the idea before
+			was to execute them with hash join OFF and again with
+			hash join ON.  This is not necessary.  Same results is
+			expected from the queries with hash join always being
+          18-Apr-2003   (vande02) Removed comments about Issue 12391270 as it
+			is now fixed as of 2.6 SP2.
+           2-Oct-2008   (vande02) Added conditional statements to allow test to
+                        run in UTF8.  The max length for character data types
+                        for UTF8 columns is 16000 not 32000. Removed the 'p'
+                        syntax and updated the canons accordingly.
+*/
+? fill drop.sql
+!!
+drop table qp303_c\g
+drop table qp303_char\g
+drop table qp303_text\g
+drop table qp303_vchar\g
+!!
+? fill insert.sql
+!!
+insert into qp303_c values('0123456789')\g
+insert into qp303_c values('1234567890')\g
+insert into qp303_c values('2345678901')\g
+insert into qp303_c values('3456789012')\g
+insert into qp303_c values('4567890123')\g
+
+insert into qp303_char values('5678901234')\g
+insert into qp303_char values('6789012345')\g
+insert into qp303_char values('7890123456')\g
+insert into qp303_char values('8901234567')\g
+insert into qp303_char values('9012345678')\g
+
+insert into qp303_text values('0123456789')\g
+insert into qp303_text values('1234567890')\g
+insert into qp303_text values('2345678901')\g
+insert into qp303_text values('3456789012')\g
+insert into qp303_text values('4567890123')\g
+
+insert into qp303_vchar values('5678901234')\g
+insert into qp303_vchar values('6789012345')\g
+insert into qp303_vchar values('7890123456')\g
+insert into qp303_vchar values('8901234567')\g
+insert into qp303_vchar values('9012345678')\g
+!!
+? sql -s SEPPARAMDB
+<<
+
+>>
+* \i drop.sql
+<<
+~
+>>
+* create table qp303_c(c c(8800))\g
+<<
+>>
+* create table qp303_char(char char(8800))\g
+<<
+>>
+* create table qp303_text(text text(8800))\g
+<<
+>>
+* create table qp303_vchar(vchar varchar(8800))\g
+<<
+>>
+* \i insert.sql
+<<
+~
+>>
+* select varchar(c,20) as c from qp303_c order by c\g
+<<
++--------------------+
+|c                   |
++--------------------+
+|0123456789          |
+|1234567890          |
+|2345678901          |
+|3456789012          |
+|4567890123          |
++--------------------+
+(5 rows)
+>>
+* select varchar(char,20) as char from qp303_char order by char\g
+<<
++--------------------+
+|char                |
++--------------------+
+|5678901234          |
+|6789012345          |
+|7890123456          |
+|8901234567          |
+|9012345678          |
++--------------------+
+(5 rows)
+>>
+* select varchar(text,20) as text from qp303_text order by text\g
+<<
++--------------------+
+|text                |
++--------------------+
+|0123456789          |
+|1234567890          |
+|2345678901          |
+|3456789012          |
+|4567890123          |
++--------------------+
+(5 rows)
+>>
+* select varchar(vchar,20) as vchar from qp303_vchar order by vchar\g
+<<
++--------------------+
+|vchar               |
++--------------------+
+|5678901234          |
+|6789012345          |
+|7890123456          |
+|8901234567          |
+|9012345678          |
++--------------------+
+(5 rows)
+>>
+* select count(*) from qp303_c C, qp303_char CHAR where C.c=CHAR.char\g
+<<
++-------------+
+|col1         |
++-------------+
+|            0|
++-------------+
+(1 row)
+>>
+* select count(*) from qp303_c C, qp303_text TEXT where C.c=TEXT.text\g
+<<
++-------------+
+|col1         |
++-------------+
+|            5|
++-------------+
+(1 row)
+>>
+* select count(*) from qp303_c C, qp303_vchar VCHAR where C.c=VCHAR.vchar\g
+<<
++-------------+
+|col1         |
++-------------+
+|            0|
++-------------+
+(1 row)
+>>
+* select count(*) from qp303_char CHAR, qp303_text TEXT where CHAR.char=TEXT.text\g
+<<
++-------------+
+|col1         |
++-------------+
+|            0|
++-------------+
+(1 row)
+>>
+* select count(*) from qp303_char CHAR, qp303_vchar VCHAR where CHAR.char=VCHAR.vchar\g
+<<
++-------------+
+|col1         |
++-------------+
+|            5|
++-------------+
+(1 row)
+>>
+* select count(*) from qp303_text TEXT, qp303_vchar VCHAR where TEXT.text=VCHAR.vchar\g
+<<
++-------------+
+|col1         |
++-------------+
+|            0|
++-------------+
+(1 row)
+>>
+* \i drop.sql
+<<
+~
+>>
+.if ING_CHARSET = "UTF8"
+* create table qp303_c(c c(16000))\g
+<<
+>>
+* create table qp303_char(char char(16000))\g
+<<
+>>
+* create table qp303_text(text text(16000))\g
+<<
+>>
+* create table qp303_vchar(vchar varchar(16000))\g
+<<
+>>
+.else
+* create table qp303_c(c c(32000))\g
+<<
+>>
+* create table qp303_char(char char(32000))\g
+<<
+>>
+* create table qp303_text(text text(32000))\g
+<<
+>>
+* create table qp303_vchar(vchar varchar(32000))\g
+<<
+>>
+.endif
+* \i insert.sql
+<<
+~
+>>
+* select count(*) from qp303_c C, qp303_char CHAR where C.c=CHAR.char\g
+<<
++-------------+
+|col1         |
++-------------+
+|            0|
++-------------+
+(1 row)
+>>
+* select count(*) from qp303_c C, qp303_text TEXT where C.c=TEXT.text\g
+<<
++-------------+
+|col1         |
++-------------+
+|            5|
++-------------+
+(1 row)
+>>
+* select count(*) from qp303_c C, qp303_vchar VCHAR where C.c=VCHAR.vchar\g
+<<
++-------------+
+|col1         |
++-------------+
+|            0|
++-------------+
+(1 row)
+>>
+/*
+* The following next 3 queries will get E_OP0791_ADE_INSTRGEN
+* consistency check and E_AD2005 ADF routine found DB_DATA_VALUE
+* with an invalid length errors until issue 131167 has been fixed.
+*/
+* select count(*) from qp303_char CHAR, qp303_text TEXT where CHAR.char=TEXT.text\g
+<<
++-------------+
+|col1         |
++-------------+
+|            0|
++-------------+
+(1 row)
+>>
+* select count(*) from qp303_char CHAR, qp303_vchar VCHAR where CHAR.char=VCHAR.vchar\g
+<<
++-------------+
+|col1         |
++-------------+
+|            5|
++-------------+
+(1 row)
+>>
+* select count(*) from qp303_text TEXT, qp303_vchar VCHAR where TEXT.text=VCHAR.vchar\g
+<<
++-------------+
+|col1         |
++-------------+
+|            0|
++-------------+
+(1 row)
+>>
+* drop table qp303_c\g
+<<
+>>
+* drop table qp303_char\g
+<<
+>>
+* drop table qp303_text\g
+<<
+>>
+* drop table qp303_vchar\g
+<<
+>>
+* \q
+<<
+
+>>
+
+
+Ending at: Fri Dec 13 14:01:54 2002

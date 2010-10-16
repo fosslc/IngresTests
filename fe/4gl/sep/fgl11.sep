@@ -1,0 +1,1958 @@
+/*
+	Test Name: oka04.sep
+	Time: Wed Jun 19 19:24:02 1991
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : oka04
+	Module  : 4gl
+	Filename: oka04.sep
+	Purpose	: To test passing local arrays to static and non-static frames
+	Input Files  :	oka04.frm, oka04.sql, oka04_proc1.osq, oka04_uf1.osq,
+			oka04_uf2.osq
+	Output Files :
+	Database     :	SEPPARAMDB
+	Tables       :	oka04_tbl
+	Synopsis     :	In this test, uf1 passes a local array of type table
+		        field to a procedure three times. In the first procedure
+			call, 8 rows are filled and returned. The second call
+			fills 5 rows and the third fills 10. After each 
+			procedure call, uf1 calls uf2 (passing the same local
+			array) to display it in a table field. In the first run,
+			uf2 is not static. In the second run, uf2 is static.
+
+	Note        :	This test verifies bug fixes 34438, 34663 and 34840
+
+	History: 19-Jun-1991	Created				Author: saundra
+		 18-Jun-1993    (sandhya)
+		 changed filenames to make it more portable.
+                  06-Jan-1995   changed deleter to delobj and edit into
+                                correct format.                 (QA)
+          01-May-1996	(clate01)
+		Modified canons for Windows NT
+          26-Aug-1996	(li$to01) Added canons for new version of OI.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -application okao4 
+<<
+~
+>>
+? delobj SEPPARAMDB -form oka04uf1 oka04uf2 
+<<
+~
+>>
+? fill oka04.frm 
+!!
+COPYFORM:	6.4	1991_06_20 02:23:14 GMT  
+FORM:	oka04uf1		
+	80	23	0	0	0	0	5	9	0	0	0	0	0	0	0	0
+FIELD:
+TRIM:
+	5	2	This is OKA04UF1	0	0	0	0
+	5	4	o Press 1stCall to pass 5 variables	0	0	0	0
+	5	6	o Press 2ndCall to pass 8 variables	0	0	0	0
+	5	8	o Press 3rdCall to pass 10 variables	0	0	0	0
+	5	10	o Press End to end the application	0	0	0	0
+FORM:	oka04uf2		
+	80	23	0	0	1	0	0	9	0	0	0	0	0	0	0	3
+FIELD:
+	0	tf	0	8	0	2	19	16	3	29	1	3	0		1	1	0	1	0	0	0					1	0
+	0	col1	-30	5	0	2	1	4	0	1	2	0	1	col1	1	1	0	0	0	0	0		-i2			2	1
+	1	col2	-21	12	0	9	1	9	0	6	9	0	6	col2	6	1	0	0	0	0	0		c9			2	2
+TRIM:
+!!
+? fill oka04_proc1.osq 
+!!
+procedure oka04_proc1 (tfcol1 = integer, tfcol2 = char(9), dummy = integer, 
+		       i = integer, r = integer, s = array of type of table
+		       field oka04uf2.tf) =
+{ 
+   if (r=1) then
+      i=1;
+      dummy = arrayclear(arry4);
+      dummy = arrayclear(s);
+      select tfcol1 = m.col1, tfcol2 = m.col2 from oka04_tbl m
+      {
+        arry4 [i].attr1 = tfcol1;
+        arry4 [i].attr2 = tfcol2;
+	i = i + 1;
+	if (i=9) then 
+	    endloop;
+	endif;
+      };
+
+      i=1;
+      unloadtable arry4 
+      {
+        s[i].col1 = arry4 [i].attr1;
+        s[i].col2 = arry4 [i].attr2;
+	i = i + 1;
+      };
+
+   endif;
+
+
+   if (r=2) then
+      dummy = arrayremoverow(s, rownumber = 8); 
+      dummy = arrayremoverow(s, rownumber = 7); 
+      dummy = arrayremoverow(s, rownumber = 6); 
+   endif;
+
+
+   if (r=3) then
+      dummy = arrayinsertrow(s,rownumber = 2);
+      s[2].col1 = 11;
+      s[2].col2 = 'Eleven';
+
+      dummy = arrayinsertrow(s,rownumber = 4);
+      s[4].col1 = 22;
+      s[4].col2 = 'Twentytwo';
+
+      dummy = arrayinsertrow(s,rownumber = 6);
+      s[6].col1 = 33;
+      s[6].col2 = 'Thirtythr';
+
+      dummy = arrayinsertrow(s,rownumber = 8);
+      s[8].col1 = 44;
+      s[8].col2 = 'Fourtyfou';
+
+      insertrow s[9] (col1 = 55, col2 = 'Fiftyfive');
+   endif;
+
+}
+!!
+? fill oka04uf1.osq 
+!!
+initialize (x = integer,
+	    y = array of type of table field oka04uf2.tf) =
+{
+
+}
+
+'1stCall' = 
+{
+   callproc oka04_proc1(r=1,s=y);
+   callframe oka04uf2(b=y);
+}
+
+'2ndCall' =
+{
+   callproc oka04_proc1(r=2,s=y);
+   callframe oka04uf2(b=y);
+}
+
+
+'3rdCall' = 
+{
+   callproc oka04_proc1(r=3,s=y);
+   callframe oka04uf2(b=y);
+}
+
+'End' = 
+{ 
+   return; 
+}
+!!
+? fill oka04uf2.osq 
+!!
+initialize ( b = array of type of table field oka04uf2.tf, i = integer ) =
+{
+
+}
+
+'ReShuffle' = 
+{
+   clear field tf;
+   i = 1;
+   unloadtable b
+   {
+      if (b._state <> 4) then
+        insertrow tf (col1 = b[i].col1, col2 = b[i].col2);
+      endif;
+      i = i + 1;
+   };
+   scroll tf to 1;
+}
+
+
+'End' = 
+{
+  return;
+}
+!!
+? copyform -s -i SEPPARAMDB oka04.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+? abf SEPPARAMDB 
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ create`CR'oka04`TAB'Tests passing local arrays to static/non frames`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ creat`CR'`CR'`CR'oka04uf1`CR'`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`CR'oka04uf2`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ creat`CR'p`CR'`CR'oka04_proc1`ESC'
+<<
+~
+>>
+^^ ok`CR'`TAB'none`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ globals`CR'r`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'oka04_rd`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'attr1`TAB'`TAB'integer`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'attr2`TAB'`TAB'char(5)`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ globals`CR'`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'arry4`TAB'`TAB'oka04_rd`TAB'yes`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ defaults`CR'`TAB'`TAB'`TAB'oka04uf1`ESC'
+<<
+~
+>>
+^^ ok`CR'`^J'`ESC'
+<<
+~
+>>
+^^ go`CR'
+<<
+~
+>>
+^^ 1stcall`CR'`ESC'
+<<
+
+%% MENU RESPONSE: 1stCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "1stCall"
+
+%% Fetching 'oka04_proc1' from the database ...
+%% Fetching 'oka04uf2' from the database ...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: 1stCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "1stCall"
+
+%% Fetching 'oka04_proc1' from the database ...
+%% Fetching 'oka04uf2' from the database ...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ reshuffle`CR'`ESC'
+<<
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |6   |Six      |                                   |
+|                             |----+---------|                                   |
+|                             |7   |Seven    |                                   |
+|                             |----+---------|                                   |
+|                             |8   |Eight    |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |6   |Six      |                                   |
+|                             |----+---------|                                   |
+|                             |7   |Seven    |                                   |
+|                             |----+---------|                                   |
+|                             |8   |Eight    |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'2ndcall`CR'`ESC'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "End"
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|     This is OKA04UF1                                                          |
+|                                                                                |
+|     o Press 1stCall to pass 5 variables                                        |
+|                                                                                |
+|     o Press 2ndCall to pass 8 variables                                        |
+|                                                                                |
+|     o Press 3rdCall to pass 10 variables                                       |
+|                                                                                |
+|     o Press End to end the application_                                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  1stCall  2ndCall  3rdCall  End                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: 2ndCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "2ndCall"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: End
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "End"
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|     This is OKA04UF1                                                           |
+|                                                                                |
+|     o Press 1stCall to pass 5 variables                                        |
+|                                                                                |
+|     o Press 2ndCall to pass 8 variables                                        |
+|                                                                                |
+|     o Press 3rdCall to pass 10 variables                                       |
+|                                                                                |
+|     o Press End to end the application_                                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  1stCall  2ndCall  3rdCall  End                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: 2ndCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "2ndCall"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ reshuffle`CR'`ESC'
+<<
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'3rdcall`CR'`ESC'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "End"
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|     This is OKA04UF1                                                          |
+|                                                                                |
+|     o Press 1stCall to pass 5 variables                                        |
+|                                                                                |
+|     o Press 2ndCall to pass 8 variables                                        |
+|                                                                                |
+|     o Press 3rdCall to pass 10 variables                                       |
+|                                                                                |
+|     o Press End to end the application_                                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  1stCall  2ndCall  3rdCall  End                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: 3rdCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "3rdCall"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: End
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "End"
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|     This is OKA04UF1                                                           |
+|                                                                                |
+|     o Press 1stCall to pass 5 variables                                        |
+|                                                                                |
+|     o Press 2ndCall to pass 8 variables                                        |
+|                                                                                |
+|     o Press 3rdCall to pass 10 variables                                       |
+|                                                                                |
+|     o Press End to end the application_                                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  1stCall  2ndCall  3rdCall  End                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: 3rdCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "3rdCall"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ reshuffle`CR'`ESC'
+<<
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |11  |Eleven   |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |22  |Twentytwo|                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |33  |Thirtythr|                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |44  |Fourtyfou|                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |11  |Eleven   |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |22  |Twentytwo|                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |33  |Thirtythr|                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |44  |Fourtyfou|                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'end`CR'
+<<
+~
+>>
+^^ `^J'`ESC'
+<<
+~
+>>
+^^ edit`CR'`TAB'`TAB'`TAB'yes`ESC'
+<<
+
+%% MENU RESPONSE: Edit
+%% MENU:   Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Edit"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: oka04uf2                                                       |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: _oka04uf2                                                       |
+|   Source File: oka04uf2.osq                                                   |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 19-jun-1991 19:30:01  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 19-jun-1991 19:30:01     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: oka04uf2                                                       |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: oka04uf2                                                       |
+|   Source File: _oka04uf2.osq                                                   |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 19-jun-1991 19:30:01  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 19-jun-1991 19:30:01     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: oka04uf2                                                       |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: oka04uf2                                                       |
+|   Source File: oka04uf2.osq                                                   |
+|   Return Type: _none                                                            |
+|                                                                                |
+|        Static: no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 19-jun-1991 19:30:01  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 19-jun-1991 19:30:01     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: oka04uf2                                                       |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: oka04uf2                                                       |
+|   Source File: oka04uf2.osq                                                   |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: _no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 19-jun-1991 19:30:01  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 19-jun-1991 19:30:01     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Static:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: oka04uf2                                                       |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: oka04uf2                                                       |
+|   Source File: oka04uf2.osq                                                   |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: ye_s                                                             |
+|                                                                                |
+|                                                                                |
+|       Created: 19-jun-1991 19:30:01  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 19-jun-1991 19:30:01     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Edit
+%% MENU:   Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Edit"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: oka04uf2                                                        |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: _oka04uf2                                                        |
+|   Source File: oka04uf2.osq                                                    |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 24-apr-1996 15:11:26  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 24-apr-1996 15:11:26     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: oka04uf2                                                        |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: oka04uf2                                                        |
+|   Source File: _oka04uf2.osq                                                    |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 24-apr-1996 15:11:26  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 24-apr-1996 15:11:26     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: oka04uf2                                                        |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: oka04uf2                                                        |
+|   Source File: oka04uf2.osq                                                    |
+|   Return Type: _none                                                            |
+|                                                                                |
+|        Static: no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 24-apr-1996 15:11:26  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 24-apr-1996 15:11:26     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: oka04uf2                                                        |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: oka04uf2                                                        |
+|   Source File: oka04uf2.osq                                                    |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: _no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 24-apr-1996 15:11:26  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 24-apr-1996 15:11:26     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Static:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: oka04uf2                                                        |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: oka04uf2                                                        |
+|   Source File: oka04uf2.osq                                                    |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: ye_s                                                             |
+|                                                                                |
+|                                                                                |
+|       Created: 24-apr-1996 15:11:26  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 24-apr-1996 15:11:26     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+>>
+^^ end`CR'`^K'`ESC'
+<<
+~
+>>
+^^ go`CR'
+<<
+~
+>>
+^^ 1stcall`CR'`ESC'
+<<
+
+%% MENU RESPONSE: 1stCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "1stCall"
+
+%% Fetching 'oka04_proc1' from the database ...
+%% Fetching 'oka04uf2' from the database ...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: 1stCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "1stCall"
+
+%% Fetching 'oka04_proc1' from the database ...
+%% Fetching 'oka04uf2' from the database ...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ reshuffle`CR'`ESC'
+<<
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |6   |Six      |                                   |
+|                             |----+---------|                                   |
+|                             |7   |Seven    |                                   |
+|                             |----+---------|                                   |
+|                             |8   |Eight    |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |6   |Six      |                                   |
+|                             |----+---------|                                   |
+|                             |7   |Seven    |                                   |
+|                             |----+---------|                                   |
+|                             |8   |Eight    |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'2ndcall`CR'`ESC'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "End"
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|     This is OKA04UF1                                                          |
+|                                                                                |
+|     o Press 1stCall to pass 5 variables                                        |
+|                                                                                |
+|     o Press 2ndCall to pass 8 variables                                        |
+|                                                                                |
+|     o Press 3rdCall to pass 10 variables                                       |
+|                                                                                |
+|     o Press End to end the application_                                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  1stCall  2ndCall  3rdCall  End                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: 2ndCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "2ndCall"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |6   |Six      |                                   |
+|                             |----+---------|                                   |
+|                             |7   |Seven    |                                   |
+|                             |----+---------|                                   |
+|                             |8   |Eight    |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: End
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "End"
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|     This is OKA04UF1                                                           |
+|                                                                                |
+|     o Press 1stCall to pass 5 variables                                        |
+|                                                                                |
+|     o Press 2ndCall to pass 8 variables                                        |
+|                                                                                |
+|     o Press 3rdCall to pass 10 variables                                       |
+|                                                                                |
+|     o Press End to end the application_                                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  1stCall  2ndCall  3rdCall  End                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: 2ndCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "2ndCall"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |6   |Six      |                                   |
+|                             |----+---------|                                   |
+|                             |7   |Seven    |                                   |
+|                             |----+---------|                                   |
+|                             |8   |Eight    |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ reshuffle`CR'`ESC'
+<<
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'3rdcall`CR'`ESC'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "End"
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|     This is OKA04UF1                                                          |
+|                                                                                |
+|     o Press 1stCall to pass 5 variables                                        |
+|                                                                                |
+|     o Press 2ndCall to pass 8 variables                                        |
+|                                                                                |
+|     o Press 3rdCall to pass 10 variables                                       |
+|                                                                                |
+|     o Press End to end the application_                                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  1stCall  2ndCall  3rdCall  End                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: 3rdCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "3rdCall"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: End
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "End"
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|     This is OKA04UF1                                                           |
+|                                                                                |
+|     o Press 1stCall to pass 5 variables                                        |
+|                                                                                |
+|     o Press 2ndCall to pass 8 variables                                        |
+|                                                                                |
+|     o Press 3rdCall to pass 10 variables                                       |
+|                                                                                |
+|     o Press End to end the application_                                         |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  1stCall  2ndCall  3rdCall  End                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: 3rdCall
+%% MENU:   1stCall  2ndCall  3rdCall  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "3rdCall"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |5   |Five     |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             |----+---------|                                   |
+|                             |    |         |                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ reshuffle`CR'`ESC'
+<<
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |11  |Eleven   |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |22  |Twentytwo|                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |33  |Thirtythr|                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |44  |Fourtyfou|                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: ReShuffle
+%% MENU:   ReShuffle  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "ReShuffle"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                             +--------------+                                   |
+|                             |col1|col2     |                                   |
+|                             |----+---------|                                   |
+|                             |_1   |One      |                                   |
+|                             |----+---------|                                   |
+|                             |11  |Eleven   |                                   |
+|                             |----+---------|                                   |
+|                             |2   |Two      |                                   |
+|                             |----+---------|                                   |
+|                             |22  |Twentytwo|                                   |
+|                             |----+---------|                                   |
+|                             |3   |Three    |                                   |
+|                             |----+---------|                                   |
+|                             |33  |Thirtythr|                                   |
+|                             |----+---------|                                   |
+|                             |4   |Four     |                                   |
+|                             |----+---------|                                   |
+|                             |44  |Fourtyfou|                                   |
+|                             +--------------+                                   |
+|                                                                                |
+|                                                                                |
+|  ReShuffle  End                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'end`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ quit`CR'
+<<
+~
+>>
+? delobj SEPPARAMDB -application oka04 
+<<
+~
+>>
+? delobj SEPPARAMDB -form oka04uf1 oka04uf2 
+<<
+~
+>>
+
+
+Ending at: Mon Aug 26 08:04:25 1996

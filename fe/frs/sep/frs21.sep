@@ -1,0 +1,778 @@
+/*
+	Test Name: jfa01.sep
+	Time: Fri Nov 10 10:35:37 1989
+	User Name: testenv
+ 
+	Test ID : jfa01
+	Module  : FRS
+	Filename: jfa01.sep
+	Purpose	: Test warning when (entry) activation defined for derived fld.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     : Define entry activations for all fields and columns by
+		name.  Verify that at runtime the FRS generates a warning that
+		defining entry activations on derived fields doesn't make much
+		sense.  Verify that other activations and derivations still
+		work.
+
+	History	: 10-nov-1989	Created				Bruce Badash
+	18-FEB-1993  (jeremyb)  inserted -s flag after SQL and COPYFORM
+			commands where needed to eliminate duplicate CANONs
+			and DIFFs when run over HETNET and STAR.
+        26-Aug-1993  (alices) accepted new item "Input Masking" for 6.5.
+          19-Jan-1995	(qiuji01)  Taking new canon for delobj.
+          17-Jan-1996	(parmi04)  Added an alternate canon for NT_GENERIC.
+          11-Apr-1996	(clate01)
+		Modified canons to work with Windows NT
+          30-Aug-1996	(Author)
+          11-Mar-1997	(Author)
+           7-Aug-2000	(wu$ca01)New canon.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -form jfa01 
+<<
+INGRES DELOBJ Copyright (c) 1992, 1991 Ingres Corporation
+E_DE0010 No form named jfa01 and owned by testenv was found.
+
+
+E_DE000C No form matching the supplied name(s) and/or pattern(s) was
+    found.
+ Execution ends.
+
+
+>>
+<<
+INGRES DELOBJ Copyright (c) 1985, 1993 Ingres Corporation
+Deleting form jfa01 with owner testenv from database...
+>>
+<<
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+E_DE0010 No form named jfa01 and owned by testenv was found.
+
+
+E_DE000C No form matching the supplied name(s) and/or pattern(s) was
+    found.
+ Execution ends.
+
+
+>>
+<<
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+E_DE0010 No form named jfa01 and owned by testenv was found.
+
+
+E_DE000C No form matching the supplied name(s) and/or pattern(s) was
+    found.
+ Execution ends.
+
+
+>>
+? fill jfa01.frm 
+!!
+COPYFORM:	6.0	1989_11_10 17:45:22 GMT  
+FORM:	jfa01	Test entry activations against derived fields/columns.	
+	80	17	0	0	4	0	1	8	0	0	0	0	0	0	0	7
+FIELD:
+	0	a	-30	5	0	10	1	13	2	4	10	0	3	A:	0	0	0	0	0	0	0		-i10			0	0
+	1	b	-30	5	0	10	1	13	2	24	10	0	3	B:	0	0	0	0	0	0	0		-i10			0	1
+	2	tbl	0	4	0	3	8	34	5	4	1	3	0		1	1	0	33	0	0	0					1	2
+	0	a	-30	5	0	10	1	10	0	1	10	0	1	A	1	1	0	0	0	0	0		-i10			2	3
+	1	b	-30	5	0	10	1	10	0	12	10	0	12	B	12	1	0	0	0	0	0		-i10			2	4
+	2	c	-30	5	0	10	1	10	0	23	10	0	23	C	23	1	0	0	2560	0	0		-i10		tbl.a + tbl.b	2	5
+	3	c	-30	5	0	10	1	13	15	24	10	0	3	C:	0	0	0	0	2560	0	0		-i10		a + b	0	6
+TRIM:
+	4	0	Form used for entry activation testing	0	0	0	0
+!!
+? copyform -s -i SEPPARAMDB jfa01.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+? fill jfa01.sc 
+!!
+
+main(argc, argv)
+int	argc;
+char	**argv;
+{
+    exec sql begin declare section;
+    int		error;
+    char	*dbname;
+    char	*formname = "jfa01";
+    int		i = 1;
+    exec sql end declare section;
+
+    exec frs forms;
+        if (argc < 2)
+        {
+exec frs        message 'No database name on command line.  Test exiting.'
+                        with style = popup;
+exec frs        endforms;
+                return;
+        }
+        else
+        {
+                argv++;
+                dbname = *argv;
+        }
+ 
+ 
+    exec sql connect :dbname;
+ 
+    exec sql inquire_ingres (:error = errorno);
+ 
+        if (error != 0)
+        {
+exec frs        message 'Error connecting to database.  Test exiting.'
+                        with style = popup;
+exec frs        endforms;
+                return;
+        }
+ 
+
+    exec frs forminit :formname;
+    exec frs inittable :formname tbl;
+
+    exec frs display :formname;
+    exec frs activate before field a;
+    exec frs begin;
+	exec frs putform :formname (a = :i);
+	i++;
+    exec frs end;
+
+    exec frs activate before field b;
+    exec frs begin;
+	exec frs putform :formname (b = :i);
+	i++;
+    exec frs end;
+
+    exec frs activate before field c;
+    exec frs begin;
+	exec frs putform :formname (c = :i);
+	i++;
+    exec frs end;
+
+    exec frs activate before column tbl a;
+    exec frs begin;
+	exec frs putrow :formname tbl (a = :i);
+	i++;
+    exec frs end;
+
+    exec frs activate before column tbl b;
+    exec frs begin;
+	exec frs putrow :formname tbl (b = :i);
+	i++;
+    exec frs end;
+
+    exec frs activate before column tbl c;
+    exec frs begin;
+	exec frs putrow :formname tbl (c = :i);
+	i++;
+    exec frs end;
+
+    exec frs activate menuitem 'end';
+    exec frs begin;
+	exec frs breakdisplay;
+    exec frs end;
+
+    exec frs endforms;
+
+    exec sql disconnect;
+}
+!!
+? sepesqlc jfa01 
+<<
+ESQL jfa01.sc:
+>>
+<<
+>>
+? sepcc jfa01 
+<<
+>>
+<< IF (NT_GENERIC) 
+jfa01.c
+>>
+? seplnk jfa01 
+<<
+>>
+<< IF (NT_GENERIC) 
+   Creating library jfa01.lib and object jfa01.exp ...
+>>
+<<
+Microsoft (R) 32-Bit Executable Linker Version 2.50.4245
+Copyright (C) Microsoft Corp 1992-94. All rights reserved.
+
+-debug:none 
+-out:jfa01.exe 
+jfa01.obj 
+e:\qa\ingres\lib\ingres.lib 
+msvcrt.lib 
+kernel32.lib 
+user32.lib 
+advapi32.lib 
+>>
+? ferun jfa01.exe SEPPARAMDB 
+<<
+
+%%     
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A:                  B:                                                      |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:_                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Activation requested on a DERIVED field.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+>>
+<< IF (NT_GENERIC) 
+
+%%     
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A:                  B:                                                      |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:_                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Activation requested on a DERIVED field.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+>>
+^^ `CR'`CR'`TAB'`TAB'`TAB'`ESC'
+<<
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Activation requested on a DERIVED column.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: _                 B:                                                      |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: _2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 3                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_3         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 3                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |_4         |7         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 3                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Activation requested on a DERIVED column.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: _1                B:                                                      |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: _2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 3                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_3         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 3                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |_4         |7         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 3                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Activation requested on a DERIVED column.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: _1                B:                                                      |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C:                                                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: _2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 3                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |_3         |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 3                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|    Form used for entry activation testing                                      |
+|                                                                                |
+|    A: 1                B: 2                                                    |
+|                                                                                |
+|                                                                                |
+|    +--------------------------------+                                          |
+|    |A         |B         |C         |                                          |
+|    |----------+----------+----------|                                          |
+|    |3         |_4         |7         |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    |          |          |          |                                          |
+|    +--------------------------------+                                          |
+|                                                                                |
+|                                                                                |
+|                        C: 3                                                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'
+<<
+
+%% MENU RESPONSE: end
+%% MENU:   end
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "end"
+>>
+? delete jfa01.c 
+<<
+file was deleted
+>>
+? delete jfa01.o 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete jfa01.obj 
+<<
+file was not found
+>>
+<<
+file was deleted
+>>
+? delete jfa01.exe 
+<<
+file was deleted
+>>
+? delobj SEPPARAMDB -form jfa01 
+<<
+INGRES DELOBJ Copyright (c) 1985, 1993 Ingres Corporation
+Deleting form jfa01 with owner testenv from database...
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jfa01 with owner testenv from database...
+
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jfa01 with owner testenv from database...
+
+>>
+<<
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jfa01 with owner testenv from database...
+
+>>
+
+
+Ending at: Mon Aug  7 16:48:39 2000

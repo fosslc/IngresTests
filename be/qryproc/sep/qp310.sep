@@ -1,0 +1,488 @@
+/*
+        Test Name: qp310.sep
+        Time: Wed Mar  5 11:57:20 2003
+        User Name: testenv
+        Terminal type: septerm
+ 
+        Test ID : qp310
+        Module  : BE/QRYPROC
+        Filename: qp310.sep
+        Purpose : To test use of sequences (ANSI & Oracle formats)
+        Input Files  : None
+        Output Files : None
+        Database     : SEPPARAMDB
+        Tables       : qp310_tbl1, qp310_tbl2, qp310_tbl3
+        Synopsis     : This test will verify uses of sequences using both
+                       integer and decimal type sequences. It will also
+                       verify that the use of CURRVAL can be used along
+                       with NEXTVAL to insert/update data into a table.
+                       There is also an error-handling test to verify that
+                       INCREMENT BY parameter in a decimal sequence must
+                       be set to an integer value. 
+
+** Successful test cases:
+**
+**   NEXTVAL SELECT clause of a CREATE TABLE            integer seq/Oracle
+**   NEXTVAL SELECT list of sub-query of INSERT         decimal seq/Oracle
+**   NEXT VALUE FOR UPDATE statement                    integer seq/ANSI
+**   NEXTVAL SELECT list of sub-query of INSERT         decimal seq/Oracle
+**   CURRENT VALUE FOR  SELECT  statement               decimal seq/ANSI
+**   CURRVAL INSERT INTO VALUES statement               decimal seq/Oracle
+**   CURRVAL SELECT statement                           integer seq/Oracle 
+**   CURRENT VALUE FOR UPDATE statement                 integer seq/ANSI
+**   CURRENT VALUE FOR SELECT clause of a CREATE TABLE  decimal seq/ANSI
+**   NEXTVAL SELECT list of sub-query of INSERT         decimal seq/Oracle
+**   NEXTVAL SELECT reached max limit, recycle, minval  decimal seq/Oracle
+**   CURRVAL SELECT reached max limit, recycle, minval  decimal seq/Oracle
+**   NEXTVAL SELECT list of sub-query of INSERT         decimal seq/Oracle
+**   CURRENT VALUE FOR SELECT list of sub-query INSERT  integer seq/ANSI
+**   CURRVAL UPDATE statement                           integer seq/Oracle
+**   NEXTVAL/CURRVAL SELECT list of sub-query of INSERT decimal seq/Oracle
+**    
+** Error-handling test case:
+**
+**   Error if INCREMENT BY assigned a non-integer value (.010)
+**
+** NOTE: a test case is included in this test to verify that NEXTVAL and
+**       CURRVAL can be used in a single statement when autocommit is set
+**       to ON.
+**
+ History:  4-Mar-2003   (marwi08) Created
+          18-Mar-2003   (vande02) Added order by to ensure row order and added
+                                  test case description to test header and
+                                  made the initial drop canons ignore.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* set autocommit on\g
+<<
+>>
+/*
+        First verify all needed tables and sequences don't already exists
+*/
+* drop qp310_tbl1\g 
+<<
+~
+>>
+* drop qp310_tbl2\g 
+<<
+~
+>>
+* drop qp310_tbl3\g 
+<<
+~
+>>
+* drop sequence qp310_intseq\g 
+<<
+~
+>>
+* drop sequence qp310_decseq\g 
+<<
+~
+>>
+/*
+        Create an integer and decimal sequence to test with
+*/
+* create sequence qp310_intseq as integer start with 1 increment by 1 minvalue 1 max-
+value 10 nocache cycle order\g 
+<<
+>>
+* create sequence qp310_decseq as decimal start with 10 increment by 5 minvalue 10 m-
+axvalue 60 nocache cycle noorder\g 
+<<
+>>
+/*
+        Create a table to grab data from and insert some data
+*/
+* create table qp310_tbl1 (col1 char(10), col2 int4)\g 
+<<
+>>
+* insert into qp310_tbl1 values('aaaa',4)\g 
+<<
+(1 row)
+>>
+* insert into qp310_tbl1 values('bbbbb',5)\g 
+<<
+(1 row)
+>>
+/*
+        First use CURRENT VALUE in a SELECT statement without NEXT VALUE 
+	and with autocommit ON using the decimal sequence and ANSI format.
+        Expect error here.
+*/
+* select current value for qp310_decseq\g 
+<<
+E_QE00A2 An attempt to issue a CURRENT VALUE request on a sequence was
+    made
+ before issuing a NEXT VALUE request.
+    (Mon Apr  7 14:43:11 2003)
+
+>>
+/*
+	Now set autocommit OFF for rest of testing - this will allow
+	CURRENT VALUE to be used.
+*/
+* set autocommit off\g
+<<
+>>
+/*
+        Now test use of NEXTVAL in a SELECT clause of a CREATE TABLE
+        statement using the integer sequence and Oracle format.
+*/
+* create table qp310_tbl2 as select col1, col2, qp310_intseq.nextval from qp310_tbl1-
+\g 
+<<
+(2 rows)
+>>
+* select * from qp310_tbl2 order by 3\g 
+<<
+
++----------+-------------+-------------+
+|col1      |col2         |col3         |
++----------+-------------+-------------+
+|aaaa      |            4|            1|
+|bbbbb     |            5|            2|
++----------+-------------+-------------+
+(2 rows)
+>>
+/*
+        Now test NEXTVAL in an INSERT statement using the decimal
+        sequence and Oracle format.
+*/
+* insert into qp310_tbl2 select col1, col2, qp310_decseq.nextval from qp310_tbl1\g 
+<<
+(2 rows)
+>>
+* select * from qp310_tbl2 order by 3\g 
+<<
+
++----------+-------------+-------------+
+|col1      |col2         |col3         |
++----------+-------------+-------------+
+|aaaa      |            4|            1|
+|bbbbb     |            5|            2|
+|aaaa      |            4|           10|
+|bbbbb     |            5|           15|
++----------+-------------+-------------+
+(4 rows)
+>>
+/*
+        Now test NEXTVAL in and UPDATE statement using the integer
+        sequence and ANSI format.
+*/
+* update qp310_tbl2 set col3 = next value for qp310_intseq\g 
+<<
+(4 rows)
+>>
+* select * from qp310_tbl2 order by 3\g 
+<<
+
++----------+-------------+-------------+
+|col1      |col2         |col3         |
++----------+-------------+-------------+
+|aaaa      |            4|            3|
+|bbbbb     |            5|            4|
+|aaaa      |            4|            5|
+|bbbbb     |            5|            6|
++----------+-------------+-------------+
+(4 rows)
+>>
+/*
+        Now test that INCREMENT BY in a decimal sequence can't be assigned
+        a non-integer value - should give error.
+*/
+* alter sequence qp310_decseq restart with 10 increment by .010\g 
+<<
+E_US18AC CREATE/ALTER SEQUENCE: An integer value must be specified for the
+    'INCREMENT BY' option.
+    (Wed Mar  5 12:22:54 2003)
+
+>>
+* alter sequence qp310_decseq increment by 10\g 
+<<
+>>
+/*
+        Now use NEXTVAL in an INSERT statement using the decimal
+        sequence and Oracle format.
+*/
+* insert into qp310_tbl2 select col1, col2, qp310_decseq.nextval from qp310_tbl1\g 
+<<
+(2 rows)
+>>
+* select * from qp310_tbl2 order by 3\g 
+<<
+
++----------+-------------+-------------+
+|col1      |col2         |col3         |
++----------+-------------+-------------+
+|aaaa      |            4|            3|
+|bbbbb     |            5|            4|
+|aaaa      |            4|            5|
+|bbbbb     |            5|            6|
+|aaaa      |            4|           25|
+|bbbbb     |            5|           35|
++----------+-------------+-------------+
+(6 rows)
+>>
+/*
+        Now test CURRVAL in an INSERT statement using the decimal
+        sequence and Oracle format.
+*/
+* insert into qp310_tbl2 values ('test1',5,qp310_decseq.currval)\g 
+<<
+(1 row)
+>>
+* select * from qp310_tbl2 order by 3, 1\g 
+<<
+
++----------+-------------+-------------+
+|col1      |col2         |col3         |
++----------+-------------+-------------+
+|aaaa      |            4|            3|
+|bbbbb     |            5|            4|
+|aaaa      |            4|            5|
+|bbbbb     |            5|            6|
+|aaaa      |            4|           25|
+|bbbbb     |            5|           35|
+|test1     |            5|           35|
++----------+-------------+-------------+
+(7 rows)
+>>
+/*
+        Now use CURRVAL in a SELECT statement using the integer
+        sequence and Oracle format.
+*/
+* select qp310_intseq.currval\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|            6|
++-------------+
+(1 row)
+>>
+/*
+        Now use CURRVAL in an UPDATE statement using the integer
+        sequence and ANSI format.
+*/
+* update qp310_tbl2 set col3 = current value for qp310_intseq where col1='test1'\g 
+<<
+(1 row)
+>>
+* select * from qp310_tbl2 order by 3, 1\g 
+<<
+
++----------+-------------+-------------+
+|col1      |col2         |col3         |
++----------+-------------+-------------+
+|aaaa      |            4|            3|
+|bbbbb     |            5|            4|
+|aaaa      |            4|            5|
+|bbbbb     |            5|            6|
+|test1     |            5|            6|
+|aaaa      |            4|           25|
+|bbbbb     |            5|           35|
++----------+-------------+-------------+
+(7 rows)
+>>
+/*
+        Now just some additional tests with CURRVAL and NEXTVAL using
+        both sequences with various statements and both ANSI and Oracle
+        formats.
+*/
+* create table qp310_tbl3 as select col1, col2, current value for qp310_decseq from -
+qp310_tbl1\g 
+<<
+(2 rows)
+>>
+* select * from qp310_tbl3 order by 1, 2\g 
+<<
+
++----------+-------------+------+
+|col1      |col2         |col3  |
++----------+-------------+------+
+|aaaa      |            4|    35|
+|bbbbb     |            5|    35|
++----------+-------------+------+
+(2 rows)
+>>
+* insert into qp310_tbl3 select col1,col2,qp310_decseq.nextval from qp310_tbl1\g 
+<<
+(2 rows)
+>>
+* select * from qp310_tbl3 order by 3, 1\g 
+<<
+
++----------+-------------+------+
+|col1      |col2         |col3  |
++----------+-------------+------+
+|aaaa      |            4|    35|
+|bbbbb     |            5|    35|
+|aaaa      |            4|    45|
+|bbbbb     |            5|    55|
++----------+-------------+------+
+(4 rows)
+>>
+/*
+        Now verify that the decimal sequence has reached it's max
+        limit and started the recycle.
+*/
+* select qp310_decseq.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+|    10|
++------+
+(1 row)
+>>
+/*
+        Now verify that CURRVAL still works too
+*/
+* select qp310_decseq.currval\g 
+<<
+
++------+
+|col1  |
++------+
+|    10|
++------+
+(1 row)
+>>
+/*
+        Now insert a couple more rows with NEXTVAL using the decimal
+        sequence and Oracle format.
+*/
+* insert into qp310_tbl3 select col1,col2,qp310_decseq.nextval from qp310_tbl1\g 
+<<
+(2 rows)
+>>
+* select * from qp310_tbl3 order by 3, 1\g 
+<<
+
++----------+-------------+------+
+|col1      |col2         |col3  |
++----------+-------------+------+
+|aaaa      |            4|    20|
+|bbbbb     |            5|    30|
+|aaaa      |            4|    35|
+|bbbbb     |            5|    35|
+|aaaa      |            4|    45|
+|bbbbb     |            5|    55|
++----------+-------------+------+
+(6 rows)
+>>
+/*
+        Now insert a couple rows using CURRVAL with the integer
+        sequence and ANSI format.
+*/
+* insert into qp310_tbl3 select col1,col2,current value for qp310_intseq from qp310_-
+tbl1\g 
+<<
+(2 rows)
+>>
+* select * from qp310_tbl3 order by 3, 1\g 
+<<
+
++----------+-------------+------+
+|col1      |col2         |col3  |
++----------+-------------+------+
+|aaaa      |            4|     6|
+|bbbbb     |            5|     6|
+|aaaa      |            4|    20|
+|bbbbb     |            5|    30|
+|aaaa      |            4|    35|
+|bbbbb     |            5|    35|
+|aaaa      |            4|    45|
+|bbbbb     |            5|    55|
++----------+-------------+------+
+(8 rows)
+>>
+/*
+        One more update with CURRVAL using the integer sequence
+        and Oracle format.
+*/
+* update qp310_tbl3 set col3 = qp310_intseq.currval where col1='aaaa'\g 
+<<
+(4 rows)
+>>
+* select * from qp310_tbl3 order by 3, 1\g 
+<<
+
++----------+-------------+------+
+|col1      |col2         |col3  |
++----------+-------------+------+
+|aaaa      |            4|     6|
+|aaaa      |            4|     6|
+|aaaa      |            4|     6|
+|aaaa      |            4|     6|
+|bbbbb     |            5|     6|
+|bbbbb     |            5|    30|
+|bbbbb     |            5|    35|
+|bbbbb     |            5|    55|
++----------+-------------+------+
+(8 rows)
+>>
+/*
+        Commit above transactions
+*/
+* commit\g
+<<
+>>
+/*
+        Now test NEXTVAL/CURRVAL in single statement with autocommit ON
+*/
+* set autocommit on\g
+<<
+>>
+* insert into qp310_tbl3 select col1,qp310_decseq.nextval,qp310_decseq.currval from -
+qp310_tbl1\g
+<<
+(2 rows)
+>>
+* select * from qp310_tbl3 order by 3, 1\g
+<<
+
++----------+-------------+------+
+|col1      |col2         |col3  |
++----------+-------------+------+
+|aaaa      |            4|     6|
+|aaaa      |            4|     6|
+|aaaa      |            4|     6|
+|aaaa      |            4|     6|
+|bbbbb     |            5|     6|
+|bbbbb     |            5|    30|
+|bbbbb     |            5|    35|
+|aaaa      |           40|    40|
+|bbbbb     |           50|    50|
+|bbbbb     |            5|    55|
++----------+-------------+------+
+(10 rows)
+>>
+/*
+        Now cleanup database by dropping sequences and tables
+*/
+* drop sequence qp310_intseq\g 
+<<
+>>
+* drop sequence qp310_decseq\g 
+<<
+>>
+* drop qp310_tbl1\g 
+<<
+>>
+* drop qp310_tbl2\g 
+<<
+>>
+* drop qp310_tbl3\g 
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Tue Mar 18 16:52:01 2003

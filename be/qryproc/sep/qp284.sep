@@ -1,0 +1,155 @@
+ /*
+	Test Name: qp284.sep
+	Time: Wed May 14 11:20:17 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :	runme.sc
+	Output Files :	runme.c, runme.o, runme.exe
+	Database     :	SEPPARAMDB
+	Tables       :	t1, t2
+	Synopsis     :	AFTER a statement level rule is fired, if the 
+			invoked procedure create with "set of" is invoked
+			using "execute procedure" statement alone, in 
+			returning error msg E_US098A, ingres should NOT
+			lose the parameter name being pass to the error
+			msg.  In another word, E_US098A should contain
+			<procedure_name> instead of 'NULL'.
+			(Bug 82298)
+			ESQL version of qp275.sep.
+
+ History: 14-May-1997	(cheis01)	Created
+					Need to be modified.
+          15-Sep-1998   (kinte01)
+                        Add delete for files left around after test completes
+	  23-Mar-1999  (vande02)  Hard-coded VPG_SZ to 8K 
+	  17-may-1999	(somsa01)	Added alternate canon for sepcc on NT.
+*/
+? fill runme.sc 
+!!
+exec sql include sqlca;
+
+#include <stdio.h>
+
+main(argc, argv)
+int argc;
+char **argv;
+{
+	exec sql begin declare section;
+	char	dbname[20];
+	exec sql end declare section;
+
+	strcpy(dbname, argv[1]);
+	exec sql connect :dbname;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("create table t1 (a int) with page_size=8192;\n\n");
+	exec sql create table t1 (a int) with page_size=8192;
+	printf("create table t2 (b int) with page_size=8192;\n\n");
+	exec sql create table t2 (b int) with page_size=8192;
+
+	printf("create procedure p1 (pt1 set of (col int))\n");
+	printf("as begin insert into t2 select * from pt1 end;\n\n");
+	exec sql create procedure p1 (pt1 set of (col int))
+		as begin insert into t2 select * from pt1 end;
+
+	printf("execute procedure p1 (pt1=9);\n");
+	exec sql execute procedure p1 (pt1=9);
+
+	printf("\ncreate rule r1 after insert into t1 for each statement\n");
+	printf("execute procedure p1 (col=new.a);\n\n");
+	exec sql create rule r1 after insert into t1 for each statement
+		execute procedure p1 (col=new.a);
+
+	printf("execute procedure p1 (pt1=9);\n");
+	exec sql execute procedure p1 (pt1=9);
+
+	printf("\ninsert into t1 values (1);\n");
+	exec sql insert into t1 values (1);
+
+	printf("\nexecute procedure p1 (pt1=9);\n");
+	exec sql execute procedure p1 (pt1=9);
+
+	exec sql drop rule r1;
+	exec sql drop procedure p1;
+	exec sql drop t1, t2;
+
+	exec sql commit;
+	exec sql disconnect;
+}
+!!
+? sepesqlc runme 
+<<
+ESQL runme.sc:
+>>
+? sepcc runme 
+<<
+>>
+<<
+runme.c
+>>
+? seplnk runme 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop rule r1\g 
+<<
+~
+>>
+* drop procedure p1\g 
+<<
+~
+>>
+* drop table t1, t2\g\q
+<<
+~
+>>
+? run runme.exe SEPPARAMDB 
+<<
+create table t1 (a int) with page_size=8192;
+
+create table t2 (b int) with page_size=8192;
+
+create procedure p1 (pt1 set of (col int))
+as begin insert into t2 select * from pt1 end;
+
+execute procedure p1 (pt1=9);
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Tue May 27 13:54:19 1997)
+
+create rule r1 after insert into t1 for each statement
+execute procedure p1 (col=new.a);
+
+execute procedure p1 (pt1=9);
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Tue May 27 13:54:20 1997)
+
+insert into t1 values (1);
+
+execute procedure p1 (pt1=9);
+E_FORMAT : Couldn't look up message 98a (reason: ER error 10903)
+    E_CL0903_ER_BADPARAM	Bad parameter
+    (UL)
+>>
+? run rm runme* 
+<<
+~
+>>
+? delete runme.*
+<<
+~
+>>
+
+
+Ending at: Tue May 27 13:54:35 1997

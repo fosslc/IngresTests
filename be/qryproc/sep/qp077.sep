@@ -1,0 +1,471 @@
+/*
+	Test Name: efa04.sep
+	Time: Tue May  8 19:21:08 1990
+	User Name: testenv
+ 
+	Test ID : efa04
+	Module  : 
+	Filename: efa04.sep
+	Purpose	: test return statement in embedded C (dbproc)
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : none
+	Synopsis     : create some procedures to test 
+			the return statement with constants, variables, 
+			parameters, messages and illegal values
+	Setup   : efa00.sep
+
+	History	: xx-xxx-1989	Created				Author
+	7-9-91
+		altered path to source files. copied over driver.sc 
+		and compile rather than copying driver.o.
+		7-MAR-1997    (vissu01) Modified for NT
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa04.sc 
+!!
+/*
+**	efa04.sc
+**
+**	basic functionality: return
+**
+**		 1: return constant
+**		 2: return variable
+**		 3: return parameter
+**		 4: should see only this message...
+**		 5: nothing to catch return value
+**		 6: illegal return value: character string
+**		 7: no return
+**
+**	history:
+**		oct 10/89 sgp
+**			- created.
+*/
+
+#define EFA04
+
+#include "driverefstub.h"
+
+#include <stdio.h>
+
+exec sql include sqlca;
+
+/***********/
+/* efa04() */
+/***********/
+
+efa04()
+{
+	exec sql begin declare section;
+	int	retstat;
+	char	cretstat[81];
+	exec sql end declare section;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa04: return statement\n");
+
+	/**********/
+	/* test 1 */
+	/**********/
+
+	printf("\n    test 1: return a constant\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa04_01;
+
+	/* create the proc */
+	exec sql create procedure efa04_01 as
+	begin
+
+		message 'return constant (1)';
+		return 1;
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa04_01 into :retstat;
+	printf("    returned %d\n",retstat);
+
+	/**********/
+	/* test 2 */
+	/**********/
+
+	printf("\n    test 2: return a variable\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa04_02;
+
+	/* create the proc */
+	exec sql create procedure efa04_02 as
+	declare
+		i	integer	not null with default;
+	begin
+
+		message 'return variable (2)';
+		i = 2;
+		return :i;
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa04_02 into :retstat;
+	printf("    returned %d\n",retstat);
+
+	/**********/
+	/* test 3 */
+	/**********/
+
+	printf("\n    test 3: return a parameter\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa04_03;
+
+	/* create the proc */
+	exec sql create procedure efa04_03 ( 
+		passval	integer	not null with default
+	) as
+	begin
+
+		message 'return parameter (3)';
+		return :passval;
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa04_03 ( passval = 3 ) into :retstat;
+	printf("    returned %d\n",retstat);
+
+	/**********/
+	/* test 4 */
+	/**********/
+
+	printf("\n    test 4: execute return before second message\n");
+	printf("\n            statement is reached.\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa04_04;
+
+	/* create the proc */
+	exec sql create procedure efa04_04 as
+	begin
+
+		message 'should see only this message...';
+		return 4;
+		message 'return should cause this message to be skipped';
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa04_04 into :retstat;
+	printf("    returned %d\n",retstat);
+
+	/**********/
+	/* test 5 */
+	/**********/
+
+	printf("\n    test 5: execute w/out into var for return value\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa04_05;
+
+	/* create the proc */
+	exec sql create procedure efa04_05 as
+	begin
+
+		message 'nothing to catch return value';
+		return 5;
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa04_05;
+
+	/**********/
+	/* test 6 */
+	/**********/
+
+	printf("\n    test 6: return incompatible var type\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa04_06;
+
+	/* create the proc */
+	exec sql create procedure efa04_06 as
+	declare
+		chstr	varchar(30)	not null with default;
+	begin
+
+		chstr = 'illegal return';
+		message 'illegal return value: character string';
+		return :chstr;
+
+	end;
+
+	/* run the proc */
+
+	/* this form generates an esql preprocessor error */
+/*
+**	exec sql execute procedure efa04_06 into :cretstat;
+**	printf("    returned %s\n",cretstat);
+*/
+
+	exec sql execute procedure efa04_06 into :retstat;
+	printf("    returned %d\n",retstat);
+
+	/**********/
+	/* test 7 */
+	/**********/
+
+	printf("\n    test 7: provide into var but no return value\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa04_07;
+
+	/* create the proc */
+	exec sql create procedure efa04_07 as
+	begin
+
+		message 'no return';
+
+	end;
+
+	/* run the proc */
+	exec sql execute procedure efa04_07 into :retstat;
+	printf("    returned %d\n",retstat);
+
+} /* efa04() */
+!!
+? sepesqlc driver.sc
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc efa04.sc 
+<<
+ESQL efa04.sc:
+>>
+? sepcc efa04.c 
+<<
+>>
+<<
+efa04.c
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa04
+<<
+>>
+? sql SEPPARAMDB -s
+<<
+~
+>>
+* drop procedure efa04_01;\g
+<<
+~
+>>
+* drop procedure efa04_02;\g
+<<
+~
+>>
+* drop procedure efa04_03;\g
+<<
+~
+>>
+* drop procedure efa04_04;\g
+<<
+~
+>>
+* drop procedure efa04_05;\g
+<<
+~
+>>
+* drop procedure efa04_06;\g
+<<
+~
+>>
+* drop procedure efa04_07;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa04 
+<<
+TEST DRIVER
+source : driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa04
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa04 XX
+
+  efa04: return statement
+
+    test 1: return a constant
+E_US0965 Procedure 'efa04_01' not found.
+    (Tue May  8 19:21:24 1990)
+MESSAGE 0: return constant (1)
+    returned 1
+
+    test 2: return a variable
+E_US0965 Procedure 'efa04_02' not found.
+    (Tue May  8 19:21:24 1990)
+MESSAGE 0: return variable (2)
+    returned 2
+
+    test 3: return a parameter
+E_US0965 Procedure 'efa04_03' not found.
+    (Tue May  8 19:21:24 1990)
+MESSAGE 0: return parameter (3)
+    returned 3
+
+    test 4: execute return before second message
+
+            statement is reached.
+E_US0965 Procedure 'efa04_04' not found.
+    (Tue May  8 19:21:24 1990)
+MESSAGE 0: should see only this message...
+    returned 4
+
+    test 5: execute w/out into var for return value
+E_US0965 Procedure 'efa04_05' not found.
+    (Tue May  8 19:21:24 1990)
+MESSAGE 0: nothing to catch return value
+
+    test 6: return incompatible var type
+E_US0965 Procedure 'efa04_06' not found.
+    (Tue May  8 19:21:24 1990)
+E_US0978 Return value must be of INTEGER type.
+    (Tue May  8 19:21:24 1990)
+E_US0965 Procedure 'efa04_06' not found.
+    (Tue May  8 19:21:24 1990)
+    returned 0
+
+    test 7: provide into var but no return value
+E_US0965 Procedure 'efa04_07' not found.
+    (Tue May  8 19:21:24 1990)
+MESSAGE 0: no return
+    returned 0
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.sc
+<<
+~
+>>
+? delete driver.c
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.o
+<<
+~
+>>
+? delete driverefstub.h 
+<<
+~
+>>
+? delete driveref.c 
+<<
+~
+>>
+? delete driveref.obj 
+<<
+~
+>>
+? delete driveref.o
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~
+>>
+? delete dbph.c 
+<<
+~
+>>
+? delete dbpmisc.sc 
+<<
+~
+>>
+? delete dbpmisc.c 
+<<
+~
+>>
+? delete dbpmisc.obj 
+<<
+~
+>>
+? delete dbpmisc.o
+<<
+~
+>>
+? delete efa04.c 
+<<
+~
+>>
+? delete efa04.obj
+<<
+~
+>>
+? delete efa04.o
+<<
+~
+>>
+
+Ending at: Tue May  8 19:21:40 1990

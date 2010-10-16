@@ -1,0 +1,264 @@
+/*
+Copyright (c) 2006 Ingres Corporation
+
+	Test Name: acc53.sep (formerly dba45.sep) 
+	Time:  9-SEP-1991
+	User Name: testenv     
+	Terminal type: septerm
+	Test ID : acc53
+	Module  : 
+	Filename:
+	Purpose	: to test default groups get grants on procedures
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB3 = grantdb
+	Tables       : 
+	Synopsis     : create a procedure and give execute grant to
+		a group, then connect with a user that has that 
+		default group and see that he gets the grants. also 
+		connect with a role to make sure they don't lose the grant.
+
+	History:  9-SEP-1991	  Created	 by Troy Camacho
+          23-Jan-1992	(fredv)   Fixed typos taht cause cc errors.
+          23-Jan-1992	(fredv)   Can't have '_' in the file name for
+				  portability reasons. Removed underscore
+				  from all file names.
+          28-May-1992	(Author)
+          10-Aug-1992	(GordonW) Replace hard-coded 'grantdb' DBname with
+				  SEPPARAMDB3 symbol.  Also pass the DBname
+				  down thru argv[1] programs.
+	  20-Aug-1992	(rodneyy) "dbname" in dba45role.sc was not getting
+				  assigned to argv[1] which caused an error
+				  when the routine was run.  
+          11-Oct-1993	(garys)   Updated canon to accept double quotes for
+				  delimiter for dba and no quotes for granted
+				  user - plus slightly different help procedure 
+				  info.
+          15-Nov-1993   (garys)   Updated test to use 'qasetusertm' and sql's 
+				  'alter user' instead of 'qasetuserfe' and 
+				  'accessdb'.
+          20-Jan-1995	(oertel)  Added syntax 'default_privileges=all' to alter
+				  user stmnts.
+          31-Jan-1995	(holla02) Minor modifications
+	  01-Mar-1995	(oerde01) Added privilege 'maintain_users' to alter
+                                  user pvusr1 stmnt.
+           1-Dec-1995	(gauje02) Took new canon for output of 'help procedure'
+	  13_Mar-1997	(vissu01) Modified for NT
+	  22-mar-1999	(yu$pe02) Hard code page size to 4K.
+           3-Nov-2006	(vande02) Updated canon from help procedure which now
+                       		  includes a format with line numbers. Added
+				  Copyright, header cleanup.
+*/
+? qasetusertm ingres sql -s iidbdb 
+<<
+>>
+* alter user pvusr1 with group = pvusr1_group, privileges = (createdb,operator,secur-
+ity,trace,maintain_locations,maintain_users), default_privileges=all;\g
+<<
+>>
+* alter user pvusr2 with group = pvusr2_group, privileges = (createdb,trace), defaul-
+t_privileges = all;\g
+<<
+>>
+* alter user pvusr3 with group = pvusr3_group, privileges = (createdb,trace), defaul-
+t_privileges = all;\g
+<<
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop procedure dba45t_p1;\g
+<<
+~
+>>
+*  create procedure dba45t_p1 as
+<<
+>>
+* begin
+<<
+>>
+*       message 'executing dba45t_p1';
+<<
+>>
+* end;\g
+<<
+>>
+* grant execute
+<<
+>>
+* on procedure dba45t_p1
+<<
+>>
+* to group pvusr3_group;\g
+<<
+>>
+* help procedure dba45t_p1;\g
+<<
+Procedure:            dba45t_p1
+Owner:                pvusr1
+Procedure Type:       native
+Object type:          user object
+Created:              03-nov-2006 11:43:38     
+
+Procedure Definition:
+/*    1 */ create procedure  dba45t_p1 as begin message 'executing    
+dba45t_p1';                                                           
+/*    2 */ end                                                        
+
+Permissions on procedure dba45t_p1 are:
+
+
+Permission 2:
+grant execute on procedure "pvusr1".dba45t_p1 to group pvusr3_group   
+
+
+
+>>
+* \q
+<<
+>>
+? fill dba45.sc 
+!!
+main(argc, argv)
+int	argc;
+char	*argv[];
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+
+    exec sql begin declare section;
+    char *dbname;
+    exec sql end declare section;
+
+    dbname = argv[1];
+    exec sql connect :dbname;
+    exec sql execute procedure dba45t_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba45.sc 
+<<
+ESQL dba45.sc:
+>>
+? sepcc dba45.c 
+<<
+>>
+<<
+dba45.c
+>>
+? seplnk dba45 
+<<
+>>
+? qasetuser pvusr3 run dba45.exe SEPPARAMDB3 
+<<
+MESSAGE 0: executing dba45t_p1
+>>
+? fill dba45role.sc 
+!!
+main(argc, argv)
+int	argc;
+char	*argv[];
+{ 
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+
+    exec sql begin declare section;
+    char *dbname;
+    exec sql end declare section;
+
+    dbname = argv[1];
+    exec sql connect :dbname options='-Rpvusr3_role';
+    exec sql execute procedure dba45t_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba45role.sc 
+<<
+ESQL dba45role.sc:
+>>
+? sepcc dba45role.c 
+<<
+>>
+<<
+dba45role.c
+>>
+? seplnk dba45role 
+<<
+>>
+? qasetuser pvusr3 run dba45role.exe SEPPARAMDB3 
+<<
+MESSAGE 0: executing dba45t_p1
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop procedure dba45t_p1;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? qasetusertm ingres sql -s iidbdb 
+<<
+>>
+* alter user pvusr1 with nogroup;\g
+<<
+>>
+* alter user pvusr2 with nogroup;\g
+<<
+>>
+* alter user pvusr3 with nogroup;\g
+<<
+>>
+* \q
+<<
+>>
+? delete dba45.sc 
+<<
+~
+>>
+? delete dba45.c 
+<<
+~
+>>
+? delete dba45.o 
+<<
+~
+>>
+? delete dba45.obj 
+<<
+~
+>>
+? delete dba45.exe 
+<<
+~
+>>
+? delete dba45role.sc 
+<<
+~
+>>
+? delete dba45role.c 
+<<
+~
+>>
+? delete dba45role.o 
+<<
+~
+>>
+? delete dba45role.obj 
+<<
+~
+>>
+? delete dba45role.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Nov  3 11:35:33 2006

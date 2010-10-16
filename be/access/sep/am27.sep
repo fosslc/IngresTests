@@ -1,0 +1,511 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: am26.sep (forerly cda05.sep, former fe007.sep)
+	Time:  5-JUL-1989 10:29:05
+	User Name: testenv
+ 
+	Test ID : am26.sep
+	Module  : be/qryproc
+	Filename: am26.sep
+	Purpose	: Test of append statements particular to sql
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : atest, btest
+	Synopsis     : insert statements: inserting simple value lists, 
+			then tests of insert... select from... statements
+
+	History	: xx-xxx-1989	Created				Author
+		  05-JUL-1989   Converted   LARRYH 
+           2-Aug-1993	(garys) Test previously expected a bad qualifier 
+                                format because 64 didn't allow p.name format.
+                                p.name qualifier format is now allowed on 65.
+          20-Aug-1993	(garys) updated canon to accept correct # of pages 
+				and new sql null/default for help table info.
+          11-Oct-1993   (judi)  when create a table in 6.5 journaling is now
+                                automatically enabled.  Therefore, all the
+                                help table canons were updated.
+          23-Mar-1995   (gauje01) Updated canons to contain current Ingres
+				  version number. (OPING1.2)
+           7-May-1996	(huami01) Changed canons because of different message
+                                  from help command.
+           7-May-1997	(seran01) Updated canon to reflect changed of help 
+                                  table command in OI 2.0 release
+          07-Jan-1999   (hanch04) Replace table version with TBL_VER
+	  18-Mar-1999	(vande02) Hard-coded VPG_SZ to 2K and removed TBL_VER
+				  (grammar.lex masks table versions)
+	   1-oct-2007	(kibro01) b119191 - Updated message for US0B61
+           1-Oct-2008	(vande02) Replaced canons due to changed text in
+                                  expected syntax error E_US09C7. Header cleanup
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table atest\g
+<<
+~
+>>
+* create table atest (col1 vchar(6), col2 integer4, col3 integer4) with page_size=20-
+48; \g 
+<<
+>>
+* help table atest; \g 
+/*
+*/
+<<
+Name:                 atest
+Owner:                testenv
+Created:              07-may-1997 10:49:36     
+Location:             ii_database
+Type:                 user table
+Version:              OI2.0
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 19
+Row width:            19
+Number of rows:       0
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             vchar           6  yes    null       
+col2                             integer         4  yes    null       
+col3                             integer         4  yes    null       
+
+Secondary indexes:    none
+
+
+
+>>
+* insert into atest (col1, col2, col3) values ('aaa',1,1); insert into atest (col1, -
+col2, col3) values ('bbb',2,2); \g 
+/*
+Test INSERT statements that have 'VALUES simple_expression_list' as their
+object
+*/
+<<
+(1 row)
+(1 row)
+>>
+* insert into atest (col1, col2, col3) values (ascii (100), 2*100/5, (2) ) ; \g 
+<<
+(1 row)
+>>
+* insert into atest (col1, col2) values ('ccc',3); \g 
+<<
+(1 row)
+>>
+* select * from atest; \g 
+<<
+
++------+-------------+-------------+
+|col1  |col2         |col3         |
++------+-------------+-------------+
+|aaa   |            1|            1|
+|bbb   |            2|            2|
+|100   |           40|            2|
+|ccc   |            3|             |
++------+-------------+-------------+
+(4 rows)
+>>
+* insert into atest values ('aaa', 100, 200*5); \g 
+/*
+Illegal syntax:  if values specified, column name list MUST be specified
+#conversion notes: actually, this seems to work just fine
+*/
+<<
+(1 row)
+>>
+* insert into atest values (col1='ddd', col2=4); \g 
+/*
+Illegal syntax: if values specified, column name list MUST be specified
+*/
+<<
+E_US0836 line 1, Column 'col1' not found in any specified table.
+    ( 5-JUL-1989 11:19:40)
+
+>>
+* insert into atest rvar values ('eee', 4); \g 
+/*
+Illegal syntax: range vars not allowed in insert statement
+*/
+<<
+E_US09C7 line 1, Syntax error on 'rvar'.  The correct syntax is: 
+    INSERT INTO tablename [(column {, ... })] 
+       VALUES [OVERRIDING {SYSTEM | USER} VALUE] (expression {, ... }) 
+     
+     INSERT INTO tablename [(column {, ... })]  
+       [OVERRIDING {SYSTEM | USER} VALUE] subselect
+    (Wed Oct  1 13:11:31 2008)
+
+>>
+* insert into atest values ('fff', p.weight); \g 
+/*
+*/
+<<
+E_PS0461 A <column reference> contained a <qualifier> 'p' 
+    which did not correspond to any of the <table reference>s 
+    within whose scope the <column reference> appeared.
+    (Mon Aug  2 17:14:21 1993)
+
+>>
+* insert into atest values ('ggg', col2+col3) ; \g 
+/*
+simple expressions can reference only constants or scalar bifs
+*/
+<<
+E_US0836 line 1, Column 'col2' not found in any specified table.
+    ( 5-JUL-1989 11:20:02)
+
+>>
+* insert into atest values ('jjj', sum(200)); \g 
+/*
+simple expressions can reference only constants or scalar bifs
+*/
+<<
+E_US0B70 line 1, aggregate function 'sum' not allowed in this context.
+    ( 5-JUL-1989 11:20:09)
+
+>>
+* insert into atest (col1) values ('hhh',100); \g 
+/*
+if column names are specifeid, number must match number of expressions
+*/
+<<
+E_US0AD7 INSERT: number of target columns must equal the number of
+    specified values.
+    ( 5-JUL-1989 11:20:15)
+
+>>
+* insert into atest (col1, col2) values ('iii'); \g 
+/*
+if column names are specified, number must match number of expressions
+*/
+<<
+E_US0AD7 INSERT: number of target columns must equal the number of
+    specified values.
+    ( 5-JUL-1989 11:20:24)
+
+>>
+* insert into atest () values ('kkk', 300, 300); \g 
+/*
+if column names are specified, number must match number of expressions
+*/
+<<
+E_US09C7 line 1, Syntax error on ')'.  The correct syntax is: 
+    INSERT INTO tablename [(column {, ... })] 
+       VALUES [OVERRIDING {SYSTEM | USER} VALUE] (expression {, ... }) 
+     
+     INSERT INTO tablename [(column {, ... })]  
+       [OVERRIDING {SYSTEM | USER} VALUE] subselect
+    (Wed Oct  1 13:11:40 2008)
+
+>>
+* insert into atest ('kkk', 300, 300); \g 
+/*
+gave list of values when column names expected
+*/
+<<
+E_US09C7 line 1, Syntax error on ''kkk''.  The correct syntax is: 
+    INSERT INTO tablename [(column {, ... })] 
+       VALUES [OVERRIDING {SYSTEM | USER} VALUE] (expression {, ... }) 
+     
+     INSERT INTO tablename [(column {, ... })]  
+       [OVERRIDING {SYSTEM | USER} VALUE] subselect
+    (Wed Oct  1 13:11:41 2008)
+
+>>
+* select * from atest; \g 
+<<
+
++------+-------------+-------------+
+|col1  |col2         |col3         |
++------+-------------+-------------+
+|aaa   |            1|            1|
+|bbb   |            2|            2|
+|100   |           40|            2|
+|ccc   |            3|             |
+|aaa   |          100|         1000|
++------+-------------+-------------+
+(5 rows)
+>>
+* drop table btest\g
+<<
+~
+>>
+* create table btest (col1 vchar(6), col2 integer4, colx integer4) with page_size=20-
+48; \g 
+<<
+>>
+* help table btest; \g 
+/*
+*/
+<<
+Name:                 btest
+Owner:                testenv
+Created:              07-may-1997 10:49:57     
+Location:             ii_database
+Type:                 user table
+Version:              OI2.0
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 19
+Row width:            19
+Number of rows:       0
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      3
+Overflow data pages:  0
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             vchar           6  yes    null       
+col2                             integer         4  yes    null       
+colx                             integer         4  yes    null       
+
+Secondary indexes:    none
+
+
+
+>>
+* insert into btest select col1, col2 from atest where col1='aaa' or col1='bbb';\g 
+<<
+E_US0AD8 INSERT: number of target columns must equal the number of target
+    list elements in the specified subselect.
+    ( 7-FEB-1990 12:04:51)
+
+>>
+* select * from btest; \g 
+<<
+
++------+-------------+-------------+
+|col1  |col2         |colx         |
++------+-------------+-------------+
++------+-------------+-------------+
+(0 rows)
+>>
+* delete from btest; \g 
+<<
+(0 rows)
+>>
+* insert into btest (col1, col2) select ascii(col2), col2 from atest where col1='aaa-
+' or col1='bbb';\g 
+<<
+(3 rows)
+>>
+* select * from btest;\g 
+<<
+
++------+-------------+-------------+
+|col1  |col2         |colx         |
++------+-------------+-------------+
+|1     |            1|             |
+|2     |            2|             |
+|100   |          100|             |
++------+-------------+-------------+
+(3 rows)
+>>
+* delete from btest; \g 
+<<
+(3 rows)
+>>
+* insert into btest (col1, col2) select ascii (a.col2), a.col2 from atest a where a.-
+col1='aaa' or a.col1='bbb'; \g 
+<<
+(3 rows)
+>>
+* select * from btest; \g 
+<<
+
++------+-------------+-------------+
+|col1  |col2         |colx         |
++------+-------------+-------------+
+|1     |            1|             |
+|2     |            2|             |
+|100   |          100|             |
++------+-------------+-------------+
+(3 rows)
+>>
+* delete from btest; \g 
+<<
+(3 rows)
+>>
+* insert into btest (col1, col2, colx) select 'xxx', 500, 500 from atest; \g 
+<<
+(5 rows)
+>>
+* select * from btest; \g 
+<<
+
++------+-------------+-------------+
+|col1  |col2         |colx         |
++------+-------------+-------------+
+|xxx   |          500|          500|
+|xxx   |          500|          500|
+|xxx   |          500|          500|
+|xxx   |          500|          500|
+|xxx   |          500|          500|
++------+-------------+-------------+
+(5 rows)
+>>
+* delete from btest ; \g 
+<<
+(5 rows)
+>>
+* insert into btest select 'nnn', 500+4, 500 from atest; \g 
+/*
+if target colun names not specified, default is names from select target
+*/
+<<
+(5 rows)
+>>
+* insert into btest select col1='mmm', col2=600, colx=600 from atest; \g 
+<<
+(5 rows)
+>>
+* select * from btest; delete from btest; \g 
+<<
+
++------+-------------+-------------+
+|col1  |col2         |colx         |
++------+-------------+-------------+
+|nnn   |          504|          500|
+|nnn   |          504|          500|
+|nnn   |          504|          500|
+|nnn   |          504|          500|
+|nnn   |          504|          500|
+|mmm   |          600|          600|
+|mmm   |          600|          600|
+|mmm   |          600|          600|
+|mmm   |          600|          600|
+|mmm   |          600|          600|
++------+-------------+-------------+
+(10 rows)
+(10 rows)
+>>
+* insert into btest select col1, col2, col3 from atest; \g 
+<<
+(5 rows)
+>>
+* insert into btest select dummy=col1, col2 from atest; \g 
+<<
+E_US0AD8 INSERT: number of target columns must equal the number of target
+    list elements in the specified subselect.
+    ( 7-FEB-1990 12:08:59)
+
+>>
+<<
+E_US0B61 line 1, You cannot assign this 'text' value to a column of
+type 'integer'. Explicitly convert the value to the required type or check
+it is in the valid range for the target datatype.
+    ( 5-JUL-1989 11:23:02)
+
+>>
+* insert into btest select * from atest; \g 
+<<
+(5 rows)
+>>
+* select * from btest; delete from btest; \g 
+<<
+
++------+-------------+-------------+
+|col1  |col2         |colx         |
++------+-------------+-------------+
+|aaa   |            1|            1|
+|bbb   |            2|            2|
+|100   |           40|            2|
+|ccc   |            3|             |
+|aaa   |          100|         1000|
+|aaa   |            1|            1|
+|bbb   |            2|            2|
+|100   |           40|            2|
+|ccc   |            3|             |
+|aaa   |          100|         1000|
++------+-------------+-------------+
+(10 rows)
+(10 rows)
+>>
+* insert into btest select distinct col1, col2 from atest where col1='aaa' or col1='-
+bbb'; \g 
+/*
+select cannot include distinct
+#conversion notes: this query appears to have other problems in it, too.
+*/
+<<
+E_US0AD8 INSERT: number of target columns must equal the number of target
+    list elements in the specified subselect.
+    ( 7-FEB-1990 12:09:33)
+
+>>
+<<
+E_US0B61 line 1, You cannot assign this 'text' value to a column of
+type 'integer'. Explicitly convert the value to the required type or check
+it is in the valid range for the target datatype.
+    ( 5-JUL-1989 11:23:26)
+
+>>
+* insert into btest (col1, col2) select btest.col1, btest.col2 from atest btest wher-
+e btest.col1='aaa'; select * from atest; select * from btest; \g 
+/*
+Try generating confusing range variables
+*/
+<<
+(2 rows)
+
++------+-------------+-------------+
+|col1  |col2         |col3         |
++------+-------------+-------------+
+|aaa   |            1|            1|
+|bbb   |            2|            2|
+|100   |           40|            2|
+|ccc   |            3|             |
+|aaa   |          100|         1000|
++------+-------------+-------------+
+(5 rows)
+
++------+-------------+-------------+
+|col1  |col2         |colx         |
++------+-------------+-------------+
+|aaa   |            1|             |
+|aaa   |          100|             |
++------+-------------+-------------+
+(2 rows)
+>>
+* insert into btest (col1, col2) select col1, col2 from atest where col1 = (select c-
+ol1 from atest where col2>300); \g 
+/*
+Try a nested select
+*/
+<<
+(0 rows)
+>>
+* drop btest, atest; \g 
+<<
+~
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Wed Oct  1 13:11:46 2008

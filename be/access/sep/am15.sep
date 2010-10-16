@@ -1,0 +1,352 @@
+/*
+        Test Name: cba05.sep
+        Time: Mon Nov  4 13:59:35 1991
+        User Name: testenv
+        Terminal type: septerm
+        Test ID : cba05
+        Module  :
+        Filename: cba05.sep
+        Purpose : test for bug #40777 and 38646
+        Input Files  :
+        Output Files :
+        Database     : SEPPARAMDB
+        Tables       : cba05_t1, cba05_t2, cba05_t3
+        Synopsis     : setup tables and secondary index.
+		give a qry that fails and shows bugs #38646,
+		and #40777. Delete secondary index and repeat
+		the query except this time it works.
+
+        History: 11-4-91 converted to sep script by CAMACHO
+	03/22/99  (kamra01)  Modified the page_size to 2K instead of VPG_SZ
+*/
+
+? sql -s SEPPARAMDB 
+<<
+>>
+* set autocommit on;\g 
+<<
+>>
+* drop table cba05_t1;\g
+<<
+~
+>>
+* drop table cba05_t3;\g
+<<
+~
+>>
+* drop table cba05_t2;\g
+<<
+~
+>>
+* create table cba05_t1 (
+<<
+>>
+* 	permno		integer		not null not default,
+<<
+>>
+* 	namedt		date		not null not default,
+<<
+>>
+* 	ncusip		char(8)		with null)
+<<
+>>
+* 	with noduplicates,page_size=2048;
+<<
+>>
+* create table cba05_t3 (
+<<
+>>
+* 	permco		integer 	not null not default,
+<<
+>>
+* 	permno		integer 	not null not default,
+<<
+>>
+* 	edtcode		integer 	not null not default) 
+<<
+>>
+* 	with noduplicates,page_size=2048;\g
+<<
+>>
+* create table cba05_t2 (
+<<
+>>
+* 	cnum		char(6)		not null not default,
+<<
+>>
+* 	permco		integer		not null not default ,
+<<
+>>
+* 	sourceflag	smallint	not null not default)
+<<
+>>
+* 	with noduplicates,page_size=2048;\g
+<<
+>>
+* insert into cba05_t1( permno, namedt, ncusip) 
+<<
+>>
+* 	values ( 12490, '1/1/70', null );\g
+<<
+(1 row)
+>>
+* insert into cba05_t1( permno, namedt, ncusip) 
+<<
+>>
+* 	values ( 12490, '1/1/80', '45920010' );\g
+<<
+(1 row)
+>>
+* insert into cba05_t1( permno, namedt, ncusip) 
+<<
+>>
+* 	values ( 12490, '1/1/90', null );\g
+<<
+(1 row)
+>>
+* insert into cba05_t3( permco, permno, edtcode ) 
+<<
+>>
+* 	values ( 20990, 12490, 165 );\g
+<<
+(1 row)
+>>
+* insert into cba05_t2( cnum, permco, sourceflag ) 
+<<
+>>
+* 	values ( '459200', 20990, 0 );\g
+<<
+(1 row)
+>>
+* modify cba05_t1 to btree unique on permno, namedt with page_size=2048;\g
+<<
+(3 rows)
+>>
+* modify cba05_t3 to btree unique on permno with page_size=2048;\g
+<<
+(1 row)
+>>
+* modify cba05_t2 to btree unique on cnum with page_size=2048;\g
+<<
+(1 row)
+>>
+* create index x_rgsco on cba05_t2 ( permco , cnum , sourceflag )
+<<
+>>
+* 	with structure = btree, key = (permco), page_size=2048;\g
+<<
+(1 row)
+>>
+* select * from cba05_t1;\g
+<<
+
++-------------+-------------------------+--------+
+|permno       |namedt                   |ncusip  |
++-------------+-------------------------+--------+
+|        12490|01-jan-1970              |        |
+|        12490|01-jan-1980              |45920010|
+|        12490|01-jan-1990              |        |
++-------------+-------------------------+--------+
+(3 rows)
+>>
+* select * from cba05_t3;\g
+<<
+
++-------------+-------------+-------------+
+|permco       |permno       |edtcode      |
++-------------+-------------+-------------+
+|        20990|        12490|          165|
++-------------+-------------+-------------+
+(1 row)
+>>
+* select * from cba05_t2;\g
+<<
+
++------+-------------+------+
+|cnum  |permco       |source|
++------+-------------+------+
+|459200|        20990|     0|
++------+-------------+------+
+(1 row)
+>>
+* select permco, cnum, sourceflag from x_rgsco;\g
+<<
+
++-------------+------+------+
+|permco       |cnum  |source|
++-------------+------+------+
+|        20990|459200|     0|
++-------------+------+------+
+(1 row)
+>>
+* select left(n.ncusip,6),d.cnum 
+<<
+>>
+* 	from cba05_t1 n, cba05_t3 h, cba05_t2 d
+<<
+>>
+* 	where 1=1
+<<
+>>
+*	and h.permno = n.permno 
+<<
+>>
+* 	and h.edtcode = 165
+<<
+>>
+* 	and left(n.ncusip,6) = d.cnum 
+<<
+>>
+* 	and h.permco = d.permco;\p\g
+/*
+ queries that use index return too many rows: bug 38646
+ queries that use index get qef errors and fail to 
+ return any rows: bug 40777 
+*/
+<<
+
+select left(n.ncusip,6),d.cnum
+        from cba05_t1 n, cba05_t3 h, cba05_t2 d
+        where 1 = 1
+	and h.permno = n.permno
+        and h.edtcode = 165
+        and left(n.ncusip,6) = d.cnum
+        and h.permco = d.permco;
+
++--------+------+
+|col1    |cnum  |
++--------+------+
+|459200  |459200|
++--------+------+
+(1 row)
+>>
+* select left(ifnull(n.ncusip,'000000'),6),d.cnum 
+<<
+>>
+* 	from cba05_t1 n, cba05_t3 h, cba05_t2 d
+<<
+>>
+* 	where 1 = 1
+<<
+>>
+* 	and h.permno = n.permno 
+<<
+>>
+* 	and h.edtcode = 165
+<<
+>>
+* 	and left(ifnull(n.ncusip,'000000'),6) = d.cnum 
+<<
+>>
+* 	and h.permco = d.permco;\p\g
+<<
+
+select left(ifnull(n.ncusip,'000000'),6),d.cnum
+        from cba05_t1 n, cba05_t3 h, cba05_t2 d
+        where 1 = 1
+        and h.permno = n.permno
+        and h.edtcode = 165
+        and left(ifnull(n.ncusip,'000000'),6) = d.cnum
+        and h.permco = d.permco;
+
++--------+------+
+|col1    |cnum  |
++--------+------+
+|459200  |459200|
++--------+------+
+(1 row)
+>>
+* drop index x_rgsco;\g
+/*
+ drop the index, get correct results from same queries 
+*/
+<<
+>>
+* select left(n.ncusip,6),d.cnum 
+<<
+>>
+* 	from cba05_t1 n, cba05_t3 h, cba05_t2 d
+<<
+>>
+* 	where 1 = 1 
+<<
+>>
+* 	and h.permno = n.permno 
+<<
+>>
+* 	and h.edtcode = 165
+<<
+>>
+* 	and left(n.ncusip,6) = d.cnum 
+<<
+>>
+* 	and h.permco = d.permco;\p\g
+<<
+ select left(n.ncusip,6),d.cnum 
+ 	from cba05_t1 n, cba05_t3 h, cba05_t2 d
+ 	where 1 = 1 
+ 	and h.permno = n.permno 
+ 	and h.edtcode = 165
+ 	and left(n.ncusip,6) = d.cnum 
+ 	and h.permco = d.permco;
+
++--------+------+
+|col1    |cnum  |
++--------+------+
+|459200  |459200|
++--------+------+
+(1 row)
+>>
+* select left(ifnull(n.ncusip,'000000'),6),d.cnum 
+<<
+>>
+* 	from cba05_t1 n, cba05_t3 h, cba05_t2 d
+<<
+>>
+* 	where 1 = 1 
+<<
+>>
+* 	and h.permno = n.permno 
+<<
+>>
+* 	and h.edtcode = 165
+<<
+>>
+* 	and left(ifnull(n.ncusip,'000000'),6) = d.cnum 
+<<
+>>
+* 	and h.permco = d.permco;\p\g
+<<
+ select left(ifnull(n.ncusip,'000000'),6),d.cnum 
+ 	from cba05_t1 n, cba05_t3 h, cba05_t2 d
+ 	where 1 = 1 
+ 	and h.permno = n.permno 
+ 	and h.edtcode = 165
+ 	and left(ifnull(n.ncusip,'000000'),6) = d.cnum 
+ 	and h.permco = d.permco;
+
++--------+------+
+|col1    |cnum  |
++--------+------+
+|459200  |459200|
++--------+------+
+(1 row)
+>>
+* drop table cba05_t1;\g
+<<
+~
+>>
+* drop table cba05_t3;\g
+<<
+~
+>>
+* drop table cba05_t2;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Mon Nov 11 17:14:38 1991

@@ -1,0 +1,463 @@
+/*
+	Test Name: pza11sc.sep
+	Time: Wed Sep 29 16:30:38 1993
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : pza11sc
+	Module  : 3gl
+	Filename: pza11sc.sep
+	Purpose	: test the Long Varchar Data Type (BLOB)
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : blobtable
+	Synopsis     : Uses the Callback Method (DATAHANDER) for
+		       the BLOB datatype.  Uses DATAHANDERs with
+		       select (cursor, select loop, and singleton),
+		       insert, and update statements to manipulate the
+		       BLOB data type.
+
+ History: 29-Sep-1993	(jbryson)	Created
+          31-Dec-1993	(jbryson) Added additional code to verify BUG # 58294.
+          02-Apr-1997  Modified (chiel02)
+                       Added an alternate canon for the sepcc command.
+                       Removed the platform specifications of the canons 
+                       for the esqlc command to make it work under NT. 
+          01-May-2001   (sarjo01) Added ORDER BY to assure consistent result.
+*/
+? delete pza11sc.c 
+<<
+~
+>>
+? delete pza11sc.o 
+<<
+~
+>>
+? delete pza11sc.obj 
+<<
+~
+>>
+? delete pza11sc.exe 
+<<
+~
+>>
+? fill pza11sc.sql 
+!!
+create table blobtable (
+       intcol integer,
+       lvchcol long varchar)\p\g
+insert into blobtable values
+   (1,'This is blob row #1')\p\g
+insert into blobtable values
+   (2,'This is blob row #2 - just a little longer!')\p\g
+insert into blobtable values
+   (3,'This is blob row #3')\p\g
+insert into blobtable values
+   (4,'This is blob row #4')\p\g
+insert into blobtable values
+   (5,null)\p\g
+insert into blobtable values
+   (6,'This is blob row #6 after a NULL row.')\p\g
+
+!!
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* drop table blobtable\g 
+<<
+~
+>>
+* \i pza11sc.sql 
+<<
+ 
+ create table blobtable (
+       intcol integer,
+       lvchcol long varchar)
+insert into blobtable values
+   (1,'This is blob row #1')
+(1 row)
+insert into blobtable values
+   (2,'This is blob row #2 - just a little longer!')
+(1 row)
+insert into blobtable values
+   (3,'This is blob row #3')
+(1 row)
+insert into blobtable values
+   (4,'This is blob row #4')
+(1 row)
+insert into blobtable values
+   (5,null)
+(1 row)
+insert into blobtable values
+   (6,'This is blob row #6 after a NULL row.')
+(1 row)
+>>
+* \q 
+<<
+~
+>>
+? fill pza11sc.sc 
+!!
+#include    <stdio.h>
+#include    <string.h>	
+exec sql include sqlca;
+
+int     My_OutputHdlr();
+int     My_InputHdlr();
+int     My_WhereHdlr();
+int     My_VchOutputHdlr();
+
+EXEC SQL BEGIN DECLARE SECTION;
+typedef	struct vch_ {
+	     short vc_len;
+	     char  vc[30];
+        } VCH;
+EXEC SQL END DECLARE SECTION;
+
+main(argc,argv)
+int     argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char*   argv[];
+EXEC SQL END DECLARE SECTION;
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+	char    blob[31];
+	int     i;
+	short	ind;
+	varchar VCH vch;
+   EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   EXEC SQL CONNECT :argv[1];
+
+   EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+   EXEC SQL declare c1 cursor for SELECT intcol,lvchcol
+	FROM blobtable
+	FOR UPDATE OF intcol,lvchcol;
+
+   printf("Cursor select from blob table...\n");
+   printf("Also deleting blob#3 and updating blob#4\n");
+   EXEC SQL OPEN c1;
+   while(1)
+   {
+      EXEC SQL FETCH c1 into :i,DATAHANDLER(My_OutputHdlr(blob)):ind;
+      if (sqlca.sqlcode)
+         break;
+
+      printit(i,blob,ind);
+
+      if(i==3)
+	 EXEC SQL DELETE FROM blobtable WHERE CURRENT OF c1;
+      if(i==4)
+	 EXEC SQL UPDATE blobtable 
+	     SET lvchcol = 'New data for blob#4'
+	     WHERE CURRENT OF c1;
+   }
+   EXEC SQL CLOSE c1;
+
+   printf("\nCursor select FOR READONLY from blob table...\n");
+   EXEC SQL OPEN c1 FOR READONLY;
+   while(1)
+   {
+      EXEC SQL FETCH c1 into :i,DATAHANDLER(My_OutputHdlr(blob)):ind;
+      if (sqlca.sqlcode)
+         break;
+
+      printit(i,blob,ind);
+   }
+   EXEC SQL CLOSE c1;
+
+
+   printf("\nInsert into blob table...\n");
+   strcpy(blob,"Inserted BLOB");
+   EXEC SQL INSERT INTO blobtable VALUES (3,DATAHANDLER(My_InputHdlr(blob)));
+   
+   printf("\nSelect loop from blob table...\n");
+   EXEC SQL SELECT intcol,lvchcol
+	INTO :i,DATAHANDLER(My_OutputHdlr(blob)):ind
+	FROM blobtable order by 1;
+   EXEC SQL BEGIN;
+      printit(i,blob,ind);
+   EXEC SQL END;
+
+   printf("\nSelect loop from blob table using varchar structure...\n");
+
+   EXEC SQL SELECT intcol,lvchcol
+	INTO :i,DATAHANDLER(My_VchOutputHdlr(&vch)):ind
+	FROM blobtable order by 1;
+   EXEC SQL BEGIN;
+      if(ind == -1)
+         printit(i,vch.vc,ind);
+      else
+	 printit(i,vch.vc,vch.vc_len);
+   EXEC SQL END;
+
+   printf("\nUpdate with DATAHANDLER...\n");
+   strcpy(blob,"Updated BLOB");
+
+   EXEC SQL UPDATE blobtable
+	SET intcol = 0,
+	    lvchcol = DATAHANDLER(My_InputHdlr(blob))
+	WHERE length(DATAHANDLER(My_WhereHdlr())) > 5 and
+	      intcol = 1;
+
+   printf("\nSingleton select from blob table...\n");
+   EXEC SQL SELECT intcol,lvchcol
+	INTO :i,DATAHANDLER(My_OutputHdlr(blob)):ind
+	FROM blobtable
+	WHERE intcol=0;
+   printit(i,blob,ind);
+
+   printf("\nSingleton select from blob table...without null indicator\n");
+   printf("This is to check for BUG #58294\n");
+   EXEC SQL SELECT intcol,lvchcol
+	INTO :i,DATAHANDLER(My_OutputHdlr(blob))
+	FROM blobtable
+	WHERE intcol=0;
+   ind = 0;
+   printit(i,blob,ind);
+
+   EXEC SQL DISCONNECT;
+}
+
+/******************************************************/
+printit(i,blob,ind)
+EXEC SQL BEGIN DECLARE SECTION;
+   char   *blob;
+   int    i;
+   short  ind;
+EXEC SQL END DECLARE SECTION;
+{
+
+   switch(ind)
+   {
+      case 0:
+         printf("blob#%d blob=%s=\n",i,blob);
+	 break;
+      case -1: 
+         printf("blob#%d **blobind=%d **NULL**\n",i,ind);
+	 break;
+      default:
+	 printf("blob#%d length=%d blob=%.*s=\n",i,ind,ind,blob);
+   }
+
+   if(sqlca.sqlwarn.sqlwarn1 != ' ')
+   {
+      printf("sqlca.sqlwarn.sqlwarn1=%c=\n",sqlca.sqlwarn.sqlwarn1);
+      sqlca.sqlwarn.sqlwarn1 = ' ';
+   }
+
+}
+
+/******************************************************/
+My_InputHdlr(segment)
+EXEC SQL BEGIN DECLARE SECTION;
+   char *segment;
+EXEC SQL END DECLARE SECTION;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+ int seglen;
+EXEC SQL END DECLARE SECTION;
+
+   printf("hello from input handler\n");
+
+   seglen = strlen(segment);
+   EXEC SQL PUT DATA (SEGMENT = :segment,
+		      SEGMENTLENGTH = :seglen);
+
+   EXEC SQL PUT DATA (DATAEND = 1);
+}
+
+/******************************************************/
+My_OutputHdlr(segment)
+EXEC SQL BEGIN DECLARE SECTION;
+   char *segment;
+EXEC SQL END DECLARE SECTION;
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+	int	seg_len = 30;
+        int     got_seglen;
+        int     data_end;
+	char	cname[33];
+	int     ctype;
+    EXEC SQL END DECLARE SECTION;
+        int     i;
+
+    EXEC SQL INQUIRE_SQL (:cname = columnname, :ctype = columntype);
+    printf("BLOB Column \"%s\":\n",cname);
+    printf("BLOB Column type = %d\n",ctype);
+
+    data_end = 0;
+
+    EXEC SQL GET DATA(:segment = SEGMENT, :got_seglen = SEGMENTLENGTH,
+		      :data_end = DATAEND) WITH MAXLENGTH = :seg_len;
+
+    segment[got_seglen] = '\0';
+
+    if(!data_end)
+        EXEC SQL ENDDATA;
+}
+
+/******************************************************/
+My_VchOutputHdlr(VCsegment)
+EXEC SQL BEGIN DECLARE SECTION;
+   varchar VCH *VCsegment;
+EXEC SQL END DECLARE SECTION;
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+	int	seg_len;
+        int     data_end;
+    EXEC SQL END DECLARE SECTION;
+        int     i;
+
+    data_end = 0;
+    seg_len = sizeof(VCsegment->vc);
+
+    EXEC SQL GET DATA(:*VCsegment = SEGMENT,
+		      :data_end = DATAEND) WITH MAXLENGTH = :seg_len;
+
+    if(!data_end)
+        EXEC SQL ENDDATA;
+}
+
+/******************************************************/
+My_WhereHdlr()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+ int seglen;
+ char segment[20];
+EXEC SQL END DECLARE SECTION;
+
+printf("Where handler!\n");
+
+   strcpy(segment,"hello...");
+   seglen=8;
+   EXEC SQL PUT DATA (SEGMENT = :segment,
+		      SEGMENTLENGTH = :seglen);
+
+   EXEC SQL PUT DATA (DATAEND = 1);
+}
+!!
+? esqlc pza11sc.sc 
+<< 
+ESQL pza11sc.sc:
+>>
+<< 
+>>
+? sepcc pza11sc 
+<<
+>>
+<<
+pza11sc.c
+>>
+? seplnk pza11sc 
+<<
+>>
+? run pza11sc.exe SEPPARAMDB 
+<<
+Cursor select from blob table...
+Also deleting blob#3 and updating blob#4
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#1 blob=This is blob row #1=
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#2 blob=This is blob row #2 - just a l=
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#3 blob=This is blob row #3=
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#4 blob=This is blob row #4=
+blob#5 **blobind=-1 **NULL**
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#6 blob=This is blob row #6 after a NU=
+
+Cursor select FOR READONLY from blob table...
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#1 blob=This is blob row #1=
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#2 blob=This is blob row #2 - just a l=
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#4 blob=New data for blob#4=
+blob#5 **blobind=-1 **NULL**
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#6 blob=This is blob row #6 after a NU=
+
+Insert into blob table...
+hello from input handler
+
+Select loop from blob table...
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#1 blob=This is blob row #1=
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#2 blob=This is blob row #2 - just a l=
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#3 blob=Inserted BLOB=
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#4 blob=New data for blob#4=
+blob#5 **blobind=-1 **NULL**
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#6 blob=This is blob row #6 after a NU=
+
+Select loop from blob table using varchar structure...
+blob#1 length=19 blob=This is blob row #1=
+blob#2 length=30 blob=This is blob row #2 - just a l=
+blob#3 length=13 blob=Inserted BLOB=
+blob#4 length=19 blob=New data for blob#4=
+blob#5 **blobind=-1 **NULL**
+blob#6 length=30 blob=This is blob row #6 after a NU=
+
+Update with DATAHANDLER...
+hello from input handler
+Where handler!
+
+Singleton select from blob table...
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#0 blob=Updated BLOB=
+
+Singleton select from blob table...without null indicator
+This is to check for BUG #58294
+BLOB Column "lvchcol":
+BLOB Column type = -22
+blob#0 blob=Updated BLOB=
+>>
+? delete pza11sc.c 
+<<
+~
+>>
+? delete pza11sc.o 
+<<
+~
+>>
+? delete pza11sc.obj 
+<<
+~
+>>
+? delete pza11sc.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Dec 31 11:45:02 1993

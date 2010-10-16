@@ -1,0 +1,222 @@
+/*
+        Test Name: qp292.sep
+        Time: Fri May 14 13:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp292.sep
+        Module  : be/qryproc
+        Filename: qp292.sep
+        Purpose : To test the new feature row producing procedure. 
+        Input Files  : rp1.sc
+        Output Files : rp1.exe
+        Database     : qryprocdb
+        Tables       : qp292_table1
+        Synopsis     : This is to test the row producing procedure where RESULT
+                       ROW size passed in EXECUTE PROCEDURE STATEMENT is 
+                       different than the RETURN ROW size in the procedure from
+		       within an embedded C program.
+
+ History: 11-May-2001   (wu$ca01) Created
+          14-May-2001	(sarjo01) Recanonized for fix to 10850853.
+**
+**  ROW PRODUCING PROCEDURE
+**
+**  - ESQLC, Incorrect RESULT ROW size passed in
+**           EXECUTE PROCEDURE STATEMENT
+**
+**  Known Problems:
+**  1) Issue 10850853 opened for this test. Second EXECUTE
+**     PROCEDURE does not produce an error. (RESOLVED)
+**
+*/
+? fill setup.sql 
+!!
+set autocommit on\g
+\i cleanup.sql
+create table qp292_table1 as select * from iirelation\g
+!!
+? fill cleanup.sql 
+!!
+drop table qp292_table1\g
+drop procedure qp292_rp1\g
+!!
+? fill rp1.sql 
+!!
+create procedure qp292_rp1
+       result row(int, char(32), char(32))
+as declare
+   v1 int;
+   v2 char(33);
+   v3 char(33);
+   buf char(80) not null;
+begin
+   for select reltid, relid, relowner into :v1, :v2, :v3 from qp292_table1 order by 1 do
+      return row(:v1, :v2, :v3);
+   endfor;
+end;\g
+!!
+? fill rp1.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+      int       v1;
+      char      v2[33];
+      char      v3[33];
+      char      v4[33];
+      int       rcount;
+   EXEC SQL END DECLARE SECTION;
+
+   int       i;
+
+   EXEC SQL WHENEVER SQLERROR stop;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+
+   printf("Result Row > Return Row\n");
+
+   i = 0;
+   EXEC SQL execute procedure qp292_rp1
+                    result row (:v1, :v2, :v3, :v4);
+   EXEC SQL begin;
+      i++;
+      EXEC SQL ENDSELECT;
+   EXEC SQL end;
+
+   if (i != 0)
+      printf("ERROR: Row returned\n");
+   else
+      printf("Operation completed\n");
+
+   EXEC SQL disconnect;
+}
+!!
+? esqlc rp1.sc 
+<<
+~
+>>
+? sepcc rp1.c 
+<<
+~
+>>
+? seplnk rp1 
+<<
+~
+>>
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* \i rp1.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? run rp1.exe SEPPARAMDB 
+<<
+Result Row > Return Row
+E_LQ003C Mismatching number of result columns and program variables.
+    There are 3 result columns and 4 program variables.
+SQL STOP.
+>>
+? fill rp1.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+      int       v1;
+      char      v2[33];
+      char      v3[33];
+      char      v4[33];
+      int       rcount;
+   EXEC SQL END DECLARE SECTION;
+
+   int       i;
+
+   EXEC SQL WHENEVER SQLERROR stop;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+
+   printf("Result Row < Return Row\n");
+
+   i = 0;
+
+   EXEC SQL execute procedure qp292_rp1
+                    result row (:v1, :v2);
+   EXEC SQL begin;
+      i++;
+      EXEC SQL ENDSELECT;
+   EXEC SQL end;
+
+   if (i != 0)
+      printf("ERROR: Row returned\n");
+   else
+      printf("Operation completed\n");
+
+   EXEC SQL disconnect;
+}
+!!
+? esqlc rp1.sc 
+<<
+~
+>>
+? sepcc rp1.c 
+<<
+~
+>>
+? seplnk rp1 
+<<
+~
+>>
+? run rp1.exe SEPPARAMDB 
+<<
+Result Row < Return Row
+E_LQ003C Mismatching number of result columns and program variables.
+    There are 3 result columns and 2 program variables.
+SQL STOP.
+>>
+? delete rp1.c 
+<<
+~
+>>
+? delete rp1.o 
+<<
+~
+>>
+? delete rp1.obj 
+<<
+~
+>>
+? delete rp1.exe 
+<<
+~
+>>
+
+
+Ending at: Mon May 14 17:08:16 2001

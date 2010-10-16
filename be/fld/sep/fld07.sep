@@ -1,0 +1,166 @@
+/*
+	Copyright (c) 2006 Ingres Corporation
+
+	Test Name: fld07.sep
+	Time: Thu Oct 24 12:57:29 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename: fld07.sep
+	Purpose	: To test fastload with heap table with secondary index.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : fld07_t1, fld07_t2
+	Synopsis     : 
+ 	Assertions   : If a table (with any structure) has a secondary index,
+		       than fastload shouldn't load data into the table
+		       whether there is some data or not.
+
+ History: 29-Oct-1996	(chosh01)	Created
+          11-Dec-1996	(panph01)
+          24-Mar-1997	(ivlbi01)
+		Modified for OI 2.0
+	  28-Jul-1998   (chegu01)  added "delete t1.in*" command for cleanup.
+	  23-Mar-1999   (vande02)  Hard-coded VPG_SZ to 8K and changed 'sql -s
+                                   SEPPARAMDB' canon to be empty, therfore, if
+                                   the test db does not exist, you will catch
+                                   the msg. "TM could not connect to db."
+         30-Apr-2003    (sinra04) Corrected "delete t1.in*" command to 
+                                  "delete t1.in" so that file does gets
+                                  deleted from output directory.
+	22-Sep-2006	(rogch01)
+		Add a sleep before running fastload to ensure the database is
+		available.  See issue 105201.  Lose the pointless filled
+		setup file and all those \p's.  Name the tables after the test.
+		Take the risk that creating two tables and adding a few rows
+		won't fill the log file.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table fld07_t1, fld07_t2; commit; \g
+<<
+~
+>>
+* create table fld07_t1(col1 integer, col2 varchar(20)) with page_size=8192;\g
+<<
+>>
+* create index fld07_t1_index on fld07_t1(col1);\g
+<<
+(0 rows)
+>>
+* create table fld07_t2(col1 integer, col2 varchar(20)) with page_size=8192;\g
+<<
+>>
+* create index fld07_t2_index on fld07_t2(col1);\g
+<<
+(0 rows)
+>>
+* insert into fld07_t2 values(1111111, 'aaaaaaaaaaaa');\g
+<<
+(1 row)
+>>
+* insert into fld07_t2 values(2222222, 'bbbbbbbbbbbb');\g
+<<
+(1 row)
+>>
+* insert into fld07_t2 values(3333333, 'cccccccccccc');\g
+<<
+(1 row)
+>>
+* copy table fld07_t2() into 'fld07_t1.in';\g
+<<
+(3 rows)
+>>
+* select * from fld07_t1;\g
+<<
+
++-------------+--------------------+
+|col1         |col2                |
++-------------+--------------------+
++-------------+--------------------+
+(0 rows)
+>>
+* select * from fld07_t2;\g
+<<
+
++-------------+--------------------+
+|col1         |col2                |
++-------------+--------------------+
+|      1111111|aaaaaaaaaaaa        |
+|      2222222|bbbbbbbbbbbb        |
+|      3333333|cccccccccccc        |
++-------------+--------------------+
+(3 rows)
+>>
+* \q
+<<
+~
+>>
+? sleep 1
+<<
+>>
+? fastload SEPPARAMDB -table=fld07_t1 -file=fld07_t1.in 
+<<
+Mon Mar 24 17:31:49 1997 E_DM1615_FLOAD_BAD_TABLE_FORMAT	The given table is not in t-
+he correct format for fastload, the table must not have a secondary index or be jour-
+naled, and cannot be a gateway table. Also, the table must not contain complex datat-
+ypes such as INTLIST.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from fld07_t1; \g
+<<
+
++-------------+--------------------+
+|col1         |col2                |
++-------------+--------------------+
++-------------+--------------------+
+(0 rows)
+>>
+* \q
+<<
+~
+>>
+? sleep 1
+<<
+>>
+? fastload SEPPARAMDB -table=fld07_t1 -file=fld07_t1.in 
+<<
+Mon Mar 24 17:33:11 1997 E_DM1615_FLOAD_BAD_TABLE_FORMAT	The given table is not in t-
+he correct format for fastload, the table must not have a secondary index or be jour-
+naled, and cannot be a gateway table. Also, the table must not contain complex datat-
+ypes such as INTLIST.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from fld07_t1; \g
+<<
+
++-------------+--------------------+
+|col1         |col2                |
++-------------+--------------------+
++-------------+--------------------+
+(0 rows)
+>>
+* drop table fld07_t1, fld07_t2\g
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? delete fld07_t1.in
+<<
+~
+>>
+Ending at: Mon Mar 24 17:33:31 1997

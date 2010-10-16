@@ -1,0 +1,886 @@
+/*
+	Test Name: eca10
+	Time: 28-JUL-1989 09:43:26
+	User Name: testenv   
+ 
+	Test ID : 	eca10 (formerly af016)
+	Module  :	qryproc
+	Filename: 	eca010.sep
+	Purpose	:	Test subqueries involving AGGREGATES
+			on HASH tables and secondary indices.
+	Input Files  :	None
+	Output Files :	None
+	Database     :	SEPPARAMDB
+	Tables       :	eca10_t1, eca10_t2, eca10_t3, eca10_t4, eca10_t5
+	Synopsis     :  Test subqueries involving AGGREGATES
+                        on HASH tables and secondary indices.
+
+	History	: 28-Jul-1989	Created				srr
+10-29-91	cleaned up to make more readable by CAMACHO
+          11-Aug-1993	(garys) Updated canon to accept new 65 error # and
+				message for Illegal use of aggregate function					in a WHERE clause.  Also added a '* \q' to
+				end of test to quit TM properly.
+	  25-March-1999  (kamra01) modified VPG_SZ to 4096
+*/
+? fill eca10t1.jup 
+!!
+s5	adams 	    30	athens    
+s3	blake 	    30	paris     
+s4	clark 	    20	london    
+s2	jones 	    10	paris     
+s1	smith 	    20	london    
+!!
+? fill eca10t2.jup 
+!!
+p1	nut       	red   	    12	london    
+p2	bolt      	green 	    17	paris     
+p3	screw     	blue  	    17	rome      
+p4	screw     	red   	    14	london    
+p5	cam       	blue  	    12	paris     
+p6	cog       	red   	    19	london    
+!!
+? fill eca10t3.jup 
+!!
+j1	sorter  	paris 
+j2	punch   	rome  
+j3	reader  	athens
+j4	console 	athens
+j5	collator	london
+j6	terminal	oslo  
+j7	tape    	london
+!!
+? fill eca10t4.jup 
+!!
+s1	p1	   300
+s1	p2	   200
+s1	p3	   400
+s1	p4	   200
+s1	p5	   100
+s1	p6	   100
+s2	p1	   300
+s2	p2	   400
+s3	p2	   200
+s4	p2	   200
+s4	p4	   300
+s4	p5	   400
+!!
+? fill eca10t5.jup 
+!!
+s1	p1	j1	   200
+s1	p1	j4	   700
+s2	p3	j1	   400
+s2	p3	j2	   200
+s2	p3	j3	   200
+s2	p3	j4	   500
+s2	p3	j5	   600
+s2	p3	j6	   400
+s2	p3	j7	   800
+s2	p5	j2	   100
+s3	p3	j1	   200
+s3	p4	j2	   500
+s4	p6	j3	   300
+s4	p6	j7	   300
+s5	p2	j2	   200
+s5	p2	j4	   100
+s5	p5	j5	   500
+s5	p5	j7	   100
+s5	p6	j2	   200
+s5	p1	j4	   100
+s5	p3	j4	   200
+s5	p4	j4	   800
+s5	p5	j4	   400
+s5	p6	j4	   500
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table eca10_t3;\g
+<<
+~
+>>
+* create table eca10_t3 (jno text(2) with null, jname text(8) with null,
+<<
+>>
+*		  city text(6) with null ) with noduplicates, page_size=4096;\g
+<<
+>>
+* copy table eca10_t3 ( jno=c0tab, jname=c0tab, city=c0nl) 
+<<
+>>
+*		from 'eca10t3.jup';\g
+<<
+(7 rows)
+>>
+* drop table eca10_t2;\g
+<<
+~
+>>
+* create table eca10_t2 (pno text(2) with null,pname text(10) with null,
+<<
+>>
+*		  color text(6) with null, weight i2 with null,
+<<
+>>
+*	          city text(10) with null) with duplicates, page_size=4096;\g
+<<
+>>
+* copy table eca10_t2 (pno=c0tab, pname=c0tab, color=c0tab, weight=c0tab, 
+<<
+>>
+*		city=c0nl ) from 'eca10t2.jup';\g
+<<
+(6 rows)
+>>
+* drop table eca10_t1;\g
+<<
+~
+>>
+* create table eca10_t1 (sno text(2) with null, sname text(6) with null,
+<<
+>>
+*		status i2 with null, city text(10) with null)
+<<
+>>
+*		 with duplicates, page_size=4096;\g
+<<
+>>
+* copy table eca10_t1 (sno=c0tab, sname=c0tab, status=c0tab, city=c0nl)
+<<
+>>
+*		 from 'eca10t1.jup';\g
+<<
+(5 rows)
+>>
+* drop table eca10_t4;\g
+<<
+~
+>>
+* create table eca10_t4 (sno text(2) with null, pno text(2) with null,
+<<
+>>
+*	 	qty i2 with null) with duplicates, page_size=4096;\g
+<<
+>>
+* copy table eca10_t4 (sno=c0tab, pno=c0tab, qty=c0nl) from 'eca10t4.jup';\g
+<<
+(12 rows)
+>>
+* drop table eca10_t5;\g
+<<
+~
+>>
+* create table eca10_t5 (sno text(2) with null, pno text(2) with null,
+<<
+>>
+* 	jno text(2) with null, 	qty i2 with null)
+<<
+>>
+*	 with noduplicates, page_size=4096;\g
+<<
+>>
+* copy table eca10_t5 (sno=c0tab, pno=c0tab, jno=c0tab, qty=c0nl)
+<<
+>>
+*	 from 'eca10t5.jup';\g
+<<
+(24 rows)
+>>
+* modify eca10_t3 to hash on jno with page_size=4096;\g
+<<
+(7 rows)
+>>
+* create index eca10_t3_1 on eca10_t3 (jname) with structure = hash, page_size=4096;\g
+<<
+(7 rows)
+>>
+* create index eca10_t3_2 on eca10_t3 (city) with structure = hash, page_size=4096;\g
+<<
+(7 rows)
+>>
+* modify eca10_t2 to hash on pno with page_size=4096;\g
+<<
+(6 rows)
+>>
+* create index eca10_t2_1 on eca10_t2 (pname) with structure = hash, page_size=4096;\g
+<<
+(6 rows)
+>>
+* create index eca10_t2_2 on eca10_t2 (color) with structure = hash, page_size=4096;\g
+<<
+(6 rows)
+>>
+* create index eca10_t2_3 on eca10_t2 (weight) with structure = hash, page_size=4096;\g
+<<
+(6 rows)
+>>
+* create index eca10_t2_4 on eca10_t2 (city) with structure = hash, page_size=4096;\g
+<<
+(6 rows)
+>>
+* modify eca10_t1 to hash on sno with page_size=4096;\g
+<<
+(5 rows)
+>>
+* create index eca10_t11 on eca10_t1 (sname) with structure = hash, page_size=4096;\g
+<<
+(5 rows)
+>>
+* create index eca10_t12 on eca10_t1 (status) with structure = hash, page_size=4096;\g
+<<
+(5 rows)
+>>
+* create index eca10_t13 on eca10_t1 (city) with structure = hash, page_size=4096;\g
+<<
+(5 rows)
+>>
+* modify eca10_t4 to hash on sno with page_size=4096;\g
+<<
+(12 rows)
+>>
+* create index eca10_t4_1 on eca10_t4 (pno) with structure = hash, page_size=4096;\g
+<<
+(12 rows)
+>>
+* create index eca10_t4_2 on eca10_t4 (qty) with structure = hash, page_size=4096;\g
+<<
+(12 rows)
+>>
+* modify eca10_t5 to hash on sno with page_size=4096;\g
+<<
+(24 rows)
+>>
+* create index eca10_t5_1 on eca10_t5 (pno) with structure = hash, page_size=4096;\g
+<<
+(24 rows)
+>>
+* create index eca10_t5_2 on eca10_t5 (jno) with structure = hash, page_size=4096;\g
+<<
+(24 rows)
+>>
+* create index eca10_t5_3 on eca10_t5 (qty) with structure = hash, page_size=4096;\g
+<<
+(24 rows)
+>>
+* select * from eca10_t3 order by jno, jname, city;\g
+<<
++------+--------+------+
+|jno   |jname   |city  |
++------+--------+------+
+|j1    |sorter  |paris |
+|j2    |punch   |rome  |
+|j3    |reader  |athens|
+|j4    |console |athens|
+|j5    |collator|london|
+|j6    |terminal|oslo  |
+|j7    |tape    |london|
++------+--------+------+
+(7 rows)
+>>
+* select * from eca10_t2 order by pno, pname, color, weight, city;\g
+<<
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p1    |nut       |red   |    12|london    |
+|p2    |bolt      |green |    17|paris     |
+|p3    |screw     |blue  |    17|rome      |
+|p4    |screw     |red   |    14|london    |
+|p5    |cam       |blue  |    12|paris     |
+|p6    |cog       |red   |    19|london    |
++------+----------+------+------+----------+
+(6 rows)
+>>
+* select * from eca10_t1 order by sno, sname, status, city;\g
+<<
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s1    |smith |    20|london    |
+|s2    |jones |    10|paris     |
+|s3    |blake |    30|paris     |
+|s4    |clark |    20|london    |
+|s5    |adams |    30|athens    |
++------+------+------+----------+
+(5 rows)
+>>
+* select * from eca10_t4 order by sno, pno, qty;\g
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select * from eca10_t5 order by sno, pno, jno, qty;\g
+<<
+
++------+------+------+------+
+|sno   |pno   |jno   |qty   |
++------+------+------+------+
+|s1    |p1    |j1    |   200|
+|s1    |p1    |j4    |   700|
+|s2    |p3    |j1    |   400|
+|s2    |p3    |j2    |   200|
+|s2    |p3    |j3    |   200|
+|s2    |p3    |j4    |   500|
+|s2    |p3    |j5    |   600|
+|s2    |p3    |j6    |   400|
+|s2    |p3    |j7    |   800|
+|s2    |p5    |j2    |   100|
+|s3    |p3    |j1    |   200|
+|s3    |p4    |j2    |   500|
+|s4    |p6    |j3    |   300|
+|s4    |p6    |j7    |   300|
+|s5    |p1    |j4    |   100|
+|s5    |p2    |j2    |   200|
+|s5    |p2    |j4    |   100|
+|s5    |p3    |j4    |   200|
+|s5    |p4    |j4    |   800|
+|s5    |p5    |j4    |   400|
+|s5    |p5    |j5    |   500|
+|s5    |p5    |j7    |   100|
+|s5    |p6    |j2    |   200|
+|s5    |p6    |j4    |   500|
++------+------+------+------+
+(24 rows)
+>>
+* create view eca10_t3_v as select * from eca10_t3;\g
+<<
+>>
+* create view eca10_t2_v as select * from eca10_t2;\g
+<<
+>>
+* create view eca10_t1_v as select * from eca10_t1;\g
+<<
+>>
+* create view eca10_t4_v as select * from eca10_t4;\g
+<<
+>>
+* create view eca10_t5_v as select * from eca10_t5;\g
+<<
+>>
+* select * from eca10_t3_v order by jno, jname, city;\g
+<<
++------+--------+------+
+|jno   |jname   |city  |
++------+--------+------+
+|j1    |sorter  |paris |
+|j2    |punch   |rome  |
+|j3    |reader  |athens|
+|j4    |console |athens|
+|j5    |collator|london|
+|j6    |terminal|oslo  |
+|j7    |tape    |london|
++------+--------+------+
+(7 rows)
+>>
+* select * from eca10_t2_v order by pno, pname, color, weight, city;\g
+<<
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p1    |nut       |red   |    12|london    |
+|p2    |bolt      |green |    17|paris     |
+|p3    |screw     |blue  |    17|rome      |
+|p4    |screw     |red   |    14|london    |
+|p5    |cam       |blue  |    12|paris     |
+|p6    |cog       |red   |    19|london    |
++------+----------+------+------+----------+
+(6 rows)
+>>
+* select * from eca10_t1_v order by sno, sname, status, city;\g
+<<
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s1    |smith |    20|london    |
+|s2    |jones |    10|paris     |
+|s3    |blake |    30|paris     |
+|s4    |clark |    20|london    |
+|s5    |adams |    30|athens    |
++------+------+------+----------+
+(5 rows)
+>>
+* select * from eca10_t4_v order by sno, pno, qty;\g
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select * from eca10_t5_v order by sno, pno, jno, qty;\g
+<<
++------+------+------+------+
+|sno   |pno   |jno   |qty   |
++------+------+------+------+
+|s1    |p1    |j1    |   200|
+|s1    |p1    |j4    |   700|
+|s2    |p3    |j1    |   400|
+|s2    |p3    |j2    |   200|
+|s2    |p3    |j3    |   200|
+|s2    |p3    |j4    |   500|
+|s2    |p3    |j5    |   600|
+|s2    |p3    |j6    |   400|
+|s2    |p3    |j7    |   800|
+|s2    |p5    |j2    |   100|
+|s3    |p3    |j1    |   200|
+|s3    |p4    |j2    |   500|
+|s4    |p6    |j3    |   300|
+|s4    |p6    |j7    |   300|
+|s5    |p1    |j4    |   100|
+|s5    |p2    |j2    |   200|
+|s5    |p2    |j4    |   100|
+|s5    |p3    |j4    |   200|
+|s5    |p4    |j4    |   800|
+|s5    |p5    |j4    |   400|
+|s5    |p5    |j5    |   500|
+|s5    |p5    |j7    |   100|
+|s5    |p6    |j2    |   200|
+|s5    |p6    |j4    |   500|
++------+------+------+------+
+(24 rows)
+>>
+* select pno from eca10_t2 px where px.weight * 5 > any 
+<<
+>>
+*	(select sum(weight) from eca10_t2 py where py.city=px.city) 
+<<
+>>
+*	order by pno;\g
+<<
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p3    |
+|p4    |
+|p5    |
+|p6    |
++------+
+(6 rows)
+>>
+* select pno, qty from eca10_t4 where avg(qty) in
+<<
+>>
+*	(select eca10_t4z.qty from eca10_t4 eca10_t4z where pno='p1');\g
+/*
+*/
+<<
+E_US0B72 line 1.  Illegal use of aggregate function in a WHERE clause.
+    (Wed Aug 11 17:52:02 1993)
+
+>>
+* select avg(qty) from eca10_t4 where sno = any
+<<
+>>
+*	(select sno from eca10_t1 where city = 'paris');\g
+<<
++-----------+
+|col1       |
++-----------+
+|    300.000|
++-----------+
+(1 row)
+>>
+* select eca10_t3.jno from eca10_t3 
+<<
+>>
+*	where eca10_t3.city = (select min (eca10_t3.city) 
+<<
+>>
+*	from eca10_t3) order by jno;\g
+<<
++------+
+|jno   |
++------+
+|j3    |
+|j4    |
++------+
+(2 rows)
+>>
+* select eca10_t5.jno from eca10_t5 where eca10_t5.pno = 'p1' 
+<<
+>>
+*	group by eca10_t5.jno 
+<<
+>>
+*	having avg (eca10_t5.qty) >	(select max(eca10_t5.qty)  
+<<
+>>
+*	from eca10_t5 where eca10_t5.jno = 'j1');\g
+<<
++------+
+|jno   |
++------+
++------+
+(0 rows)
+>>
+* select distinct eca10_t5x.sno from eca10_t5 eca10_t5x 
+<<
+>>
+*	where eca10_t5x.pno = 'p1' and 
+<<
+>>
+*	eca10_t5x.qty > (select avg(eca10_t5y.qty) from eca10_t5 eca10_t5y 
+<<
+>>
+*		where eca10_t5x.pno = 'p1' 
+<<
+>>
+*		and eca10_t5y.jno = eca10_t5x.jno);\g
+<<
++------+
+|sno   |
++------+
+|s1    |
++------+
+(1 row)
+>>
+* select pno from eca10_t2_v px where px.weight * 5 > any 
+<<
+>>
+*	(select sum(weight) from eca10_t2_v py where py.city=px.city)
+<<
+>>
+*	order by pno;\g
+<<
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p3    |
+|p4    |
+|p5    |
+|p6    |
++------+
+(6 rows)
+>>
+* select pno, qty from eca10_t4_v where avg(qty) in 
+<<
+>>
+*	(select eca10_t4z.qty from eca10_t4_v eca10_t4z where pno='p1');\g
+/*
+*/
+<<
+E_US0B72 line 1.  Illegal use of aggregate function in a WHERE clause.
+    (Wed Aug 11 17:52:28 1993)
+
+>>
+* select avg(qty) from eca10_t4_v where sno = any 
+<<
+>>
+*	(select sno from eca10_t1_v where city = 'paris');\g
+<<
++-----------+
+|col1       |
++-----------+
+|    300.000|
++-----------+
+(1 row)
+>>
+* select eca10_t3_v.jno from eca10_t3_v 
+<<
+>>
+*	where eca10_t3_v.city = (select min (eca10_t3_v.city) 
+<<
+>>
+*	from eca10_t3_v) order by jno;\g
+<<
++------+
+|jno   |
++------+
+|j3    |
+|j4    |
++------+
+(2 rows)
+>>
+* select eca10_t5_v.jno from eca10_t5_v where eca10_t5_v.pno = 'p1' 
+<<
+>>
+*	group by eca10_t5_v.jno having avg (eca10_t5_v.qty) >
+<<
+>>
+*	(select max(eca10_t5_v.qty) from eca10_t5_v 
+<<
+>>
+*		where eca10_t5_v.jno = 'j1');\g
+<<
++------+
+|jno   |
++------+
++------+
+(0 rows)
+>>
+* select distinct eca10_t5x.sno from eca10_t5_v eca10_t5x 
+<<
+>>
+*	where eca10_t5x.pno = 'p1' and eca10_t5x.qty > 	
+<<
+>>
+*		(select avg(eca10_t5y.qty) from eca10_t5_v eca10_t5y  	
+<<
+>>
+*			where eca10_t5x.pno = 'p1' 
+<<
+>>
+*			and eca10_t5y.jno = eca10_t5x.jno);\g
+<<
++------+
+|sno   |
++------+
+|s1    |
++------+
+(1 row)
+>>
+* set trace point op132;\g
+/*
+Run the query on the base tables, flatteining turned ON
+*/
+<<
+>>
+* select pno from eca10_t2 px where px.weight * 5 > any 
+<<
+>>
+*	(select sum(weight) from eca10_t2 py where py.city=px.city)
+<<
+>>
+*	order by pno;\g
+<<
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p3    |
+|p4    |
+|p5    |
+|p6    |
++------+
+(6 rows)
+>>
+* select pno, qty from eca10_t4 where avg(qty) in 
+<<
+>>
+*	(select eca10_t4z.qty from eca10_t4 eca10_t4z where pno='p1');\g
+/*
+*/
+<<
+E_US0B72 line 1.  Illegal use of aggregate function in a WHERE clause.
+    (Wed Aug 11 17:52:38 1993)
+
+>>
+* select avg(qty) from eca10_t4 where sno = any 
+<<
+>>
+*	(select sno from eca10_t1 where city = 'paris');\g
+<<
++-----------+
+|col1       |
++-----------+
+|    300.000|
++-----------+
+(1 row)
+>>
+* select eca10_t3.jno from eca10_t3 where eca10_t3.city = 
+<<
+>>
+*	(select min (eca10_t3.city) from eca10_t3)
+<<
+>>
+*	order by jno;\g
+<<
++------+
+|jno   |
++------+
+|j3    |
+|j4    |
++------+
+(2 rows)
+>>
+* select eca10_t5.jno from eca10_t5 where eca10_t5.pno = 'p1' 
+<<
+>>
+*	group by eca10_t5.jno having avg (eca10_t5.qty) >	
+<<
+>>
+*	(select max(eca10_t5.qty)  from eca10_t5 
+<<
+>>
+*			where eca10_t5.jno = 'j1');\g
+<<
++------+
+|jno   |
++------+
++------+
+(0 rows)
+>>
+* select distinct eca10_t5x.sno from eca10_t5 eca10_t5x where 
+<<
+>>
+*	eca10_t5x.pno = 'p1' and 
+<<
+>>
+*	eca10_t5x.qty > (select avg(eca10_t5y.qty) from eca10_t5 eca10_t5y 
+<<
+>>
+*			where eca10_t5x.pno = 'p1' and 
+<<
+>>
+*			eca10_t5y.jno = eca10_t5x.jno);\g
+<<
++------+
+|sno   |
++------+
+|s1    |
++------+
+(1 row)
+>>
+* select pno from eca10_t2_v px where px.weight * 5 > any 
+<<
+>>
+*	(select sum(weight) from eca10_t2_v py where py.city=px.city)
+<<
+>>
+*	order by pno;\g
+<<
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p3    |
+|p4    |
+|p5    |
+|p6    |
++------+
+(6 rows)
+>>
+* select pno, qty from eca10_t4_v where avg(qty) in 
+<<
+>>
+*	(select eca10_t4z.qty from eca10_t4_v eca10_t4z where pno='p1');\g
+/*
+*/
+<<
+E_US0B72 line 1.  Illegal use of aggregate function in a WHERE clause.
+    (Wed Aug 11 17:52:42 1993)
+
+>>
+* select avg(qty) from eca10_t4_v where sno = any 
+<<
+>>
+*	(select sno from eca10_t1_v where city = 'paris');\g
+<<
++-----------+
+|col1       |
++-----------+
+|    300.000|
++-----------+
+(1 row)
+>>
+* select eca10_t3_v.jno from eca10_t3_v where eca10_t3_v.city = 
+<<
+>>
+*	(select min (eca10_t3_v.city) from eca10_t3_v) order by jno;\g
+<<
++------+
+|jno   |
++------+
+|j3    |
+|j4    |
++------+
+(2 rows)
+>>
+* select eca10_t5_v.jno from eca10_t5_v where eca10_t5_v.pno = 'p1' 
+<<
+>>
+*	group by eca10_t5_v.jno having 
+<<
+>>
+*	avg (eca10_t5_v.qty) > (select max(eca10_t5_v.qty) from eca10_t5_v 
+<<
+>>
+*				where eca10_t5_v.jno = 'j1');\g
+<<
++------+
+|jno   |
++------+
++------+
+(0 rows)
+>>
+* select distinct eca10_t5x.sno from eca10_t5_v eca10_t5x 
+<<
+>>
+*	where eca10_t5x.pno = 'p1' and 
+<<
+>>
+*	eca10_t5x.qty > (select avg(eca10_t5y.qty) from eca10_t5_v eca10_t5y 
+<<
+>>
+*	where eca10_t5x.pno = 'p1' and eca10_t5y.jno = eca10_t5x.jno);\g
+<<
++------+
+|sno   |
++------+
+|s1    |
++------+
+(1 row)
+>>
+* drop table eca10_t1;\g
+<<
+~
+>>
+* drop table eca10_t2;\g
+<<
+~
+>>
+* drop table eca10_t3;\g
+<<
+~
+>>
+* drop table eca10_t4;\g
+<<
+~
+>>
+* drop table eca10_t5;\g
+<<
+~
+>>
+* \g
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: Wed Aug 11 17:52:52 1993

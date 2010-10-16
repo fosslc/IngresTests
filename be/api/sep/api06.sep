@@ -1,0 +1,1631 @@
+/*
+	Copyright (c) 2006 Ingres Corporation
+
+	Test Name: api06.sep
+	Time: Thu Mar 27 11:10:21 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : api06.sep
+	Module  : be/lar
+	Filename: api06.sep
+	Purpose	: To test API function in Asynchronous mode:
+		  IIapi_rollback(),IIapi_savePoint()
+	Input Files  :
+	Output Files :
+	Database     :
+	Tables       :
+	Synopsis     :
+
+ History: 27-Mar-1997	zhaqi01		Created
+	  23-Jul-1998	chegu01:	added the VMS version.		
+	  29-sep-1998   (kinte01)       For VMS use seplnk -a to pick up the
+					API shared library otherwise the
+					executable would be linked as an
+					ESQLC application
+	  29-sep-1998   (kinte01)       Changed size advise value for VMS to
+					4120 which is the new value in 2.0
+	  08-dec-1998   (hanch04)       Changed size advise value to
+                                        4064  which is the new value in 2.5
+	  17-Mar-1999	(vande02)	Hard-coded VPG_SZ to 8K
+          19-May-1999	(somsa01)
+		Updated canon with size of API structure.
+	2-Arp-1999      (yu$pe02)       Hard code to 2K.
+          17-Aug-1999   (hweho01)       Added stdlib.h header file in header.h,
+                                        it provides the function prototype of 
+                                        malloc(). Without the declaration, the  
+                                        default int return type will result in 
+                                        64-bit address being truncated on  
+                                        ris_u64 platform.
+          02-Sep-199   (madsu02)
+		x-integrating from handoffqa into main. Taking page_size 2k
+		from main. taking changes by hanch04,somsa01 
+          30-Dec-1999	(ngutr03)
+		Changed initP.in_version from IIAPI_VERSION_1 to 
+		IIAPI_VERSION_2 (see syc_savept.c).  Added new member variable
+		in_envHandle to initP structure (see syc_savept.c).  Added new
+		API function IIapi_releaseEnv() to synchronous.c to release
+		the environment handle.
+	  17-sep-2001   (devjo01)	Changed failure tests to make sure
+					program will not infinitely loop
+					if an error code other than
+					IIAPI_ST_NO_DATA is returned.
+	11-jun-2003 (abbjo03)
+		Corrections to eliminate warnings on VMS.
+	 6-Oct-2006	(rogch01)
+		Reorder canons to make the platform specific ones diff against
+		the result to make interpretation easier.  Change size advise
+		in line with Windows for VMS.
+*/
+? fill header.h 
+!!
+/*
+** Name: header.h	Header file used by test programs of API functions
+**
+** Description:		Contains function prototypes for synchronous and
+**			asynchronous mode testing.
+**
+** History:
+**      15-May-95 (Manfu)
+**	   creation
+**
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include "iiapi.h"
+#include "iiapidep.h"
+
+#define DBname		"usilhu09::apidb" /* Database used for testing */
+#define DBA		"testenv"
+#define CONNTIMEOUT	-1	/* Timeout not desired for connection */
+#define WAITTIMEOUT	10	/* 10 milliseconds for wait timeout */
+
+/*
+** Name: Handleparm
+**
+** Description: This datatype defines the function pointers for
+**		the various handles.
+**
+*/
+
+typedef struct Handleparm {
+	II_PTR	hp_connHandle;
+	II_PTR	hp_tranHandle;
+	II_PTR	hp_stmtHandle;
+	II_VOID	(*hp_next)();
+} Handleparm;
+
+/*	Function prototypes for synchronous mode testing     */
+/*							     */
+void syc_initialize	(IIAPI_INITPARM *);
+void syc_terminate	(IIAPI_TERMPARM *);
+void syc_releaseEnv     (II_PTR);
+void syc_connect	(Handleparm *, IIAPI_CONNPARM *);
+void syc_disconnect	(Handleparm *, IIAPI_DISCONNPARM *);
+void syc_setConnectParam(Handleparm *, IIAPI_SETCONPRMPARM *);
+void syc_modifyConnect	(Handleparm *, IIAPI_MODCONNPARM *);
+void syc_query		(Handleparm *, IIAPI_QUERYPARM *);
+void syc_close		(Handleparm *, IIAPI_CLOSEPARM *);
+void syc_cancel		(Handleparm *, IIAPI_CANCELPARM *);
+void syc_registerXID	(IIAPI_REGXIDPARM *);
+void syc_releaseXID	(IIAPI_RELXIDPARM *);
+void syc_prepareCommit	(Handleparm *, IIAPI_PREPCMTPARM *);
+void syc_commit		(Handleparm *, IIAPI_COMMITPARM *);
+void syc_rollback	(Handleparm *, IIAPI_ROLLBACKPARM *);
+void syc_savePoint	(Handleparm *, IIAPI_SAVEPTPARM *);
+void syc_convertData	(IIAPI_DESCRIPTOR, IIAPI_DATAVALUE,
+			 IIAPI_DESCRIPTOR, IIAPI_DATAVALUE *);
+void syc_setDescriptor	(Handleparm *, IIAPI_SETDESCRPARM *);
+void syc_getDescriptor	(Handleparm *, IIAPI_GETDESCRPARM *);
+void syc_putParms	(Handleparm *, IIAPI_PUTPARMPARM *);
+void syc_getColumns	(Handleparm *, IIAPI_GETCOLPARM *, IIAPI_DESCRIPTOR *);
+void syc_getCopyMap	(Handleparm *, IIAPI_GETCOPYMAPPARM *);
+void syc_getQueryInfo	(Handleparm *, IIAPI_GETQINFOPARM *);
+void syc_getErrorInfo	(II_PTR);
+
+/* This function returns the status of completion of each API function */
+/* in the code */
+char *check_status	(int);
+
+/* Function prototypes for asynchronous mode testing */
+/*						     */
+#define asc_initialize	syc_initialize
+#define asc_terminate	syc_terminate
+void asc_connect	(Handleparm *, IIAPI_CONNPARM *);
+void asc_disconnect	(Handleparm *, IIAPI_DISCONNPARM *);
+void asc_setConnectParam(Handleparm *, IIAPI_SETCONPRMPARM *);
+void asc_modifyConnect	(Handleparm *, IIAPI_MODCONNPARM *);
+void asc_query		(Handleparm *, IIAPI_QUERYPARM *);
+void asc_close		(Handleparm *, IIAPI_CLOSEPARM *);
+void asc_cancel		(Handleparm *, IIAPI_CANCELPARM *);
+#define asc_registerXID	syc_registerXID
+#define asc_releaseXID	syc_releaseXID
+void asc_prepareCommit	(Handleparm *, IIAPI_PREPCMTPARM *);
+void asc_commit		(Handleparm *, IIAPI_COMMITPARM *);
+void asc_rollback	(Handleparm *, IIAPI_ROLLBACKPARM *);
+void asc_savePoint	(Handleparm *, IIAPI_SAVEPTPARM *);
+#define asc_convertData	syc_convertData
+void asc_setDescriptor	(Handleparm *, IIAPI_SETDESCRPARM *);
+void asc_getDescriptor	(Handleparm *, IIAPI_GETDESCRPARM *);
+void asc_putParms	(Handleparm *, IIAPI_PUTPARMPARM *);
+void asc_getColumns	(Handleparm *, IIAPI_GETCOLPARM *, IIAPI_DESCRIPTOR *);
+void asc_getCopyMap	(Handleparm *, IIAPI_GETCOPYMAPPARM *);
+void asc_getQueryInfo	(Handleparm *, IIAPI_GETQINFOPARM *);
+#define asc_getErrorInfo syc_getErrorInfo
+
+extern int space, lspace;
+#define BEGIN(x)\
+        for (space=0; space<lspace; space++, printf("----"));\
+        lspace++;\
+        printf(" BEGIN %s\n", x);
+#define END(x)\
+        lspace--;\
+        for (space=0; space<lspace; space++, printf("----"));\
+        printf(" END   %s\n", x);
+!!
+? cp @file(ii_system,ingres,files,iiapidep.h) iiapidep.h 
+<<
+
+>>
+? cp @file(ii_system,ingres,files,iiapi.h) iiapi.tmp 
+<<
+
+>>
+.if (NT_GENERIC) 
+? fill makeiiapi.bat 
+!!
+sed  "s/<iiapidep.h>/\"iiapidep.h\"/g" iiapi.tmp > iiapi.h
+!!
+? run makeiiapi.bat 
+<<
+
+>>
+.endif 
+.if (UNIX) 
+? fill makeiiapi.sh 
+!!
+sed  "s/<iiapidep.h>/\"iiapidep.h\"/g" iiapi.tmp > iiapi.h
+!!
+? sh makeiiapi.sh 
+<<
+
+>>
+.endif 
+.if (VMS) 
+? fill iiapi_edit.com
+!!
+$ pipe sed "s/<iiapidep.h>/""iiapidep.h""/g" iiapi.tmp > iiapi.h
+!!
+? qasetuser testenv @iiapi_edit.com
+<<
+>>
+.endif 
+? fill syc_savept.c 
+!!
+/*
+** Name: syc_savepoint.c
+**
+** Description: This program tests IIapi_savepoint(), which
+**		declares a savepoint marker within a transaction,
+**		in synchronous mode.
+**
+** History
+**      15-May-95(Manfu)
+**         creation
+**
+*/
+
+#include "header.h"
+
+/* Initialization using API input parameters */
+
+IIAPI_INITPARM		iiapi_initparm;
+IIAPI_TERMPARM		iiapi_termparm;
+IIAPI_CONNPARM		iiapi_connparm;
+IIAPI_DISCONNPARM	iiapi_disconnparm;
+IIAPI_QUERYPARM		iiapi_queryparm;
+IIAPI_CLOSEPARM		iiapi_closeparm;
+IIAPI_GETQINFOPARM	iiapi_getqinfoparm;
+IIAPI_GETDESCRPARM	iiapi_getdescrparm;
+IIAPI_GETCOLPARM	iiapi_getcolparm;
+IIAPI_SAVEPTPARM	iiapi_saveptparm;
+IIAPI_ROLLBACKPARM	iiapi_rollbackparm;
+Handleparm		handleparm;
+II_PTR			savePointHandle1;
+II_PTR			savePointHandle2;
+II_PTR			savePointHandle3;
+
+void subroutine1()			/* connect to database */
+{
+	iiapi_connparm.co_target = "apidb2";
+	iiapi_connparm.co_username = DBA;
+	iiapi_connparm.co_password = NULL;
+	iiapi_connparm.co_timeout = CONNTIMEOUT;
+	syc_connect(&handleparm, &iiapi_connparm);
+}
+
+void subroutine2()			/* 1st statement: create table */
+{
+	iiapi_queryparm.qy_queryType = IIAPI_QT_QUERY;
+	iiapi_queryparm.qy_parameters = FALSE;
+	iiapi_queryparm.qy_queryText = "create table mytable(col char(20))with page_size=20-
+48";
+	syc_query(&handleparm, &iiapi_queryparm);
+}
+
+void subroutine3()
+{
+	syc_getQueryInfo(&handleparm, &iiapi_getqinfoparm);
+}
+
+void subroutine4()
+{
+	syc_close(&handleparm, &iiapi_closeparm);
+}
+
+void subroutine5()			/* mark down SavePoint 1 */
+{
+	iiapi_saveptparm.sp_savePoint = "SavePoint1";
+	syc_savePoint(&handleparm, &iiapi_saveptparm);
+	savePointHandle1 = iiapi_saveptparm.sp_savePointHandle;
+}
+
+void subroutine6()			/* 2nd statement: insert 'line1' */
+{
+	iiapi_queryparm.qy_queryType = IIAPI_QT_QUERY;
+	iiapi_queryparm.qy_parameters = FALSE;
+	iiapi_queryparm.qy_queryText = "insert into mytable values('line1')";
+	syc_query(&handleparm, &iiapi_queryparm);
+}
+
+void subroutine7()
+{
+	syc_getQueryInfo(&handleparm, &iiapi_getqinfoparm);
+}
+
+void subroutine8()
+{
+	syc_close(&handleparm, &iiapi_closeparm);
+}
+
+void subroutine9()			/* mark down SavePoint 2 */
+{
+	iiapi_saveptparm.sp_savePoint = "SavePoint2";
+	syc_savePoint(&handleparm, &iiapi_saveptparm);
+	savePointHandle2 = iiapi_saveptparm.sp_savePointHandle;
+}
+
+void subroutine10()			/* 3rd statement: insert 'line2' */
+{
+	iiapi_queryparm.qy_queryType = IIAPI_QT_QUERY;
+	iiapi_queryparm.qy_parameters = FALSE;
+	iiapi_queryparm.qy_queryText = "insert into mytable values('line2')";
+	syc_query(&handleparm, &iiapi_queryparm);
+}
+
+void subroutine11()
+{
+	syc_getQueryInfo(&handleparm, &iiapi_getqinfoparm);
+}
+
+void subroutine12()
+{
+	syc_close(&handleparm, &iiapi_closeparm);
+}
+
+void subroutine13()			/* mark down SavePoint 3 */
+{
+	iiapi_saveptparm.sp_savePoint = "SavePoint3";
+	syc_savePoint(&handleparm, &iiapi_saveptparm);
+	savePointHandle3 = iiapi_saveptparm.sp_savePointHandle;
+}
+
+void subroutine14()			/* 4th statement: drop table */
+{
+	iiapi_queryparm.qy_queryType = IIAPI_QT_QUERY;
+	iiapi_queryparm.qy_parameters = FALSE;
+	iiapi_queryparm.qy_queryText = "drop table mytable";
+	syc_query(&handleparm, &iiapi_queryparm);
+}
+
+void subroutine15()
+{
+	syc_getQueryInfo(&handleparm, &iiapi_getqinfoparm);
+}
+
+void subroutine16()
+{
+	syc_close(&handleparm, &iiapi_closeparm);
+}
+
+void subroutine17()			/* rollback to SavePoint 3 */
+{
+	iiapi_rollbackparm.rb_savePointHandle = savePointHandle3;
+	syc_rollback(&handleparm, &iiapi_rollbackparm);
+}
+
+void subroutine18()			/* 5th statement: insert 'line3' */
+{
+	iiapi_queryparm.qy_queryType = IIAPI_QT_QUERY;
+	iiapi_queryparm.qy_parameters = FALSE;
+	iiapi_queryparm.qy_queryText = "insert into mytable values('line3')";
+	syc_query(&handleparm, &iiapi_queryparm);
+}
+
+void subroutine19()
+{
+	syc_getQueryInfo(&handleparm, &iiapi_getqinfoparm);
+}
+
+void subroutine20()
+{
+	syc_close(&handleparm, &iiapi_closeparm);
+}
+
+void subroutine21()			/* check result */
+{
+	iiapi_queryparm.qy_queryType = IIAPI_QT_QUERY;
+	iiapi_queryparm.qy_parameters = FALSE;
+	iiapi_queryparm.qy_queryText = "select * from mytable";
+	syc_query(&handleparm, &iiapi_queryparm);
+}
+
+void subroutine22()
+{
+	syc_getDescriptor(&handleparm, &iiapi_getdescrparm);
+}
+
+void subroutine23()
+{
+	iiapi_getcolparm.gc_rowCount = 1;
+	iiapi_getcolparm.gc_columnCount = iiapi_getdescrparm.gd_descriptorCount;
+	do
+	{
+		syc_getColumns(&handleparm, &iiapi_getcolparm,
+			iiapi_getdescrparm.gd_descriptor);
+	}
+	while (iiapi_getcolparm.gc_genParm.gp_status != IIAPI_ST_NO_DATA &&
+	       iiapi_getcolparm.gc_genParm.gp_status != IIAPI_ST_FAILURE &&
+	       iiapi_getcolparm.gc_genParm.gp_status != IIAPI_ST_INVALID_HANDLE
+	       );
+}
+
+void subroutine24()
+{
+	syc_getQueryInfo(&handleparm, &iiapi_getqinfoparm);
+}
+
+void subroutine25()
+{
+	syc_close(&handleparm, &iiapi_closeparm);
+}
+
+void subroutine26()			/* rollback */
+{
+	iiapi_rollbackparm.rb_savePointHandle = NULL;
+	syc_rollback(&handleparm, &iiapi_rollbackparm);
+}
+
+void subroutine27()			/* disconnect */
+{
+	syc_disconnect(&handleparm, &iiapi_disconnparm);
+}
+
+main()
+{
+	int index=0;
+	void (*func_array[])() = {
+		subroutine1,
+		subroutine2,
+		subroutine3,
+		subroutine4,
+		subroutine5,
+		subroutine6,
+		subroutine7,
+		subroutine8,
+		subroutine9,
+		subroutine10,
+		subroutine11,
+		subroutine12,
+		subroutine13,
+		subroutine14,
+		subroutine15,
+		subroutine16,
+		subroutine17,
+		subroutine18,
+		subroutine19,
+		subroutine20,
+		subroutine21,
+		subroutine22,
+		subroutine23,
+		subroutine24,
+		subroutine25,
+		subroutine26,
+		subroutine27,
+		NULL
+	};
+
+	handleparm.hp_tranHandle = NULL;
+	handleparm.hp_stmtHandle = NULL;
+
+	iiapi_initparm.in_timeout = -1;
+	iiapi_initparm.in_version = IIAPI_VERSION_2;
+        iiapi_initparm.in_envHandle = NULL;
+
+	syc_initialize(&iiapi_initparm);
+
+	handleparm.hp_connHandle = iiapi_initparm.in_envHandle; 
+
+	while (func_array[index])
+		func_array[index++]();
+
+	syc_releaseEnv( iiapi_initparm.in_envHandle );
+	syc_terminate(&iiapi_termparm);
+
+	return(0);
+}
+!!
+? fill synchronous.c 
+!!
+/*
+** Name: synchronous.c
+**
+** Description: This file contains the API functions for
+**		synchronous mode. This file is used as an
+**		include file by all programs in synchronous mode.
+**
+** History:
+**	15-May-95 (Manfu)
+**         creation
+**		
+*/
+#include <string.h>
+#include "header.h"
+
+
+void syc_initialize(IIAPI_INITPARM *iiapi_initparm)
+{
+	IIapi_initialize(iiapi_initparm);
+	printf("IIapi_initialize return status:\t%s\n",
+		check_status(iiapi_initparm->in_status));
+	return;
+}
+
+
+void syc_terminate(IIAPI_TERMPARM *iiapi_termparm)
+{
+	IIapi_terminate(iiapi_termparm);
+	printf("IIapi_terminate return status:\t%s\n",
+		check_status(iiapi_termparm->tm_status));
+	return;
+}
+
+void syc_releaseEnv(II_PTR envHandle )
+{
+	IIAPI_RELENVPARM relEnvParm;
+
+	relEnvParm.re_envHandle = envHandle;
+	printf("Releasing API environment...\n");
+	IIapi_releaseEnv(&relEnvParm);
+	printf("%s\n", (relEnvParm.re_status == IIAPI_ST_SUCCESS) ? "Successfully, released-
+ API environment" : "Failed to release API environment");
+}
+
+void syc_connect(Handleparm     *handleparm,
+		 IIAPI_CONNPARM *iiapi_connparm)
+{
+	IIAPI_WAITPARM		iiapi_waitparm;
+
+	iiapi_connparm->co_genParm.gp_callback = NULL;
+	iiapi_connparm->co_connHandle = handleparm->hp_connHandle;
+	iiapi_connparm->co_tranHandle = handleparm->hp_tranHandle;
+	iiapi_connparm->co_type = IIAPI_CT_SQL;
+
+	IIapi_connect(iiapi_connparm);
+	iiapi_waitparm.wt_timeout = WAITTIMEOUT;
+	while (iiapi_connparm->co_genParm.gp_completed == FALSE)
+		IIapi_wait(&iiapi_waitparm);
+	printf("IIapi_connect return status:\t%s\n",
+		check_status(iiapi_connparm->co_genParm.gp_status));
+	syc_getErrorInfo(iiapi_connparm->co_genParm.gp_errorHandle);
+	handleparm->hp_connHandle = iiapi_connparm->co_connHandle;
+	handleparm->hp_tranHandle = iiapi_connparm->co_tranHandle;
+	printf("\tsizeAdvise:\t%ld\n", iiapi_connparm->co_sizeAdvise);
+	printf("\tapiLevel:\t%ld\n", iiapi_connparm->co_apiLevel);
+	return;
+}
+
+
+void syc_disconnect(Handleparm        *handleparm,
+		    IIAPI_DISCONNPARM *iiapi_disconnparm)
+{
+	IIAPI_WAITPARM		iiapi_waitparm;
+
+	iiapi_disconnparm->dc_genParm.gp_callback = NULL;
+	iiapi_disconnparm->dc_connHandle = handleparm->hp_connHandle;
+	IIapi_disconnect(iiapi_disconnparm);
+	iiapi_waitparm.wt_timeout = WAITTIMEOUT;
+	while (iiapi_disconnparm->dc_genParm.gp_completed == FALSE)
+		IIapi_wait(&iiapi_waitparm);
+	printf("IIapi_disconnect return status:\t%s\n",
+		check_status(iiapi_disconnparm->dc_genParm.gp_status));
+	syc_getErrorInfo(iiapi_disconnparm->dc_genParm.gp_errorHandle);
+	handleparm->hp_connHandle = NULL;
+	return;
+}
+
+void syc_query(Handleparm      *handleparm,
+	       IIAPI_QUERYPARM *iiapi_queryparm)
+{
+	IIAPI_WAITPARM		iiapi_waitparm;
+
+	iiapi_queryparm->qy_genParm.gp_callback = NULL;
+	iiapi_queryparm->qy_connHandle = handleparm->hp_connHandle;
+	iiapi_queryparm->qy_tranHandle = handleparm->hp_tranHandle;
+	IIapi_query(iiapi_queryparm);
+	iiapi_waitparm.wt_timeout = WAITTIMEOUT;
+	while (iiapi_queryparm->qy_genParm.gp_completed == FALSE)
+		IIapi_wait(&iiapi_waitparm);
+	printf("iiapi_query return status:\t%s\n",
+		check_status(iiapi_queryparm->qy_genParm.gp_status));
+	syc_getErrorInfo(iiapi_queryparm->qy_genParm.gp_errorHandle);
+	handleparm->hp_tranHandle = iiapi_queryparm->qy_tranHandle;
+	handleparm->hp_stmtHandle = iiapi_queryparm->qy_stmtHandle;
+	return;
+}
+
+
+void syc_close(Handleparm      *handleparm,
+	       IIAPI_CLOSEPARM *iiapi_closeparm)
+{
+	IIAPI_WAITPARM		iiapi_waitparm;
+	
+	iiapi_closeparm->cl_genParm.gp_callback = NULL;
+	iiapi_closeparm->cl_stmtHandle = handleparm->hp_stmtHandle;
+	IIapi_close(iiapi_closeparm);
+	iiapi_waitparm.wt_timeout = WAITTIMEOUT;
+	while (iiapi_closeparm->cl_genParm.gp_completed == FALSE)
+		IIapi_wait(&iiapi_waitparm);
+	printf("IIapi_close return status:\t%s\n",
+		check_status(iiapi_closeparm->cl_genParm.gp_status));
+	syc_getErrorInfo(iiapi_closeparm->cl_genParm.gp_errorHandle);
+	handleparm->hp_stmtHandle = NULL;
+	return;
+}
+
+void syc_commit(Handleparm       *handleparm,
+		IIAPI_COMMITPARM *iiapi_commitparm)
+{
+	IIAPI_WAITPARM		iiapi_waitparm;
+
+	iiapi_commitparm->cm_genParm.gp_callback = NULL;
+	iiapi_commitparm->cm_tranHandle = handleparm->hp_tranHandle;
+	IIapi_commit(iiapi_commitparm);
+	iiapi_waitparm.wt_timeout = WAITTIMEOUT;
+	while (iiapi_commitparm->cm_genParm.gp_completed == FALSE)
+		IIapi_wait(&iiapi_waitparm);
+	printf("IIapi_commit return status:\t%s\n",
+		check_status(iiapi_commitparm->cm_genParm.gp_status));
+	syc_getErrorInfo(iiapi_commitparm->cm_genParm.gp_errorHandle);		
+	handleparm->hp_tranHandle = NULL;
+	return;
+}
+
+
+void syc_rollback(Handleparm         *handleparm,
+                  IIAPI_ROLLBACKPARM *iiapi_rollbackparm)
+{
+        IIAPI_WAITPARM          iiapi_waitparm;
+ 
+        iiapi_rollbackparm->rb_genParm.gp_callback = NULL;
+	iiapi_rollbackparm->rb_tranHandle = handleparm->hp_tranHandle;
+        IIapi_rollback(iiapi_rollbackparm);
+        iiapi_waitparm.wt_timeout = WAITTIMEOUT;
+        while (iiapi_rollbackparm->rb_genParm.gp_completed == FALSE)
+                IIapi_wait(&iiapi_waitparm);
+        printf("IIapi_rollback return status:\t%s\n",
+                check_status(iiapi_rollbackparm->rb_genParm.gp_status));
+        syc_getErrorInfo(iiapi_rollbackparm->rb_genParm.gp_errorHandle);
+	if (iiapi_rollbackparm->rb_savePointHandle == NULL)
+		handleparm->hp_tranHandle = NULL;
+        return;
+}
+ 
+
+void syc_savePoint(Handleparm       *handleparm,
+                   IIAPI_SAVEPTPARM *iiapi_saveptparm)
+{
+        IIAPI_WAITPARM          iiapi_waitparm;
+ 
+        iiapi_saveptparm->sp_genParm.gp_callback = NULL;
+	iiapi_saveptparm->sp_tranHandle = handleparm->hp_tranHandle;
+        IIapi_savePoint(iiapi_saveptparm);
+        iiapi_waitparm.wt_timeout = WAITTIMEOUT;
+        while (iiapi_saveptparm->sp_genParm.gp_completed == FALSE)
+                IIapi_wait(&iiapi_waitparm);
+        printf("IIapi_saveptparm return status:\t%s\n",
+                check_status(iiapi_saveptparm->sp_genParm.gp_status));
+        syc_getErrorInfo(iiapi_saveptparm->sp_genParm.gp_errorHandle);
+        return;
+}
+
+void syc_getDescriptor(Handleparm         *handleparm,
+                       IIAPI_GETDESCRPARM *iiapi_getdescrparm)
+{
+	void display_descriptor	(IIAPI_DESCRIPTOR *,int nullIndex);
+	IIAPI_WAITPARM		iiapi_waitparm;
+	IIAPI_DESCRIPTOR	*iiapi_descriptor;
+	IIAPI_DATAVALUE		*iiapi_datavalue;
+	int i;
+
+	iiapi_getdescrparm->gd_genParm.gp_callback = NULL;
+	iiapi_getdescrparm->gd_stmtHandle = handleparm->hp_stmtHandle;
+	IIapi_getDescriptor(iiapi_getdescrparm);
+	iiapi_waitparm.wt_timeout = WAITTIMEOUT;
+	while (iiapi_getdescrparm->gd_genParm.gp_completed == FALSE)
+		IIapi_wait(&iiapi_waitparm);
+	printf("IIapi_getDescriptor return status:\t%s\n",
+		check_status(iiapi_getdescrparm->gd_genParm.gp_status));
+	syc_getErrorInfo(iiapi_getdescrparm->gd_genParm.gp_errorHandle);
+	iiapi_descriptor = iiapi_getdescrparm->gd_descriptor;
+	for (i=0; i<iiapi_getdescrparm->gd_descriptorCount; i++)
+	{
+		display_descriptor(iiapi_descriptor,0);
+		iiapi_descriptor++;
+	}
+	return;
+}
+
+void syc_getColumns(Handleparm	       *handleparm,
+		    IIAPI_GETCOLPARM   *iiapi_getcolparm,
+		    IIAPI_DESCRIPTOR   *iiapi_descriptor)
+{
+	IIAPI_WAITPARM		iiapi_waitparm;
+	IIAPI_DATAVALUE		*iiapi_datavalue;
+	int i, j, k;
+
+	iiapi_getcolparm->gc_genParm.gp_callback = NULL;
+	iiapi_getcolparm->gc_stmtHandle = handleparm->hp_stmtHandle;
+	iiapi_getcolparm->gc_columnData = iiapi_datavalue =
+		(IIAPI_DATAVALUE *) malloc(
+		iiapi_getcolparm->gc_rowCount *
+		iiapi_getcolparm->gc_columnCount *
+		sizeof(IIAPI_DATAVALUE));
+	for (i=0, k=0; i<iiapi_getcolparm->gc_rowCount; i++)
+		for (j=0; j<iiapi_getcolparm->gc_columnCount; j++, k++)
+			iiapi_datavalue[k].dv_value = (II_PTR) malloc(
+				iiapi_descriptor[j].ds_length);
+	IIapi_getColumns(iiapi_getcolparm);
+	iiapi_waitparm.wt_timeout = WAITTIMEOUT;
+	while (iiapi_getcolparm->gc_genParm.gp_completed == FALSE)
+		IIapi_wait(&iiapi_waitparm);
+	printf("IIapi_getColumns return status:\t%s\n",
+		check_status(iiapi_getcolparm->gc_genParm.gp_status));
+	syc_getErrorInfo(iiapi_getcolparm->gc_genParm.gp_errorHandle);
+
+	for (i=0, k=0; i<iiapi_getcolparm->gc_rowsReturned; i++)
+	{
+	  printf("\tRow %d:\n", i+1);
+	  for (j=0; j<iiapi_getcolparm->gc_columnCount; j++, k++)
+	  {
+	    printf("\t\t%s:\t", iiapi_descriptor[j].ds_columnName);
+	    switch (iiapi_datavalue[k].dv_null)
+	    {
+	      case TRUE:
+		printf("NULL");
+		break;
+	      case FALSE:
+		switch (iiapi_descriptor[j].ds_dataType)
+		{
+		    case IIAPI_BYTE_TYPE:
+		    case IIAPI_CHA_TYPE:
+		    case IIAPI_CHR_TYPE:
+		    case IIAPI_VBYTE_TYPE:
+		    case IIAPI_LBYTE_TYPE:
+		    case IIAPI_LVCH_TYPE:
+		    case IIAPI_TXT_TYPE:
+		    {
+		   	char *buffer;
+		    	int  actsize;
+
+			actsize = iiapi_descriptor[j].ds_length;
+			buffer = (char*)malloc(actsize + 1);
+			strncpy(buffer, (char*)iiapi_datavalue[k].dv_value,
+			    actsize);
+			buffer[actsize] = '\0';
+			printf("%s", buffer);
+			free(buffer);
+			break;
+		    }
+		    case IIAPI_VCH_TYPE:
+		    {
+		   	char *buffer;
+		    	int  actsize;
+
+			actsize = *(unsigned short*)iiapi_datavalue[k].dv_value;
+			buffer = (char*)malloc(actsize + 1);
+			strncpy(buffer, (char*)iiapi_datavalue[k].dv_value + 2,
+			    actsize);
+			buffer[actsize] = '\0';
+			printf("%s", buffer);
+			free(buffer);
+			break;
+		    }
+		    case IIAPI_HNDL_TYPE:
+			printf("%p", iiapi_datavalue[k].dv_value);
+			break;
+		    case IIAPI_FLT_TYPE:
+			switch (iiapi_descriptor[j].ds_length)
+			{
+			    case 4:
+				printf("%f",
+				    *(float*)iiapi_datavalue[k].dv_value);
+				break;
+			    case 8:
+				printf("%lf",
+				    *(double*)iiapi_datavalue[k].dv_value);
+				break;
+			    default:
+				printf("Unknown size");
+				break;
+			}
+			break;
+		    case IIAPI_INT_TYPE:
+			switch (iiapi_descriptor[j].ds_length)
+			{
+			    case 1:
+				printf("%d", *(char*)
+				    iiapi_datavalue[k].dv_value);
+				break;
+			    case 2:
+				printf("%d", *(short*)
+				    iiapi_datavalue[k].dv_value);
+				break;
+			    case 4:
+				printf("%ld", *(long*)
+				    iiapi_datavalue[k].dv_value);
+				break;
+			    default:
+				printf("Unknown size");
+				break;
+			}
+			break;
+		    case IIAPI_LOGKEY_TYPE:
+		    {
+			char buffer[17];
+
+			strncpy(buffer, iiapi_datavalue[k].dv_value, 16);
+			buffer[16] = '\0';
+			printf("%s", buffer);
+			break;
+		    }
+		    case IIAPI_TABKEY_TYPE:
+		    {
+			char buffer[9];
+
+			strncpy(buffer, iiapi_datavalue[k].dv_value, 8);
+			buffer[8] = '\0';
+			printf("%s", buffer);
+			break;
+		    }
+		    case IIAPI_DEC_TYPE:
+			printf("Incompatible data type with C");
+			break;
+		    case IIAPI_DTE_TYPE:
+		    {
+			IIAPI_CONVERTPARM	iiapi_convertparm;
+
+			iiapi_convertparm.cv_srcDesc = iiapi_descriptor[j];
+			iiapi_convertparm.cv_srcDesc.ds_nullable = TRUE;
+
+			iiapi_convertparm.cv_srcValue = iiapi_datavalue[k];
+
+			iiapi_convertparm.cv_dstDesc = iiapi_descriptor[j];
+			iiapi_convertparm.cv_dstDesc.ds_dataType =
+				IIAPI_CHA_TYPE;
+			iiapi_convertparm.cv_dstDesc.ds_nullable = TRUE;
+        		iiapi_convertparm.cv_dstDesc.ds_length = 26;
+
+			iiapi_convertparm.cv_dstValue.dv_null = FALSE;
+			iiapi_convertparm.cv_dstValue.dv_length =
+		                iiapi_convertparm.cv_dstDesc.ds_length;
+        		iiapi_convertparm.cv_dstValue.dv_value = (II_PTR)malloc
+				(iiapi_convertparm.cv_dstValue.dv_length + 1);
+
+        		*((char *)iiapi_convertparm.cv_dstValue.dv_value + 
+                		iiapi_convertparm.cv_dstDesc.ds_length) = '\0';
+
+		        IIapi_convertData(&iiapi_convertparm);
+
+                        switch (iiapi_convertparm.cv_status)
+                        {
+                            case IIAPI_ST_SUCCESS:
+                                printf("%s", (char *)
+                                    iiapi_convertparm.cv_dstValue.dv_value);
+                                break;
+                            case IIAPI_ST_FAILURE:
+                                printf("\nIIapi_convertData return:\t");
+                                printf("IIAPI_ST_FAILURE");
+                                break;
+                            default:
+                                printf("\nIIapi_convertData return:\t");
+                                printf("Unknown status");
+                                break;
+                        }
+			free(iiapi_convertparm.cv_dstValue.dv_value);
+
+			break;
+		    }
+		    case IIAPI_MNY_TYPE:
+		    {
+			IIAPI_CONVERTPARM	iiapi_convertparm;
+
+			iiapi_convertparm.cv_srcDesc = iiapi_descriptor[j];
+			iiapi_convertparm.cv_srcDesc.ds_nullable = TRUE;
+
+			iiapi_convertparm.cv_srcValue = iiapi_datavalue[k];
+
+			iiapi_convertparm.cv_dstDesc = iiapi_descriptor[j];
+			iiapi_convertparm.cv_dstDesc.ds_dataType =
+				IIAPI_CHA_TYPE;
+			iiapi_convertparm.cv_dstDesc.ds_nullable = TRUE;
+        		iiapi_convertparm.cv_dstDesc.ds_length = 20;
+
+			iiapi_convertparm.cv_dstValue.dv_null = FALSE;
+			iiapi_convertparm.cv_dstValue.dv_length =
+				iiapi_convertparm.cv_dstDesc.ds_length;
+			iiapi_convertparm.cv_dstValue.dv_value = (II_PTR)malloc
+				(iiapi_convertparm.cv_dstValue.dv_length + 1);
+
+			*((char *)iiapi_convertparm.cv_dstValue.dv_value +
+				iiapi_convertparm.cv_dstDesc.ds_length) = '\0';
+
+			IIapi_convertData(&iiapi_convertparm);
+
+			switch (iiapi_convertparm.cv_status)
+			{
+			    case IIAPI_ST_SUCCESS:
+				printf("%s", (char *)
+				    iiapi_convertparm.cv_dstValue.dv_value);
+				break;
+			    case IIAPI_ST_FAILURE:
+				printf("\nIIapi_convertData return:\t");
+				printf("IIAPI_ST_FAILURE");
+				break;
+			    default:
+				printf("\nIIapi_convertData return:\t");
+				printf("Unknown status");
+				break;
+			}
+			free(iiapi_convertparm.cv_dstValue.dv_value);
+
+			break;
+		    }
+		    default:
+			printf("Unknown data type");
+			break;
+		}
+		break;
+	      default:
+		printf("Unknown: %d", iiapi_datavalue[k].dv_null);
+		break;
+	    }
+	    printf("\n");
+	  }
+	}
+
+	printf("\tgc_rowsReturned:\t%d\n",
+		iiapi_getcolparm->gc_rowsReturned);
+	printf("\tgc_moreSegments:\t");
+	switch (iiapi_getcolparm->gc_moreSegments)
+	{
+		case TRUE:
+			printf("TRUE");
+			break;
+		case FALSE:
+			printf("FALSE");
+			break;
+		default:
+			printf("unknown");
+			break;
+	}
+	printf("\n");
+
+	for (i=0, k=0; i<iiapi_getcolparm->gc_rowCount; i++)
+		for (j=0; j<iiapi_getcolparm->gc_columnCount; j++, k++)
+			free(iiapi_datavalue[k].dv_value);
+	free(iiapi_datavalue);
+
+	return;
+}
+
+
+void syc_getQueryInfo(Handleparm         *handleparm,
+                      IIAPI_GETQINFOPARM *iiapi_getqinfoparm)
+{
+	IIAPI_WAITPARM		iiapi_waitparm;
+
+	iiapi_getqinfoparm->gq_genParm.gp_callback = NULL;
+	iiapi_getqinfoparm->gq_stmtHandle = handleparm->hp_stmtHandle;
+	IIapi_getQueryInfo(iiapi_getqinfoparm);
+	iiapi_waitparm.wt_timeout = WAITTIMEOUT;
+	while (iiapi_getqinfoparm->gq_genParm.gp_completed == FALSE)
+		IIapi_wait(&iiapi_waitparm);
+	printf("IIapi_getQueryInfo return status:\t%s\n",
+		check_status(iiapi_getqinfoparm->gq_genParm.gp_status));
+	syc_getErrorInfo(iiapi_getqinfoparm->gq_genParm.gp_errorHandle);
+
+	if (iiapi_getqinfoparm->gq_flags)
+	{
+		printf("\tgq_flags:\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_FAIL)
+			printf("\t\t\tIIAPI_GQF_FAIL\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_ALL_UPDATED)
+			printf("\t\t\tIIAPI_GQF_ALL_UPDATED\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_NULLS_REMOVED)
+			printf("\t\t\tIIAPI_GQF_NULLS_REMOVED\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_UNKNOWN_REPEAT_QUERY)
+			printf("\t\t\tIIAPI_GQF_UNKNOWN_REPEAT_QUERY\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_END_OF_DATA)
+			printf("\t\t\tIIAPI_GQF_END_OF_DATA\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_CONTINUE)
+			printf("\t\t\tIIAPI_GQF_CONTINUE\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_INVALID_STATEMENT)
+			printf("\t\t\tIIAPI_GQF_STATEMENT\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_TRANSACTION_INACTIVE)
+			printf("\t\t\tIIAPI_GQF_TRANSACTION_INACTIVE\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_OBJECT_KEY)
+			printf("\t\t\tIIAPI_GQF_OBJECT_KEY\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_TABLE_KEY)
+			printf("\t\t\tIIAPI_GQF_TABLE_KEY\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_NEW_EFFECTIVE_USER)
+			printf("\t\t\tIIAPI_GQF_NEW_EFFECTIVE_USER\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_FLUSH_QUERY_ID)
+			printf("\t\t\tIIAPI_GQF_FLUSH_QUERY_ID\n");
+		if (iiapi_getqinfoparm->gq_flags&IIAPI_GQF_ILLEGAL_XACT_STMT)
+			printf("\t\t\tIIAPI_GQF_ILLEGAL_XACT_STMT\n");
+	}
+
+	if (!iiapi_getqinfoparm->gq_mask)
+		printf("\tNo response data is available\n");
+	else
+	{
+		if (iiapi_getqinfoparm->gq_mask & IIAPI_GQ_ROW_COUNT)
+			printf("\tgq_rowCount:\t%ld\n",
+				iiapi_getqinfoparm->gq_rowCount);
+		if (iiapi_getqinfoparm->gq_mask & IIAPI_GQ_CURSOR)
+		{
+			printf("\tgq_readonly:\t");
+			switch (iiapi_getqinfoparm->gq_readonly)
+			{
+				case TRUE:
+					printf("TRUE");
+					break;
+				case FALSE:
+					printf("FALSE");
+					break;
+				default:
+					printf("Unknown:\t%d",
+					iiapi_getqinfoparm->gq_readonly);
+				break;
+			}
+			printf("\n");
+		}
+		if (iiapi_getqinfoparm->gq_mask & IIAPI_GQ_PROCEDURE_RET)
+			printf("\tgq_procedureReturn:\t%ld\n",
+				iiapi_getqinfoparm->gq_procedureReturn);
+		if (iiapi_getqinfoparm->gq_mask & IIAPI_GQ_PROCEDURE_ID)
+			printf("\tgq_procedureHandle:\t%p\n",
+				iiapi_getqinfoparm->gq_procedureHandle);
+		if (iiapi_getqinfoparm->gq_mask & IIAPI_GQ_REPEAT_QUERY_ID)
+			printf("\tgq_repeatQueryHandle:\t%p\n",
+				iiapi_getqinfoparm->gq_repeatQueryHandle);
+		if (iiapi_getqinfoparm->gq_mask & IIAPI_GQ_TABLE_KEY)
+			printf("gq_tableKey:\t%s\n",
+				iiapi_getqinfoparm->gq_tableKey);
+		if (iiapi_getqinfoparm->gq_mask & IIAPI_GQ_OBJECT_KEY)
+			printf("gq_objectKey:\t%s\n",
+				iiapi_getqinfoparm->gq_objectKey);
+	}
+
+	return;
+}
+
+
+void syc_getErrorInfo(II_PTR errorHandle)
+{
+	IIAPI_GETEINFOPARM	iiapi_geteinfoparm;
+
+
+	if ( errorHandle == NULL )	return;
+	iiapi_geteinfoparm.ge_errorHandle = errorHandle;
+
+	IIapi_getErrorInfo(&iiapi_geteinfoparm);
+	while (iiapi_geteinfoparm.ge_status == IIAPI_ST_SUCCESS)
+	{
+		fprintf(stderr, "\tType of message:\t");
+		switch (iiapi_geteinfoparm.ge_type)
+		{
+			case IIAPI_GE_ERROR:
+				fprintf(stderr, "IIAPI_GE_ERROR");
+				break;
+			case IIAPI_GE_WARNING:
+				fprintf(stderr, "IIAPI_GE_WARNING");
+				break;
+			case IIAPI_GE_MESSAGE:
+				fprintf(stderr, "IIAPI_GE_MESSAGE");
+				break;
+			default:
+				fprintf(stderr, "Unknown type");
+				break;
+		}
+		fprintf(stderr, "\n\tSQLstate:\t%s\n",
+			iiapi_geteinfoparm.ge_SQLSTATE);
+		fprintf(stderr, "\tError code:\t%ld\n",
+			iiapi_geteinfoparm.ge_errorCode);
+		fprintf(stderr, "\tMessage:\t%s\n",
+			iiapi_geteinfoparm.ge_message);
+		if (iiapi_geteinfoparm.ge_serverInfoAvail == TRUE)
+		{
+			int i;
+
+			fprintf(stderr, "\tsvr_id_error:\t%ld\n",
+			    iiapi_geteinfoparm.ge_serverInfo->svr_id_error);
+			fprintf(stderr, "\tsvr_local_error:\t%ld\n",
+			    iiapi_geteinfoparm.ge_serverInfo->svr_local_error);
+			fprintf(stderr, "\tsvr_id_server:\t%ld\n",
+			    iiapi_geteinfoparm.ge_serverInfo->svr_id_server);
+			fprintf(stderr, "\tsvr_server_type:\t%ld\n",
+			    iiapi_geteinfoparm.ge_serverInfo->svr_server_type);
+			fprintf(stderr, "\tsvr_severity:\t");
+			switch (iiapi_geteinfoparm.ge_serverInfo->svr_severity)
+			{
+				case IIAPI_SVR_DEFAULT:
+					fprintf(stderr, "IIAPI_SVR_DEFAULT");
+					break;
+				case IIAPI_SVR_MESSAGE:
+					fprintf(stderr, "IIAPI_SVR_MESSAGE");
+					break;
+				case IIAPI_SVR_WARNING:
+					fprintf(stderr, "IIAPI_SVR_WARNING");
+					break;
+				case IIAPI_SVR_FORMATTED:
+					fprintf(stderr, "IIAPI_SVR_FROMATTED");
+					break;
+				default:
+					fprintf(stderr, "unknownn");
+					break;
+			}
+			fprintf(stderr, "\n");
+			for (i=0; i<iiapi_geteinfoparm.
+					ge_serverInfo->svr_parmCount; i++)
+			{
+				fprintf(stderr, "not implemented\n");
+			}
+		}	
+		else
+			fprintf(stderr, "\tno more infomation available\n");
+		IIapi_getErrorInfo(&iiapi_geteinfoparm);
+	}
+	return;
+}
+
+
+void display_descriptor(IIAPI_DESCRIPTOR *iiapi_descriptor,int nullIndex)
+{
+	printf("\tds_dataType:\t");
+	switch (iiapi_descriptor->ds_dataType)
+	{
+		case IIAPI_BYTE_TYPE:
+			printf("IIAPI_BYTE_TYPE");
+			break;
+		case IIAPI_CHA_TYPE:
+			printf("IIAPI_CHA_TYPE");
+			break;
+		case IIAPI_CHR_TYPE:
+			printf("IIAPI_CHR_TYPE");
+			break;
+		case IIAPI_HNDL_TYPE:
+			printf("IIAPI_APIHNDL_TYPE");
+			break;
+		case IIAPI_DEC_TYPE:
+			printf("IIAPI_DEC_TYPE");
+			break;
+		case IIAPI_DTE_TYPE:
+			printf("IIAPI_DTE_TYPE");
+			break;
+		case IIAPI_FLT_TYPE:
+			printf("IIAPI_FLT_TYPE");
+			break;
+		case IIAPI_INT_TYPE:
+			printf("IIAPI_INT_TYPE");
+			break;
+		case IIAPI_LOGKEY_TYPE:
+			printf("IIAPI_LOGKEY_TYPE");
+			break;
+		case IIAPI_LBYTE_TYPE:
+			printf("IIAPI_LBYTE_TYPE");
+			break;
+		case IIAPI_LVCH_TYPE:
+			printf("IIAPI_LVCH_TYPE");
+			break;
+		case IIAPI_MNY_TYPE:
+			printf("IIAPI_MNY_TYPE");
+			break;
+		case IIAPI_TABKEY_TYPE:
+			printf("IIAPI_TABKEY_TYPE");
+			break;
+		case IIAPI_TXT_TYPE:
+			printf("IIAPI_TXT_TYPE");
+			break;
+		case IIAPI_VBYTE_TYPE:
+			printf("IIAPI_VBYTE_TYPE");
+			break;
+		case IIAPI_VCH_TYPE:
+			printf("IIAPI_VCH_TYPE");
+			break;
+		default:
+			printf("unknown type");
+			break;
+	}
+	printf("\n\tds_nullable:\t");
+	switch (iiapi_descriptor->ds_nullable)
+	{
+		case TRUE:
+			printf("TRUE");
+			break;
+		case FALSE:
+			printf("FALSE");
+			break;
+		default:
+			printf("unknown: %d",
+				iiapi_descriptor->ds_nullable);
+			break;
+	}
+	printf("\n\tds_length:\t%ld\n", iiapi_descriptor->ds_length);
+	switch (iiapi_descriptor->ds_dataType)
+	{
+		case IIAPI_DEC_TYPE:
+			printf("\tds_scale:\t%ld\n",
+				iiapi_descriptor->ds_scale);
+		case IIAPI_MNY_TYPE:
+		case IIAPI_FLT_TYPE:
+			printf("\tds_precision:\t%ld\n",
+				iiapi_descriptor->ds_precision);
+	}
+	printf("\tds_columnType:\t");
+	switch (iiapi_descriptor->ds_columnType)
+	{
+		case IIAPI_COL_TUPLE:
+			printf("IIAPI_COL_TUPLE");
+			break;
+		case IIAPI_COL_PROCBYREFPARM:
+			printf("IIAPI_COL_PROCBYREFPARM");
+			break;
+		case IIAPI_COL_PROCPARM:
+			printf("IIAPI_COL_PROCPARM");
+			break;
+		case IIAPI_COL_SVCPARM:
+			printf("IIAPI_COL_SVCPARM");
+			break;
+		case IIAPI_COL_QPARM:
+			printf("IIAPI_COL_QPARM");
+			break;
+		default:
+			printf("unknown type");
+			break;
+	}
+
+	if (!nullIndex)
+	printf("\n\tds_columnName:\t%s\n",
+		iiapi_descriptor->ds_columnName);
+	return;
+}
+
+
+void display_fdatadescr(IIAPI_FDATADESCR *iiapi_fdatadescr)
+{
+   printf("\tfd_isDelimiter:\t");
+   switch (iiapi_fdatadescr->fd_delimiter)
+   {
+      case TRUE:
+      {
+         char *delimiter;
+         int lenOfDelimiter;
+ 
+         printf("TRUE");
+         printf("\n\tfd_lenOfDelimiter:\t%d", lenOfDelimiter =
+                        iiapi_fdatadescr->fd_delimLength);
+         delimiter = (char *) malloc(lenOfDelimiter + 1);
+         strncpy(delimiter, iiapi_fdatadescr->fd_delimValue, lenOfDelimiter);
+         delimiter[lenOfDelimiter] = '\0';
+         printf("\n\tfd_delimiter:\t%s", delimiter);
+         free(delimiter);
+         break;
+      }
+      case FALSE:
+         printf("FALSE");
+         break;
+         default:
+         printf("Unknown: %d", iiapi_fdatadescr->fd_delimiter);
+         break;
+   }
+   printf("\n");
+ 
+   printf("\tfd_isNullValid:\t");
+   switch (iiapi_fdatadescr->fd_nullable)
+   {
+      case TRUE:
+         printf("TRUE");
+         printf("\n\tfd_nullValueProvided:\t");
+         switch (iiapi_fdatadescr->fd_nullInfo)
+         {
+            case TRUE:
+               printf("TRUE");
+               display_descriptor(&iiapi_fdatadescr->fd_nullDescr,1);
+               printf("Whether the value is null : %d \n",
+               iiapi_fdatadescr->fd_nullValue.dv_null);
+               printf("The length of null symbole: %d\n",
+               iiapi_fdatadescr->fd_nullValue.dv_length);
+               printf("The value of the null: %s\n",
+               (char *)iiapi_fdatadescr->fd_nullValue.dv_value);
+ 
+               break;
+            case FALSE:
+               printf("FALSE");
+               break;
+            default:
+               printf("Unknown: %d", iiapi_fdatadescr->fd_nullInfo);
+               break;
+      }
+      break;
+      case FALSE:
+         printf("FALSE");
+         break;
+      default:
+         printf("Unknown: %d", iiapi_fdatadescr->fd_nullable);
+         break;
+   }
+   printf("\n");
+ 
+   return;
+}
+
+char *check_status(int in_status)
+{
+	switch (in_status)
+        {
+                case IIAPI_ST_SUCCESS:
+                        return ("IIAPI_ST_SUCCESS");
+		case IIAPI_ST_MESSAGE:
+			return ("IIAPI_ST_MESSAGE");
+		case IIAPI_ST_WARNING:
+			return ("IIAPI_ST_WARNING");
+		case IIAPI_ST_ERROR:
+			return ("IIAPI_ST_ERROR");
+		case IIAPI_ST_NO_DATA:
+			return ("IIAPI_ST_NO_DATA");
+                case IIAPI_ST_FAILURE:
+                        return ("IIAPI_ST_FAILURE");
+		case IIAPI_ST_NOT_INITIALIZED:
+			return ("IIAPI_ST_NOT_INITIALIZED");
+		case IIAPI_ST_INVALID_HANDLE:
+			return ("IIAPI_ST_INVALID_HANDLE");
+                case IIAPI_ST_OUT_OF_MEMORY:
+                        return ("IIAPI_ST_OUT_OF_MEMORY");
+                default:
+                        return ("Unknow status");
+        }
+} 
+!!
+? sepcc syc_savept synchronous 
+<<
+>>
+<< IF (NT_GENERIC)
+syc_savept.c
+synchronous.c
+>>
+.if (VMS) 
+? seplnk -a syc_savept synchronous 
+<<
+>>
+.else 
+? seplnk syc_savept synchronous 
+<<
+>>
+.endif 
+? run syc_savept.exe 
+<< 
+IIapi_initialize return status:	IIAPI_ST_SUCCESS
+IIapi_connect return status:	IIAPI_ST_SUCCESS
+	sizeAdvise:	4064
+	apiLevel:	1
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	No response data is available
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_saveptparm return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	1
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_saveptparm return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	1
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_saveptparm return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	No response data is available
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_rollback return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	1
+IIapi_close return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getDescriptor return status:	IIAPI_ST_SUCCESS
+	ds_dataType:	IIAPI_CHA_TYPE
+	ds_nullable:	TRUE
+	ds_length:	20
+	ds_columnType:	IIAPI_COL_TUPLE
+	ds_columnName:	col
+IIapi_getColumns return status:	IIAPI_ST_SUCCESS
+	Row 1:
+		col:	line1               
+	gc_rowsReturned:	1
+	gc_moreSegments:	FALSE
+IIapi_getColumns return status:	IIAPI_ST_SUCCESS
+	Row 1:
+		col:	line2               
+	gc_rowsReturned:	1
+	gc_moreSegments:	FALSE
+IIapi_getColumns return status:	IIAPI_ST_SUCCESS
+	Row 1:
+		col:	line3               
+	gc_rowsReturned:	1
+	gc_moreSegments:	FALSE
+IIapi_getColumns return status:	IIAPI_ST_NO_DATA
+	gc_rowsReturned:	0
+	gc_moreSegments:	FALSE
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	3
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_rollback return status:	IIAPI_ST_SUCCESS
+IIapi_disconnect return status:	IIAPI_ST_SUCCESS
+Releasing API environment...
+Successfully, released API environment
+IIapi_terminate return status:	IIAPI_ST_SUCCESS
+>>
+<<
+IIapi_initialize return status:	IIAPI_ST_SUCCESS
+IIapi_connect return status:	IIAPI_ST_SUCCESS
+	sizeAdvise:	4072
+	apiLevel:	1
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	No response data is available
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_saveptparm return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	1
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_saveptparm return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	1
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_saveptparm return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	No response data is available
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_rollback return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	1
+IIapi_close return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getDescriptor return status:	IIAPI_ST_SUCCESS
+	ds_dataType:	IIAPI_CHA_TYPE
+	ds_nullable:	TRUE
+	ds_length:	20
+	ds_columnType:	IIAPI_COL_TUPLE
+	ds_columnName:	col
+IIapi_getColumns return status:	IIAPI_ST_SUCCESS
+	Row 1:
+		col:	line1               
+	gc_rowsReturned:	1
+	gc_moreSegments:	FALSE
+IIapi_getColumns return status:	IIAPI_ST_SUCCESS
+	Row 1:
+		col:	line2               
+	gc_rowsReturned:	1
+	gc_moreSegments:	FALSE
+IIapi_getColumns return status:	IIAPI_ST_SUCCESS
+	Row 1:
+		col:	line3               
+	gc_rowsReturned:	1
+	gc_moreSegments:	FALSE
+IIapi_getColumns return status:	IIAPI_ST_NO_DATA
+	gc_rowsReturned:	0
+	gc_moreSegments:	FALSE
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	3
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_rollback return status:	IIAPI_ST_SUCCESS
+IIapi_disconnect return status:	IIAPI_ST_SUCCESS
+IIapi_terminate return status:	IIAPI_ST_SUCCESS
+>>
+<< IF (NT_GENERIC) 
+IIapi_initialize return status:	IIAPI_ST_SUCCESS
+IIapi_connect return status:	IIAPI_ST_SUCCESS
+	sizeAdvise:	4072
+	apiLevel:	1
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	No response data is available
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_saveptparm return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	1
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_saveptparm return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	1
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_saveptparm return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	No response data is available
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_rollback return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	1
+IIapi_close return status:	IIAPI_ST_SUCCESS
+iiapi_query return status:	IIAPI_ST_SUCCESS
+IIapi_getDescriptor return status:	IIAPI_ST_SUCCESS
+	ds_dataType:	IIAPI_CHA_TYPE
+	ds_nullable:	TRUE
+	ds_length:	20
+	ds_columnType:	IIAPI_COL_TUPLE
+	ds_columnName:	col
+IIapi_getColumns return status:	IIAPI_ST_SUCCESS
+	Row 1:
+		col:	line1               
+	gc_rowsReturned:	1
+	gc_moreSegments:	FALSE
+IIapi_getColumns return status:	IIAPI_ST_SUCCESS
+	Row 1:
+		col:	line2               
+	gc_rowsReturned:	1
+	gc_moreSegments:	FALSE
+IIapi_getColumns return status:	IIAPI_ST_SUCCESS
+	Row 1:
+		col:	line3               
+	gc_rowsReturned:	1
+	gc_moreSegments:	FALSE
+IIapi_getColumns return status:	IIAPI_ST_NO_DATA
+	gc_rowsReturned:	0
+	gc_moreSegments:	FALSE
+IIapi_getQueryInfo return status:	IIAPI_ST_SUCCESS
+	gq_rowCount:	3
+IIapi_close return status:	IIAPI_ST_SUCCESS
+IIapi_rollback return status:	IIAPI_ST_SUCCESS
+IIapi_disconnect return status:	IIAPI_ST_SUCCESS
+Releasing API environment...
+Successfully, released API environment
+IIapi_terminate return status:	IIAPI_ST_SUCCESS
+>>
+<< if (VMS)
+IIapi_initialize return status: IIAPI_ST_SUCCESS
+IIapi_connect return status:    IIAPI_ST_SUCCESS
+        sizeAdvise:     4072
+        apiLevel:       1
+iiapi_query return status:      IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:       IIAPI_ST_SUCCESS
+        No response data is available
+IIapi_close return status:      IIAPI_ST_SUCCESS
+IIapi_saveptparm return status: IIAPI_ST_SUCCESS
+iiapi_query return status:      IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:       IIAPI_ST_SUCCESS
+        gq_rowCount:    1
+IIapi_close return status:      IIAPI_ST_SUCCESS
+IIapi_saveptparm return status: IIAPI_ST_SUCCESS
+iiapi_query return status:      IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:       IIAPI_ST_SUCCESS
+        gq_rowCount:    1
+IIapi_close return status:      IIAPI_ST_SUCCESS
+IIapi_saveptparm return status: IIAPI_ST_SUCCESS
+iiapi_query return status:      IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:       IIAPI_ST_SUCCESS
+        No response data is available
+IIapi_close return status:      IIAPI_ST_SUCCESS
+IIapi_rollback return status:   IIAPI_ST_SUCCESS
+iiapi_query return status:      IIAPI_ST_SUCCESS
+IIapi_getQueryInfo return status:       IIAPI_ST_SUCCESS
+        gq_rowCount:    1
+IIapi_close return status:      IIAPI_ST_SUCCESS
+iiapi_query return status:      IIAPI_ST_SUCCESS
+IIapi_getDescriptor return status:      IIAPI_ST_SUCCESS
+        ds_dataType:    IIAPI_CHA_TYPE
+        ds_nullable:    TRUE
+        ds_length:      20
+        ds_columnType:  IIAPI_COL_TUPLE
+        ds_columnName:  col
+IIapi_getColumns return status: IIAPI_ST_SUCCESS
+        Row 1:
+                col:    line1
+        gc_rowsReturned:        1
+        gc_moreSegments:        FALSE
+IIapi_getColumns return status: IIAPI_ST_SUCCESS
+        Row 1:
+                col:    line2
+        gc_rowsReturned:        1
+        gc_moreSegments:        FALSE
+IIapi_getColumns return status: IIAPI_ST_SUCCESS
+        Row 1:
+                col:    line3
+        gc_rowsReturned:        1
+        gc_moreSegments:        FALSE
+IIapi_getColumns return status: IIAPI_ST_NO_DATA
+        gc_rowsReturned:        0
+        gc_moreSegments:        FALSE
+IIapi_getQueryInfo return status:       IIAPI_ST_SUCCESS
+        gq_rowCount:    3
+IIapi_close return status:      IIAPI_ST_SUCCESS
+IIapi_rollback return status:   IIAPI_ST_SUCCESS
+IIapi_disconnect return status: IIAPI_ST_SUCCESS
+Releasing API environment...
+Successfully, released API environment
+IIapi_terminate return status:  IIAPI_ST_SUCCESS
+>>
+? delete iiapi_edit.com 
+<<
+~
+>>
+? delete syc_savept.exe 
+<<
+~
+>>
+? delete syc_savept.obj 
+<<
+~
+>>
+? delete synchronous.obj 
+<<
+~
+>>
+? delete syc_savept.o 
+<<
+~
+>>
+? delete synchronous.o 
+<<
+~
+>>
+? delete iiapi.h 
+<<
+~
+>>
+? delete iiapi.tmp 
+<<
+~
+>>
+? delete iiapidep.h 
+<<
+~
+>>
+? delete iiapi_edit.com 
+<<
+~
+>>
+
+
+Ending at: Thu Dec 30 02:52:55 1999

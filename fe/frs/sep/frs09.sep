@@ -1,0 +1,1110 @@
+/*
+	Test Name: jba10.sep
+	Time: Thu Nov  9 09:52:22 1989
+	User Name: testenv
+ 
+	Test ID : jba10
+	Module  : FRS
+	Filename: jba10.sep
+	Purpose	: Test derivation error conditions caused by bad data that
+		  triggers exceptions:  divide by zero, overflow, etc.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     : Put 'good' values in each source field to produce valid
+		derivations.  Then, place 0's in the divide-by-zero cases
+		(integer and floating point), absolute dates in the date
+		addition case, and a large integer value for the integer
+		overflow case.  Each case should produce an error message.
+		End with an enddisplay, verifying that error messages are
+		produced, but that the display loop is still exited.
+
+	INGRES version: 6.3/03
+			6.5/01
+
+	Note:
+	This test canon was created on a Sun 3 workstation.  This setup
+	doesn't trap floating point divide-by-zero, instead returning a
+	bogus value.  When running this test against machines that do
+	trap this error, additional keystrokes will be required, <CR>'s
+	to clear the additional error messages produced.
+
+	Note:
+	The error messages for addition of absolute dates and for integer
+	overflow will possibly change with a different installation.  It
+	remains to see how ADF is modified.
+
+	History	: 09-nov-1989	Created				Bruce Badash
+          25-Aug-1993	(jbryson)  
+			Modified to run on both VMS and UNIX.
+			Added missing key strokes from UNIX version.
+          11-Mar-1997	(Author)
+           8-Jul-2004   (shafa01) Removed spurious "Child did not exit" line
+                        from SEP.
+*/
+? delobj SEPPARAMDB -form jba10 
+<<
+~
+>>
+? fill jba10.frm 
+!!
+COPYFORM:	6.0	1989_11_08 23:10:37 GMT  
+FORM:	jba10	Generate derivation runtime exceptions	
+	80	64	0	0	11	0	9	8	0	0	0	0	0	0	0	11
+FIELD:
+	0	int1	-30	5	0	5	1	11	5	0	5	0	6	Int1:	0	0	0	0	0	0	0		-i5			0	0
+	1	int2	-30	5	0	5	1	11	5	14	5	0	6	Int2:	0	0	0	0	0	0	0		-i5			0	1
+	2	intdivide	-30	5	0	5	1	17	6	22	5	0	12	Int Divide:	0	0	0	0	2560	0	0		-i5		int1 / in-
+t2	0	2
+	3	flt1	-31	9	0	5	1	11	10	0	5	0	6	Flt1:	0	0	0	0	0	0	0		-f5.2			0	3
+	4	flt2	-31	9	0	5	1	11	10	14	5	0	6	Flt2:	0	0	0	0	0	0	0		-f5.2			0	4
+	5	fltdivide	-31	9	0	5	1	17	11	22	5	0	12	Flt Divide:	0	0	0	0	2560	0	0		-f5.2		flt1 /-
+ flt2	0	5
+	6	date1	-3	13	0	25	1	32	15	0	25	0	7	Date1:	0	0	0	0	0	0	0		c25			0	6
+	7	date2	-3	13	0	25	1	32	15	35	25	0	7	Date2:	0	0	0	0	0	0	0		c25			0	7
+	8	dateaddition	-3	13	0	25	1	40	16	22	25	0	15	Date Addition:	0	0	0	0	2560	0	0		c25		-
+date1 + date2	0	8
+	9	largeint	-30	5	0	6	1	17	19	0	6	0	11	Large Int:	0	0	0	0	0	0	0		-i6			0	9
+	10	smallint	-30	3	0	6	1	17	20	22	6	0	11	Small Int:	0	0	0	0	2560	0	0		-i6		largeint	-
+0	10
+TRIM:
+	0	0	Derivation Exception Handling:	0	0	0	0
+	0	3	Integer divide-by-zero:	1024	0	0	0
+	0	8	Float divide-by-zero:	1024	0	0	0
+	0	13	Addition of absolute dates:	1024	0	0	0
+	0	18	Integer overflow:	1024	0	0	0
+	40	6	(Int1 / Int2)	0	0	0	0
+	40	11	(Flt1 / Flt2)	0	0	0	0
+	40	20	(Large Int)	0	0	0	0
+	63	16	(Date1 + Date2)	0	0	0	0
+!!
+? copyform -i SEPPARAMDB jba10.frm 
+<<
+~
+>>
+? fill jba10.sc 
+!!
+main(argc, argv)
+int	argc;
+char	**argv;
+{
+    exec sql begin declare section;
+    int		error;
+    char	*formname = "jba10";
+    char	*dbname;
+    exec sql end declare section;
+
+    exec frs forms;
+        if (argc < 2)
+        {
+exec frs        message 'No database name on command line.  Test exiting.'
+                        with style = popup;
+exec frs        endforms;
+                return;
+        }
+        else
+        {
+                argv++;
+                dbname = *argv;
+        }
+ 
+ 
+    exec sql connect :dbname;
+ 
+    exec sql inquire_ingres (:error = errorno);
+ 
+        if (error != 0)
+        {
+exec frs        message 'Error connecting to database.  Test exiting.'
+                        with style = popup;
+exec frs        endforms;
+                return;
+        }
+ 
+
+    exec frs forminit :formname;
+
+    exec frs display :formname;
+    exec frs activate menuitem 'end';
+    exec frs begin;
+	exec frs enddisplay;
+    exec frs end;
+
+    exec frs endforms;
+
+    exec sql disconnect;
+}
+!!
+? sepesqlc jba10 
+<<
+ESQL jba10.sc:
+>>
+? sepcc jba10 
+<<
+>>
+<<
+jba10.c
+>>
+? seplnk jba10 
+<<
+>>
+<<
+Microsoft (R) 32-Bit Executable Linker Version 2.50.4245
+Copyright (C) Microsoft Corp 1992-94. All rights reserved.
+
+-debug:none 
+-out:jba10.exe 
+jba10.obj 
+e:\qa\ingres\lib\ingres.lib 
+msvcrt.lib 
+kernel32.lib 
+user32.lib 
+advapi32.lib 
+>>
+? ferun jba10.exe SEPPARAMDB 
+<<
+
+%%     
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: _        Int2:                                                             |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1:         Flt2:                                                             |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1:                             Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%%     
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: _        Int2:                                                             |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1:         Flt2:                                                             |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1:                             Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+>>
+^^ 4`CR'2`CR'10.0`CR'2.5`CR'1/5/61`CR'5 days`CR'200`CR'`TAB'0`CR'`CR'`TAB'0`CR'`CR'`-
+TAB'1/5/61`CR'`CR'99999`CR'`CR'`ESC'
+<<
+
+%% CHANGED FIELD Int1:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4_       Int2:                                                             |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1:         Flt2:                                                             |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1:                             Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Int2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2_                                                           |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1:         Flt2:                                                             |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1:                             Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Flt1:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.0_    Flt2:                                                             |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1:                             Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Flt2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 2.5_                                                         |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1:                             Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Date1:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 2.50                                                        |
+|                      Flt Divide: 4.00  (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 1/5/61_                      Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Date2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 2.50                                                        |
+|                      Flt Divide: 4.00  (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 5 days_                                |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Large Int:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 2.50                                                        |
+|                      Flt Divide: 4.00  (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 5 days                                |
+|                      Date Addition: 10-jan-1961               (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int: 200_                                                                  |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Int2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 0_                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 2.50                                                        |
+|                      Flt Divide: 4.00  (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 5 days                                |
+|                      Date Addition: 10-jan-1961               (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int: 200                                                                  |
+|                      Small Int: 200    (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Integer divide by zero has occurred.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% CHANGED FIELD Flt2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 0                                                           |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 0_.50                                                        |
+|                      Flt Divide: 4.00  (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 5 days                                |
+|                      Date Addition: 10-jan-1961               (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int: 200                                                                  |
+|                      Small Int: 200    (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Floating point divide by zero error.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% CHANGED FIELD Date2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 0                                                           |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 0.00                                                        |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 1/5/61_                                |
+|                      Date Addition: 10-jan-1961               (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int: 200                                                                  |
+|                      Small Int: 200    (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Derivation calculation error.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% CHANGED FIELD Large Int:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 0                                                           |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 0.00                                                        |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 05-jan-1961                           |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int: 99999_                                                                |
+|                      Small Int: 200    (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Error putting derived value in field/column.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% MENU KEY selected
+>>
+<<
+
+%% CHANGED FIELD Int1:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4_       Int2:                                                             |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1:         Flt2:                                                             |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1:                             Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Int2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2_                                                           |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1:         Flt2:                                                             |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1:                             Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Flt1:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.0_    Flt2:                                                             |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1:                             Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Flt2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 2.5_                                                         |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1:                             Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Date1:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 2.50                                                        |
+|                      Flt Divide: 4.00  (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 1/5/61_                      Date2:                                       |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Date2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 2.50                                                        |
+|                      Flt Divide: 4.00  (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 5 days_                                |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int:                                                                      |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Large Int:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 2                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 2.50                                                        |
+|                      Flt Divide: 4.00  (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 5 days                                |
+|                      Date Addition: 10-jan-1961               (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int: 200_                                                                  |
+|                      Small Int:        (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Int2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 0_                                                           |
+|                      Int Divide: 2     (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 2.50                                                        |
+|                      Flt Divide: 4.00  (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 5 days                                |
+|                      Date Addition: 10-jan-1961               (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int: 200                                                                  |
+|                      Small Int: 200    (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Integer divide by zero has occurred.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% CHANGED FIELD Flt2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 0                                                           |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 0_.50                                                        |
+|                      Flt Divide: 4.00  (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 5 days                                |
+|                      Date Addition: 10-jan-1961               (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int: 200                                                                  |
+|                      Small Int: 200    (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Floating point divide by zero error.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% CHANGED FIELD Date2:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 0                                                           |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 0.00                                                        |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 1/5/61_                                |
+|                      Date Addition: 10-jan-1961               (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int: 200                                                                  |
+|                      Small Int: 200    (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Derivation calculation error.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% CHANGED FIELD Large Int:
+##
+__________________________________________________________________________________
+|Derivation Exception Handling:                                                  |
+|                                                                                |
+|                                                                                |
+|Integer divide-by-zero:                                                         |
+|                                                                                |
+|Int1: 4       Int2: 0                                                           |
+|                      Int Divide:       (Int1 / Int2)                           |
+|                                                                                |
+|Float divide-by-zero:                                                           |
+|                                                                                |
+|Flt1: 10.00   Flt2: 0.00                                                        |
+|                      Flt Divide:       (Flt1 / Flt2)                           |
+|                                                                                |
+|Addition of absolute dates:                                                     |
+|                                                                                |
+|Date1: 05-jan-1961                 Date2: 05-jan-1961                           |
+|                      Date Addition:                           (Date1 + Date2)  |
+|                                                                                |
+|Integer overflow:                                                               |
+|Large Int: 99999_                                                                |
+|                      Small Int: 200    (Large Int)                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  end                                                                           |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Error putting derived value in field/column.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% MENU KEY selected
+>>
+^^ end`CR'`CR'`CR'`CR'`CR'`CR'`CR'`CR'
+<<
+
+%% MENU RESPONSE: end
+%% MENU:   end
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "end"
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Integer divide by zero has occurred.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Integer divide by zero has occurred.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Floating point divide by zero error.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Floating point divide by zero error.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Derivation calculation error.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Derivation calculation error.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Error putting derived value in field/column.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+>>
+? delete jba10.c 
+<<
+~
+>>
+? delete jba10.o 
+<<
+~
+>>
+? delete jba10.obj 
+<<
+~
+>>
+? delete jba10.exe 
+<<
+~
+>>
+? delobj SEPPARAMDB -form jba10 
+<<
+~
+>>
+
+
+Ending at: Tue Mar 11 10:42:31 1997

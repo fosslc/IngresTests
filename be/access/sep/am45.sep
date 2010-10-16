@@ -1,0 +1,266 @@
+/*
+        Test Name    : cda24.sep
+        User Name    : testenv
+        Test ID      : cda24
+        Module       : 
+        Filename     : cda24.sep
+        Purpose      : To test bug 41793, 40082
+        Input Files  : none
+        Output Files : none
+        Database     : SEPPARAMDB
+        Tables       : cda24_t1
+        Synopsis     : In embedded quel, do an append, retrieve, delete, 
+		append, replace and then get iirowcount and iierror and
+		print them after each function. The bug comes from doing an 
+		append and then a replace.
+        History      : 3-19-92 Sepized by CAMACHO
+          19-Mar-1992	(Author)
+          25-Dec-1998	(somsa01)
+			Added alternate canons for Windows NT compilation.
+	  03/22/99  (kamra01)  Modified the page_size to 4K instead of 4096 	
+*/
+? cp @file(ing_tst,testtool,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,access,src,cdstub.h) cdstub.h 
+<<
+>>
+? cp @file(ing_tst,be,access,src,drivercd.c) drivercd.c 
+<<
+>>
+? fill cda24.qc 
+!!
+#define CDA24
+#include "cdstub.h"
+#include <stdio.h>
+/***************/
+/*    cda24    */
+/***************/
+cda24()
+{
+##	int	errno;
+##	int	rcount;
+
+##	float	var1;
+##	float	var2;
+##	float	var3;
+##	float	act_onhand;
+##	char	var4[19];
+##	char	var5[13];
+
+	var1 = 0.000;
+	var2 = 6.000;
+	var3 = 0.000;
+	strcpy(var4,"ACM-40A11560-5016");
+	strcpy(var5,"19-jul-1992");
+
+	printf("create table...\n");
+##	destroy cda24_t1
+
+##	create cda24_t1 (
+##		period_no	= i4,
+##		date_req	= date,
+##		counter		= i4,
+##		partno		= text(25),
+##		gross_req	= f8,
+##		open_orders	= f8,
+##		proj_onhand	= f8,
+##		net_require	= f8,
+##		plan_ord_rec	= f8,
+##		plan_ord_rel	= f8,
+##		firm_planned	= f8,
+##		sched_rec	= f8,
+##		req_no		= text(12),
+##		line_no		= i4
+##	) with duplicates
+
+##	modify cda24_t1 to btree unique on partno, date_req with page_size=4096
+
+	printf("append: ");
+##	append cda24_t1( partno = var4, date_req = var5)
+##	inquire_ingres ( errno = errorno, rcount = rowcount)
+	printf("errno = %d, rowcount = %d\n",errno,rcount);
+
+	printf("retrieve: ");
+##      retrieve ( act_onhand = var1 + var2 *((100 - var3)/100) )
+##	inquire_ingres ( errno = errorno, rcount = rowcount)
+	printf("errno = %d, rowcount = %d\n",errno,rcount);
+
+	printf("delete: ");
+##	delete cda24_t1 where cda24_t1.partno = var4 and cda24_t1.date_req = var5
+##	inquire_ingres ( errno = errorno, rcount = rowcount)
+	printf("errno = %d, rowcount = %d\n",errno,rcount);
+
+	printf("append: ");
+##	append cda24_t1( partno = var4, date_req = var5)
+##	inquire_ingres ( errno = errorno, rcount = rowcount)
+	printf("errno = %d, rowcount = %d\n",errno,rcount);
+
+	printf("replace: (bug 41793 error E_OP08A2:) ");
+##	replace cda24_t1 ( plan_ord_rel = cda24_t1.plan_ord_rel + var1)
+##	where cda24_t1.partno = var4 and cda24_t1.date_req = var5
+##	inquire_ingres ( errno = errorno, rcount = rowcount)
+	printf("errno = %d, rowcount = %d\n",errno,rcount);
+
+##	exit
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table cda24_t1;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? sepesqlc driver.sc 
+<<
+>>
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepcc drivercd.c 
+<<
+>>
+<<
+drivercd.c
+>>
+? sepesqlc cda24.qc 
+<<
+EQUEL cda24.qc:
+>>
+? sepcc cda24.c 
+<<
+>>
+<<
+cda24.c
+>>
+? seplnk driver drivercd cda24 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tcda24 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+DML-STATEMENTS
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   cda24
+XX-----------------XX
+
+connecting with database...
+
+XX running test cda24 XX
+
+create table...
+E_US1452 DESTROY: cda24_t1 does not exist or is not owned by you.
+    (Thu Mar 19 11:51:10 1992)
+
+append: errno = 0, rowcount = 1
+retrieve: errno = 0, rowcount = 1
+delete: errno = 0, rowcount = 1
+append: errno = 0, rowcount = 1
+replace: (bug 41793 error E_OP08A2:) errno = 0, rowcount = 1
+
+disconnecting with database...
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table cda24_t1;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? delete cdstub.h 
+<<
+~
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete drivercd.c 
+<<
+~
+>>
+? delete drivercd.obj 
+<<
+~
+>>
+? delete drivercd.o 
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~
+>>
+? delete dbph.c 
+<<
+~
+>>
+? delete dbpmisc.sc 
+<<
+~
+>>
+? delete dbpmisc.c 
+<<
+~
+>>
+? delete dbpmisc.obj 
+<<
+~
+>>
+? delete dbpmisc.o 
+<<
+~
+>>
+? delete cda24.c 
+<<
+~
+>>
+? delete cda24.qc 
+<<
+~
+>>
+? delete cda24.obj 
+<<
+~
+>>
+? delete cda24.o 
+<<
+~
+>>
+
+
+Ending at: Thu Mar 19 11:51:21 1992

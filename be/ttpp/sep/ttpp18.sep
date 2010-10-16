@@ -1,0 +1,112 @@
+/* 	
+	Copyright (c) 2006 Ingres Corporation
+
+	Test Name: ttpp18.sep 
+	Time: Thu Jan  9 12:28:02 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : ttpp18.sep 
+	Module  : 
+	Filename:
+	Purpose	: This test verifies that bug # 82493 is fixed. Bug 82493 was, 
+		  if a table involved in a procedure passing temporary table
+		  as a parameter, was being dropped and recreated again within
+	 	  one session, dropping that procedure would fail with error
+	 	  message "E_US138E Table is in use. Close that table and try
+		  again.". If the procedure were dropped after the table was
+		  dropped, this would not happen.
+	Input Files  :
+	Output Files :
+	Database     :	ttppdb
+	Tables       :	tt1, session.tt1
+	Synopsis     :	If a table involved in a procedure passing temporary
+			table as parameter, is being dropped and recreated
+			again within a session, dropping that procedure
+			should not give error E_US138E.
+			(bug #82493)
+
+ History:  21-May-1997	(cheis01)	Created
+	01-Arp-1999     (yu$pe02)       Hard code page size to 4K.
+	08-Jul-2002  	(shafa01) 	Test cleanup Bug: 108167
+	20-Jul-2006	(rogch01)
+		Changes for Ingres 2006 Update 1.  Session tables do not need
+		to be prefixed with the session schema but must be unambiguous.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* set autocommit on\g
+<<
+
+>>
+* drop procedure p1\g
+<<
+~
+>>
+* drop table tt1\g
+<<
+~
+>>
+* declare global temporary table session.tt1 (c1 varchar(10), c2 varchar(15)) -
+on commit preserve rows with norecovery, page_size=4096\g
+<<
+>>
+* insert into session.tt1 values ('Carl', 'marketing')\g
+<<
+(1 row)
+>>
+* insert into session.tt1 values ('John', 'travel')\g
+<<
+(1 row)
+>>
+* create table tt1 (col1 varchar(10), col2 varchar(15)) with page_size=4096\g
+<<
+
+>>
+* create procedure p1 (yahoo set of (c1 varchar(10), c2 varchar(15))) as -
+begin insert into testenv.tt1 select * from yahoo; end;\g
+<<
+
+>>
+* drop table testenv.tt1\g
+<<
+
+>>
+* create table tt1 (col1 varchar(10), col2 varchar(15)) with page_size=4096\g
+<<
+ 
+>>
+* execute procedure p1(yahoo=session.tt1);\g
+<<
+
+>>
+* select * from testenv.tt1\g
+<<
+
++----------+---------------+
+|col1      |col2           |
++----------+---------------+
+|Carl      |marketing      |
+|John      |travel         |
++----------+---------------+
+(2 rows)
+>>
+* drop procedure p1\g
+<<
+
+>>
+* drop table tt1\g
+<<
+
+>>
+* drop procedure p1\g\q
+<<
+E_US0965 Procedure 'p1' not found.
+    (Thu Jun  5 11:15:28 1997)
+
+>>
+
+
+Ending at: Thu Jun  5 11:15:35 1997

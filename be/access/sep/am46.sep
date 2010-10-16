@@ -1,0 +1,388 @@
+/*
+	Test Name: cda25
+	Time: Wed Oct  6 13:20:25 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (cda25)
+	Module  : 
+	Filename: cda25.sep
+	Purpose	: For testing bug fixing - bug #47337.
+		  On 6.4/04 (ds3.ulx/00), this bug does not seem to occur.
+                  On 6.4/04 (su4.u42/00), I can always generate this bug. 
+	Input Files  : plan_host.sql, one_copydel.sql, two_copydel.sql
+	Output Files : will all be deleted.
+	Database     : SEPPARAMDB
+	Tables       : planhost
+	Synopsis     : A copy in, delete, copy in, delete SQL combination on 
+		       a btree unique table should not cause error 
+
+                     . E_DM9335 on $II_SYSTEM/ingres/files/errlog.log, 		       "End-
+ of file reached during a read or write operation". 
+                     . E_QE0080 on Terminal Monitor                        "Error tr-
+ying to position a table". 
+
+		       on second delete and any subsequent table access.  
+		       After exiting SQL and re-entering, table appears fine.
+		
+        History      : 6-Oct-1993	Created      (alices)
+                       11-Jan-1993      Modify  (scotts)
+                       Updated test so that it is portable on VMS also.
+                       The fill files need to be added for VMS directory
+                       constructs. Also allowed alternate canons for 
+                       one_copydel.sql and two_copydel.sql results for 
+                       VMS.
+                       29-Mar-1999   (madsu02) The condition if-else-endif was set as if-endif-else
+				     This causes the sep test not to run. 
+		       03/22/99  (kamra01)  Modified the page_size to 4K instead of VPG_SZ 	
+*/
+? delete plan_host.sql 
+<<
+~
+>>
+? delete one_copydel.sql 
+<<
+~
+>>
+? delete two_copydel.sql 
+<<
+~
+>>
+? delete plan.add 
+<<
+~
+>>
+? delete plan.mod 
+<<
+~
+>>
+? fill plan.add 
+!!
+A|TPLANB|test plan1|TPARTB|3|Y|test part1|TCLASS|1|TUa1|TUa2|TUa3|TUa4|
+A|TPLANX|test plan2|TPARTX|4|Y|test part2|TCLASS|1|TUb1|TUb2|TUb3|TUb4|
+A|TPLANT|test plan3|TPARTT|5|Y|test part3|TCLASS|1|TUc1|TUc2|TUc3|TUc4|
+A|TPLANU|test plan4|TPARTU|6|Y|test part4|TCLASS|1|TUd1|TUd2|TUd3|TUd4|
+A|TPLANO|test plan5|TPARTO|7|Y|test part5|TCLASS|1|TUe1|TUe2|TUe3|TUe4|
+A|TPLANE|test plan6|TPARTE|8|Y|test part6|TCLASS|1|TUf1|TUf2|TUf3|TUf4|
+A|TPLAND|test plan7|TPARTD|9|Y|test part7|TCLASS|1|TUg1|TUg2|TUg3|TUg4|
+!!
+? fill plan.mod 
+!!
+M|TPLANB|test plan1|TPARTB|3|Y|test part1|TCLASSB|1|text1|text2|text3|text4|
+D|TPLANE|test plan6|TPARTE|8|Y|test part6|TCLASS|1|TUf1|TUf2|TUf3|TUf4|
+!!
+? fill plan_host.sql 
+!!
+create table planhost(
+procplanname	c20 not null with default,
+procplandesc	c50 not null with default,
+partname	c25 not null with default,
+revisioncode	c10 not null with default,
+validflag	c1 not null with default,
+sequentialflag	c1 not null with default,
+partdesc	c50 not null with default,
+partclass	c15 not null with default,
+partsizeval	i4 not null with default,
+userfield1	c128 not null with default,
+userfield2	c128 not null with default,
+userfield3	c128 not null with default,
+userfield4	c128 not null with default,
+actionflag	c1 not null with default
+) with page_size=4096; \p\g\r
+
+grant all on planhost to public; \p\g\r
+
+modify planhost to btree unique on 
+procplanname, partname with page_size=4096;\p\g\r
+!!
+.if (UNIX||NT_GENERIC) 
+? fill one_copydel.sql 
+!!
+COPY TABLE planhost
+(actionflag=char(0)'|', procplanname=char(0)'|', procplandesc=char(0)'|',
+ partname=char(0)'|', revisioncode=char(0)'|',  sequentialflag=char(0)'|',
+ partdesc=char(0)'|', partclass=char(0)'|', partsizeval=char(0)'|',
+ userfield1=char(0)'|', userfield2=char(0)'|', userfield3=char(0)'|',
+ userfield4=char(0)'|', xxx=d0nl)
+FROM 'plan.add' 
+WITH ON_ERROR = CONTINUE,
+     ROLLBACK = DISABLED,
+     LOG = 'error.log'; \p\g\r
+commit; \p\g\r
+
+delete from planhost
+where actionflag = 'A'; \p\g\r
+commit; \p\g\r
+!!
+? fill two_copydel.sql 
+!!
+COPY TABLE planhost
+(actionflag=char(0)'|', procplanname=char(0)'|', procplandesc=char(0)'|',
+ partname=char(0)'|', revisioncode=char(0)'|',  sequentialflag=char(0)'|',
+ partdesc=char(0)'|', partclass=char(0)'|', partsizeval=char(0)'|',
+ userfield1=char(0)'|', userfield2=char(0)'|', userfield3=char(0)'|',
+ userfield4=char(0)'|', xxx=d0nl)
+FROM  'plan.mod' 
+WITH ON_ERROR = CONTINUE,
+     ROLLBACK = DISABLED,
+     LOG = 'error.log'; \p\g\r
+commit; \p\g\r
+
+delete from planhost
+where actionflag = 'M'; \p\g\r
+commit; \p\g\r
+!!
+.else
+/* 
+    VMS machine 
+*/
+? fill one_copydel.sql 
+!!
+COPY TABLE planhost
+(actionflag=char(0)'|', procplanname=char(0)'|', procplandesc=char(0)'|',
+ partname=char(0)'|', revisioncode=char(0)'|',  sequentialflag=char(0)'|',
+ partdesc=char(0)'|', partclass=char(0)'|', partsizeval=char(0)'|',
+ userfield1=char(0)'|', userfield2=char(0)'|', userfield3=char(0)'|',
+ userfield4=char(0)'|', xxx=d0nl)
+FROM '[]plan.add'
+WITH ON_ERROR = CONTINUE,
+     ROLLBACK = DISABLED,
+     LOG = 'error.log'; \p\g\r
+commit; \p\g\r
+
+delete from planhost
+where actionflag = 'A'; \p\g\r
+commit; \p\g\r
+!!
+? fill two_copydel.sql 
+!!
+COPY TABLE planhost
+(actionflag=char(0)'|', procplanname=char(0)'|', procplandesc=char(0)'|',
+ partname=char(0)'|', revisioncode=char(0)'|',  sequentialflag=char(0)'|',
+ partdesc=char(0)'|', partclass=char(0)'|', partsizeval=char(0)'|',
+ userfield1=char(0)'|', userfield2=char(0)'|', userfield3=char(0)'|',
+ userfield4=char(0)'|', xxx=d0nl)
+FROM '[]plan.mod'
+WITH ON_ERROR = CONTINUE,
+     ROLLBACK = DISABLED,
+     LOG = 'error.log'; \p\g\r
+commit; \p\g\r
+
+delete from planhost
+where actionflag = 'M'; \p\g\r
+commit; \p\g\r
+!!
+.endif
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* set autocommit on; \g
+<<
+>>
+* drop table planhost;\g
+<<
+~
+>>
+* \i plan_host.sql 
+<<
+ create table planhost(
+procplanname	c20 not null with default,
+procplandesc	c50 not null with default,
+partname	c25 not null with default,
+revisioncode	c10 not null with default,
+validflag	c1 not null with default,
+sequentialflag	c1 not null with default,
+partdesc	c50 not null with default,
+partclass	c15 not null with default,
+partsizeval	i4 not null with default,
+userfield1	c128 not null with default,
+userfield2	c128 not null with default,
+userfield3	c128 not null with default,
+userfield4	c128 not null with default,
+actionflag	c1 not null with default
+) with page_size=4096; 
+
+grant all on planhost to public; 
+
+modify planhost to btree unique on 
+procplanname, partname with page_size=4096;
+(0 rows)
+>>
+* \i one_copydel.sql
+<<
+ COPY TABLE planhost
+(actionflag=char(0)'|', procplanname=char(0)'|', procplandesc=char(0)'|',
+ partname=char(0)'|', revisioncode=char(0)'|',  sequentialflag=char(0)'|',
+ partdesc=char(0)'|', partclass=char(0)'|', partsizeval=char(0)'|',
+ userfield1=char(0)'|', userfield2=char(0)'|', userfield3=char(0)'|',
+ userfield4=char(0)'|', xxx=d0nl)
+FROM 'plan.add'
+WITH ON_ERROR = CONTINUE,
+     ROLLBACK = DISABLED,
+     LOG = 'error.log'; 
+(7 rows)
+commit; 
+
+delete from planhost
+where actionflag = 'A'; 
+(7 rows)
+commit; 
+>>
+<<
+ COPY TABLE planhost
+(actionflag=char(0)'|', procplanname=char(0)'|', procplandesc=char(0)'|',
+ partname=char(0)'|', revisioncode=char(0)'|',  sequentialflag=char(0)'|',
+ partdesc=char(0)'|', partclass=char(0)'|', partsizeval=char(0)'|',
+ userfield1=char(0)'|', userfield2=char(0)'|', userfield3=char(0)'|',
+ userfield4=char(0)'|', xxx=d0nl)
+FROM '[]plan.add'
+WITH ON_ERROR = CONTINUE,
+     ROLLBACK = DISABLED,
+     LOG = 'error.log'; 
+(7 rows)
+commit; 
+
+delete from planhost
+where actionflag = 'A'; 
+(7 rows)
+commit; 
+>>
+* select * from planhost\g
+<<
+
++--------------------+--------------------------------------------------+------------
+--------------+----------+------+------+---------------------------------------------
+------+---------------+-------------+------------------------------------------------
+---------------------------------------------------------------------------------+---
+-------------------------------------------------------------------------------------
+------------------------------------------+------------------------------------------
+-------------------------------------------------------------------------------------
+---+---------------------------------------------------------------------------------
+------------------------------------------------+------+
+|procplanname        |procplandesc                                      |partname   -
+              |revisionco|validf|sequen|partdesc                                    -
+      |partclass      |partsizeval  |userfield1                                     -
+                                                                                 |us-
+erfield2                                                                            -
+                                          |userfield3                               -
+                                                                                    -
+   |userfield4                                                                      -
+                                                |action|
++--------------------+--------------------------------------------------+------------
+--------------+----------+------+------+---------------------------------------------
+------+---------------+-------------+------------------------------------------------
+---------------------------------------------------------------------------------+---
+-------------------------------------------------------------------------------------
+------------------------------------------+------------------------------------------
+-------------------------------------------------------------------------------------
+---+---------------------------------------------------------------------------------
+------------------------------------------------+------+
++--------------------+--------------------------------------------------+------------
+--------------+----------+------+------+---------------------------------------------
+------+---------------+-------------+------------------------------------------------
+---------------------------------------------------------------------------------+---
+-------------------------------------------------------------------------------------
+------------------------------------------+------------------------------------------
+-------------------------------------------------------------------------------------
+---+---------------------------------------------------------------------------------
+------------------------------------------------+------+
+(0 rows)
+>>
+* \i two_copydel.sql
+<<
+ COPY TABLE planhost
+(actionflag=char(0)'|', procplanname=char(0)'|', procplandesc=char(0)'|',
+ partname=char(0)'|', revisioncode=char(0)'|',  sequentialflag=char(0)'|',
+ partdesc=char(0)'|', partclass=char(0)'|', partsizeval=char(0)'|',
+ userfield1=char(0)'|', userfield2=char(0)'|', userfield3=char(0)'|',
+ userfield4=char(0)'|', xxx=d0nl)
+FROM 'plan.mod'
+WITH ON_ERROR = CONTINUE,
+     ROLLBACK = DISABLED,
+     LOG = 'error.log'; 
+(2 rows)
+commit; 
+
+delete from planhost
+where actionflag = 'M'; 
+(1 row)
+commit; 
+>>
+<<
+ COPY TABLE planhost
+(actionflag=char(0)'|', procplanname=char(0)'|', procplandesc=char(0)'|',
+ partname=char(0)'|', revisioncode=char(0)'|',  sequentialflag=char(0)'|',
+ partdesc=char(0)'|', partclass=char(0)'|', partsizeval=char(0)'|',
+ userfield1=char(0)'|', userfield2=char(0)'|', userfield3=char(0)'|',
+ userfield4=char(0)'|', xxx=d0nl)
+FROM '[]plan.mod'
+WITH ON_ERROR = CONTINUE,
+     ROLLBACK = DISABLED,
+     LOG = 'error.log'; 
+(2 rows)
+commit; 
+
+delete from planhost
+where actionflag = 'M'; 
+(1 row)
+commit; 
+>>
+* select * from planhost; \p\g
+<<
+ select * from planhost; 
+
++--------------------+--------------------------------------------------+------------
+--------------+----------+------+------+---------------------------------------------
+------+---------------+-------------+------------------------------------------------
+---------------------------------------------------------------------------------+---
+-------------------------------------------------------------------------------------
+------------------------------------------+------------------------------------------
+-------------------------------------------------------------------------------------
+---+---------------------------------------------------------------------------------
+------------------------------------------------+------+
+|procplanname        |procplandesc                                      |partname   -
+              |revisionco|validf|sequen|partdesc                                    -
+      |partclass      |partsizeval  |userfield1                                     -
+                                                                                 |us-
+erfield2                                                                            -
+                                          |userfield3                               -
+                                                                                    -
+   |userfield4                                                                      -
+                                                |action|
++--------------------+--------------------------------------------------+------------
+--------------+----------+------+------+---------------------------------------------
+------+---------------+-------------+------------------------------------------------
+---------------------------------------------------------------------------------+---
+-------------------------------------------------------------------------------------
+------------------------------------------+------------------------------------------
+-------------------------------------------------------------------------------------
+---+---------------------------------------------------------------------------------
+------------------------------------------------+------+
+|TPLANE              |test plan6                                        |TPARTE     -
+              |8         |      |Y     |test part6                                  -
+      |TCLASS         |            1|TUf1                                           -
+                                                                                 |TU-
+f2                                                                                  -
+                                          |TUf3                                     -
+                                                                                    -
+   |TUf4                                                                            -
+                                                |D     |
++--------------------+--------------------------------------------------+------------
+--------------+----------+------+------+---------------------------------------------
+------+---------------+-------------+------------------------------------------------
+---------------------------------------------------------------------------------+---
+-------------------------------------------------------------------------------------
+------------------------------------------+------------------------------------------
+-------------------------------------------------------------------------------------
+---+---------------------------------------------------------------------------------
+------------------------------------------------+------+
+(1 row)
+>>
+* \q 
+<<
+~
+>>
+
+
+Ending at: 11-JAN-1994 18:21:50

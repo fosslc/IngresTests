@@ -1,0 +1,302 @@
+/*
+	Test Name: efa29
+	Time: 
+	User Name: testenv
+ 	Test ID : efa29
+	Module  : 
+	Filename: efa29.sep
+	Purpose	: Test for bug 41092
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : none
+	Synopsis     : Create a table and a procedure on the table. Insert data
+		into table. Declare a cursor. Open cursor. Try to take a 
+		savepoint that causes an error because the cursor is open 
+		(expected correct behavior). Then try to rollback to 
+		savepoint that was invalid (expected correct behavior). Now 
+		try to execute the procedure and get bug 41092. 
+		All is in embedded sql.
+	History	:
+          25-Feb-1992	created by Camacho (from Bug Script)
+	  7-MAR-1997    (vissu01) Modified for NT
+	  25-March-1999  (kamra01) modified VPG_SZ to 2048
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa29.sc 
+!!
+/*
+**	efa29.sc
+**
+*/
+
+#define EFA29
+
+#include "driverefstub.h"
+
+#include <stdio.h>
+
+exec sql include sqlca;
+
+/************/
+/* EFA29() */
+/************/
+
+efa29()
+{
+exec sql whenever sqlerror  continue;
+exec sql whenever sqlerror  call sqlprint;
+
+exec sql begin declare section;
+char buf [11];
+exec sql end declare section;
+
+printf("\nDropping Table \n");
+	exec sql drop table test_t;
+
+printf("\nDropping Procedure \n");
+	exec sql drop procedure efa29_p1;
+
+printf("\nCreating Table \n");
+	exec sql create table test_t (col1 c10) with page_size=2048;
+
+printf("\nCreating Procedure \n");
+	exec sql create procedure efa29_p1 as
+		begin
+			insert into test_t values ('zxxx');
+		end;
+printf("\nInserting values into table.\n");
+	exec sql insert into test_t values ('aaa');
+	exec sql insert into test_t values ('aaa');
+	exec sql insert into test_t values ('aaa');
+	exec sql insert into test_t values ('aaa');
+	exec sql insert into test_t values ('aaa');
+
+printf("\n COMMITTING.\n");
+	exec sql commit;
+
+printf("\n Declare Cursor \n");
+	exec sql declare c1 cursor for select 
+		col1 from test_t;
+
+printf("\n Open Cursor \n");
+	exec sql open c1 for readonly;
+
+printf("\n Fetch Cursor \n");
+	exec sql fetch c1 into :buf;
+
+printf("\n Try to take Savepoint \n");
+	exec sql savepoint 1;
+
+printf("\n Try to ROLLBACK To SAVEPOINT\n ");
+	exec sql rollback to 1;
+
+printf("\n Try to execute procedure efa29_p1 \n");
+	exec sql execute procedure efa29_p1;
+
+printf("\n Try to Close Cursor \n");
+	exec sql close c1;
+
+printf("\n Try to ROLLBACK ");
+	exec sql rollback;
+
+} /* efa29() */
+!!
+? sepesqlc efa29.sc 
+<<
+ESQL efa29.sc:
+>>
+? sepcc efa29.c 
+<<
+>>
+<<
+efa29.c
+>>
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa29 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table test_t;\g
+<<
+~
+>>
+* drop procedure efa29_p1;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa29 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa29
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa29 XX
+
+
+Dropping Table 
+E_US0AC1 DROP: 'test_t' does not exist or is not owned by you.
+    (Tue Feb 25 14:27:53 1992)
+
+Dropping Procedure 
+E_US0965 Procedure 'efa29_p1' not found.
+    (Tue Feb 25 14:27:53 1992)
+
+Creating Table 
+
+Creating Procedure 
+
+Inserting values into table.
+
+ COMMITTING.
+
+ Declare Cursor 
+
+ Open Cursor 
+
+ Fetch Cursor 
+
+ Try to take Savepoint 
+E_US11FC Either this cursor is already open or an attempt was
+    made to declare a savepoint when a cursor was open.
+    (Tue Feb 25 14:27:54 1992)
+
+ Try to ROLLBACK To SAVEPOINT
+ E_US087A Attempt to abort to a non-existent savepoint.
+    (Tue Feb 25 14:27:54 1992)
+
+ Try to execute procedure efa29_p1 
+
+ Try to Close Cursor 
+
+ Try to ROLLBACK 
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driverefstub.h 
+<<
+~
+>>
+? delete driveref.c 
+<<
+~
+>>
+? delete driveref.obj 
+<<
+~
+>>
+? delete driveref.o 
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~
+>>
+? delete dbph.c 
+<<
+~
+>>
+? delete dbpmisc.sc 
+<<
+~
+>>
+? delete dbpmisc.c 
+<<
+~
+>>
+? delete dbpmisc.obj 
+<<
+~
+>>
+? delete dbpmisc.o 
+<<
+~
+>>
+? delete efa29.c 
+<<
+~
+>>
+? delete efa29.obj 
+<<
+~
+>>
+? delete efa29.o 
+<<
+~
+>>
+
+
+Ending at: Tue Feb 25 14:28:22 1992

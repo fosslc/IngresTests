@@ -1,0 +1,1447 @@
+/*
+	Test Name: jla03.sep
+	Time: Wed Oct 20 12:33:00 1993
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : jla03.sep
+	Module  : frs
+	Filename: jla03.sep
+	Purpose	: To test the use of float(n) data type within FRS.
+	Input Files  :
+	Output Files : jla03.sc, jla03.sql, jla03.frm
+	Database     : SEPPARAMDB
+	Tables       : jla03
+	Synopsis     : Verify that float precision (floatn) will be
+		       mapped toeither float4 or float8.
+
+ History: 20-Oct-1993	(jbryson)	Created
+          18-Jan-1996	(parmi04)  Added an alternate canon for NT_GENERIC.
+          11-Apr-1996	(clate01)	
+		Modified canons to work with Windows NT
+           3-Sep-1996	(Author)
+          12-Mar-1997	(Author)
+           8-Jul-2004   (shafa01) Removed spurious "Child did not exit" line
+                        from SEP.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delete jla03.o 
+<<
+~
+>>
+? delete jla03.obj 
+<<
+~
+>>
+? delete jla03.c 
+<<
+~
+>>
+? delete jla03.exe 
+<<
+~
+>>
+? delobj SEPPARAMDB -form jla03 
+<<
+~
+>>
+? fill jla03.sql 
+!!
+create table jla03(
+	intcol integer,
+	fltcol2 float(2),
+	fltcol104  float(10,4),
+	fltcol20 float(20))\p\g
+insert into jla03 values (1,1.1,104.5,20)\p\g
+insert into jla03 values (2,null,null,null)\p\g
+insert into jla03 values (3,3.3,333.3333,2020)\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* drop table jla03\g 
+<<
+~
+>>
+* \i jla03.sql 
+<<
+create table jla03(
+	intcol integer,
+	fltcol2 float(2),
+	fltcol104  float(10,4),
+	fltcol20 float(20))
+insert into jla03 values (1,1.1,104.5,20)
+(1 row)
+insert into jla03 values (2,null,null,null)
+(1 row)
+insert into jla03 values (3,3.3,333.3333,2020)
+(1 row)
+>>
+* \q 
+<<
+~
+>>
+? fill jla03.frm 
+!!
+COPYFORM:	6.4	1993_10_20 19:32:44 GMT  
+FORM:	jla03		
+	80	4	0	0	4	0	1	9	0	0	0	0	0	0	0	4
+FIELD:
+	0	intcol	-30	5	0	13	1	21	2	6	13	0	8	Intcol:	0	0	0	66560	0	0	0		-f13			0	0
+	1	fltcol2	-31	5	0	20	1	29	2	45	20	0	9	Fltcol2:	0	0	0	66560	0	0	0		-n20.3			0	1
+	2	fltcol104	-31	9	0	20	1	31	3	3	20	0	11	Fltcol104:	0	0	0	66560	0	0	0		-n20.3			0	2
+	3	fltcol20	-31	9	0	20	1	30	3	44	20	0	10	Fltcol20:	0	0	0	66560	0	0	0		-n20.3			0	3
+TRIM:
+	31	0	FLOAT-N-TABLE Form	0	0	0	0
+!!
+? copyform -i SEPPARAMDB jla03.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+Copied form 'jla03' to database.
+Encoding forms into database . . .
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+Copied form 'jla03' to database.
+Encoding forms into database . . .
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+Copied form 'jla03' to database.
+Encoding forms into database . . .
+>>
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+Copied form 'jla03' to database.
+Encoding forms into database . . .
+>>
+? fill jla03.sc 
+!!
+EXEC SQL INCLUDE SQLCA;
+
+int main(argc,argv)
+int  argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char *argv[];
+EXEC SQL END DECLARE SECTION;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+   char  msgbuf[100];
+   int   datatype,
+         type,
+	 length,
+	 intcol;
+   double fld1,
+	  fld2,
+	  fld3;
+   short ind1, ind2, ind3, ind4;
+EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   /* Start up INGRES and the INGRES/FORMS system */
+   EXEC SQL CONNECT :argv[1];
+
+   EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+   EXEC FRS FORMS;
+
+   EXEC FRS MESSAGE 'Initializing Form...';
+   EXEC FRS FORMINIT jla03;
+
+   EXEC FRS DISPLAY jla03;
+   EXEC FRS INITIALIZE;
+
+   EXEC FRS ACTIVATE MENUITEM 'Select';
+   EXEC FRS BEGIN;
+      EXEC SQL DECLARE csr CURSOR FOR
+	 SELECT intcol, fltcol2, fltcol104, fltcol20
+	     FROM jla03;
+
+      EXEC SQL OPEN csr FOR READONLY;
+
+      while(1)
+      {
+	 EXEC SQL FETCH csr
+	      INTO :intcol:ind1, :fld1:ind2, :fld2:ind3, :fld3:ind4;
+
+         if(sqlca.sqlcode != 0)
+	 { 
+            EXEC SQL CLOSE csr;
+	    EXEC FRS MESSAGE 'No more rows' WITH STYLE=POPUP;
+	    EXEC FRS CLEAR FIELD ALL;
+	    break;
+	 }
+
+	 EXEC FRS PUTFORM (intcol    = :intcol:ind1,
+			   fltcol2   = :fld1:ind2,
+			   fltcol104 = :fld2:ind3,
+			   fltcol20  = :fld3:ind4);
+
+	 EXEC FRS REDISPLAY;
+
+	 EXEC FRS SUBMENU;
+	    EXEC FRS ACTIVATE MENUITEM 'Next', FRSKEY4;
+	    EXEC FRS BEGIN;
+	       /* Continue with cursor loop */
+	       EXEC FRS MESSAGE 'Next row ...';
+	       EXEC FRS CLEAR FIELD ALL;
+	    EXEC FRS END;
+
+	    EXEC FRS ACTIVATE MENUITEM 'End';
+	    EXEC FRS BEGIN;
+	       EXEC SQL CLOSE csr;
+	       EXEC FRS CLEAR FIELD ALL;
+               break;
+	    EXEC FRS END;
+      }
+
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Save';
+   EXEC FRS BEGIN;
+      EXEC FRS GETFORM (:intcol:ind1 = intcol,
+			:fld1:ind2   = fltcol2,
+			:fld2:ind3   = fltcol104,
+			:fld3:ind4   = fltcol20);
+      EXEC SQL INSERT INTO jla03 
+	    VALUES (:intcol:ind1, :fld1:ind2, :fld2:ind3, :fld3:ind4);
+      EXEC SQL COMMIT;
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Inquire';
+   EXEC FRS BEGIN;
+      EXEC FRS INQUIRE_FRS FIELD jla03
+	   (:datatype = DATATYPE, :type = TYPE, :length = LENGTH);
+
+      sprintf(msgbuf,"Datatype(+/-31) is: %d   Type(2) is: %d   Length is: %d",
+	     datatype, type, length);
+
+      EXEC FRS MESSAGE :msgbuf WITH STYLE=POPUP;
+
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Exit';
+   EXEC FRS BEGIN;
+      EXEC FRS BREAKDISPLAY;
+   EXEC FRS END;
+
+   EXEC FRS FINALIZE;
+
+   /* Terminate the FORMS and INGRES */
+   EXEC FRS ENDFORMS;
+   EXEC SQL DISCONNECT;
+
+   exit(0);
+} /* Main Program */
+
+!!
+? esqlc jla03.sc 
+<< if (UNIX||NT_GENERIC)
+ESQL jla03.sc:
+>>
+<< if (VMS)
+>>
+? sepcc jla03 
+<<
+>>
+<< IF (NT_GENERIC) 
+jla03.c
+>>
+? seplnk jla03 
+<<
+>>
+<< IF (NT_GENERIC) 
+   Creating library jla03.lib and object jla03.exp ...
+>>
+<<
+Microsoft (R) 32-Bit Executable Linker Version 2.50.4245
+Copyright (C) Microsoft Corp 1992-94. All rights reserved.
+
+-debug:none 
+-out:jla03.exe 
+jla03.obj 
+e:\qa\ingres\lib\ingres.lib 
+msvcrt.lib 
+kernel32.lib 
+user32.lib 
+advapi32.lib 
+>>
+? ferun jla03.exe SEPPARAMDB 
+<<
+
+%%     
+%% Initializing Form...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: _                               Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+>>
+<< IF (NT_GENERIC) 
+
+%%     
+%% Initializing Form...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: _                               Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+>>
+^^ 4`CR'4.4`CR'444.4444`CR'4040`CR'`ESC'
+<<
+
+%% CHANGED FIELD Intcol:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4_                              Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Fltcol2:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4                              Fltcol2: 4.4_                       |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Fltcol104:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4                              Fltcol2: 4.400                     |
+|   Fltcol104: 444.4444_                      Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Fltcol20:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4                              Fltcol2: 4.400                     |
+|   Fltcol104: 444.444                       Fltcol20: 4040_                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% CHANGED FIELD Intcol:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4_                              Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Fltcol2:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4                              Fltcol2: 4.4_                       |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Fltcol104:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4                              Fltcol2: 4.400                     |
+|   Fltcol104: 444.4444_                      Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Fltcol20:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4                              Fltcol2: 4.400                     |
+|   Fltcol104: 444.444                       Fltcol20: 4040_                      |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Save`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Save
+%% MENU:   Select  Save  Inquire  Exit
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Save"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: _4                              Fltcol2: 4.400                     |
+|   Fltcol104: 444.444                       Fltcol20: 4040.000                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Save
+%% MENU:   Select  Save  Inquire  Exit
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Save"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: _4                              Fltcol2: 4.400                     |
+|   Fltcol104: 444.444                       Fltcol20: 4040.000                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Select`CR'Next`CR'Next`CR'Next`CR'Next`CR'`CR'`TAB'`ESC'
+<<
+
+%% MENU RESPONSE: Select
+%% MENU:   Select  Save  Inquire  Exit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Select"
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 1                              Fltcol2: 1.100                     |
+|   Fltcol104: 104.500                       Fltcol20: 20.000                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit  : Select                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% Next row ...
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 2                              Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|Next row ...                                                                    |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% Next row ...
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 3                              Fltcol2: 3.300                     |
+|   Fltcol104: 333.333                       Fltcol20: 2020.000                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|Next row ...                                                                    |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% Next row ...
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4                              Fltcol2: 4.400                     |
+|   Fltcol104: 444.444                       Fltcol20: 4040.000                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|Next row ...                                                                    |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% Next row ...##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4                              Fltcol2: 4.400                     |
+|   Fltcol104: 444.444                       Fltcol20: 4040.000                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | No more rows                                                               | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: _                               Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Select
+%% MENU:   Select  Save  Inquire  Exit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Select"
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 1                              Fltcol2: 1.100                     |
+|   Fltcol104: 104.500                       Fltcol20: 20.000                    |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit  : Select                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% Next row ...
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 2                              Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|Next row ...                                                                    |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% Next row ...
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 3                              Fltcol2: 3.300                     |
+|   Fltcol104: 333.333                       Fltcol20: 2020.000                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|Next row ...                                                                    |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% Next row ...
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4                              Fltcol2: 4.400                     |
+|   Fltcol104: 444.444                       Fltcol20: 4040.000                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|Next row ...                                                                    |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: Next
+%% MENU:   Next  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Next"
+
+%% Next row ...##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: 4                              Fltcol2: 4.400                     |
+|   Fltcol104: 444.444                       Fltcol20: 4040.000                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | No more rows                                                               | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol: _                               Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Inquire`CR'`CR'`TAB'`ESC'
+<<
+
+%% MENU RESPONSE: Inquire
+%% MENU:   Select  Save  Inquire  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Inquire"
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol:                                Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Datatype(+/-31) is: -31   Type(2) is: 2   Length is: 4                     | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol:                                Fltcol2: _                          |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Inquire
+%% MENU:   Select  Save  Inquire  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Inquire"
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol:                                Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Datatype(+/-31) is: -31   Type(2) is: 2   Length is: 4                     | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol:                                Fltcol2: _                          |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Inquire`CR'`CR'`TAB'`ESC'
+<<
+
+%% MENU RESPONSE: Inquire
+%% MENU:   Select  Save  Inquire  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Inquire"
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol:                                Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Datatype(+/-31) is: -31   Type(2) is: 2   Length is: 8                     | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol:                                Fltcol2:                           |
+|   Fltcol104: _                              Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Inquire
+%% MENU:   Select  Save  Inquire  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Inquire"
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol:                                Fltcol2:                           |
+|   Fltcol104:                               Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Datatype(+/-31) is: -31   Type(2) is: 2   Length is: 8                     | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                               FLOAT-N-TABLE Form                               |
+|                                                                                |
+|      Intcol:                                Fltcol2:                           |
+|   Fltcol104: _                              Fltcol20:                           |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Select  Save  Inquire  Exit                                                   |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Exit`CR'
+<<
+
+%% MENU RESPONSE: Exit
+%% MENU:   Select  Save  Inquire  Exit
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Exit"
+>>
+? delobj SEPPARAMDB -form jla03 
+<<
+INGRES DELOBJ Copyright (c) 1985, 1993 Ingres Corporation
+Deleting form jla03 with owner testenv from database...
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jla03 with owner testenv from database...
+
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jla03 with owner testenv from database...
+
+>>
+<<
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jla03 with owner testenv from database...
+
+>>
+? delete jla03.o 
+<<
+~
+>>
+? delete jla03.obj 
+<<
+~
+>>
+? delete jla03.c 
+<<
+~
+>>
+? delete jla03.exe 
+<<
+~
+>>
+
+
+Ending at: Wed Mar 12 13:30:23 1997

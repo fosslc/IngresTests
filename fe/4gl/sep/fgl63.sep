@@ -1,0 +1,2041 @@
+/*
+	Test Name: pna07.sep
+	Time: Thu Aug 16 09:48:19 1990
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : pna07
+	Module  : 4gl
+	Filename: pna07.sep
+	Purpose	: Confirmatory cursory test of TableField operations.
+	Input Files  : (none)
+	Output Files : (none)
+	Database     : SEPPARAMDB
+	Tables       : pna07_price
+	Synopsis     : The 4gl initialization script creates and populates the
+		       table.
+                       Create application pna07, with 1 user frame that does
+                       a variety of operations on a tablefield. Run the
+                       application; clean up and exit.
+
+        NOTE: This is a remake of KellyP's pna07. Changes were made for 6.4
+              compatibility and for portability.
+
+	History: 16-Aug-1990	Created			www
+		  26-jul-1991   (dufour) Removed table drops and creates
+				required for initialization to a separate 
+				initilization script in basis/fe.
+                 17-nov-1993   (judi)  Replace the canon for 'go' with an
+			       ignore canon.  1.  go is not being tested in
+			       this test.  2.  the diff caused by the re			       compiling.... msg will -
+be eliminated.
+			       Also update the synopsis to remove the comments
+			       about the table creation as this is no longer
+			       occurring in this test.
+			       Accept a canon for (u`CR'1`CR'`ESC') which was
+			       ignored and should not have been.
+          17-Nov-1993	(Author)
+                  06-Jan-1995   changed deleter to delobj and edit into
+                                correct format.                 (QA)
+          04-Dec-1995	(Author)
+	  11-Apr-1996   (clate01)
+			Modified canons for Windows NT
+          7-Aug-1996	(Author)
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -application pna07 
+<<
+~
+>>
+? delobj SEPPARAMDB -form pna07uf1 
+<<
+~
+>>
+? fill pna07uf1.osq 
+!!
+initialize ( h_state = smallint, h_row = varchar(6), 
+h_saved = smallint, h_changed = smallint, h_prompt = varchar(1),
+h_choice = varchar(6), h_selected = varchar(1)  ) =
+{
+  message 'Enter a Vendor Number and then select QUERY ITEM';
+  sleep 3;
+
+  h_selected = 'n';
+  h_changed = 0; /* flag to indicate that there were changes to the table */
+  h_saved = 0;  /* flag to indicate whether the changes have been saved or not */
+
+  while h_selected != 'y' do
+    h_choice = prompt 'Enter desired mode :r(ead), u(update), f(ill)'
+      with style = popup;
+    if h_choice like 'r%' then
+      inittable pricetbl read;
+      message 'User cannot modify or add rows on the table...';
+      sleep 2;
+      h_selected = 'y';
+    elseif h_choice like 'u%' then
+      inittable pricetbl update;
+      message 'User can modify but NOT add rows on the table...';
+      sleep 2;
+      h_selected = 'y';
+    elseif h_choice like 'f%' then
+      inittable pricetbl fill;
+      message 'User can modify or add rows on the table...';
+      sleep 2;
+      h_selected = 'y';
+    endif;
+  endwhile;
+}
+
+'Query' =
+{
+  commit;
+  set lockmode on pna07_price where readlock = exclusive;
+  pricetbl = select partno, vendorno, catno, price from pna07_price
+            where vendorno = :vendorno;
+  commit;
+  resume field pricetbl.partno;
+}
+
+'Insert'=
+{
+  insertrow pricetbl ( vendorno = :vendorno );
+  h_changed = 1;
+}
+
+'DeleteRow' =
+{
+  deleterow pricetbl;
+  h_changed = 1;
+}
+
+'ClearRow' =
+{
+  clearrow pricetbl;
+  h_changed = 1;
+}
+
+'InsertAfter' =
+{
+  h_row = prompt 'Enter the row you want to insert the new line after: '
+    with style = popup;
+  insertrow pricetbl[int2(h_row)];
+  h_changed = 1;
+}
+
+'DeleteRow#' =
+{
+  h_row = prompt 'Enter the row you want to insert the new line after: '
+    with style = popup;
+  deleterow pricetbl[int2(h_row)];
+  h_changed = 1;
+}
+
+'IncPrice' =
+{
+  h_changed = 1;
+  unloadtable pricetbl 
+  {
+    pricetbl.price = :pricetbl.price * 1.5;
+  }
+  
+}
+
+'ClearPrice' =
+{
+  h_row = prompt 'Enter the row you want to clear the price: ' 
+    with style = popup;
+  clearrow pricetbl[int2(h_row)] (price);
+  h_changed = 1;
+}
+
+'Save' =
+{
+  h_saved = 1;
+  unloadtable pricetbl ( h_state = _state )
+  {
+    if h_state = 2 then
+      message 'Row unchanged';
+      sleep 2;
+    elseif h_state = 1 then
+      repeated insert into pna07_price(partno, vendorno, catno, price )
+        values (:pricetbl.partno, :vendorno, :pricetbl.catno, :pricetbl.price );
+      message 'Row added';
+    elseif h_state = 3 then
+      repeated update pna07_price
+        set price = :pricetbl.price,
+        catno = :pricetbl.catno
+        where vendorno = :pricetbl.vendorno
+        and partno = :pricetbl.partno;
+      message 'Row changed';
+    elseif h_state = 4 then
+      repeated delete from pna07_price 
+        where pna07_price.partno = :pricetbl.partno
+        and pna07_price.vendorno = :pricetbl.vendorno;
+      message 'Row deleted';
+    endif;
+  };
+  rollback;
+  message 'Transaction rolled back to restore prev condition...';
+  clear field all;
+  resume field pricetbl.partno;
+
+}
+
+'End', key frskey3 =
+{
+  if h_changed = 1 and h_saved = 0 then
+    h_prompt = 
+      prompt 'Changes have not been saved. Do you want to end anyhow (y/n) ?';
+    if h_prompt = 'y' then
+      return;
+    endif;
+  else
+    return;
+  endif;
+}
+!!
+? fill pna07.frm 
+!!
+COPYFORM:	6.4	1990_08_17 00:09:24 GMT  
+FORM:	pna07uf1		
+	80	23	0	0	2	0	0	8	0	0	0	0	0	0	0	6
+FIELD:
+	0	vendorno	-30	3	0	6	1	22	0	0	6	0	16	Vendor Number :	0	0	0	0	0	0	0		-i6			0	0
+	1	pricetbl	0	3	0	4	7	46	2	0	1	3	0		1	1	0	1073741857	0	0	0					1	1
+	0	partno	-30	5	0	10	1	11	0	1	10	3	1	Part Number	1	1	0	0	0	0	0		-i10		pricetbl.partn-
+o > 0	2	2
+	1	vendorno	-30	5	0	10	1	13	0	13	10	3	13	Vendor Number	13	1	0	0	0	0	0		-i10	Vendor #-
+ cannot be 0	pricetbl.vendorno > 0	2	3
+	2	catno	-21	9	0	6	1	8	0	27	6	3	27	Category	27	1	0	0	0	0	0		c6			2	4
+	3	price	-5	9	0	9	1	9	0	36	9	3	36	Price	36	1	0	0	0	0	0		-"$$,$$$.zz"	Price cannot ex-
+ceed $10,000		2	5
+TRIM:
+!!
+? copyform -s -i SEPPARAMDB pna07.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+? abf SEPPARAMDB 
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ create`CR'pna07`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`ESC'
+<<
+~
+>>
+^^ select`CR'pna07uf1`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ compile`CR'`ESC'
+<<
+~
+>>
+^^ go`CR'
+<<
+~
+>>
+^^ r`CR'1`ESC'
+<<
+
+%% User cannot modify or add rows on the table...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : _                                                                |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Vendor Number :
+##
+__________________________________________________________________________________
+|Vendor Number : 1_                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% User cannot modify or add rows on the table...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : _                                                                |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Vendor Number :
+##
+__________________________________________________________________________________
+|Vendor Number : 1_                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+>>
+^^ query`CR'6h`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_1          |1            |One     |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Not a valid command for BROWSE mode.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Not a valid command for BROWSE mode.                                      
+
+%%   You are currently in BROWSE mode.  This means that you may only move the
+
+%% cursor within and between fields.  You may NOT modify or enter values in  
+
+%% fields.  Your last command either tried to change a field value or was a  
+
+%% command not allowed in BROWSE mode.  Please try again. (E_FT003B)         
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_1          |1            |One     |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Not a valid command for BROWSE mode.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Not a valid command for BROWSE mode.                                      
+
+%%   You are currently in BROWSE mode.  This means that you may only move the
+
+%% cursor within and between fields.  You may NOT modify or enter values in  
+
+%% fields.  Your last command either tried to change a field value or was a  
+
+%% command not allowed in BROWSE mode.  Please try again. (E_FT003B)         
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% MENU KEY selected
+>>
+^^ delete`CR'`CR'deleterow`CR'`ESC'
+<<
+
+%% MENU RESPONSE: delete
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Input "delete" is an ambiguous prefix.  The ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% MENU RESPONSE: DeleteRow
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "DeleteRow"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+||4          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: delete
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Input "delete" is an ambiguous prefix.  The ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% MENU RESPONSE: DeleteRow
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "DeleteRow"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+||4          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ deleterow#`CR'3`CR'`ESC'
+<<
+
+%% MENU RESPONSE: DeleteRow#
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "DeleteRow#"
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+||4          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Enter the row you want to insert the new line after:                       | |
+| |                                                        _                    | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+||5          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: DeleteRow#
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "DeleteRow#"
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+||4          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Enter the row you want to insert the new line after:                       | |
+| |                                                        _                    | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+||5          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ incprice`CR'`ESC'
+<<
+
+%% MENU RESPONSE: IncPrice
+%% MENU: <  DeleteRow#  IncPrice  ClearPrice  Save  End
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "IncPrice"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_2          |1            |Two     |$8.93    |                                  |
+||3          |1            |One     |$8.93    |                                  |
+||5          |1            |One     |$8.93    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|<  DeleteRow#  IncPrice  ClearPrice  Save  End                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: IncPrice
+%% MENU: <  DeleteRow#  IncPrice  ClearPrice  Save  End
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "IncPrice"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_2          |1            |Two     |$8.93    |                                  |
+||3          |1            |One     |$8.93    |                                  |
+||5          |1            |One     |$8.93    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|<  DeleteRow#  IncPrice  ClearPrice  Save  End                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ clearprice`CR'3`CR'`ESC'
+<<
+
+%% MENU RESPONSE: ClearPrice
+%% MENU: <  DeleteRow#  IncPrice  ClearPrice  Save  End
+%% MENU AT POSITION `7' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `7' is "ClearPrice"
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||2          |1            |Two     |$8.93    |                                  |
+||3          |1            |One     |$8.93    |                                  |
+||5          |1            |One     |$8.93    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Enter the row you want to clear the price:                                 | |
+| |                                                        _                    | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_2          |1            |Two     |$8.93    |                                  |
+||3          |1            |One     |$8.93    |                                  |
+||5          |1            |One     |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|<  DeleteRow#  IncPrice  ClearPrice  Save  End                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: ClearPrice
+%% MENU: <  DeleteRow#  IncPrice  ClearPrice  Save  End
+%% MENU AT POSITION `7' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `7' is "ClearPrice"
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||2          |1            |Two     |$8.93    |                                  |
+||3          |1            |One     |$8.93    |                                  |
+||5          |1            |One     |$8.93    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Enter the row you want to clear the price:                                 | |
+| |                                                        _                    | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_2          |1            |Two     |$8.93    |                                  |
+||3          |1            |One     |$8.93    |                                  |
+||5          |1            |One     |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|<  DeleteRow#  IncPrice  ClearPrice  Save  End                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ query`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_1          |1            |One     |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_1          |1            |One     |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'y`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ go`CR'
+<<
+~
+>>
+^^ u`CR'1`CR'`ESC'
+<<
+
+%% User can modify but NOT add rows on the table...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : _                                                                |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Vendor Number :
+##
+__________________________________________________________________________________
+|Vendor Number : 1_                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_           |             |        |         |                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% User can modify but NOT add rows on the table...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : _                                                                |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Vendor Number :
+##
+__________________________________________________________________________________
+|Vendor Number : 1_                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_           |             |        |         |                                  |
+||           |             |        |         |                                  |
+||           |             |        |         |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ query`CR'99`CR'1`CR'nine`ESC'
+<<
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_1          |1            |One     |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Part Number
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99_         |1            |One     |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Vendor Number
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99         |1_            |One     |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Category
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99         |1            |nine_    |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||_1          |1            |One     |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Part Number
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99_         |1            |One     |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Vendor Number
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99         |1_            |One     |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Category
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99         |1            |nine_    |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+>>
+^^ insert`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Insert
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Insert"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99         |1            |nine    |$5.95    |                                  |
+||_           |1            |        |         |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Insert
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Insert"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99         |1            |nine    |$5.95    |                                  |
+||_           |1            |        |         |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ deleterow`CR'`ESC'
+<<
+
+%% MENU RESPONSE: DeleteRow
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "DeleteRow"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99         |1            |nine    |$5.95    |                                  |
+||_2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: DeleteRow
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "DeleteRow"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99         |1            |nine    |$5.95    |                                  |
+||_2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ deleterow#`CR'1`CR'`ESC'
+<<
+
+%% MENU RESPONSE: DeleteRow#
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "DeleteRow#"
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99         |1            |nine    |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Enter the row you want to insert the new line after:                       | |
+| |                                                        _                    | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||_3          |1            |One     |$5.95    |                                  |
+||4          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: DeleteRow#
+%% MENU:   Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "DeleteRow#"
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||99         |1            |nine    |$5.95    |                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Enter the row you want to insert the new line after:                       | |
+| |                                                        _                    | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||_3          |1            |One     |$5.95    |                                  |
+||4          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  Insert  DeleteRow  ClearRow  InsertAfter  DeleteRow#  >                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ clearprice`CR'2`CR'`ESC'
+<<
+
+%% MENU RESPONSE: ClearPrice
+%% MENU: <  DeleteRow#  IncPrice  ClearPrice  Save  End
+%% MENU AT POSITION `7' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `7' is "ClearPrice"
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+||4          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Enter the row you want to clear the price:                                 | |
+| |                                                        _                    | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||_3          |1            |One     |         |                                  |
+||4          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|<  DeleteRow#  IncPrice  ClearPrice  Save  End                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: ClearPrice
+%% MENU: <  DeleteRow#  IncPrice  ClearPrice  Save  End
+%% MENU AT POSITION `7' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `7' is "ClearPrice"
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||3          |1            |One     |$5.95    |                                  |
+||4          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | Enter the row you want to clear the price:                                 | |
+| |                                                        _                    | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendor Number : 1                                                               |
+|                                                                                |
+|+--------------------------------------------+                                  |
+||Part Number|Vendor Number|Category|Price    |                                  |
+||-----------+-------------+--------+---------|                                  |
+||2          |1            |Two     |$5.95    |                                  |
+||_3          |1            |One     |         |                                  |
+||4          |1            |One     |$5.95    |                                  |
+|+--------------------------------------------+                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|<  DeleteRow#  IncPrice  ClearPrice  Save  End                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ incprice`CR'`ESC'
+<<
+~
+>>
+^^ save`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'
+<<
+~
+>>
+? delobj SEPPARAMDB -application pna07 
+<<
+~
+>>
+? delobj SEPPARAMDB -form pna07uf1 
+<<
+~
+>>
+
+
+Ending at: Tue Aug 27 15:39:00 1996

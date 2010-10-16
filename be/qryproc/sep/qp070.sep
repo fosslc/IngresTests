@@ -1,0 +1,399 @@
+/*
+	Test Name: eea28.sep
+	Time: 
+	User Name: testenv
+ 
+	Test ID : eea28
+	Module  : cursors
+	Filename: eea28.sep
+	Purpose	: To test the a user can only update through a cursor
+		defined on another users table, the columns on which 
+		he has update privs. Cursor is not opened in update,
+		or read mode.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : eea28_table1
+	Synopsis     : Create a table as the initial user, switch to
+		another user and declare a cursor for select of
+		the initial user's table. This cursor will be opened
+		in an implicit update mode because the cursor was 
+		declared without a FOR UPDATE or READONLY clause.
+		First try to update a column that the user doesn't
+		have update priviledge on. Then try to update 2 columns,
+		and the user only has update priv on 1. Last, update the
+		table using the cursor and the columns that the user
+		does have update priviledge on.
+
+	History	: 8-Dec-1993 (camacho) created from script that 
+			andre created.
+		  7-MAR-1997    (vissu01) Modified for NT
+		  25-March-1999  (kamra01) modified VPG_SZ to 8192	
+
+*/
+? fill eea28.sc 
+!!
+#include <stdio.h>
+
+main(argc, argv)
+int	argc;
+char	*argv[];
+{
+
+exec sql include sqlca;
+
+exec sql begin declare section;
+	int   v1, v2, v3, v4, v5, v6, cnt;
+	char  *dbname;
+exec sql end declare section;
+
+if (argc != 2)
+    {
+        printf("ERROR : program requires 1 arguments.");
+        printf(" %d arguments given\n", (argc - 1));
+        exit(-1);
+    }
+
+dbname = argv[1];
+
+/********* Connecting to database **********/
+
+exec sql whenever sqlerror stop;
+exec sql connect :dbname;
+exec sql whenever sqlerror call sqlprint;
+
+/********* Creating Objects ****************/
+
+exec sql drop eea28_table1;
+
+exec sql create table eea28_table1(c1 i, c2 i, c3 i, c4 i, c5 i) with page_size=8192;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Failure trying to create table eea28_table1\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+    
+exec sql grant select, update (c1,c3,c5) on eea28_table1 to eea28_user2;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Failure trying to GRANT privileges on eea28_table1\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+
+/********** Populating Table eea28_table1 *************/
+
+exec sql insert into eea28_table1 values(1,2,3,4,5);
+exec sql insert into eea28_table1 values(11,12,13,14,15);
+exec sql insert into eea28_table1 values(21,22,23,24,25);
+exec sql insert into eea28_table1 values(31,32,33,34,35);
+exec sql insert into eea28_table1 values(41,42,43,44,45);
+
+exec sql select count(*) into :cnt from eea28_table1;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Error trying to count rows in eea28_table1\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+    else if (cnt != 5)
+    {
+	printf("eea28_table1 contains %d rows - should be 5\n", cnt);
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+
+exec sql commit;
+
+/*******************************************************
+** Declare cursor that will be used to read rows of eea28_table1 in a
+** certain order to minimize test diffs
+*******************************************************/
+exec sql declare ordered cursor for
+	select * from eea28_table1 order by c1,c2,c3,c4,c5;
+
+/* Display contents of the table before we start messing with it */
+
+printf("\nDumping table eea28_table1 \n");
+printf("------------------------------------\n");
+printf("C1\tC2\tC3\tC4\tC5\n");
+printf("------------------------------------\n");
+
+exec sql open ordered;
+
+for (cnt = 0; cnt < 5; cnt++)
+    {
+	exec sql fetch ordered into :v1, :v2, :v3, :v4, :v5;
+	if (sqlca.sqlcode < 0)
+	{
+	    printf("Failure trying to read eea28_table1 using a cursor\n");
+	    printf("sqlcode = %d; skip the rest of the tests\n", sqlca.sqlcode);
+	    exit(-1);
+	}
+	else if (sqlca.sqlcode==100)
+	{
+	    printf("Ran out of rows to read after ");
+            printf("row # %d; will continue\n",	cnt);
+	    break;
+	}
+	
+	printf("%d\t%d\t%d\t%d\t%d\n", v1, v2, v3, v4, v5);
+    }
+exec sql close ordered;
+
+	
+/*******************************************************
+** Test Case:
+**	Verify that having declared a cursor without specifying FOR UPDATE,
+**	FOR READONLY, or ORDER BY over a base table owned by another user,
+**	current user will be able to update only those columns of the table
+**	on which he/she posseses UPDATE privilege 
+*******************************************************/
+
+printf("\n\nEEA28:\n");
+
+exec sql commit;
+
+printf("\nSET SESSION AUTHORIZATION eea28_user2\n");
+exec sql SET SESSION AUTHORIZATION eea28_user2;
+
+exec sql declare cursor10 cursor for select c1 from eea28_table1;
+
+exec sql open cursor10;
+for (cnt = 0; cnt < 5; cnt++)
+{
+	exec sql fetch cursor10 into :v1;
+	if (sqlca.sqlcode < 0)
+	{
+	    printf("Failure trying to read eea28_table1 using a cursor\n");
+	    printf("sqlcode = %d; skip the rest of test 10\n", sqlca.sqlcode);
+	    break;
+	}
+	else if (sqlca.sqlcode==100)
+	{
+	    printf("Ran out of rows to read after row # %d;\n",cnt);
+	    printf("skip the rest of test 10\n");
+	    break;
+	}
+
+	printf("\n Cursor returned : %d\n\n",v1);
+
+	/*******************************************************
+	** Do the error cases only for the first two iterations
+	*******************************************************/
+	if (cnt < 2)
+	{
+	    /*******************************************************
+	    ** Try to update a column on which the current user lacks
+	    ** UPDATE privilege
+	    *******************************************************/
+	    printf("\n\n***\tTHIS WAS MEANT TO FAIL ***\n\n");
+	    exec sql update eea28_table1 set c2=c2+1
+		where current of cursor10;
+	    if (sqlca.sqlcode == 0)
+	    {
+		printf("ERROR:  We were able to update a column\n");
+		printf("on which the user lacked UPDATE privilege.\n");
+	    }
+
+	    /*******************************************************
+	    ** Next try to update two columns s.t. the user has UPDATE
+	    ** on only one of them
+	    *******************************************************/
+	    printf("\n\n***\tTHIS WAS MEANT TO FAIL ***\n\n");
+	    exec sql update eea28_table1 set c1=-c1,c2=-2*c2
+		where current of cursor10;
+	    if (sqlca.sqlcode == 0)
+	    {
+		printf("ERROR:  We were able to update a column on\n");
+                printf("which the user lacked UPDATE privilege along\n");
+                printf("with a column on which he has it\n");
+	    }
+	}
+	
+	/*******************************************************
+	** Finally, update columns on which the user possesses 
+	** UPDATE privilege.
+	*******************************************************/
+	exec sql update eea28_table1 set c1=-c1, c3=-3*c3, c5=-5*c5
+	    where current of cursor10;
+	if (sqlca.sqlcode < 0)
+	{
+	    printf("ERROR - We were unable to update columns \n");
+ 	    printf("even though the user possesses UPDATE on them.");
+	    printf(" sqlcode = %d\n", sqlca.sqlcode);
+	}
+    }
+    exec sql close cursor10;
+
+end_of_test10:
+
+printf("\nDumping table eea28_table1 \n");
+printf("------------------------------------\n");
+printf("C1\tC2\tC3\tC4\tC5\n");
+printf("------------------------------------\n");
+
+exec sql open ordered;
+
+for (cnt = 0; cnt < 5; cnt++)
+    {
+	exec sql fetch ordered into :v1, :v2, :v3, :v4, :v5;
+	if (sqlca.sqlcode < 0)
+	{
+	    printf("Failure trying to read eea28_table1 using a cursor\n");
+	    printf("sqlcode = %d; skip the rest of the tests\n", sqlca.sqlcode);
+	    exit(-1);
+	}
+	else if (sqlca.sqlcode==100)
+	{
+	    printf("Ran out of rows to read after ");
+            printf("row # %d; will continue\n",	cnt);
+	    break;
+	}
+
+	printf("%d\t%d\t%d\t%d\t%d\n", v1, v2, v3, v4, v5);
+    }
+exec sql close ordered;
+
+/****************************************************
+*
+*     ROLLING BACK TRANSACTION. Still need to drop
+*     table eea28_table1 to finish cleanup!
+*
+*****************************************************/
+
+    exec sql rollback;
+
+    exec sql whenever sqlerror continue;
+    exec sql drop eea28_table1;
+
+    exec sql commit;
+
+    printf("\n\nDisconnecting....\n\n");
+    exec sql disconnect;
+}
+!!
+? sepesqlc eea28.sc 
+<<
+ESQL eea28.sc:
+>>
+? sepcc eea28.c 
+<<
+>>
+<<
+eea28.c
+>>
+? seplnk eea28 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table eea28_table1;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run eea28.exe SEPPARAMDB 
+<<
+E_US0AC1 DROP: 'eea28_table1' does not exist or is not owned by you.
+    (Fri Jan 28 09:31:37 1994)
+
+Dumping table eea28_table1 
+------------------------------------
+C1	C2	C3	C4	C5
+------------------------------------
+1	2	3	4	5
+11	12	13	14	15
+21	22	23	24	25
+31	32	33	34	35
+41	42	43	44	45
+
+
+EEA28:
+
+SET SESSION AUTHORIZATION eea28_user2
+
+ Cursor returned : 1
+
+
+
+***	THIS WAS MEANT TO FAIL ***
+
+E_PS0403 UPDATE: column 'c2' of 'eea28_table1' may not be updated 
+    using cursor 'cursor10' because you lack privileges required 
+to update it.
+    (Fri Jan 28 09:31:38 1994)
+
+
+***	THIS WAS MEANT TO FAIL ***
+
+E_PS0403 UPDATE: column 'c2' of 'eea28_table1' may not be updated 
+    using cursor 'cursor10' because you lack privileges required 
+to update it.
+    (Fri Jan 28 09:31:38 1994)
+
+ Cursor returned : 11
+
+
+
+***	THIS WAS MEANT TO FAIL ***
+
+E_PS0403 UPDATE: column 'c2' of 'eea28_table1' may not be updated 
+    using cursor 'cursor10' because you lack privileges required 
+to update it.
+    (Fri Jan 28 09:31:38 1994)
+
+
+***	THIS WAS MEANT TO FAIL ***
+
+E_PS0403 UPDATE: column 'c2' of 'eea28_table1' may not be updated 
+    using cursor 'cursor10' because you lack privileges required 
+to update it.
+    (Fri Jan 28 09:31:38 1994)
+
+ Cursor returned : 21
+
+
+ Cursor returned : 31
+
+
+ Cursor returned : 41
+
+
+Dumping table eea28_table1 
+------------------------------------
+C1	C2	C3	C4	C5
+------------------------------------
+-41	42	-129	44	-225
+-31	32	-99	34	-175
+-21	22	-69	24	-125
+-11	12	-39	14	-75
+-1	2	-9	4	-25
+
+
+Disconnecting....
+
+>>
+? delete eea28.exe 
+<<
+~
+>>
+? delete eea28.c 
+<<
+~
+>>
+? delete eea28.obj 
+<<
+~
+>>
+? delete eea28.o 
+<<
+~
+>>
+
+
+Ending at: Fri Jan 28 09:31:39 1994

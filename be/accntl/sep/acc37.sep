@@ -1,0 +1,456 @@
+/*
+Test Name: dba29
+Time: march 12th 15:10
+User Name: rch
+
+Test ID : dba29
+Module  :qrymod
+Filename:dba29.sep
+Purpose :tests inheritance of permits between groups users and roles
+Input Files :none
+Output Files:none
+Database    :SEPPARAMDB3
+Tables      :dba29_p1(a database procedure)
+Synopsis    :Grants execute privilege on a procedure to a group. Then checks
+		a) other group members get the privilege
+		b) non privileged user can't execute the procedure
+		c) the privileged user can assume a role id and still retain
+		   the privilege.
+	     
+	     Initialization test = dba00.sep
+
+
+History :Created by rch		Created: 3.12.90	Author :rch
+10-3-91	 rewritten to use driver program to make more portable by Troy Camacho
+23-Jan-92 (fredv)
+	dba29_group.sc was spelled wrong as dba29group.sc.  Corrected the typo
+	so that it won't produce cc errors.
+23-Jan-1992 (fredv)
+	Didn't catch all the typos last time. Fixed more.
+23-Jan-1992 (fredv)
+	Can't have '_' in the file name for portability reason. Removed
+	underscore from all file names.
+4-nov-1992 (Camacho)
+	Deleted out the compiling and linking of files : DBPH.SC and 
+	DBMISC.SC because they were not needed. Also moved the driver
+	files to a location under accntl rather than qryproc.
+13-Mar-1997 (vissu01) Modified for NT
+22-mar-1999     (yu$pe02) Hard code page size to 4K.
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,accntl,src,dbstub.h) dbstub.h 
+<<
+>>
+? cp @file(ing_tst,be,accntl,src,driverdb.c) driverdb.c 
+<<
+>>
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepcc driverdb.c 
+<<
+>>
+<<
+driverdb.c
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop procedure dba29_p1;\g
+<<
+~
+>>
+* create procedure dba29_p1 as
+<<
+>>
+* begin
+<<
+>>
+* 	message 'executing dba29_p1';
+<<
+>>
+* end;\p\g
+<<
+ create procedure dba29_p1 as
+ begin
+ 	message 'executing dba29_p1';
+ end;
+>>
+* grant execute
+<<
+>>
+* on procedure dba29_p1
+<<
+>>
+* to group pvusr3_group;\p\g
+<<
+ grant execute
+ on procedure dba29_p1
+ to group pvusr3_group;
+>>
+* \q
+<<
+>>
+? fill dba29group.sc 
+!!
+#define DBA29
+#include "dbstub.h"
+#include <stdio.h>
+
+exec sql begin declare section;
+extern char     db_name_str[32];
+exec sql end declare section;
+
+dba29()
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+    exec sql disconnect;
+    exec sql connect :db_name_str options='-Gpvusr3_group';
+    exec sql execute procedure dba29_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba29group.sc 
+<<
+ESQL dba29group.sc:
+>>
+? sepcc dba29group 
+<<
+>>
+<<
+dba29group.c
+>>
+? seplnk driver driverdb dba29group 
+<<
+>>
+? qasetuser pvusr2 run driver.exe SEPPARAMDRIVERDB -tdba29 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba29
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba29 XX
+
+MESSAGE 0: executing dba29_p1
+
+disconnecting with database...
+>>
+? fill dba29user.sc 
+!!
+#define DBA29
+
+#include "dbstub.h"
+
+#include <stdio.h>
+
+exec sql begin declare section;
+extern char     db_name_str[32];
+exec sql end declare section;
+
+dba29()
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+    exec sql disconnect;
+    exec sql connect :db_name_str;
+    exec sql execute procedure dba29_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba29user 
+<<
+ESQL dba29user.sc:
+>>
+? sepcc dba29user
+<<
+>>
+<<
+dba29user.c
+>>
+? seplnk driver driverdb dba29user 
+<<
+>>
+? qasetuser pvusr3 run driver.exe SEPPARAMDRIVERDB -tdba29 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba29
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba29 XX
+
+E_US0D36 User has no permission to execute database procedure 'dba29_p1'.
+    (Thu Oct  3 13:23:31 1991)
+
+disconnecting with database...
+>>
+? fill dba29role.sc 
+!!
+#define DBA29
+
+#include "dbstub.h"
+
+#include <stdio.h>
+
+exec sql begin declare section;
+extern char     db_name_str[32];
+exec sql end declare section;
+
+dba29()
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+    exec sql disconnect;
+    exec sql connect :db_name_str options='-Rpvusr3_role','-Gpvusr3_group';
+    exec sql execute procedure dba29_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba29role 
+<<
+ESQL dba29role.sc:
+>>
+? sepcc dba29role
+<<
+>>
+<<
+dba29role.c
+>>
+? seplnk driver driverdb dba29role 
+<<
+>>
+? qasetuser pvusr3 run driver.exe SEPPARAMDRIVERDB -tdba29 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba29
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba29 XX
+
+MESSAGE 0: executing dba29_p1
+
+disconnecting with database...
+>>
+? fill dba29role2.sc 
+!!
+#define DBA29
+
+#include "dbstub.h"
+
+#include <stdio.h>
+
+exec sql begin declare section;
+extern char     db_name_str[32];
+exec sql end declare section;
+
+dba29()
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+    exec sql disconnect;
+    exec sql connect :db_name_str options='-Rpvusr3_role';
+    exec sql execute procedure dba29_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba29role2 
+<<
+ESQL dba29role2.sc:
+>>
+? sepcc dba29role2 
+<<
+>>
+<<
+dba29role2.c
+>>
+? seplnk driver driverdb dba29role2 
+<<
+>>
+? qasetuser pvusr2 run driver.exe SEPPARAMDRIVERDB -tdba29 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba29
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba29 XX
+
+E_US0D36 User has no permission to execute database procedure 'dba29_p1'.
+    (Thu Oct  3 13:30:17 1991)
+
+disconnecting with database...
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop procedure dba29_p1;\p\g
+<<
+/* SQL Startup File */
+ drop procedure dba29_p1;
+>>
+* \q
+<<
+>>
+? delete dba29group.c 
+<<
+~
+>>
+? delete dba29group.exe 
+<<
+~
+>>
+? delete dba29group.obj 
+<<
+~
+>>
+? delete dba29group.o 
+<<
+~
+>>
+? delete dba29role.c 
+<<
+~
+>>
+? delete dba29role.exe 
+<<
+~
+>>
+? delete dba29role.obj 
+<<
+~
+>>
+? delete dba29role.o 
+<<
+~
+>>
+? delete dba29role2.c 
+<<
+~
+>>
+? delete dba29role2.exe 
+<<
+~
+>>
+? delete dba29role2.obj 
+<<
+~
+>>
+? delete dba29role2.o 
+<<
+~
+>>
+? delete dba29user.c 
+<<
+~
+>>
+? delete dba29user.exe 
+<<
+~
+>>
+? delete dba29user.obj 
+<<
+~
+>>
+? delete dba29user.o 
+<<
+~
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete dbstub.h 
+<<
+~
+>>
+? delete driverdb.c 
+<<
+~
+>>
+? delete driverdb.o 
+<<
+~
+>>
+? delete driverdb.obj 
+<<
+~
+>>
+? delete dba27.c 
+<<
+~
+>>
+? delete dba27.o 
+<<
+~
+>>
+? delete dba27.obj 
+<<
+~
+>>
+
+
+Ending at: Thu Oct  3 13:30:30 1991

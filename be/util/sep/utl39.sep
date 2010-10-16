@@ -1,0 +1,261 @@
+/*
+Copyright (c) 2006 Ingres Corporation
+
+	Test Name: utl39.sep
+	Time: Tue Oct 16 14:17:27 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl39.sep
+	Module  : be/util
+	Filename: utl39.sep
+	Purpose	: To test new xml utilities(genxml, xmlimport), first available
+                  with Ingres 2.6/0106 and later releases.
+	Input Files  : utl39.in
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : utl39_table
+	Synopsis     : Test genxml and xmlimport a table with data types: date,
+                       money, float4, float8, decimal, and with null. Test 
+                       genxml -metadata_only flag. When this flag is specified,
+                       only the table structure is defined.
+
+ History: 16-Oct-2001	(wu$ca01)	Created
+          26-Apr-2002	(wu$ca01) Canonized the genxml/xmlimport output.
+           5-Aug-2002	(wu$ca01) Issue 11262617(bug 106091) resolved-remove
+                        comment from the History. Change the column definition
+                        float(8) to float8 and recanonize select query output
+                        due to space differences.
+           8-May-2003	(wu$ca01) Updated test due to new behavior('nl=d1' to
+                        'nl=d0nl'). Added a drop statement to clean out the
+                        database.
+          26-Mar-2004	(vande02) Correcting 'with null' syntax during table 
+			create which now properly gives error E_US07D7 when
+			'with null' is out side of the parenthesis of a column
+			list.  Fixed as of Ingres 3.  Added test case at the end
+			here to show when the syntax error should be received.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+          12-Jun-2006   (hanal04) create table statements are terminated
+                        with a GO statement not a semi-colon after change
+                        for bug 116045.
+          31-Oct-2006   (vande02) Updated data type date to ingresdate in the
+			XML output, brought back correct copyright and removed
+			SQL print syntax.
+*/
+? fill utl39.in 
+!!
+drop table utl39_table\g
+create table utl39_table
+(c1 date, c2 money, c3 float4, c4 float8, c5 decimal(6,2) with null)\g
+insert into utl39_table values('10-31-2001', 35999, 35.999, 123.900, 100.99)\g
+insert into utl39_table values('10-31-2001',40001,400.01, 99999.901, 399.01)\g
+insert into utl39_table values('10-31-2001', 45009, 4500.9, 0.009, 4444.20)\g
+insert into utl39_table values('10-31-2001', 199, 1.99, 1.999, 9.11)\g
+insert into utl39_table values('10-31-2001', NULL, NULL, NULL, NULL)\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i utl39.in 
+<<
+~
+>>
+* select * from utl39_table order by c2\g 
+<<
+
++-------------------------+--------------------+-----------+-----------+--------+
+|c1                       |c2                  |c3         |c4         |c5      |
++-------------------------+--------------------+-----------+-----------+--------+
+|31-oct-2001              |             $199.00|      1.990|      1.999|    9.11|
+|31-oct-2001              |           $35999.00|     35.999|    123.900|  100.99|
+|31-oct-2001              |           $40001.00|    400.010|  99999.901|  399.01|
+|31-oct-2001              |           $45009.00|   4500.900|      0.009| 4444.20|
+|31-oct-2001              |                    |           |           |        |
++-------------------------+--------------------+-----------+-----------+--------+
+(5 rows)
+>>
+* \q 
+<<
+
+>>
+? genxml SEPPARAMDB utl39_table 
+<<
+INGRES Genxml Copyright 2001 Ingres Corporation
+Unload directory is '/home/install/CW/wuca01/xml'.
+Reload directory is '/home/install/CW/wuca01/xml'.
+There is one table owned by user 'testenv'.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table utl39_table\g 
+<<
+
+>>
+* \q 
+<<
+
+>>
+? xmlimport SEPPARAMDB xmlout.xml 
+<<
+INGRES Impxml Copyright 2001 Ingres Corporation
+Unload directory is '/tmp/7d4'.
+Reload directory is '/tmp/7d4'.
+INGRES TERMINAL MONITOR Copyright 2001 Ingres Corporation
+/* SQL Startup File */
+create table utl39_table(
+	c1 ingresdate,
+	c2 money,
+	c3 f4,
+	c4 float,
+	c5 decimal(6,2)
+)
+with duplicates,
+nojournaling,
+location = (ii_database)
+modify utl39_table to heap
+(0 rows)
+copy utl39_table(
+	c1= c0tab with null(']^NULL^['),
+	c2= c0tab with null(']^NULL^['),
+	c3= c0tab with null(']^NULL^['),
+	c4= c0tab with null(']^NULL^['),
+	c5= varchar(0)nl with null(']^NULL^['),
+	nl= d0nl)
+from '/tmp/7d4/utl39_table.tes'
+with row_estimate = 5
+(5 rows)
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from utl39_table order by c2\g 
+<<
+
++-------------------------+--------------------+-----------+-----------+--------+
+|c1                       |c2                  |c3         |c4         |c5      |
++-------------------------+--------------------+-----------+-----------+--------+
+|31-oct-2001              |             $199.00|      1.990|      1.999|    9.11|
+|31-oct-2001              |           $35999.00|     35.999|    123.900|  100.99|
+|31-oct-2001              |           $40001.00|    400.010|  99999.901|  399.01|
+|31-oct-2001              |           $45009.00|   4500.900|      0.009| 4444.20|
+|31-oct-2001              |                    |           |           |        |
++-------------------------+--------------------+-----------+-----------+--------+
+(5 rows)
+>>
+* \q 
+<<
+
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i utl39.in
+<<
+~
+>>
+* \q
+<<
+
+>>
+? genxml SEPPARAMDB -metadata_only utl39_table 
+<<
+INGRES Genxml Copyright 2001 Ingres Corporation
+Unload directory is '/home/install/CW/wuca01/xml'.
+Reload directory is '/home/install/CW/wuca01/xml'.
+There is one table owned by user 'testenv'.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table utl39_table\g
+<<
+
+>>
+* \q
+<<
+
+>>
+? xmlimport SEPPARAMDB xmlout.xml 
+<<
+INGRES Impxml Copyright 2001 Ingres Corporation
+Unload directory is '/tmp/7e6'.
+Reload directory is '/tmp/7e6'.
+INGRES TERMINAL MONITOR Copyright 2001 Ingres Corporation
+/* SQL Startup File */
+create table utl39_table(
+	c1 ingresdate,
+	c2 money,
+	c3 f4,
+	c4 float,
+	c5 decimal(6,2)
+)
+with duplicates,
+nojournaling,
+location = (ii_database)
+modify utl39_table to heap
+(0 rows)
+copy utl39_table(
+	c1= c0tab with null(']^NULL^['),
+	c2= c0tab with null(']^NULL^['),
+	c3= c0tab with null(']^NULL^['),
+	c4= c0tab with null(']^NULL^['),
+	c5= varchar(0)nl with null(']^NULL^['),
+	nl= d0nl)
+from '/tmp/7e6/utl39_table.tes'
+with row_estimate = 5
+(0 rows)
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+<<
+/* SQL Startup File */
+ select * from utl39_table
+
++-------------------------+--------------------+-----------+-----------+--------+
+|c1                       |c2                  |c3         |c4         |c5      |
++-------------------------+--------------------+-----------+-----------+--------+
++-------------------------+--------------------+-----------+-----------+--------+
+(0 rows)
+>>
+* create table utl39_error_table (c1 int, col2 char) with null\g
+<<
+E_US07D7 CREATE TABLE: 'null' is either an invalid option or the syntax of
+    the WITH subclause is invalid. 
+    The valid keywords for this type of subclause are: 
+    [NO]DUPLICATES, [NO]JOURNALING, [NO]COMPRESSION.
+    (Fri Mar 26 13:12:58 2004)
+
+>>
+* drop table utl39_table\g
+<<
+
+>>
+* drop table utl39_error_table\g
+<<
+E_US0AC1 DROP: 'utl39_error_table' does not exist or is not owned by you.
+    (Fri Mar 26 13:13:15 2004)
+
+>>
+* \q
+<<
+
+>>
+? delete ingres.dtd 
+<<
+file was deleted
+>>
+? delete xmlout.xml 
+<<
+file was deleted
+>>
+
+
+Ending at: Fri Mar 26 13:13:25 2004

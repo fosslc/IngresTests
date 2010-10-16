@@ -1,0 +1,228 @@
+/*
+	Test Name: dtu10.sep
+	Time: Fri Nov  9 23:36:39 2001
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : dtu10.sep
+	Module  : be/datatypes
+	Filename: dtu10.sep
+	Purpose	: To test the new unicode data types first available with
+                  II 2.6/0106 and later releases.
+	Input Files  : dtu10.sc
+	Output Files : dtu10.exe
+	Database     : unidb
+	Tables       : test_nchar, test_nchar2, test_nchar3, test_nvarchar,
+                       test_nvarchar2, test_lnvarchar, test_lnvarchar2
+	Synopsis     : This test will select tables using database procedures
+                       on unicode columns.
+
+ History:  9-Nov-2001	(wu$ca01)	Created
+          28-May-2002   (sarjo01) Change %ls to %S, modularize canon.
+*/
+? fill dtu10.sc 
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i, i1, i2, rowcount;
+  wchar_t wc1[9], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, k2;
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "=======================================================\n";
+
+void print_header(char *s)
+{
+   printf("%s\n%s", s, ln);
+}
+
+void print_trailer()
+{
+   printf(ln);
+}
+
+int main(int argc, char *argv[])
+{
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   EXEC SQL select max(col1) into :rowcount from test_nchar; 
+
+   exec sql create procedure nchar_proc1
+            (keyval integer, ncharval nchar(8),
+             nvarcharval nvarchar(64))
+        as declare 
+           nc1  nchar(8);
+           nvc1 nvarchar(64);
+        begin
+           select col2 into :nc1 from test_nchar
+              where col1 = :keyval;
+           ncharval = nc1;
+           select col2 into :nvc1 from test_nvarchar
+              where col1 = :keyval;
+           nvarcharval = nvc1; 
+        end;
+
+   exec sql create procedure nchar_proc2
+            result row (nvarchar(8))
+        as declare
+          i1    integer;
+          nvc1  nvarchar(8);
+        begin
+           for select col1, col2 into :i1, :nvc1
+               from test_nvarchar order by col1 do
+              return row(:nvc1);
+           endfor;
+        end;
+
+   exec sql create procedure nchar_proc3
+            result row (nchar(8))
+        as declare
+          i1    integer;
+          nc1  nchar(8);
+        begin
+           for select col1, col2 into :i1, :nc1
+               from test_nchar order by col1 do
+              return row(:nc1);
+           endfor;
+        end;
+
+   print_header("Execute proc1...");
+   for (i1 = 0; i1 <= rowcount; i1++)
+   {
+      exec sql execute procedure nchar_proc1
+               (keyval = :i1,
+                ncharval = byref(:wc1),
+                nvarcharval = byref(:nv1));
+      UC_TERM(nv1);
+      printf("|%3d|%S|%S|\n", i1, wc1, nv1.text);
+   }
+   print_trailer();
+
+   print_header("Execute proc2...");
+   exec sql execute procedure nchar_proc2
+                    result row (:nv1);
+   exec sql begin;
+      UC_TERM(nv1);
+      printf("|%S|\n", nv1.text);
+   exec sql end;
+   print_trailer();
+
+   print_header("Execute proc3...");
+   exec sql execute procedure nchar_proc3
+                    result row (:wc1);
+   exec sql begin;
+      printf("|%S|\n", wc1);
+   exec sql end;
+   print_trailer();
+
+   exec sql drop procedure nchar_proc1;
+   exec sql drop procedure nchar_proc2;
+   exec sql drop procedure nchar_proc3;
+
+   printf("Operation complete\n");
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu10.sc 
+<<
+~
+>>
+? sepcc dtu10 
+<<
+~
+>>
+? seplnk dtu10 
+<<
+~
+>>
+? run dtu10.exe SEPPARAMDB3 
+<<
+Execute proc1...
+=======================================================
+|  0|ABC     |ABC|
+|  1|STUVWXYZ|STUVWXYZ|
+|  2|DEF     |DEF|
+|  3|stuvwxyz|stuvwxyz|
+|  4|GHI     |GHI|
+|  5|LMNOPQRS|LMNOPQRS|
+|  6|ABCDE   |ABCDE   |
+|  7|Z       |Z   |
+=======================================================
+Execute proc2...
+=======================================================
+|ABC|
+|ABC|
+|STUVWXYZ|
+|STUVWXYZ|
+|DEF|
+|DEF|
+|stuvwxyz|
+|stuvwxyz|
+|GHI|
+|GHI|
+|LMNOPQRS|
+|LMNOPQRS|
+|ABCDE   |
+|ABCDE   |
+|Z   |
+|Z   |
+=======================================================
+Execute proc3...
+=======================================================
+|ABC     |
+|ABC     |
+|STUVWXYZ|
+|STUVWXYZ|
+|DEF     |
+|DEF     |
+|stuvwxyz|
+|stuvwxyz|
+|GHI     |
+|GHI     |
+|LMNOPQRS|
+|LMNOPQRS|
+|ABCDE   |
+|ABCDE   |
+|Z       |
+|Z       |
+=======================================================
+Operation complete
+>>
+? delete dtu10.c 
+<<
+~
+>>
+? delete dtu10.o 
+<<
+~
+>>
+? delete dtu10.obj 
+<<
+~
+>>
+? delete dtu10.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Nov  9 23:37:43 2001

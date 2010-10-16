@@ -1,0 +1,476 @@
+/*
+        Test Name    : eea11.sep
+        User Name    : testenv
+        Test ID      : eea11.sep
+        Module       : 
+        Filename     : eea11.sep
+        Purpose      : Test cursors for update in a MQT
+        Input Files  : none
+        Output Files : none
+        Database     : SEPPARAMDB
+        Tables       : emp, dept, bldg.
+        Synopsis     : Start a transaction. Update the tables by use of
+			cursors. End transaction.
+        History      : written into a sep test 7/91 by Troy Camacho from
+                       original equel test:
+                                tst_qatest:[equel.eqfunc.src]rf003a.qc
+                       synonymous to eea03.sep.
+			7-MAR-1997 (vissu01) Modified for NT
+		        25-March-1999  (kamra01) modified VPG_SZ to 8192
+*/
+? fill eea11a.dat 
+!!
+    6Aitken	  50000.000	    5sales	    2NE	    8Verducci	   1112-mar-1947	     2
+
+    7Cameron	  35000.000	    8tech sup	    2SE	    6Shigio	   1115-aug-1960	     0
+
+    5Clark	  40000.000	    5sales	    2NC	    8Verducci	   1118-nov-1949	     1
+
+    5Curan	  30000.000	    8tech sup	    2NW	    6Shigio	   1120-aug-1959	     0
+
+    5Curry	  32000.000	    8tech sup	    2NW	    6Shigio	   1130-nov-1955	     3
+
+    6Gordon	  27000.000	    8tech sup	    2NC	    6Shigio	   1123-may-1963	     0
+
+    5Green	  26000.000	    6market	    2NW	    7McTigue	   1119-dec-1961	     0
+
+    7Gregori	  31000.000	    5sales	    2NW	    8Verducci	   1121-oct-1949	     2
+
+    8Kreseski	  24000.000	    8tech sup	    2NC	    6Shigio	   1111-sep-1955	     0
+
+    6Mandic	  43000.000	    5sales	    2SE	    8Verducci	   1110-jul-1964	     0
+
+    7McTigue	  41000.000	    5sales	    2NW	    8Verducci	   11 9-apr-1953	     1
+
+    4Ming	  22000.000	    8tech sup	    2SE	    6Shigio	   11 4-may-1956	     1
+
+    5Ramos	  30000.000	    8tech sup	    2NW	    6Shigio	   1121-jan-1941	     0
+
+    8Robinson	  80000.000	    5sales	    2NE	    8Verducci	   1120-nov-1952	     1
+
+    5Sabel	  21000.000	    8tech sup	    2SE	    6Shigio	   11 8-jan-1958	     0
+
+    6Saxena	  22000.000	    8tech sup	    2NC	    6Shigio	   11 8-may-1950	     0
+
+    6Shigio	  28000.000	    5sales	    2SE	    8Verducci	   11 9-jul-1948	     3
+
+    8Stannich	  33000.000	    6market	    2NW	    7McTigue	   1113-dec-1961	     0
+
+    5Stein	  40000.000	    5sales	    2NE	    8Verducci	   1125-dec-1952	     1
+
+    8Sullivan	  35000.000	    8tech sup	    2NW	    6Shigio	   1110-oct-1960	     1
+
+    8Verducci	  55000.000	    5admin	    2NW	    0	   1125-dec-1958	     2
+
+    9Zimmerman	  25000.000	    8tech sup	    2NE	    6Shigio	   1128-aug-1962	     0
+
+    7DiTallo	  65000.000	    8Contract	    3unk	    8Robinson	   1102-sep-1955	     -
+0
+
+    7Herbert	  35000.000	    7banking	    0	    9Emprinham	   1117-mar-1945	     0
+
+!!
+? fill eea11b.dat 
+!!
+admin   NW                 0.00C  2     4
+market  NW              9200.00A  1     2
+sales   NC            120000.00A  2     1
+sales   NE                 0.00D 18     4
+sales   NW            200000.00A  2     1
+sales   SC             95000.00E  1     1
+sales   SE            175000.00D 18     1
+tech supNC              5000.00C  2     3
+tech supNE             20000.00D 17     2
+tech supNW                 0.00B  1     1
+tech supSE                 0.00D 19     1
+!!
+? fill eea11c.dat 
+!!
+    1A	   191000 University Ave	    8Berkeley	    2CA	    594000
+
+    1B	   171800 Shattuck Ave	    8Berkeley	    2CA	    594100
+
+    1C	   19900 Lake Shore Blvd	    7Chicago	    2IL	    560080
+
+    1D	   2224130 Pennsylvania Ave	   10Washington	    2DC	    520198
+
+    1E	   1842318 Woodsay Blvd	    7Houston	    2TX	    577009
+
+    1F	   111585 Eye St	   10Washington	    2DC	    520199
+
+!!
+? fill eea11.qc 
+!!
+#include <stdio.h>
+/***************/
+/*    EEA11    */
+/***************/
+
+main(argc, argv)
+##      int argc;
+##      char **argv;
+
+{	/* Declarations for EMP basis table */
+##	char	ename[11];
+##	int	esalary;	/* Really money but no decimal places */
+##	char	edept[9];
+##	char	ediv[4];
+##	char	emgr[11];
+##	char	ebirthdate[26];
+##	short	enum_dep;
+	/* Declarations for DEPT basis table */
+##	char	ddname[9];
+##	char	ddiv[4];
+##	int	dsales;		/* Really money but no decimal places */
+##	char	dbldg[3];
+##	short	dfloor;
+##	short	dnum_emp;
+	/* Declarations for  BLDG basis table */
+##	char	bbldg[3];
+##	char	bst_adr[31];
+##	char	bcity[16];
+##	char	bstate[3];
+##	char	bzip[6];
+	/* Declarations for ALLT basis table */
+##	short	ai1;
+##	short	ai2;
+##	int	ai4;
+##	float	af4;
+##	double	af8;
+##	float	amoney;
+##	char	adate[26];
+##	char	ac62[62];
+	/* Useful vars */
+##	int	done;		/* to signal end of cursor */
+##	int	err;		/* Error number */
+	/* Utility variables/clauses */
+##	char	*C2_WHERE_CLAUSE = "d.floor > 1";
+##	char	*C3_TARGET_LIST  = "b.bldg, b.state, b.zip";
+##	int	IS_3 = 3;
+##	int	NEW_ZIP = 99999;
+##	float	point_5 = 0.50;
+##	char	astring10[10];
+##	char	*astring     = "A String";
+##	char	*is_tech_sup = "tech sup";
+##	char	*not_date    = "I AM NOT A DATE";
+##	int	countvar;
+##	int	percent;
+##	char	mname[11];
+##	char	*empty_where = "   ";
+##	double	money_f;	/* Non-generic */
+##	char	money_str[20];
+
+printf("\n***************\n");
+printf("*    EEA10    *\n");
+printf("***************\n\n");
+
+printf("connecting with database...\n");
+##	ingres argv[1];
+
+	/*  update with default mode */
+##	RANGE OF e IS emp
+##	DECLARE CURSOR c1 FOR
+##		RETRIEVE (e.name, x = astring, e.dept, e.div)
+##		WHERE e.div = "NW"
+##		FOR UPDATE OF (name, div)
+
+	/*  update with DEFERRED mode */
+##	RANGE OF d IS dept
+##	DECLARE CURSOR c2 FOR
+##		RETRIEVE (d.dname, d.sales, d.floor)
+##		WHERE C2_WHERE_CLAUSE
+##		FOR DEFERRED UPDATE OF (dname, sales, floor)
+
+	/*  update with DIRECT mode */
+##	RANGE OF b IS bldg
+##	DECLARE CURSOR c3 FOR
+##		RETRIEVE ( C3_TARGET_LIST )
+##		FOR DIRECT UPDATE OF (zip)
+
+	/*  BEGIN CURSOR UPDATE  */
+	printf( "EQUEL CURSOR UPDATE Test\n\n" );
+
+##	BEGIN TRANSACTION
+
+	printf("(1) EMP(e.name,x=<A String>,e.dept,e.div) where div=NW\n");
+	done = 0;
+	err  = 0;
+##	OPEN CURSOR c1
+##	INQUIRE_EQUEL (err = errorno)
+	while (!done && !err)
+		{
+##		RETRIEVE CURSOR c1 (ename, astring10, edept, ediv)
+##		INQUIRE_EQUEL (done = endquery, err = errorno)
+		if (!done && !err)
+			{
+			printf( "%-11s, %-11s %-9s, %-4s \n",
+				   ename, astring10, edept, ediv );
+##			REPLACE CURSOR c1 ( div = "XX" )
+			}
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+##	CLOSE CURSOR c1
+##	INQUIRE_EQUEL (err = errorno)
+	if (err) printf( "Error closing c1 = %d\n", err );
+
+	printf( "\n(2) DEPT(dname, sales, floor) where <d.floor > 1>\n" );
+	done = 0;
+	err  = 0;
+##	OPEN CURSOR c2
+##	INQUIRE_EQUEL (err = errorno)
+	while (!done && !err)
+		{
+##		RETRIEVE CURSOR c2 (ddname, dsales, dfloor)
+##		INQUIRE_EQUEL (done = endquery, err = errorno);
+		if (!done && !err)
+			{
+			printf( "%-9s, %-10d, %3d\n",
+				   ddname, dsales, dfloor );
+##			REPLACE CURSOR c2 (dname = UPPERCASE(ddname),
+##				sales = dsales + IS_3, floor = 1)
+			}
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+##	CLOSE CURSOR c2
+##	INQUIRE_EQUEL (err = errorno)
+	if (err) printf( "Error closing c2 = %d\n", err );
+
+	printf( "\n(3) BLDG( <b.bldg,b.state,b.zip> \n" );
+	done = 0;
+	err  = 0;
+##	OPEN CURSOR c3
+##	INQUIRE_EQUEL (err = errorno)
+	while (!done && !err)
+		{
+##		RETRIEVE CURSOR c3 (bbldg, bstate, bzip)
+##		INQUIRE_EQUEL (done = endquery, err = errorno);
+		if (!done && !err)
+			{
+			printf( "%-3.3s, %-31.31s, %-6.6s\n",
+				   bbldg, bstate, bzip);
+			if (!strcmp(bstate,"DC"))
+##				REPLACE CURSOR c3 (zip = C(NEW_ZIP));
+			}
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+##	CLOSE CURSOR c3
+##	INQUIRE_EQUEL (err = errorno)
+	if (err) printf( "Error closing c3 = %d\n", err );
+
+##	END TRANSACTION
+##	EXIT
+	printf( "\n===END OF TEST RUN===\n" );
+
+	exit(0);	
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop emp\g
+<<
+~
+>>
+* drop dept\g
+<<
+~
+>>
+* drop bldg\g
+<<
+~
+>>
+*	create table emp(
+<<
+>>
+*	name c10 not null with default,
+<<
+>>
+*	salary float not null with default,
+<<
+>>
+*	dept c8 not null with default,
+<<
+>>
+*	div c3 not null with default,
+<<
+>>
+*	mgr c10 not null with default,
+<<
+>>
+*	birthdate c25 not null with default,
+<<
+>>
+*	num_dep smallint not null with default)
+<<
+>>
+*	with noduplicates, page_size=8192\g
+<<
+>>
+*	copy emp(
+<<
+>>
+*	name= varchar(0)tab,
+<<
+>>
+*	salary= c0tab,
+<<
+>>
+*	dept= varchar(0)tab,
+<<
+>>
+*	div= varchar(0)tab,
+<<
+>>
+*	mgr= varchar(0)tab,
+<<
+>>
+*	birthdate= varchar(0)tab,
+<<
+>>
+*	num_dep= c0nl, nl= d1)
+<<
+>>
+*	from 'eea11a.dat'\g
+<<
+(24 rows)
+>>
+* create table dept ( dname c8, div c3, sales f8, bldg c2,
+<<
+>>
+*		floor  i1, num_emp i2)with page_size=8192\g
+<<
+>>
+* copy dept (	dname = c8, div = c3, sales = c20, bldg = c2,
+<<
+>>
+*		floor = c2, num_emp = c0nl)	
+<<
+>>
+*		from 'eea11b.dat'\g
+<<
+(11 rows)
+>>
+* create table bldg( bldg c2 not null with default,
+<<
+>>
+*	st_adr c30 not null with default, city c15 not null with default,
+<<
+>>
+*	state c2 not null with default, zip c5 not null with default)
+<<
+>>
+*	with noduplicates, page_size=8192\g
+<<
+>>
+* copy bldg (bldg= varchar(0)tab,
+<<
+>>
+*	st_adr= varchar(0)tab, city= varchar(0)tab,
+<<
+>>
+*	state= varchar(0)tab, zip= varchar(0)nl, nl= d1)
+<<
+>>
+*	from 'eea11c.dat'\g
+<<
+(6 rows)
+>>
+* commit\g
+<<
+>>
+* \q
+<<
+>>
+? sepesqlc eea11.qc 
+<<
+EQUEL eea11.qc:
+>>
+? sepcc eea11.c 
+<<
+>>
+<< IF (NT_GENERIC)
+eea11.c
+>>
+? seplnk eea11 
+<<
+>>
+? run eea11.exe SEPPARAMDB
+<<
+***************
+*    EEA10    *
+***************
+
+connecting with database...
+EQUEL CURSOR UPDATE Test
+
+(1) EMP(e.name,x=<A String>,e.dept,e.div) where div=NW
+Curan      , A String    tech sup , NW
+Curry      , A String    tech sup , NW
+Green      , A String    market   , NW
+Gregori    , A String    sales    , NW
+McTigue    , A String    sales    , NW
+Ramos      , A String    tech sup , NW
+Stannich   , A String    market   , NW
+Sullivan   , A String    tech sup , NW
+Verducci   , A String    admin    , NW
+
+(2) DEPT(dname, sales, floor) where <d.floor > 1>
+admin    , 0         ,   2
+sales    , 120000    ,   2
+sales    , 0         ,  18
+sales    , 200000    ,   2
+sales    , 175000    ,  18
+tech sup , 5000      ,   2
+tech sup , 20000     ,  17
+tech sup , 0         ,  19
+
+(3) BLDG( <b.bldg,b.state,b.zip>
+A  , CA                             , 94000
+B  , CA                             , 94100
+C  , IL                             , 60080
+D  , DC                             , 20198
+E  , TX                             , 77009
+F  , DC                             , 20199
+
+===END OF TEST RUN===
+
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop emp\g
+<<
+~
+>>
+* drop dept\g
+<<
+~
+>>
+* drop bldg\g
+<<
+~
+>>
+* \q
+<<
+>>
+? delete eea11.exe 
+<<
+~
+>>
+? delete eea11.c 
+<<
+~
+>>
+? delete eea11.obj 
+<<
+~
+>>
+? delete eea11.o 
+<<
+~
+>>
+
+Ending at:  6-AUG-1991 13:07:03

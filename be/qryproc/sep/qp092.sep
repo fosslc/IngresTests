@@ -1,0 +1,302 @@
+/
+	Test Name: efa24.sep
+	Time: Tue May  8 19:30:28 1990
+	User Name: testenv
+ 
+	Test ID : efa24
+	Module  :  
+	Filename: efa24.sep
+	Purpose	: To test if dropped procedures could be executed again.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : none
+	Synopsis     : Drop the dbproc. Create the dbproc. Run it. 
+			Drop it. Try to run it again. Drop it and
+			commit. Try to run it again. Recreate 
+			Run it. Drop it twice.
+
+	History	: xx-xxx-1989	Created				Author
+		  7-MAR-1997    (vissu01) Modified for NT
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa24.sc 
+!!
+/*
+**	efa24.sc
+**
+**	possible drop bugs.
+**
+**		procedure is still apparently there after being dropped.
+**		a disconnect does it in.
+**		try to create it again.
+**
+**	history:
+**		sep 21/89 sgp
+**			- created.
+*/
+
+#define EFA24
+
+#include "driverefstub.h"
+
+#include <stdio.h>
+
+exec sql include sqlca;
+
+/************/
+/* efa24() */
+/************/
+
+efa24()
+{
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+        /**********/
+        /* test 1 */
+        /**********/
+	
+	printf("\n    test 1: Test that dropped procedure cannot be executed.\n");
+	/* drop the message */
+	exec sql drop procedure efa24;
+
+	/* create the message */
+	printf("    creating procedure efa24...\n");
+	exec sql create procedure efa24 as
+	begin
+		message '    efa24 1st create';
+	end;
+
+	/* run the message */
+	printf("    executing procedure efa24...\n");
+	exec sql execute procedure efa24;
+
+	/* drop the message */
+	printf("    dropping procedure efa24...\n");
+	exec sql drop procedure efa24;
+
+	/* run the dropped message */
+	printf("    executing dropped procedure efa24...\n");
+	exec sql execute procedure efa24;
+
+	/* make sure you dropped the message */
+	printf("    drop commit procedure efa24...\n");
+	exec sql drop procedure efa24;
+	exec sql commit;
+
+	/* run the dropped message again */
+	printf("    this was a bug - the proc was still cached & executable\n");
+	printf("    executing dropped procedure efa24...\n");
+	exec sql execute procedure efa24;
+
+	/* create the message */
+	printf("    try recreating procedure efa24...\n");
+	exec sql create procedure efa24 as
+	begin
+		message '    efa24 2nd create';
+	end;
+
+	/* run the dropped message again */
+	printf("    executing recreated procedure efa24...\n");
+	exec sql execute procedure efa24;
+
+
+	/**********/
+        /* test 2 */
+        /**********/
+
+        printf("\n    test 2: drop proc that does not exist\n");
+
+        exec sql drop procedure efa24;
+
+        exec sql drop procedure efa24;
+
+} /* efa24() */
+!!
+? sepesqlc efa24.sc 
+<<
+ESQL efa24.sc:
+>>
+? sepcc efa24.c 
+<<
+>>
+<<
+efa24.c
+>>
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa24 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+~
+>>
+* drop procedure efa24;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa24 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa24
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa24 XX
+
+
+    test 1: Test that dropped procedure cannot be executed.
+E_US0965 Procedure 'efa24' not found.
+    (Mon Dec  2 10:52:27 1991)
+    creating procedure efa24...
+    executing procedure efa24...
+MESSAGE 0:     efa24 1st create
+    dropping procedure efa24...
+    executing dropped procedure efa24...
+E_US0965 Procedure 'efa24' not found.
+    (Mon Dec  2 10:52:28 1991)
+    drop commit procedure efa24...
+E_US0965 Procedure 'efa24' not found.
+    (Mon Dec  2 10:52:28 1991)
+    this was a bug - the proc was still cached & executable
+    executing dropped procedure efa24...
+E_US0965 Procedure 'efa24' not found.
+    (Mon Dec  2 10:52:28 1991)
+    try recreating procedure efa24...
+    executing recreated procedure efa24...
+MESSAGE 0:     efa24 2nd create
+
+    test 2: drop proc that does not exist
+E_US0965 Procedure 'efa24' not found.
+    (Mon Dec  2 10:52:28 1991)
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driverefstub.h 
+<<
+~
+>>
+? delete driveref.c 
+<<
+~
+>>
+? delete driveref.obj 
+<<
+~
+>>
+? delete driveref.o 
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~
+>>
+? delete dbph.c 
+<<
+~
+>>
+? delete dbpmisc.sc 
+<<
+~
+>>
+? delete dbpmisc.c 
+<<
+~
+>>
+? delete dbpmisc.obj 
+<<
+~
+>>
+? delete dbpmisc.o 
+<<
+~
+>>
+? delete efa24.c 
+<<
+~
+>>
+? delete efa24.obj 
+<<
+~
+>>
+? delete efa24.o 
+<<
+~
+>>
+
+
+Ending at: Mon Dec  2 10:52:58 1991

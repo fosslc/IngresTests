@@ -1,0 +1,1975 @@
+/*
+	Test Name: oka03.sep
+	Time: Wed Jun 19 12:22:04 1991
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : oka03
+	Module  : 4gl
+	Filename: oka03
+	Purpose	: To test the ArrayAllRows 4GL function
+	Input Files  :	oka03_uf1.frm, oka03.sql, oka03_uf1.osq, oka03_proc1.osq
+	Output Files :
+	Database     :	SEPAPRAMDB
+	Tables       :	oka03_tbl
+	Synopsis     :	This test counts the rows of an array using ArrayAllRows
+			after the array undergoes the following operations:  the
+			array is filled, rows are marked deleted, rows are 
+			removed, rows are cleared and rows are inserted.
+	Note	     :  This test verifies bug fixes, 34846, 37183, 34845 and 
+			34468. 
+
+	History: 19-Jun-1991	Created				Author: saundra
+                 18-Jun-1993	(sandhya)
+		 changed filename to 8 characters to make it 
+		 more portable.
+                  06-Jan-1995   changed deleter to delobj and edit into
+                                correct format.                 (QA)
+          01-Dec-1995	(Author)
+	  11-Apr-1996   (clate01)
+			Modified canons for Windows NT
+          26-Aug-1996	(li$to01) Added canons for new version of OI.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+
+? delobj SEPPARAMDB -application oka03 
+<<
+~
+>>
+? delobj SEPPARAMDB -form oka03uf1 
+<<
+~
+>>
+? fill oka03uf1.osq 
+!!
+initialize (
+   total = integer, 
+   dummy = integer, 
+   tfcol1 = integer, 
+   i = integer, 
+   r = integer) = 
+{
+   total = 10000000;
+   inquire_forms table oka03uf1 (r=maxrow(tf));
+}
+
+'CountRows' =
+{
+   total = callproc arrayallrows (arry2);
+   message 'There are ' + varchar(total) + ' rows in the array' 
+      with style = popup;
+}
+
+'FillArry' =
+{
+   i=1;
+   dummy = callproc arrayclear(arry2);
+   tf := select col1 = m.col1 from oka03_tbl m;
+
+  /* This code must be used until bug 34846 is fixed */
+   select tfcol1 = m.col1 from oka03_tbl m
+   {
+     arry2 [i].attr1 = tfcol1; 
+     i = i + 1;
+   } ;
+
+   /* When bug 34846 is fixed, try following code */
+   /* 
+   select arry2 [i].attr1 = m.col1 from oka03_tbl m { i = i + 1; }
+   */
+}
+
+'InsertRows' =
+{
+   callproc oka03_proc1;
+   clear field tf;
+
+   i = 0;
+   unloadtable arry2
+   {
+     if (arry2._state = 4) then
+       insertrow tf[0] (col1 = arry2 [i+1].attr1, col2 = 'Blank');
+       deleterow tf[i];
+     else
+       insertrow tf[i] (col1 = arry2 [i+1].attr1, col2 = 'Blank', 
+		 	_state = arry2._state);
+       if i < r then
+          i = i + 1;
+       else
+	  endloop;
+       endif;
+     endif;
+   };
+   scroll tf to 1;
+}
+
+'RemoveRows' =
+{
+   i = 9;
+   while i > 1 do
+      dummy = callproc arrayremoverow (arry2, rownumber = i);
+      i = i - 3;
+   endwhile;
+
+   i=0;
+   clear field tf;
+   unloadtable arry2
+   {
+     if (arry2._state = 4) then
+        insertrow tf[0] (col1 = arry2 [i+1].attr1, col2 = 'blank');
+        deleterow tf[i];
+     else
+        insertrow tf[i] (col1 = arry2 [i+1].attr1, col2 = 'blank',
+      			 _state = arry2._state);
+        if i < r then
+	   i = i + 1;
+	else
+	   endloop;
+        endif;
+     endif;
+   };
+   scroll tf to 1;
+}
+
+'SetToDel' =
+{
+   total = callproc arrayallrows(arry2);
+   clear field tf; 
+
+   i = 0;
+   unloadtable arry2
+   {
+     i = i + 1;
+     if (mod(arry2 [i].attr1,2)=0) then
+        insertrow tf[0] (col1 = arry2 [i].attr1, col2 = 'BLANK');
+     else
+/* Note:  Can't use deleterow or arraysetrow deleted here because that
+   would reorder the elements in the array. Instead, I'm setting the array
+   value to an arbitrary number, 55 */
+        arry2 [i].attr1 = 55;
+     endif;
+   };
+
+   i = 1;
+   while (i = i) do
+      if (arry2 [i].attr1 = 55) then
+ 	 dummy = callproc arraysetrowdeleted (arry2, rownumber=i);
+	 i = 1;
+	 total = callproc arraylastrow(arry2);
+      endif;
+      if (i = total) then 
+         endloop;
+      endif;
+      i = i + 1;
+   endwhile;
+
+   scroll tf to 1;
+}
+
+'Last-First' =
+{
+total = arraylastrow(arry2) - arrayfirstrow(arry2) + 1;
+message 'Total number of rows ' + varchar(total) with style = popup;
+}
+
+'ClearOneRow' =
+{
+   total = arraylastrow(arry2);
+   clearrow arry2 [total];
+
+   clear field tf;
+
+   i = 1;
+   unloadtable arry2
+   {
+     if (arry2._state <> 4) then
+         insertrow tf[0] (col1 = arry2 [i].attr1, col2 = 'clear');
+      endif;
+     i = i + 1;
+   };
+}
+
+'ClearAll' = 
+{
+  dummy = callproc arrayclear(arry2);
+  clear field tf;
+  i = 1;
+  unloadtable arry2
+  {
+    if (arry2._state <> 4) then
+       insertrow tf[0] (col1 = arry2 [i].attr1, col2 = 'clrall');
+    endif;
+    i = i + 1;
+  };
+}
+
+'End' = { return; }
+!!
+? fill oka03_proc1.osq 
+!!
+
+procedure oka03_proc1 (c=integer, z=integer) =
+{
+   z = 2;
+   while z < 12 do
+      c=callproc arrayinsertrow(arry2, rownumber=z);
+      arry2 [z].attr1 = z;
+      z = z + 2;
+   endwhile;
+}
+!!
+? fill oka03uf1.frm 
+!!
+COPYFORM:	6.4	1991_06_19 19:37:07 GMT  
+FORM:	oka03uf1		
+	80	24	0	0	1	0	0	9	0	0	0	0	0	0	0	3
+FIELD:
+	0	tf	0	8	0	2	19	12	2	17	1	3	0		1	1	0	1	0	0	0					1	0
+	0	col1	-30	5	0	4	1	4	0	1	4	0	1	col1	1	1	0	0	0	0	0		-i4			2	1
+	1	col2	-21	8	0	5	1	5	0	6	5	0	6	col2	6	1	0	0	0	0	0		c5			2	2
+TRIM:
+!!
+? copyform -s -i SEPPARAMDB oka03uf1.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+? abf SEPPARAMDB 
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ create`CR'oka03`TAB'Tests the ArrayAllRows 4GL function`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`CR'oka03uf1`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ newedit`CR'create`CR'p`CR'`CR'oka03_proc1`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ defaults`CR'`TAB'`TAB'`TAB'oka03uf1`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ globals`CR'r`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'oka03_rd`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'attr1`TAB'`TAB'integer`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'attr2`TAB'`TAB'varchar(5)`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ globals`CR'`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'arry2`TAB'`TAB'oka03_rd`TAB'yes`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ go`CR'd`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ countrows`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 0 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 0 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ fillarry`CR'`ESC'
+<<
+
+%% MENU RESPONSE: FillArry
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "FillArry"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |9   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: FillArry
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "FillArry"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |9   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ countrows`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |1   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |9   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 5 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |9   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |1   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |9   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 5 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |9   |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ insertrows`CR'`ESC'
+<<
+
+%% MENU RESPONSE: InsertRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "InsertRows"
+
+%% Fetching 'oka03_proc1' from the database ...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |6   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |Blank|                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: InsertRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "InsertRows"
+
+%% Fetching 'oka03_proc1' from the database ...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |6   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |Blank|                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ countrows`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |1   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |6   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |Blank|                                                   |
+|                 |----+-----|                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 10 rows in the array                                             | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |6   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |Blank|                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |1   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |6   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |Blank|                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 10 rows in the array                                             | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |3   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |6   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |Blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |Blank|                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ removerows`CR'`ESC'
+<<
+
+%% MENU RESPONSE: RemoveRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "RemoveRows"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |10  |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: RemoveRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "RemoveRows"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |10  |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ countrows`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |1   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |10  |blank|                                                   |
+|                 |----+-----|                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 7 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |10  |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |1   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |10  |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 7 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_1   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |5   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |7   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |10  |blank|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ settodel`CR'`ESC'
+<<
+
+%% MENU RESPONSE: SetToDel
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "SetToDel"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_10  |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: SetToDel
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "SetToDel"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_10  |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ countrows`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |10  |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 7 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_10  |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |10  |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 7 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_10  |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ last-first`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Last-First
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "Last-First"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |10  |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+| +----------------------------------------------------------------------------+ |
+| | Total number of rows 7                                                     | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_10  |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Last-First
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "Last-First"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |10  |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+| +----------------------------------------------------------------------------+ |
+| | Total number of rows 7                                                     | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_10  |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |BLANK|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ clearonerow`CR'`ESC'
+<<
+
+%% MENU RESPONSE: ClearOneRow
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "ClearOneRow"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_0   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: ClearOneRow
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "ClearOneRow"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_0   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ countrows`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |0   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 7 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_0   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |0   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 7 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_0   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |8   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |4   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |2   |clear|                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ clearall`CR'`ESC'
+<<
+
+%% MENU RESPONSE: ClearAll
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `7' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `7' is "ClearAll"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: ClearAll
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `7' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `7' is "ClearAll"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ countrows`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 0 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: CountRows
+%% MENU:   CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "CountRows"
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+| +----------------------------------------------------------------------------+ |
+| | There are 0 rows in the array                                              | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                 +----------+                                                   |
+|                 |col1|col2 |                                                   |
+|                 |----+-----|                                                   |
+|                 |_    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 |----+-----|                                                   |
+|                 |    |     |                                                   |
+|                 +----------+                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  CountRows  FillArry  InsertRows  RemoveRows  SetToDel  >                      |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ quit`CR'
+<<
+~
+>>
+? delobj SEPPARAMDB -application oka03 
+<<
+~
+>>
+? delobj SEPPARAMDB -form oka03uf1 
+<<
+~
+>>
+
+
+Ending at: Mon Aug 26 07:51:47 1996

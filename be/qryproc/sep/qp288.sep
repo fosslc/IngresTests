@@ -1,0 +1,398 @@
+/*
+        Test Name: qp288.sep
+        Time: Fri May 11 13:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp288.sep
+        Module  : be/qryproc
+        Filename: qp288.sep
+        Purpose : To test the new feature row producing procedure.
+        Input Files  : rp1.sql, rp2.sql....rp6.sql
+        Output Files :
+        Database     : qryprocdb
+        Tables       : qp288_table1, qp288_table2, qp288_table3
+        Synopsis     : This is to test the multiple for-loop, nested for-loop,
+                       multiple nested for-loop, and nested-INSERT syntax for
+                       row producing procedures within within Terminal Monitor.
+                       Also, two destructive tests for expected error with
+                       RESULT ROW and RETURN ROW syntax.
+
+ History: 11-May-2001   (wu$ca01)       Created
+
+**
+**  ROW PRODUCING PROCEDURE
+**
+**  - SYNTAX, ADVANCED 
+**
+**  Known Problems
+**  1) rp5: See issue 10869786 (resolved).
+*/
+? fill setup.sql 
+!!
+\i cleanup.sql
+create table qp288_table1 (a1 int, a2 char(10), a3 date)\g
+insert into qp288_table1 values(100, 'abcd', 'now')\g
+insert into qp288_table1 values(101, 'xyz', 'now')\g
+insert into qp288_table1 values(102, 'xxx', 'now')\g
+insert into qp288_table1 values(103, 'qqqqq', 'now')\g
+insert into qp288_table1 values(104, 'junk', 'now')\g
+create table qp288_table2 (a1 int, a2 char(10), a3 date)\g
+insert into qp288_table2 values(200, 'abcd', 'now')\g
+insert into qp288_table2 values(201, 'xyz', 'now')\g
+insert into qp288_table2 values(202, 'xxx', 'now')\g
+insert into qp288_table2 values(203, 'qqqqq', 'now')\g
+insert into qp288_table2 values(204, 'junk', 'now')\g
+create table qp288_table3 (a1 int, a2 char(10), a3 date)\g
+insert into qp288_table3 values(300, 'abcd', 'now')\g
+insert into qp288_table3 values(301, 'xyz', 'now')\g
+insert into qp288_table3 values(302, 'xxx', 'now')\g
+insert into qp288_table3 values(303, 'qqqqq', 'now')\g
+insert into qp288_table3 values(304, 'junk', 'now')\g
+!!
+? fill cleanup.sql 
+!!
+drop table qp288_table1\g
+drop table qp288_table2\g
+drop table qp288_table3\g
+drop procedure qp288_rp1\g
+!!
+? fill rp1.sql 
+!!
+/*-------------------------------*
+   GOOD SYNTAX: test multiple FOR 
+*/
+create procedure qp288_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp288_table1 order by 1 do
+      buf = varchar(:v1);
+      message :buf;
+   endfor;
+   for select a1, a2, a3 into :v4, :v5, :v6 from qp288_table2 order by 1 do
+      buf = varchar(:v4);
+      message :buf;
+   endfor;
+end;\g
+execute procedure qp288_rp1;\g
+drop procedure qp288_rp1;\g
+!!
+? fill rp2.sql 
+!!
+/*-----------------------------*
+   GOOD SYNTAX: test nested FOR
+*/
+create procedure qp288_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp288_table1 order by 1 do
+      buf = varchar(:v1);
+      message :buf;
+      for select a1, a2, a3 into :v4, :v5, :v6 from qp288_table2 order by 1 do
+         buf = varchar(:v4);
+         message :buf;
+      endfor;
+   endfor;
+end;\g
+execute procedure qp288_rp1;\g
+drop procedure qp288_rp1;\g
+!!
+? fill rp3.sql 
+!!
+/*--------------------------------------*
+   GOOD SYNTAX: test multiple nested FOR
+*/
+create procedure qp288_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   v7 int;
+   buf char(80) not null;
+begin
+   for select a1 into :v7 from qp288_table3 order by 1 do
+      buf = varchar(:v7);
+      message :buf;
+      for select a1, a2, a3 into :v1, :v2, :v3 from qp288_table1 order by 1 do
+         buf = varchar(:v1);
+         message :buf;
+      endfor;
+      for select a1, a2, a3 into :v4, :v5, :v6 from qp288_table2 order by 1 do
+         buf = varchar(:v4);
+         message :buf;
+      endfor;
+   endfor;
+end;\g
+execute procedure qp288_rp1;\g
+drop procedure qp288_rp1;\g
+!!
+? fill rp4.sql 
+!!
+/*---------------------------------*
+   GOOD SYNTAX: test nested INSERT 
+*/
+create procedure qp288_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp288_table1 order by 1 do
+      buf = varchar(:v1);
+      message :buf;
+      insert into qp288_table2 values (:v1, :v2, :v3); 
+   endfor;
+   for select a1 into :v1 from qp288_table2 order by 1 do
+      buf = varchar(:v1);
+      message :buf;
+   endfor;
+end;\g
+execute procedure qp288_rp1;\g
+drop procedure qp288_rp1;\g
+!!
+? fill rp5.sql 
+!!
+/*--------------------------------------*
+   BAD SYNTAX: result row > return row 
+*/
+create procedure qp288_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp288_table1 order by 1 do
+      return row (:v1, :v2);
+   endfor;
+end;\g
+execute procedure qp288_rp1;\g
+drop procedure qp288_rp1;\g
+!!
+? fill rp6.sql 
+!!
+/*--------------------------------------*
+   BAD SYNTAX: result row < return row
+*/
+create procedure qp288_rp1
+       result row(int, char(10))
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp288_table1 order by 1 do
+      return row (:v1, :v2, :v3);
+   endfor;
+end;\g
+execute procedure qp288_rp1;\g
+drop procedure qp288_rp1;\g
+!!
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* \i rp1.sql
+<<
+MESSAGE 0: 100
+MESSAGE 0: 101
+MESSAGE 0: 102
+MESSAGE 0: 103
+MESSAGE 0: 104
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+continue
+* 
+>>
+* \i rp2.sql
+<<
+MESSAGE 0: 100
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+MESSAGE 0: 101
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+MESSAGE 0: 102
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+MESSAGE 0: 103
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+MESSAGE 0: 104
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+continue
+* 
+>>
+* \i rp3.sql
+<<
+MESSAGE 0: 300
+MESSAGE 0: 100
+MESSAGE 0: 101
+MESSAGE 0: 102
+MESSAGE 0: 103
+MESSAGE 0: 104
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+MESSAGE 0: 301
+MESSAGE 0: 100
+MESSAGE 0: 101
+MESSAGE 0: 102
+MESSAGE 0: 103
+MESSAGE 0: 104
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+MESSAGE 0: 302
+MESSAGE 0: 100
+MESSAGE 0: 101
+MESSAGE 0: 102
+MESSAGE 0: 103
+MESSAGE 0: 104
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+MESSAGE 0: 303
+MESSAGE 0: 100
+MESSAGE 0: 101
+MESSAGE 0: 102
+MESSAGE 0: 103
+MESSAGE 0: 104
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+MESSAGE 0: 304
+MESSAGE 0: 100
+MESSAGE 0: 101
+MESSAGE 0: 102
+MESSAGE 0: 103
+MESSAGE 0: 104
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+continue
+* 
+>>
+* \i rp4.sql
+<<
+MESSAGE 0: 100
+MESSAGE 0: 101
+MESSAGE 0: 102
+MESSAGE 0: 103
+MESSAGE 0: 104
+MESSAGE 0: 100
+MESSAGE 0: 101
+MESSAGE 0: 102
+MESSAGE 0: 103
+MESSAGE 0: 104
+MESSAGE 0: 200
+MESSAGE 0: 201
+MESSAGE 0: 202
+MESSAGE 0: 203
+MESSAGE 0: 204
+continue
+* 
+>>
+* \i rp5.sql
+<<
+E_US098E The number of entries in a RETURN ROW list must match the number
+    of  entries in the corresponding RESULT ROW declaration.
+    (Fri Apr 13 14:32:25 2001)
+
+E_US0965 Procedure 'qp288_rp1' not found.
+    (Fri Apr 13 14:32:25 2001)
+
+E_US0965 Procedure 'qp288_rp1' not found.
+    (Fri Apr 13 14:32:25 2001)
+
+continue
+* 
+>>
+* \i rp6.sql
+<<
+E_US098E The number of entries in a RETURN ROW list must match the number
+    of  entries in the corresponding RESULT ROW declaration.
+    (Fri Apr 13 14:32:29 2001)
+
+E_US0965 Procedure 'qp288_rp1' not found.
+    (Fri Apr 13 14:32:29 2001)
+
+E_US0965 Procedure 'qp288_rp1' not found.
+    (Fri Apr 13 14:32:29 2001)
+
+continue
+* 
+>>
+* \q
+<<
+~
+>>
+
+
+Ending at: Fri May 11 14:32:39 2001

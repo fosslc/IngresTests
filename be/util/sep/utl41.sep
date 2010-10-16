@@ -1,0 +1,228 @@
+/*
+Copyright (c) 2005 Ingres Corporation
+
+
+	Test Name: utl41.sep
+	Time: Tue Nov  6 11:56:34 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl41.sep 
+	Module  : be/util 
+	Filename: utl41.sep
+	Purpose	: To test the new usermod utility, first available with
+                  Ingres 2.6/0106 and later releases.
+	Input Files  : utl41.sql
+	Output Files :
+	Database     : utl41db
+	Tables       : endfor, endrepeat, leave, result, row
+	Synopsis     : Test usermod -u flag, with reserved words as the table 
+                       names, tables with different structure. Usermod the 
+                       database using a vnode 'lback'(loop back to the machine).
+
+ History:  6-Nov-2001	(wu$ca01) Created
+           6-Aug-2002	(wu$ca01) Add 'destroydb utl41db' at the end of the
+                        	  test to cleanup the database.
+          25-Nov-2003	(rogch01) Recanonise for parallel index creation.
+          14-Mar-2005   (vande02) Updated canons for usermod output as it now
+                                  includes 'minpages=10' when modifying the
+                                  table to hash.  See issue 14006341 where
+                                  Development agrees this is expected behavior.
+                                  Aligned history comments.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+          14-Nov-2006   (kiria01) b116944/b117102 Added nodependency_check to
+                        copydb interface.
+
+          19-Mar-2008	(hanal04) Bug 101117 usermod now does create index
+                                  on a per table basis. Updated canons 
+                                  accordingly.
+*/
+? fill utl41.sql 
+!!
+drop table endfor\g
+drop table endrepeat\g
+drop table leave\g
+drop table result\g
+drop table row\g
+
+create table endfor(a text(5))\g
+insert into endfor values('xxxxx')\g
+insert into endfor values('yyyyy')\g
+insert into endfor values('zzzzz')\g
+
+create table endrepeat(b varchar(50))\g
+insert into endrepeat values('TESTING')\g
+insert into endrepeat values('TESTING USERMOD')\g
+insert into endrepeat values('TESTING USERMOD WITH RESERVED WORDS')\g
+modify endrepeat to hash\g
+
+create table leave(c1 smallint, c2 money)\g
+insert into leave values(40, 40000)\g
+insert into leave values(50, 50000)\g
+insert into leave values(60, 60000)\g
+modify leave to isam\g
+create index select on leave(c1)\g
+
+create table result(date date)\g
+insert into result values('11-06-2001')\g
+insert into result values('11-07-2001')\g
+insert into result values('11-08-2001')\g
+modify result to btree\g
+
+create table row(c1 float)\g
+insert into row values(20.999)\g
+insert into row values(999.01)\g
+insert into row values(1026.75)\g
+modify row to btree\g
+!!
+? destroydb utl41db 
+<<
+~
+>>
+? createdb utl41db 
+<<
+~
+>>
+? sql -s -uingres utl41db 
+<<
+
+>>
+* \i utl41.sql 
+<<
+~
+>>
+* \q 
+<<
+~
+>>
+? usermod utl41db -uingres 
+<<
+INGRES COPYDB Copyright 2003 Ingres Corporation
+Unload directory is 'C:\IngresII\ingres\temp'.
+Reload directory is 'C:\IngresII\ingres\temp'.
+There are 5 tables owned by user 'ingres'.
+INGRES TERMINAL MONITOR Copyright 2003 Ingres Corporation
+set autocommit on
+set nojournaling
+set session with privileges=all
+
+	/* TABLES */
+
+modify "endfor" to heap
+with extend = 16,
+	allocation = 4,
+	nodependency_check
+(3 rows)
+modify "endrepeat" to hash on
+	b
+with minpages = 10,
+  fillfactor = 50,
+  extend = 16,
+  nodependency_check
+(3 rows)
+modify "leave" to isam on
+	c1
+with fillfactor = 80,
+	extend = 16,
+	nodependency_check
+(3 rows)
+create index ("select" on "leave" (
+	c1)
+with structure = isam,
+	nocompression,
+	key = (c1),
+	fillfactor = 80,
+	location = (ii_database))
+(3 rows)
+modify "result" to btree on
+	date
+with nonleaffill = 80,
+	leaffill = 70,
+	fillfactor = 80,
+	extend = 16,
+	nodependency_check
+(3 rows)
+modify "row" to btree on
+	c1
+with nonleaffill = 80,
+	leaffill = 70,
+	fillfactor = 80,
+	extend = 16,
+	nodependency_check
+(3 rows)
+>>
+? sql -s utl41db 
+<<
+
+>>
+* \i utl41.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? usermod lback::utl41db endfor endrepeat leave result row 
+<<
+INGRES COPYDB Copyright 2007 Ingres Corporation
+Unload directory is '/tmp'.
+Reload directory is '/tmp'.
+There are 5 tables owned by user 'testenv'.
+INGRES TERMINAL MONITOR Copyright 2007 Ingres Corporation
+set autocommit on
+set nojournaling
+set session with privileges=all
+
+	/* TABLES */
+
+modify "endfor" to heap
+with extend = 16,
+	allocation = 4,
+	nodependency_check
+(3 rows)
+modify "endrepeat" to hash on
+	b
+with minpages = 10,
+	fillfactor = 50,
+	extend = 16,
+	nodependency_check
+(3 rows)
+modify "leave" to isam on
+	c1
+with fillfactor = 80,
+	extend = 16,
+	nodependency_check
+(3 rows)
+create index ("select" on "leave" (
+	c1)
+with structure = isam,
+	nocompression,
+	key = (c1),
+	fillfactor = 80,
+	location = (ii_database))
+(3 rows)
+modify "result" to btree on
+	date
+with nonleaffill = 80,
+	leaffill = 70,
+	fillfactor = 80,
+	extend = 16,
+	nodependency_check
+(3 rows)
+modify "row" to btree on
+	c1
+with nonleaffill = 80,
+	leaffill = 70,
+	fillfactor = 80,
+	extend = 16,
+	nodependency_check
+(3 rows)
+>>
+? destroydb utl41db 
+<<
+~
+>>
+
+
+Ending at: Wed Mar 19 09:31:46 2008

@@ -1,0 +1,1330 @@
+/*
+	Test Name: eia08.sep     
+	Time:
+	User Name: testenv      
+ 
+	Test ID : eia08
+	Module  :
+	Filename: eia08.sep
+	Purpose	: Test aggregate expressions
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : employee, dept, parts, prime
+	Synopsis     : Tests aggregate expressions: mod, atan, log, sum, 
+		sumu, max sqrt, avgu, concat, any, ascii, avg, count.
+
+	History	: 10-july-1989	Created		Author
+
+                                converted by :dennisk             
+		11-aug-1993 (garys) added a '* \q' to quit TM properly.
+		23-Mar-1999  (vande02)  Hard-coded VPG_SZ to 4K and changed
+                                'quel -s SEPPARAMDB' canon to be empty,
+                                in order to catch the msg. "TM could not connect
+                                ..." if the test database did not exist.
+          10-Mar-2008	(kiria01) b120043
+			Updating canons for less ambiguous SUM and AVG
+			operators due to coercion changes for date operators.
+
+*/
+? fill partsa.dat 
+!!
+1	central processor	pink	10	1
+2	memory	gray	20	32
+3	disk drive	black	685	2
+4	tape drive	black	450	4
+5	tapes	gray	1	250
+6	line printer	yellow	578	3
+7	l-p paper	white	15	95
+8	terminals	blue	19	15
+13	paper tape reader	black	107	0
+14	paper tape punch	black	147	0
+9	terminal paper	white	2	350
+10	byte-soap	clear	0	143
+11	card reader	gray	327	0
+12	card punch	gray	427	0
+!!
+? fill employa.dat 
+!!
+157	Jones, Tim          	 12000	   199	  1944	  1960
+1110	Smith, Paul         	  6000	    33	  1956	  1979
+35	Evans, Michael      	  5000	    32	  1956	  1981
+129	Thomas, Tom         	 10000	   199	  1945	  1962
+13	Edwards, Peter      	  9000	   199	  1932	  1958
+215	Collins, Joanne     	  7000	    10	  1954	  1976
+55	James, Mary         	 12000	   199	  1924	  1969
+26	Thompson, Bob       	 13000	   199	  1934	  1970
+98	Williams, Judy      	  9000	   199	  1939	  1969
+32	Smythe, Carol       	  9050	   199	  1933	  1967
+33	Hayes, Evelyn       	 10100	   199	  1935	  1963
+199	Bullock, J.D.       	 27000	     0	  1924	  1920
+4901	Bailey, Chas M.     	  8377	    32	  1960	  1980
+843	Schmidt, Herman     	 11204	    26	  1940	  1956
+2398	Wallace, Maggie J.  	  7880	    26	  1944	  1959
+1639	Choy, Wanda         	 11160	    55	  1951	  1970
+5119	Ferro, Tony         	 13621	    55	  1943	  1963
+37	Raveen, Lemont      	 11985	    26	  1954	  1979
+5219	Williams, Bruce     	 13374	    33	  1948	  1959
+1523	Zugnoni, Arthur A.  	 19868	   129	  1932	  1949
+430	Brunet, Paul C.     	 17674	   129	  1942	  1959
+994	Iwano, Masahiro     	 15641	   129	  1948	  1970
+1330	Onstad, Richard     	  8779	    13	  1956	  1971
+10	Ross, Stanley       	 15908	   199	  1931	  1945
+11	Ross, Stuart        	 12067	     0	  1935	  1932
+!!
+? fill depta.dat 
+!!
+35	Book	5	1	55
+10	Candy	5	1	13
+19	Furniture	7	4	26
+20	Major Appliances	7	4	26
+14	Jewelry	8	1	33
+43	Children's	8	2	32
+65	Junior's	7	3	17
+58	Men's	7	2	129
+60	Sportswear	5	1	10
+99	Giftwrap	5	1	98
+1	Bargain	5	0	7
+26	Linens	7	3	157
+63	Women's	7	3	38
+49	Toys	8	2	35
+70	Women's	5	1	10
+73	Children's	5	1	10
+34	Stationary	5	1	33
+47	Junior Miss	7	2	129
+28	Women's	8	2	32
+!!
+? quel SEPPARAMDB -s 
+<<
+
+>>
+* destroy parts, dept, employee, prime, aggr \g
+<<
+~
+>>
+* create parts(pnum = i2,pname = c20,color = c8,weight = i2,qoh = i2) with page_size-
+=4096 \g
+<<
+>>
+* create employee(number = i2,name = c20,salary = i2,
+<<
+>>
+*	manager = i2, birthdate = i2,startdate = i2) with page_size=4096 \g
+<<
+>>
+* create dept(number = i2,name = c20,store = i2,floor = i2,manager = i2) with page_s-
+ize=4096 \g
+<<
+>>
+* copy	parts(pnum = c0tab, pname = c0tab, color = c0tab, 
+<<
+>>
+*	weight = c0tab, qoh = c0nl)
+<<
+>>
+*	from  "partsa.dat" \g
+<<
+(14 rows)
+>>
+* copy	employee(number = c0tab, name = c0tab, salary = c0tab, 
+<<
+>>
+*	manager = c0tab, birthdate = c0tab, startdate = c0nl) 
+<<
+>>
+*	from "employa.dat" \g
+<<
+(25 rows)
+>>
+* copy	dept(number = c0tab, name = c0tab, store = c0tab, 
+<<
+>>
+*	floor = c0tab, manager = c0nl) 
+<<
+>>
+*	from "depta.dat" \g
+<<
+(19 rows)
+>>
+* print employee, dept, parts \g
+<<
+
+employee table
+
++------+--------------------+------+------+------+------+
+|number|name                |salary|manage|birthd|startd|
++------+--------------------+------+------+------+------+
+|   157|Jones, Tim          | 12000|   199|  1944|  1960|
+|  1110|Smith, Paul         |  6000|    33|  1956|  1979|
+|    35|Evans, Michael      |  5000|    32|  1956|  1981|
+|   129|Thomas, Tom         | 10000|   199|  1945|  1962|
+|    13|Edwards, Peter      |  9000|   199|  1932|  1958|
+|   215|Collins, Joanne     |  7000|    10|  1954|  1976|
+|    55|James, Mary         | 12000|   199|  1924|  1969|
+|    26|Thompson, Bob       | 13000|   199|  1934|  1970|
+|    98|Williams, Judy      |  9000|   199|  1939|  1969|
+|    32|Smythe, Carol       |  9050|   199|  1933|  1967|
+|    33|Hayes, Evelyn       | 10100|   199|  1935|  1963|
+|   199|Bullock, J.D.       | 27000|     0|  1924|  1920|
+|  4901|Bailey, Chas M.     |  8377|    32|  1960|  1980|
+|   843|Schmidt, Herman     | 11204|    26|  1940|  1956|
+|  2398|Wallace, Maggie J.  |  7880|    26|  1944|  1959|
+|  1639|Choy, Wanda         | 11160|    55|  1951|  1970|
+|  5119|Ferro, Tony         | 13621|    55|  1943|  1963|
+|    37|Raveen, Lemont      | 11985|    26|  1954|  1979|
+|  5219|Williams, Bruce     | 13374|    33|  1948|  1959|
+|  1523|Zugnoni, Arthur A.  | 19868|   129|  1932|  1949|
+|   430|Brunet, Paul C.     | 17674|   129|  1942|  1959|
+|   994|Iwano, Masahiro     | 15641|   129|  1948|  1970|
+|  1330|Onstad, Richard     |  8779|    13|  1956|  1971|
+|    10|Ross, Stanley       | 15908|   199|  1931|  1945|
+|    11|Ross, Stuart        | 12067|     0|  1935|  1932|
++------+--------------------+------+------+------+------+
+
+dept table
+
++------+--------------------+------+------+------+
+|number|name                |store |floor |manage|
++------+--------------------+------+------+------+
+|    35|Book                |     5|     1|    55|
+|    10|Candy               |     5|     1|    13|
+|    19|Furniture           |     7|     4|    26|
+|    20|Major Appliances    |     7|     4|    26|
+|    14|Jewelry             |     8|     1|    33|
+|    43|Children's          |     8|     2|    32|
+|    65|Junior's            |     7|     3|    17|
+|    58|Men's               |     7|     2|   129|
+|    60|Sportswear          |     5|     1|    10|
+|    99|Giftwrap            |     5|     1|    98|
+|     1|Bargain             |     5|     0|     7|
+|    26|Linens              |     7|     3|   157|
+|    63|Women's             |     7|     3|    38|
+|    49|Toys                |     8|     2|    35|
+|    70|Women's             |     5|     1|    10|
+|    73|Children's          |     5|     1|    10|
+|    34|Stationary          |     5|     1|    33|
+|    47|Junior Miss         |     7|     2|   129|
+|    28|Women's             |     8|     2|    32|
++------+--------------------+------+------+------+
+
+parts table
+
++------+--------------------+--------+------+------+
+|pnum  |pname               |color   |weight|qoh   |
++------+--------------------+--------+------+------+
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
++------+--------------------+--------+------+------+
+(14 rows)
+>>
+* range of e is employee \g
+<<
+>>
+* range of d is dept \g
+<<
+>>
+* range of p is parts \g
+<<
+>>
+* create prime (pnum=i2, pname=c20, color=c8, weight=i2, qoh=i2) with page_size=4096-
+ \g
+<<
+>>
+* append prime (p.all) \g
+<<
+(14 rows)
+>>
+* append prime (p.all) where p.pnum<10 \g
+<<
+(9 rows)
+>>
+* print prime \g
+<<
+
+prime table
+
++------+--------------------+--------+------+------+
+|pnum  |pname               |color   |weight|qoh   |
++------+--------------------+--------+------+------+
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|     9|terminal paper      |white   |     2|   350|
++------+--------------------+--------+------+------+
+(23 rows)
+>>
+* range of pp is prime \g
+<<
+>>
+* destroy aggr \g
+/*
+simple aggregates 
+*/
+<<
+E_US1452 DESTROY: aggr does not exist or is not owned by you.
+    (25-JUL-1989 12:28:10)
+
+>>
+* create aggr (aggr=c8, i2=i2, i4=i4, f8=f8, c8=c8) with page_size=4096 \g
+<<
+>>
+* append aggr (aggr="count", i4=count(p.qoh where p.qoh=0)) \g
+/*
+count of occurences 
+*/
+<<
+(1 row)
+>>
+* append aggr (aggr="countu", i4=countu(pp.pname where pp.qoh=0)) \g
+<<
+(1 row)
+>>
+* append aggr (c8=sum(p.pname)) \g
+/*
+sum and avg require numeric type a-expr 
+*/
+<<
+E_US1130 illegal character to integer conversion or non-numeric character
+    in money field.
+    (Mon Mar 10 14:35:43 2008)
+
+>>
+* append aggr (f8=avg(p.color)) \g
+<<
+E_US1130 illegal character to integer conversion or non-numeric character
+    in money field.
+    (Mon Mar 10 14:35:48 2008)
+
+>>
+* append aggr (c8=sumu(pp.pname)) \g
+<<
+E_US1130 illegal character to integer conversion or non-numeric character
+    in money field.
+    (Mon Mar 10 14:35:49 2008)
+
+>>
+* append aggr (f8=avgu(pp.color)) \g
+<<
+E_US1130 illegal character to integer conversion or non-numeric character
+    in money field.
+    (Mon Mar 10 14:35:50 2008)
+
+>>
+* append aggr (aggr="sum", i2=sum(p.weight where p.pnum<3)) \g
+/*
+summation 
+*/
+<<
+(1 row)
+>>
+* append aggr (aggr="sumu", i2=sumu(pp.weight where pp.pnum<3)) \g
+<<
+(1 row)
+>>
+* append aggr (aggr="avg", f8=avg(p.weight)) \g
+/*
+average 
+*/
+<<
+(1 row)
+>>
+* append aggr (aggr="avgu", f8=avgu(pp.weight)) \g
+<<
+(1 row)
+>>
+* append aggr (aggr="max", c8=max(p.color where p.pnum<5)) \g
+/*
+maximum 
+*/
+<<
+(1 row)
+>>
+* append aggr (aggr="max", i2=max(p.qoh)) \g
+<<
+(1 row)
+>>
+* append aggr (aggr="min", c8=min(p.color)) \g
+/*
+minimum 
+*/
+<<
+(1 row)
+>>
+* append aggr (aggr="min", i2=min(p.pnum where p.color="black")) \g
+<<
+(1 row)
+>>
+* append aggr (aggr="any", i2=any(p.color where p.color="gray")) \g
+/*
+any tuple satisfying the qualification 
+*/
+<<
+(1 row)
+>>
+* print aggr \g
+<<
+
+aggr table
+
++--------+------+-------------+-----------+--------+
+|aggr    |i2    |i4           |f8         |c8      |
++--------+------+-------------+-----------+--------+
+|count   |     0|            4|      0.000|        |
+|countu  |     0|            4|      0.000|        |
+|sum     |    30|            0|      0.000|        |
+|sumu    |    30|            0|      0.000|        |
+|avg     |     0|            0|    199.143|        |
+|avgu    |     0|            0|    199.143|        |
+|max     |     0|            0|      0.000|pink    |
+|max     |   350|            0|      0.000|        |
+|min     |     0|            0|      0.000|black   |
+|min     |     3|            0|      0.000|        |
+|any     |     1|            0|      0.000|        |
++--------+------+-------------+-----------+--------+
+(11 rows)
+>>
+* destroy aggr \g
+<<
+>>
+* retrieve (i4=count(atan(p.qoh) where p.qoh=0)) where p.pnum>12 \g
+<<
+
++-------------+
+|i4           |
++-------------+
+|            4|
+|            4|
++-------------+
+(2 rows)
+>>
+* retrieve (f8=sum(log(p.weight) where p.pnum<3)) \g
+<<
+
++-----------+
+|f8         |
++-----------+
+|      5.298|
++-----------+
+(1 row)
+>>
+* retrieve (i4=avgu(concat(pp.color,","))) \g
+<<
+E_US1130 illegal character to integer conversion or non-numeric character
+    in money field.
+    (Mon Mar 10 14:35:51 2008)
+
+>>
+* retrieve (f8=max(sqrt(p.weight)+p.qoh where p.pnum<5)) \g
+<<
+
++-----------+
+|f8         |
++-----------+
+|     36.472|
++-----------+
+(1 row)
+>>
+* retrieve (p.all) where any(p.color where p.color="gray")=1 \g
+<<
+
++------+--------------------+--------+------+------+
+|pnum  |pname               |color   |weight|qoh   |
++------+--------------------+--------+------+------+
+|     1|central processor   |pink    |    10|     1|
+|     2|memory              |gray    |    20|    32|
+|     3|disk drive          |black   |   685|     2|
+|     4|tape drive          |black   |   450|     4|
+|     5|tapes               |gray    |     1|   250|
+|     6|line printer        |yellow  |   578|     3|
+|     7|l-p paper           |white   |    15|    95|
+|     8|terminals           |blue    |    19|    15|
+|    13|paper tape reader   |black   |   107|     0|
+|    14|paper tape punch    |black   |   147|     0|
+|     9|terminal paper      |white   |     2|   350|
+|    10|byte-soap           |clear   |     0|   143|
+|    11|card reader         |gray    |   327|     0|
+|    12|card punch          |gray    |   427|     0|
++------+--------------------+--------+------+------+
+(14 rows)
+>>
+* retrieve (func=ascii(avg(p.weight))) \g
+<<
+
++-----------+
+|func       |
++-----------+
+|199.143    |
++-----------+
+(1 row)
+>>
+* retrieve (d1=avgu(pp.weight where pp.pnum<14),
+<<
+>>
+*	d2=avgu(pp.weight where pp.pnum<14)) \g
+/*
+optimization 
+*/
+<<
+
++-----------+-----------+
+|d1         |d2         |
++-----------+-----------+
+|    203.154|    203.154|
++-----------+-----------+
+(1 row)
+>>
+* retrieve (d1=avgu(pp.weight where pp.pnum<14),d2=avgu(pp.weight where pp.pnum<15))-
+ \g
+<<
+
++-----------+-----------+
+|d1         |d2         |
++-----------+-----------+
+|    203.154|    199.143|
++-----------+-----------+
+(1 row)
+>>
+* retrieve (d1=avgu(pp.weight where pp.pnum<14),d2=avgu(pp.pnum   where pp.pnum<14))-
+ \g
+<<
+
++-----------+-----------+
+|d1         |d2         |
++-----------+-----------+
+|    203.154|      7.000|
++-----------+-----------+
+(1 row)
+>>
+* retrieve (avgsal=avg(e.salary where d.floor=4 and e.manager=d.manager))\g
+/*
+----------------2 variables
+*/
+<<
+
++-----------+
+|avgsal     |
++-----------+
+|  10356.333|
++-----------+
+(1 row)
+>>
+* retrieve (p.qoh, avgwt=avg(p.weight by p.qoh)) \g
+/*
+aggregate function 
+*/
+<<
+
++------+-----------+
+|qoh   |avgwt      |
++------+-----------+
+|     0|    252.000|
+|     1|     10.000|
+|     2|    685.000|
+|     3|    578.000|
+|     4|    450.000|
+|    15|     19.000|
+|    32|     20.000|
+|    95|     15.000|
+|   143|      0.000|
+|   250|      1.000|
+|   350|      2.000|
++------+-----------+
+(11 rows)
+>>
+* retrieve (p.qoh, s=sum(sqrt(p.weight)+p.pnum by p.qoh where p.qoh<5))\g
+<<
+
++------+-----------+
+|qoh   |s          |
++------+-----------+
+|     0|    111.216|
+|     1|      4.162|
+|     2|     29.173|
+|     3|     30.042|
+|     4|     25.213|
+|    15|      0.000|
+|    32|      0.000|
+|    95|      0.000|
+|   143|      0.000|
+|   250|      0.000|
+|   350|      0.000|
++------+-----------+
+(11 rows)
+>>
+* retrieve (p.color, p.qoh, maxnum=max(p.pnum by p.color,p.qoh where p.pnum>10))\g
+<<
+
++--------+------+------+
+|color   |qoh   |maxnum|
++--------+------+------+
+|black   |     0|    14|
+|black   |     2|     0|
+|black   |     4|     0|
+|blue    |    15|     0|
+|clear   |   143|     0|
+|gray    |     0|    12|
+|gray    |    32|     0|
+|gray    |   250|     0|
+|pink    |     1|     0|
+|white   |    95|     0|
+|white   |   350|     0|
+|yellow  |     3|     0|
++--------+------+------+
+(12 rows)
+>>
+<<
+
++--------+------+------+
+|color   |qoh   |maxnum|
++--------+------+------+
+|black   |     0|    14|
+|gray    |     0|    12|
+|pink    |     1|     0|
+|black   |     2|     0|
+|yellow  |     3|     0|
+|black   |     4|     0|
+|blue    |    15|     0|
+|gray    |    32|     0|
+|white   |    95|     0|
+|clear   |   143|     0|
+|gray    |   250|     0|
+|white   |   350|     0|
++--------+------+------+
+(12 rows)
+>>
+* retrieve (d1=mod(p.qoh,2)+1, d2=count(p.qoh by mod(p.qoh,2)+1)) \g
+<<
+
++-------------+-------------+
+|d1           |d2           |
++-------------+-------------+
+|            1|            9|
+|            2|            5|
++-------------+-------------+
+(2 rows)
+>>
+* retrieve (p.qoh, func=sqrt(avg(p.weight by p.qoh))) \g
+<<
+
++------+-----------+
+|qoh   |func       |
++------+-----------+
+|     0|     15.875|
+|     1|      3.162|
+|     2|     26.173|
+|     3|     24.042|
+|     4|     21.213|
+|    15|      4.359|
+|    32|      4.472|
+|    95|      3.873|
+|   143|      0.000|
+|   250|      1.000|
+|   350|      1.414|
++------+-----------+
+(11 rows)
+>>
+* retrieve (p.qoh, avgwt=avg(p.weight by p.qoh where p.qoh<10)) where p.pnum<13 \g
+<<
+
++------+-----------+
+|qoh   |avgwt      |
++------+-----------+
+|     0|    252.000|
+|     1|     10.000|
+|     2|    685.000|
+|     3|    578.000|
+|     4|    450.000|
+|    15|      0.000|
+|    32|      0.000|
+|    95|      0.000|
+|   143|      0.000|
+|   250|      0.000|
+|   350|      0.000|
++------+-----------+
+(11 rows)
+>>
+* retrieve (p.qoh, avgwt=avg(p.weight by p.qoh), sumnum=sum(p.pnum by p.color))where-
+ p.pnum>9 \g
+<<
+
++------+-----------+-------------+
+|qoh   |avgwt      |sumnum       |
++------+-----------+-------------+
+|     0|    252.000|           30|
+|     0|    252.000|           34|
+|   143|      0.000|           10|
++------+-----------+-------------+
+(3 rows)
+>>
+* retrieve (p.qoh, avgwt=avg(p.weight by p.qoh), sumnum=sum(p.pnum by p.qoh)) \g
+/*
+linking 
+*/
+<<
+
++------+-----------+-------------+
+|qoh   |avgwt      |sumnum       |
++------+-----------+-------------+
+|     0|    252.000|           50|
+|     1|     10.000|            1|
+|     2|    685.000|            3|
+|     3|    578.000|            6|
+|     4|    450.000|            4|
+|    15|     19.000|            8|
+|    32|     20.000|            2|
+|    95|     15.000|            7|
+|   143|      0.000|           10|
+|   250|      1.000|            5|
+|   350|      2.000|            9|
++------+-----------+-------------+
+(11 rows)
+>>
+* retrieve (p.qoh, avgst=avg(p.weight by p.qoh), sumnum=sum(p.pnum by p.qoh)) where -
+avg(p.pnum by p.qoh)>10 \g
+<<
+
++------+-----------+-------------+
+|qoh   |avgst      |sumnum       |
++------+-----------+-------------+
+|     0|    252.000|           50|
++------+-----------+-------------+
+(1 row)
+>>
+* retrieve (p.qoh, avgwt=avg(p.weight by p.qoh where p.pnum>8), sumnum=sum(p.pnum by-
+ p.qoh)) \g
+<<
+
++------+-----------+-------------+
+|qoh   |avgwt      |sumnum       |
++------+-----------+-------------+
+|     0|    252.000|           50|
+|     1|      0.000|            1|
+|     2|      0.000|            3|
+|     3|      0.000|            6|
+|     4|      0.000|            4|
+|    15|      0.000|            8|
+|    32|      0.000|            2|
+|    95|      0.000|            7|
+|   143|      0.000|           10|
+|   250|      0.000|            5|
+|   350|      2.000|            9|
++------+-----------+-------------+
+(11 rows)
+>>
+* retrieve (p.color, x=count(p.pnum by p.color)) \g
+/*
+domain optimization 
+*/
+<<
+
++--------+-------------+
+|color   |x            |
++--------+-------------+
+|black   |            4|
+|blue    |            1|
+|clear   |            1|
+|gray    |            4|
+|pink    |            1|
+|white   |            2|
+|yellow  |            1|
++--------+-------------+
+(7 rows)
+>>
+* retrieve (odd=count(p.qoh by mod(p.qoh,2))) where mod(p.qoh,2)=1 \g
+<<
+
++-------------+
+|odd          |
++-------------+
+|            5|
++-------------+
+(1 row)
+>>
+* retrieve (d1=avgu(pp.qoh by pp.color where pp.pnum<14), d2=sumu(pp.qoh by pp.color-
+ where pp.pnum<14), pp.color) order by d1 \g
+/*
+aggregate optimization 
+------------------------same by-list 
+------------------------same qual 
+------------------------same variables 
+------------------------prim   norm   d.c.   
+------------------------prim  afcn?  never  afcn?  
+------------------------norm  never  always always 
+------------------------d.c.  afcn?  always always 
+------------------------prim, prim 
+*/
+<<
+
++-----------+-------------+--------+
+|d1         |d2           |color   |
++-----------+-------------+--------+
+|      1.000|            1|pink    |
+|      2.000|            6|black   |
+|      3.000|            3|yellow  |
+|     15.000|           15|blue    |
+|     94.000|          282|gray    |
+|    143.000|          143|clear   |
+|    222.500|          445|white   |
++-----------+-------------+--------+
+(7 rows)
+>>
+* retrieve (d1=avg (pp.qoh by pp.color where pp.pnum<14), d2=sumu(pp.qoh by pp.color-
+ where pp.pnum<14), pp.color) order by d1 \g
+/*
+norm, prim 
+*/
+<<
+
++-----------+-------------+--------+
+|d1         |d2           |color   |
++-----------+-------------+--------+
+|      1.000|            1|pink    |
+|      2.400|            6|black   |
+|      3.000|            3|yellow  |
+|     15.000|           15|blue    |
+|     94.000|          282|gray    |
+|    143.000|          143|clear   |
+|    222.500|          445|white   |
++-----------+-------------+--------+
+(7 rows)
+>>
+* retrieve (d1=avg(pp.qoh    by pp.color where pp.pnum<14), d2=sum(pp.weight by pp.c-
+olor where pp.pnum<14), pp.color) order by d1 \g
+/*
+norm, norm 
+*/
+<<
+
++-----------+-------------+--------+
+|d1         |d2           |color   |
++-----------+-------------+--------+
+|      1.000|           20|pink    |
+|      2.400|         2377|black   |
+|      3.000|         1156|yellow  |
+|     15.000|           38|blue    |
+|     94.000|          796|gray    |
+|    143.000|            0|clear   |
+|    222.500|           34|white   |
++-----------+-------------+--------+
+(7 rows)
+>>
+* retrieve (d1=max (pp.qoh by pp.color where pp.pnum<14), d2=sumu(pp.qoh by pp.color-
+ where pp.pnum<14), pp.color) order by d1 \g
+/*
+d.c., prim 
+*/
+<<
+
++------+-------------+--------+
+|d1    |d2           |color   |
++------+-------------+--------+
+|     1|            1|pink    |
+|     3|            3|yellow  |
+|     4|            6|black   |
+|    15|           15|blue    |
+|   143|          143|clear   |
+|   250|          282|gray    |
+|   350|          445|white   |
++------+-------------+--------+
+(7 rows)
+>>
+* retrieve (d1=max(pp.qoh    by pp.color where pp.pnum<14), d2=sum(pp.weight by pp.c-
+olor where pp.pnum<14), pp.color) order by d1 \g
+/*
+d.c., norm 
+*/
+<<
+
++------+-------------+--------+
+|d1    |d2           |color   |
++------+-------------+--------+
+|     1|           20|pink    |
+|     3|         1156|yellow  |
+|     4|         2377|black   |
+|    15|           38|blue    |
+|   143|            0|clear   |
+|   250|          796|gray    |
+|   350|           34|white   |
++------+-------------+--------+
+(7 rows)
+>>
+* retrieve (d1=max(pp.qoh    by pp.color where pp.pnum<14), d2=min(pp.weight by pp.c-
+olor where pp.pnum<14), pp.color) order by d1 \g
+/*
+d.c., d.c. 
+*/
+<<
+
++------+------+--------+
+|d1    |d2    |color   |
++------+------+--------+
+|     1|    10|pink    |
+|     3|   578|yellow  |
+|     4|   107|black   |
+|    15|    19|blue    |
+|   143|     0|clear   |
+|   250|     1|gray    |
+|   350|     2|white   |
++------+------+--------+
+(7 rows)
+>>
+* retrieve (d.number, avgsal=avg(e.salary by d.number where e.manager=d.manager))  \-
+g
+/*
+multi-variable 
+----------------2 variable 
+*/
+<<
+
++------+-----------+
+|number|avgsal     |
++------+-----------+
+|     1|      0.000|
+|    10|   8779.000|
+|    14|   9687.000|
+|    19|  10356.333|
+|    20|  10356.333|
+|    26|      0.000|
+|    28|   6688.500|
+|    34|   9687.000|
+|    35|  12390.500|
+|    43|   6688.500|
+|    47|  17727.667|
+|    49|      0.000|
+|    58|  17727.667|
+|    60|   7000.000|
+|    63|      0.000|
+|    65|      0.000|
+|    70|   7000.000|
+|    73|   7000.000|
+|    99|      0.000|
++------+-----------+
+(19 rows)
+>>
+* retrieve (d.number, avgsal=avg(e.salary by d.number where e.manager=d.manager)) wh-
+ere e.number>35 \g
+/*
+cryptic query processing on quel's part - these are actually
+generally equivelant in quel's looser terms.
+*/
+<<
+
++------+-----------+
+|number|avgsal     |
++------+-----------+
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|     1|      0.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    10|   8779.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    14|   9687.000|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    19|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    20|  10356.333|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    26|      0.000|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    28|   6688.500|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    34|   9687.000|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    35|  12390.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    43|   6688.500|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    47|  17727.667|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    49|      0.000|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    58|  17727.667|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    60|   7000.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    63|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    65|      0.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    70|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    73|   7000.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
+|    99|      0.000|
++------+-----------+
+(342 rows)
+>>
+<<
+
++------+-----------+
+|number|avgsal     |
++------+-----------+
+|     1|      0.000|
+|    10|   8779.000|
+|    14|   9687.000|
+|    19|  10356.333|
+|    20|  10356.333|
+|    26|      0.000|
+|    28|   6688.500|
+|    34|   9687.000|
+|    35|  12390.500|
+|    43|   6688.500|
+|    47|  17727.667|
+|    49|      0.000|
+|    58|  17727.667|
+|    60|   7000.000|
+|    63|      0.000|
+|    65|      0.000|
+|    70|   7000.000|
+|    73|   7000.000|
+|    99|      0.000|
++------+-----------+
+(19 rows)
+>>
+* destroy employee, dept, parts, prime \g
+/*
+endperf p1 aggregate
+\p\g
+*/
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: Mon Mar 10 14:35:53 2008

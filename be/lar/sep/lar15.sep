@@ -1,0 +1,106 @@
+/*
+	Test Name: prfdb01.sep
+	Time: Wed Nov 30 17:01:19 1994
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : prfdb01.sep
+	Module  : be/lar
+	Filename: prfdb01.sep
+	Purpose	: Tests table-level rollforwarddb
+	Input Files  : 
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : jo_tab
+	Synopsis     : Tests that both db-level and table-level rollforwarddb
+	               restore a journaled table from a db-level checkpoint.  
+	               (Bug 66401: table-level rollforwarddb fails to apply 
+	               journals)
+
+ History: 16-Jan-1995	(holla02)   Created
+          20-Jan-1995   (holla02)   Minor modifications
+	  14-Apr-1999   (vande02)  Hard-coded VPG_SZ to 4K
+*/
+
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table jo_tab \g
+<<
+~
+>>
+* create table jo_tab (col1 i4, col2 varchar(30)) with journaling, page_size=4096 \g
+<<
+>>
+* insert into jo_tab values (1, 'Pre-checkpoint');\g
+<<
+(1 row)
+>>
+* \q 
+<<
+>>
+? ckpdb -d +j SEPPARAMDB 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* insert into jo_tab values(2,'After checkpoint') \g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? rollforwarddb SEPPARAMDB
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select * from jo_tab;\g
+<<
++-------------+------------------------------+
+|col1         |col2                          |
++-------------+------------------------------+
+|            1|Pre-checkpoint                |
+|            2|After checkpoint              |
++-------------+------------------------------+
+(2 rows)
+>>
+* insert into jo_tab values (3,'Before rollforward -table');\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? rollforwarddb SEPPARAMDB -table=jo_tab
+<<
+~
+>>
+? sql -s SEPPARAMDB
+<<
+>>
+* select * from jo_tab;\g
+<<
++-------------+------------------------------+
+|col1         |col2                          |
++-------------+------------------------------+
+|            1|Pre-checkpoint                |
+|            2|After checkpoint              |
+|            3|Before rollforward -table     |
++-------------+------------------------------+
+(3 rows)
+>>
+* drop table jo_tab;\g
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: Wed Nov 30 17:24:23 1994

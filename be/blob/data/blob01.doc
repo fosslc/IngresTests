@@ -1,0 +1,917 @@
+2	
+Name: blob01.sep
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : be\blob
+	Filename: blob01.sep
+	Purpose	: Test checkpoint, recovery, and journal processing with blob
+		  columns.
+	Input Files  : none.
+	Output Files : none.
+	Database     : SEPPARAMDB
+	Tables       : blob01
+	Synopsis     : This test tests checkpoint, recovery, and journal
+		       processing with blob columns.
+
+ History: 26-Feb-1999	(somsa01)	Created.
+	  22-mar-1999	(walro03)
+		Removed -v"|" from sql statement; it caused diffs.
+		Renamed table book to blob01.
+		Ignore results of "drop table".
+		Changed "2048" to 4096 in "help table" canons.
+		Drop table at end of sep test.
+	  07-apr-1999	(vande02)
+                Hard-coded VPG_SZ to 4K.
+	  28-oct-2000	(vande02) *** NOTE CONSISTENT DIFF ***
+		The command 'select bid, left' consistently causes the results
+		within sep to shift.  This will be acceptable as long as the
+		row count matches the canon.
+          03-May-2001	(sheco02)
+		Modify the NT canon for ckpdb/rollforwarddb.
+		Add mask to eliminate the *.ckp file diff.
+          16-Nov-2001	(boija02)
+		ordering might make this a bit tidier
+          20-Nov-2001	(BOIJA02)
+		Ordering of special characters is unreliable across platforms,
+		so more specific order criteria are required.
+	   4-Feb-2002	(toumi01)
+		add missing defines for CL calls MEfill and STcopy.
+           4-Nov-2003	(vande02)
+		Replace SIprintfs by printfs. Limit number of command line
+		arguments to VMS maximum (same as abbjo03 change to blob02.sep).
+		Dropping two arguments, printf.doc and read.doc, so this will
+		also run on VMS has resulted in accepting new canons as the row
+		count in the blob tables will be 200 and not 280.
+		Cleaned up canons for NT_GENERIC ckpdb/rollforwarddb.
+
+		Put empty canon to confirm sql connections to database,
+		alternate canon for ESQLC which doesn't print a banner on VMS,
+		and lined up history, purpose, and synopsis comments for easy
+		reading.
+
+? sepset sed @file(ing_tst,be,lar,data,larmasks) 
+<<
+>>
+? fill create.sql 
+!!
+create table blob01 (bid integer, bname char(32), btext long varchar) with page_size-
+=4096;\p\g
+modify blob01 to hash on bid, bname;\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table blob01;\p\g
+<<
+~
+>>
+* \i create.sql 
+<<
+create table blob01 (bid integer, bname char(32), btext long varchar) with page_size-
+=4096;
+modify blob01 to hash on bid, bname;
+(0 rows)
+>>
+* \q 
+<<
+
+>>
+? fill blob_insert.sc 
+!!
+#include    <stdio.h>
+#define MEfill(n,v,s) memset(s,v,n)
+#define STcopy(a,b)   strcpy(b,a)
+
+EXEC SQL include sqlca;
+
+#define OK 0
+#define FAIL 1
+
+/*
+**  Name: blob_insert.sc
+**
+**  Description:
+**	This program:
+**	    a) loops 40 times, inserting into a table containing a
+**	    long varchar field.
+**	or
+**	    b) loads a blob table from given data files.
+**
+**	Several segments are inserted via a PUT datahandler.
+**
+**  History:
+**	12-feb-1999 (somsa01)
+**	    Created.
+**	19-feb-1999 (somsa01)
+**	    Changed prototypes so that it would compile on all UNIX machines.
+*/
+
+int Times = 40;
+
+void read_book(char chr);
+void read_book2(FILE *fp);
+void ins_book(int chr);
+void ins_book2(char *bookname);
+
+main(int argc, char *argv[])
+{
+    EXEC SQL begin declare section;
+    char	dbname[32];
+    EXEC SQL end declare section;
+    int		i, insert_type;
+
+    if (argc < 3)
+    {
+	printf("Usage:\nblob_insert <database name> 1 <char as int>\n");
+	printf("blob_insert <database name> 2 <at least 3 textfile names>\n");
+	PCexit(FAIL);
+    }
+
+    CVan(argv[2], &insert_type);
+    if ((insert_type == 2) && (argc < 5))
+    {
+	printf("You must supply at least 3 textfile names.\n");
+	PCexit(FAIL);
+    }
+
+    srand(getpid() * 17);
+    STcopy(argv[1], dbname);
+
+    EXEC SQL whenever sqlerror stop;
+    printf("Connecting to database ...\n");
+    EXEC SQL connect :dbname;
+
+    EXEC SQL whenever sqlerror call sqlprint;
+
+    printf("Inserting blobs ...\n");
+
+    if (insert_type == 1)
+    {
+	int	chr;
+
+	Times = 40;
+	CVan(argv[3], &chr);
+	while (Times--)
+	{
+	    for (i = 0; i < 7; i++)
+		ins_book(chr);
+	}
+    }
+    else
+    {
+	Times = 20;
+	while (Times--)
+	{
+	    for (i = 0; i < argc - 3; i++)
+		ins_book2(argv[3 + i]);
+	}
+    }
+
+    printf("Done.\n");
+    EXEC SQL disconnect;
+
+    PCexit(OK);
+}
+
+void
+ins_book(int chr)
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+    int		newnum;
+    char	bname[32];
+    EXEC SQL END DECLARE SECTION;
+
+    newnum = rand();
+    IISTprintf(bname, "CONSTANT%d", getpid());
+    EXEC SQL INSERT INTO blob01 VALUES( :newnum, :bname,
+				      DATAHANDLER(read_book(chr)) );
+   
+    if (sqlca.sqlcode != 0)
+    {
+	printf( "Error %d while inserting blob, will rollback\n",
+		sqlca.sqlcode );
+	EXEC SQL rollback;
+	if (sqlca.sqlcode != 0)
+	    printf("    Error rolling back after error.\n");
+    }
+    else
+    { 
+	EXEC SQL commit;
+	if (sqlca.sqlcode != 0)
+	    printf("    Error commiting after insert.\n");
+    }
+}
+
+void
+ins_book2(char *bookname)
+{
+    EXEC SQL begin declare section;
+    int		newnum;
+    char	*book = bookname;
+    EXEC SQL end declare section;
+    FILE	*fp;
+
+    if ((fp = fopen(book, "r")) == NULL)
+    {
+	printf("Cannot open %s\n", book);
+	EXEC SQL disconnect;
+	PCexit(FAIL);
+    }
+
+    /* Get the next available id num. */
+    newnum = Times * 20;
+
+    EXEC SQL insert into blob01 values (:newnum, :book,
+				      DATAHANDLER(read_book2(fp)));
+
+    if (sqlca.sqlcode != 0)
+    {
+	printf("Error %d while inserting blob, will rollback\n",
+		 sqlca.sqlcode);
+	EXEC SQL rollback;
+	if (sqlca.sqlcode != 0)
+	    printf("	Error rolling back after error!\n");
+    }
+    else
+    {
+	EXEC SQL commit;
+	if (sqlca.sqlcode != 0)
+	    printf("	Error commiting after insert!\n");
+    }
+
+    fclose(fp);
+}
+
+void
+read_book(char chr)
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+    char	segment[936];
+    int		seglen;
+    EXEC SQL END DECLARE SECTION;
+
+    seglen = sizeof(segment);
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob A\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob B\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob C\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0);
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 1 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob E\n", sqlca.sqlcode);
+}
+
+void
+read_book2(FILE *fp)
+{
+    EXEC SQL begin declare section;
+    char	segment[936];
+    int		seglen;
+    int		data_end;
+    EXEC SQL end declare section;
+    int bytes;
+
+    while ((bytes = fread(segment, 1, sizeof segment, fp)) > 0)
+    {
+#ifdef DEBUG
+	printf("read %d bytes ERR=%d  EOF=%d\n", bytes, ferror(fp), feof(fp));
+#endif
+
+	data_end = (bytes != sizeof segment);
+	seglen = bytes;
+	EXEC SQL put data ( segment = :segment, segmentlength = :seglen,
+			    dataend = :data_end );
+	if (sqlca.sqlcode != 0)
+	{
+	    printf("Error %d while PUTing blob.\n", sqlca.sqlcode);
+	}
+    }
+
+    if (ferror(fp) || ! feof(fp))
+    {
+	printf("AFTER %d bytes ERR=%d  EOF=%d\n", bytes, ferror(fp),
+		 feof(fp));
+    }
+}
+!!
+? esqlc blob_insert.sc 
+<<
+ESQL blob_insert.sc:
+>>
+<<
+>>
+? sepcc blob_insert.c 
+<<
+>>
+<< IF (NT_GENERIC)
+blob_insert.c
+>>
+? seplnk blob_insert 
+<<
+>>
+? ckpdb +j -l +w SEPPARAMDB 
+<<
+Fri Mar 26 10:42:21 1999 CPP: Preparing to checkpoint database: blobdb
+beginning checkpoint to disk /disk3_0/ii25sqsptx/verify/ingres/ckp/default/blobdb of-
+ 1 locations
+Fri Mar 26 10:42:22 1999 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/disk3_0/ii25sqsptx/verify/ingres/ckp/default/blobdb'
+    file = 'c0001001.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /disk3_0/ii25sqsptx/verify/ingres/ckp/default/blobdb of 1 -
+locations
+>>
+<< IF (NT_GENERIC) 
+Mon Nov 10 14:06:24 2003 CPP: Preparing to checkpoint database: blobdb
+Beginning checkpoint to disk C:\IngresD3\ingres\ckp\default\blobdb of 1 locations.
+Mon Nov 10 14:06:24 2003 CPP: Start checkpoint of location: ii_database to disk:
+    path = 'C:\IngresD3\ingres\ckp\default\blobdb'
+    file = 'SEDCKPFILE'
+executing checkpoint
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaaa.cnf
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaab.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaac.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaad.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaae.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabg.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaach.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaef.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaado.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadk.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadl.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaig.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadm.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadn.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaca.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaacb.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadp.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaacc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaacd.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaif.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaai.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabe.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabi.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabm.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabk.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabl.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaace.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabn.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadg.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaei.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadi.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaeh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaacg.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabp.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaacf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaej.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaij.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaala.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalb.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaald.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaale.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalk.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalg.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaali.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaall.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamk.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaml.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaana.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanb.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamm.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamn.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamo.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamp.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalm.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaln.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalo.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalp.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaama.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamb.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamd.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaame.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamg.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaami.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaand.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaane.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaang.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaani.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaank.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanl.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanm.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaann.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaano.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanp.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoa.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaob.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaod.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoe.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaof.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaog.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoi.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaapc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaapd.t00
+C:\IngresD3\ingres\data\default\blobdb\zzzz0007.ali
+103 File(s) copied
+Ending checkpoint to disk C:\IngresD3\ingres\ckp\default\blobdb of 1 locations
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* help table blob01\g 
+<<
+Name:                 blob01
+Owner:                testenv
+Created:              04-nov-2003 17:16:19     
+Location:             ii_database
+Type:                 user table
+Version:              II2.6
+Page size:            4096
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 71
+Row width:            71
+Number of rows:       200
+Storage structure:    hash
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      18
+Overflow data pages:  0
+Journaling:           enabled
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+bid                              integer         4  yes    null     1 
+bname                            char           32  yes    null     2 
+btext                            long varch         yes    null       
+
+Secondary indexes:    none
+
+
+
+>>
+* \q 
+<<
+
+>>
+? rollforwarddb +w SEPPARAMDB 
+<<
+Fri Mar 26 10:52:27 1999 RFP: Preparing for database rollforward on : blobdb        -
+                 
+Fri Mar 26 10:52:27 1999 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Checking database snapshot for table level recovery
+beginning restore of disk /disk3_0/ii25sqsptx/verify/ingres/ckp/default/blobdb of 1 -
+locations
+Fri Mar 26 10:52:28 1999 RFP: Deleting files at root location : ii_database:
+Fri Mar 26 10:52:31 1999 RFP: Start restore of location: ii_database from disk:
+    path = '/disk3_0/ii25sqsptx/verify/ingres/ckp/default/blobdb'
+    file = 'c0001001.ckp'
+executing restore to disk /disk3_0/ii25sqsptx/verify/ingres/ckp/default/blobdb of 1 -
+locations
+done with disk operations
+beginning restore of journals
+Fri Mar 26 10:53:08 1999 RFP: Start processing journal file sequence 1.
+Fri Mar 26 10:55:25 1999 RFP: - processed 100 Xacts up to 26-Mar-1999 10:48:18.00
+done with disk operations
+Fri Mar 26 10:56:22 1999 Completed processing of 141 transactions.
+Fri Mar 26 10:56:29 1999 Rollforward completed successfully.
+>>
+<< IF (NT_GENERIC) 
+Mon Nov 10 14:07:50 2003 RFP: Preparing for database rollforward on : blobdb        -
+                  
+Mon Nov 10 14:07:50 2003 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Checking database snapshot for table level recovery
+Beginning restore of disk C:\IngresD3\ingres\ckp\default\blobdb of 1 locations.
+Mon Nov 10 14:07:50 2003 RFP: Deleting files at root location : ii_database:
+Mon Nov 10 14:07:50 2003 RFP: Start restore of location: ii_database from disk:
+    path = 'C:\IngresD3\ingres\ckp\default\blobdb'
+    file = 'SEDCKPFILE'
+executing restore from disk
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaaa.cnf
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaab.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaac.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaad.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaae.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabf.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabg.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaach.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabh.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaadf.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaef.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaado.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaadk.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaadl.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaig.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaadm.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaadn.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaca.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaacb.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaadp.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaacc.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaacd.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaif.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaai.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabe.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabi.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabm.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabj.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabk.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabl.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaace.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabn.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaadg.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaei.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaadh.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaadi.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaadj.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaeh.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaacg.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaabp.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaacf.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaej.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaij.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaala.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaalj.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaalb.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaalc.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaald.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaale.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaalk.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaalg.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaalf.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaalh.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaali.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaall.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamj.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamk.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaml.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaana.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaanb.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamm.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamn.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamo.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamp.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaalm.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaln.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaalo.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaalp.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaama.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamb.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamc.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamd.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaame.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamf.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaamg.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaanc.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaami.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaand.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaane.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaanf.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaang.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaanh.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaani.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaanj.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaank.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaanl.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaanm.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaann.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaano.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaanp.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaoa.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaob.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaoc.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaod.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaoe.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaof.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaog.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaoh.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaoi.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaaoj.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaapc.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\aaaaaapd.t00
+C:\IngresD3\ingres\ckp\default\blobdb\SEDCKPFILE\zzzz0007.ali
+103 File(s) copied
+Done with disk checkpoint operations.
+beginning restore of journals
+Mon Nov 10 14:07:51 2003 RFP: Start processing journal file sequence SEDSEQ.
+Mon Nov 10 14:07:53 2003 RFP: - processed 100 Xacts up to 10-Nov-2003 14:07:25.62
+Done with disk checkpoint operations.
+Mon Nov 10 14:07:53 2003 Completed processing of transactions.
+Mon Nov 10 14:07:53 2003 Rollforward completed successfully.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* help table blob01\g 
+<<
+Name:                 blob01
+Owner:                testenv
+Created:              04-nov-2003 17:16:19     
+Location:             ii_database
+Type:                 user table
+Version:              II2.6
+Page size:            4096
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 71
+Row width:            71
+Number of rows:       100
+Storage structure:    hash
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      18
+Overflow data pages:  0
+Journaling:           enabled
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+bid                              integer         4  yes    null     1 
+bname                            char           32  yes    null     2 
+btext                            long varch         yes    null       
+
+Secondary indexes:    none
+
+
+
+>>
+* \q 
+<<
+
+>>
+? ckpdb -j -l +w SEPPARAMDB 
+<<
+Fri Mar 26 11:09:58 1999 CPP: Preparing to checkpoint database: blobdb
+Fri Mar 26 11:09:58 1999 CPP: Archiver must drain log records from log file
+                           : to journal file.  If Archiver is not running
+                           : this program will not continue.  Exit the program
+                           : and have the appropriate person restart the archiver.
+beginning checkpoint to disk /disk3_0/ii25sqsptx/verify/ingres/ckp/default/blobdb of-
+ 1 locations
+Fri Mar 26 11:09:59 1999 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/disk3_0/ii25sqsptx/verify/ingres/ckp/default/blobdb'
+    file = 'c0002001.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /disk3_0/ii25sqsptx/verify/ingres/ckp/default/blobdb of 1 -
+locations
+>>
+<< IF (NT_GENERIC) 
+Mon Nov 10 14:09:40 2003 CPP: Preparing to checkpoint database: blobdb
+Mon Nov 10 14:09:40 2003 CPP: Archiver must drain log records from log file
+                           : to journal file.  If Archiver is not running
+                           : this program will not continue.  Exit the program
+                           : and have the appropriate person restart the archiver.
+Beginning checkpoint to disk C:\IngresD3\ingres\ckp\default\blobdb of 1 locations.
+Mon Nov 10 14:09:40 2003 CPP: Start checkpoint of location: ii_database to disk:
+    path = 'C:\IngresD3\ingres\ckp\default\blobdb'
+    file = 'SEDCKPFILE'
+executing checkpoint
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaaa.cnf
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaab.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaac.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaad.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaae.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabg.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaach.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaef.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaado.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadk.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadl.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaig.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadm.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadn.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaca.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaacb.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadp.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaacc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaacd.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaif.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaai.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabe.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabi.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabm.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabk.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabl.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaace.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabn.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadg.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaei.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadi.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaadj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaeh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaacg.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaabp.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaacf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaej.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaij.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaala.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalb.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaald.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaale.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalk.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalg.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaali.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaall.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamk.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaml.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaana.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanb.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamm.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamn.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamo.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamp.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalm.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaln.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalo.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaalp.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaama.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamb.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamd.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaame.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaamg.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaami.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaand.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaane.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanf.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaang.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaani.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaank.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanl.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanm.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaann.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaano.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaanp.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoa.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaob.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaod.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoe.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaof.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaog.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoh.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoi.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaaoj.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaapc.t00
+C:\IngresD3\ingres\data\default\blobdb\aaaaaapd.t00
+C:\IngresD3\ingres\data\default\blobdb\zzzz0008.ali
+103 File(s) copied
+Ending checkpoint to disk C:\IngresD3\ingres\ckp\default\blobdb of 1 locations
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table blob01;\p\g
+<<
+~
+>>
+* \q
+<<
+
+>>
+? delete blob_insert.c 
+<<
+~
+>>
+? delete blob_insert.exe 
+<<
+~
+>>
+.if (NT_GENERIC || VMS) 
+? delete blob_insert.obj 
+<<
+~
+>>
+.else 
+? delete blob_insert.o 
+<<
+~
+>>
+.endif 
+2

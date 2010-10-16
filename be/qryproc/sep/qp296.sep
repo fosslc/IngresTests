@@ -1,0 +1,141 @@
+/*
+        Test Name: qp296.sep
+        Time: Fri May 11 13:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp296.sep
+        Module  : be/qryproc
+        Filename: qp296.sep
+        Purpose : To test the new feature row producing procedure. 
+        Input Files  : rp1.sc
+        Output Files : rp1.exe
+        Database     : qryprocdb
+        Tables       : qp296_table1
+        Synopsis     : This is to test the ESQLC syntax where BEGIN and END 
+                       statements are missing from the EXECUTE PROCEDURE 
+                       STATEMENT.
+
+ History: 11-May-2001   (wu$ca01)       Created
+**
+**  ROW PRODUCING PROCEDURE
+**
+**  - ESQLC SYNTAX, MISSING BEGIN, END STATEMENTS
+**
+**  Known Problems:
+**  1) Currently fails with 10872364. (RESOLVED)
+          16-Apr-2001	(sarjo01)
+          15-May-2001	(sarjo01)
+*/
+? fill setup.sql 
+!!
+\i cleanup.sql
+create table qp296_table1 (a1 int, a2 char(10), a3 date)\g
+insert into qp296_table1 values(100, 'abcd', 'now')\g
+insert into qp296_table1 values(101, 'xyz', 'now')\g
+insert into qp296_table1 values(102, 'xxx', 'now')\g
+insert into qp296_table1 values(103, 'qqqqq', 'now')\g
+insert into qp296_table1 values(104, 'junk', 'now')\g
+!!
+? fill cleanup.sql 
+!!
+drop table qp296_table1\g
+drop procedure qp296_rp1\g
+!!
+? fill rp1.sql 
+!!
+/*-------------------------------------------*
+   BAD SYNTAX: too few columns in result row
+*/
+create procedure qp296_rp1
+       result row(int, char(10))
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp296_table1 order by 1 do
+      return row(:v1, :v2);
+   endfor;
+end;\g
+!!
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* \i rp1.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? fill rp1.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+   EXEC SQL END DECLARE SECTION;
+
+   int       i;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+   EXEC SQL execute procedure qp296_rp1;
+/* No BEGIN, END Statements (good syntax) */
+   EXEC SQL drop procedure qp296_rp1;
+   printf("Operation completed\n");
+}
+!!
+? esqlc rp1.sc 
+<<
+~
+>>
+? sepcc rp1.c 
+<<
+~
+>>
+? seplnk rp1 
+<<
+~
+>>
+? run rp1.exe SEPPARAMDB 
+<<
+E_LQ003C Mismatching number of result columns and program variables.
+    There are 2 result columns and 0 program variables.
+Operation completed
+>>
+? delete rp1.c 
+<<
+~
+>>
+? delete rp1.o 
+<<
+~
+>>
+? delete rp1.obj 
+<<
+~
+>>
+? delete rp1.exe 
+<<
+~
+>>
+
+
+Ending at: Tue May 15 08:49:04 2001

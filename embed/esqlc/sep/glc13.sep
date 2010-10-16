@@ -1,0 +1,368 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: glc13.sep (formerly pza12sc.sep)
+	Time: Tue Oct  5 16:15:40 1993
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : glc13
+	Module  : 3gl
+	Filename: glc13.sep
+	Purpose	: test the Long Varchar Data Type (BLOB)
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : blobtable
+	Synopsis     : Uses the Callback Method (DATAHANDER) for
+		       the BLOB datatype.  Tests various DATAHANDER
+		       semantics and will generate several errors
+		       where appropriate.
+
+ History:  5-Oct-1993	(jbryson) Created
+          17-Nov-1993	(jbryson) Accepted new canon due to error message change
+          02-Apr-1997	(chiel02) Modified Added an alternate canon for the
+                                  sepcc command.  Removed the platform
+                                  specifications of the canons for the esqlc
+                                  command to make it work under NT. 
+          13-Jun-2008	(vande02) Modified the canon text for message E_LQ00E4
+                                  which had 'to to'. Fixed up header.
+*/
+? delete pza12sc.c 
+<<
+~
+>>
+? delete pza12sc.o 
+<<
+~
+>>
+? delete pza12sc.obj 
+<<
+~
+>>
+? delete pza12sc.exe 
+<<
+~
+>>
+? fill pza12sc.sql 
+!!
+create table blobtable (
+       intcol integer,
+       lvchcol long varchar)\p\g
+insert into blobtable values
+   (1,'This is blob row #1')\p\g
+insert into blobtable values
+   (2,'This is blob row #2 - just a little longer!')\p\g
+insert into blobtable values
+   (3,'This is blob row #3')\p\g
+insert into blobtable values
+   (4,'This is blob row #4')\p\g
+insert into blobtable values
+   (5,null)\p\g
+insert into blobtable values
+   (6,'This is blob row #6 after a NULL row.')\p\g
+
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table blobtable\g 
+<<
+~
+>>
+* \i pza12sc.sql 
+<<
+ 
+ create table blobtable (
+       intcol integer,
+       lvchcol long varchar)
+insert into blobtable values
+   (1,'This is blob row #1')
+(1 row)
+insert into blobtable values
+   (2,'This is blob row #2 - just a little longer!')
+(1 row)
+insert into blobtable values
+   (3,'This is blob row #3')
+(1 row)
+insert into blobtable values
+   (4,'This is blob row #4')
+(1 row)
+insert into blobtable values
+   (5,null)
+(1 row)
+insert into blobtable values
+   (6,'This is blob row #6 after a NULL row.')
+(1 row)
+>>
+* \q 
+<<
+~
+>>
+? fill pza12sc.sc 
+!!
+#include    <stdio.h>
+#include    <string.h>	
+exec sql include sqlca;
+
+int     My_OutputHdlr();
+int     My_BadHdlr();
+int	My_NoEndDataHdlr();
+int	My_NoDataEndHdlr();
+int	My_UsrErrorHdlr();
+int	My_NullDataHdlr();
+
+main(argc,argv)
+int     argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char*   argv[];
+EXEC SQL END DECLARE SECTION;
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+	char    blob[31];
+	short	ind;
+   EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   EXEC SQL CONNECT :argv[1];
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+/*#8*/
+   EXEC SQL SET_SQL(errorhandler = My_UsrErrorHdlr);
+
+/*#2*/
+   printf("\n**** Testing for -> Use of Non-Long Varchar in a DATAHANDLER...\n");
+   EXEC SQL SELECT intcol
+	INTO DATAHANDLER(My_OutputHdlr(blob)):ind
+	FROM blobtable
+	WHERE intcol=1;
+
+/*#3*/
+   printf("\n**** Testing for -> Use of DB query that is not ");
+   printf("allowed in a DATAHANDLER...\n");
+   printf("****** Currently this test will cause a CORE Dump.\n");
+   printf("****** This is due to BUG# 53481\n");
+
+/* if this "ARCH" Bug ever gets fixed someone should */
+/* use the below select....for now we will skip this select */
+/* BUG# 53481---   EXEC SQL SELECT lvchcol
+        INTO DATAHANDLER(My_BadHdlr(blob)):ind
+	FROM blobtable
+	WHERE intcol=1;*/
+
+/*#5*/
+   printf("\n**** Testing for -> Set indicator vairable to -1\n");
+   /* This calls "My_NoEndDataHdlr()" which would cause an
+    * error...but due to the -1 nullindicator the function
+    * should not get called and 1 NULL row will be inserted */
+   ind = -1;
+   EXEC SQL INSERT INTO blobtable
+	VALUES(-1,DATAHANDLER(My_NullDataHdlr()):ind);
+
+   /* The above insert should insert one row!*/
+   EXEC SQL SELECT COUNT(*)
+	     INTO :ind
+	     FROM blobtable
+	     WHERE lvchcol is NULL;
+   printf("NULL rows in database (>=1) = %d\n",ind);
+
+/*#6*/
+   printf("\n**** Testing for -> No ENDDATA in DATAHANDLER...\n");
+   EXEC SQL SELECT lvchcol
+        INTO DATAHANDLER(My_NoEndDataHdlr(blob)):ind
+	FROM blobtable
+	WHERE intcol=1;
+    
+/*#7*/
+   printf("\n**** Testing for -> No DATAEND in DATAHANDLER...\n");
+   strcpy(blob,"Inserted BLOB");
+   EXEC SQL INSERT INTO blobtable 
+       VALUES (99,DATAHANDLER(My_NoDataEndHdlr(blob)));
+
+   EXEC SQL DISCONNECT;
+}
+
+/******************************************************/
+My_OutputHdlr(segment)
+EXEC SQL BEGIN DECLARE SECTION;
+   char *segment;
+EXEC SQL END DECLARE SECTION;
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+	int	seg_len = 30;
+        int     got_seglen;
+        int     data_end;
+	char	cname[33];
+	int     ctype;
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL INQUIRE_SQL (:cname = columnname, :ctype = columntype);
+    printf("BLOB Column \"%s\":\n",cname);
+    printf("BLOB Column type = %d\n",ctype);
+
+    data_end = 0;
+
+    EXEC SQL GET DATA(:segment = SEGMENT, :got_seglen = SEGMENTLENGTH,
+		      :data_end = DATAEND) WITH MAXLENGTH = :seg_len;
+
+    segment[got_seglen] = '\0';
+
+    if(!data_end)
+        EXEC SQL ENDDATA;
+}
+
+/******************************************************/
+My_BadHdlr(segment)
+EXEC SQL BEGIN DECLARE SECTION;
+   char *segment;
+EXEC SQL END DECLARE SECTION;
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+	int	seg_len = 30;
+        int     got_seglen;
+        int     data_end;
+	char	cname[33];
+	int     ctype;
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL INQUIRE_SQL (:cname = columnname, :ctype = columntype);
+    printf("BLOB Column \"%s\":\n",cname);
+    printf("BLOB Column type = %d\n",ctype);
+
+    EXEC SQL SELECT foo INTO :cname FROM foo;
+
+    data_end = 0;
+
+    EXEC SQL GET DATA(:segment = SEGMENT, :got_seglen = SEGMENTLENGTH,
+		      :data_end = DATAEND) WITH MAXLENGTH = :seg_len;
+
+    if(!data_end)
+        EXEC SQL ENDDATA;
+}
+
+/******************************************************/
+My_NullDataHdlr()
+{
+    printf("We are in My_NullDataHdlr and should NOT get this message!\n");
+
+    EXEC SQL PUT DATA (DATAEND = 1);
+}
+
+/******************************************************/
+My_NoEndDataHdlr(segment)
+EXEC SQL BEGIN DECLARE SECTION;
+   char *segment;
+EXEC SQL END DECLARE SECTION;
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+        int     got_seglen;
+        int     data_end;
+    EXEC SQL END DECLARE SECTION;
+
+    data_end = 0;
+    EXEC SQL GET DATA(:segment = SEGMENT, :got_seglen = SEGMENTLENGTH,
+		      :data_end = DATAEND) WITH MAXLENGTH = 1;
+
+/* NO ENDDATA.....        EXEC SQL ENDDATA;*/
+}
+
+/******************************************************/
+My_NoDataEndHdlr(segment)
+EXEC SQL BEGIN DECLARE SECTION;
+   char *segment;
+EXEC SQL END DECLARE SECTION;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+ int seglen;
+EXEC SQL END DECLARE SECTION;
+
+   seglen = strlen(segment);
+   EXEC SQL PUT DATA (SEGMENT = :segment,
+		      SEGMENTLENGTH = :seglen);
+
+/* NO DATAEND .....     EXEC SQL PUT DATA (DATAEND = 1);*/
+}
+
+/******************************************************/
+My_UsrErrorHdlr()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+ char errortxt[257];
+EXEC SQL END DECLARE SECTION;
+
+   EXEC SQL INQUIRE_SQL (:errortxt = errortext);
+   printf("User defined error handler -> My_UsrErrorHdlr\n  %s\n",errortxt);
+}
+!!
+? esqlc pza12sc.sc 
+<<
+ESQL pza12sc.sc:
+>>
+<< 
+>>
+? sepcc pza12sc 
+<<
+>>
+<<
+pza12sc.c
+>>
+? seplnk pza12sc 
+<<
+>>
+? run pza12sc.exe SEPPARAMDB 
+<<
+
+**** Testing for -> Use of Non-Long Varchar in a DATAHANDLER...
+User defined error handler -> My_UsrErrorHdlr
+  E_LQ00E1 Invalid column  data type for datahandler.
+    The DATAHANDLER clause is valid for columns of 'long' datatypes only.
+
+
+**** Testing for -> Use of DB query that is not allowed in a DATAHANDLER...
+****** Currently this test will cause a CORE Dump.
+****** This is due to BUG# 53481
+
+**** Testing for -> Set indicator vairable to -1
+NULL rows in database (>=1) = 2
+
+**** Testing for -> No ENDDATA in DATAHANDLER...
+User defined error handler -> My_UsrErrorHdlr
+  E_LQ00E4 Premature exit from datahandler.  Datahandler exited before all
+    of the data was retrieved.  Issue the ENDDATA statement to discard
+    remaining data.
+
+
+**** Testing for -> No DATAEND in DATAHANDLER...
+User defined error handler -> My_UsrErrorHdlr
+  E_LQ00E7 No DATAEND indicator.  Datahandler exited before specifying the
+    end of data.  To specify end of data set the DATAEND indicator to '1' in
+    a PUT DATA statement.
+
+>>
+? delete pza12sc.c 
+<<
+~
+>>
+? delete pza12sc.o 
+<<
+~
+>>
+? delete pza12sc.obj 
+<<
+~
+>>
+? delete pza12sc.exe 
+<<
+~
+>>
+
+
+Ending at: Wed Nov 17 14:18:32 1993

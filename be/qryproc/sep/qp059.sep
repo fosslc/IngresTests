@@ -1,0 +1,758 @@
+/*
+        Test Name    : eea15.sep
+        User Name    : testenv
+        Test ID      : eea15
+        Module       : 
+        Filename     : eea15.sep
+        Purpose      : Test various types of cursors, abort to a savepoint
+        Input Files  : none
+        Output Files : none
+        Database     : SEPPARAMDB
+        Tables       : emp, dept.
+        Synopsis     : Make changes to table using cursors. Issue savepoint
+			Do some more changes. Look at tables. Abort back
+			to savepoint. Look at tables again.
+        History      : written into a sep test 7/91 by Troy Camacho from
+                       original equel test:
+                                tst_qatest:[equel.eqfunc.src]rf007a.qc
+                       synonymous to eea07.sep.
+			7-Mar-1997 (vissu01) Modified for NT
+			25-March-1999  (kamra01) modified VPG_SZ to 8192
+*/
+? fill eea15a.dat 
+!!
+    6Aitken	  50000.000	    5sales	    2NE	    8Verducci	   1112-mar-1947	     2
+
+    7Cameron	  35000.000	    8tech sup	    2SE	    6Shigio	   1115-aug-1960	     0
+
+    5Clark	  40000.000	    5sales	    2NC	    8Verducci	   1118-nov-1949	     1
+
+    5Curan	  30000.000	    8tech sup	    2NW	    6Shigio	   1120-aug-1959	     0
+
+    5Curry	  32000.000	    8tech sup	    2NW	    6Shigio	   1130-nov-1955	     3
+
+    6Gordon	  27000.000	    8tech sup	    2NC	    6Shigio	   1123-may-1963	     0
+
+    5Green	  26000.000	    6market	    2NW	    7McTigue	   1119-dec-1961	     0
+
+    7Gregori	  31000.000	    5sales	    2NW	    8Verducci	   1121-oct-1949	     2
+
+    8Kreseski	  24000.000	    8tech sup	    2NC	    6Shigio	   1111-sep-1955	     0
+
+    6Mandic	  43000.000	    5sales	    2SE	    8Verducci	   1110-jul-1964	     0
+
+    7McTigue	  41000.000	    5sales	    2NW	    8Verducci	   11 9-apr-1953	     1
+
+    4Ming	  22000.000	    8tech sup	    2SE	    6Shigio	   11 4-may-1956	     1
+
+    5Ramos	  30000.000	    8tech sup	    2NW	    6Shigio	   1121-jan-1941	     0
+
+    8Robinson	  80000.000	    5sales	    2NE	    8Verducci	   1120-nov-1952	     1
+
+    5Sabel	  21000.000	    8tech sup	    2SE	    6Shigio	   11 8-jan-1958	     0
+
+    6Saxena	  22000.000	    8tech sup	    2NC	    6Shigio	   11 8-may-1950	     0
+
+    6Shigio	  28000.000	    5sales	    2SE	    8Verducci	   11 9-jul-1948	     3
+
+    8Stannich	  33000.000	    6market	    2NW	    7McTigue	   1113-dec-1961	     0
+
+    5Stein	  40000.000	    5sales	    2NE	    8Verducci	   1125-dec-1952	     1
+
+    8Sullivan	  35000.000	    8tech sup	    2NW	    6Shigio	   1110-oct-1960	     1
+
+    8Verducci	  55000.000	    5admin	    2NW	    0	   1125-dec-1958	     2
+
+    9Zimmerman	  25000.000	    8tech sup	    2NE	    6Shigio	   1128-aug-1962	     0
+
+    7DiTallo	  65000.000	    8Contract	    3unk	    8Robinson	   1102-sep-1955	     -
+0
+
+    7Herbert	  35000.000	    7banking	    0	    9Emprinham	   1117-mar-1945	     0
+
+!!
+? fill eea15b.dat 
+!!
+admin   NW                 0.00C  2     4
+market  NW              9200.00A  1     2
+sales   NC            120000.00A  2     1
+sales   NE                 0.00D 18     4
+sales   NW            200000.00A  2     1
+sales   SC             95000.00E  1     1
+sales   SE            175000.00D 18     1
+tech supNC              5000.00C  2     3
+tech supNE             20000.00D 17     2
+tech supNW                 0.00B  1     1
+tech supSE                 0.00D 19     1
+!!
+? fill eea15.qc 
+!!
+#include <stdio.h>
+/***************/
+/*    EEA15    */
+/***************/
+
+main(argc, argv)
+##      int argc;
+##      char **argv;
+
+{
+	/* Declarations for EMP basis table */
+##	char	ename[11];
+##	int	esalary;	/* Really money but no decimal places */
+##	char	edept[9];
+##	char	ediv[4];
+##	char	emgr[11];
+##	char	ebirthdate[26];
+##	short	enum_dep;
+	/* Declarations for DEPT basis table */
+##	char	ddname[9];
+##	char	ddiv[4];
+##	double	dsales;		/* Really money but no decimal places */
+##	char	dbldg[3];
+##	short	dfloor;
+##	short	dnum_emp;
+	/* Useful vars */
+##	int	done  ;		/* to signal end of cursor */
+##	int	err1  ;		/* Error number */
+##	int	err2  ;		/* Error number */
+##	int	err3  ;		/* Error number */
+##	int	err4  ;		/* Error number */
+	/* Utility variables/clauses */
+##	char	*C_NC = "NC";
+##	char	*e_div_eq_NC = "e.div = \"NC\"";
+##	float	point_5 = 0.50;
+##	char	*is_tech_sup = "tech sup";
+##	char	*not_date = "I AM NOT A DATE";
+##	int	percent;
+##	double	money_f;	/* Non-generic */
+##	char	money_str[20];
+
+
+printf("\n***************\n");
+printf("*    EEA15    *\n");
+printf("***************\n\n");
+
+printf("connecting with database...\n");
+##	ingres argv[1];
+
+
+	/*  plain cursor  */
+##	RANGE OF e IS emp
+##	DECLARE CURSOR c1 FOR
+##		RETRIEVE (e.name, e.salary, e.dept, e.div, e.mgr, e.birthdate,
+##			  e.num_dep)
+##		WHERE e.dept = "sales"
+
+	/*  for update  */
+##	RANGE OF e IS emp
+##	DECLARE CURSOR c2 FOR
+##		RETRIEVE (e.name, e.mgr, e.dept )
+##		WHERE e.div = "NC"
+##		FOR DIRECT UPDATE OF ( dept )
+
+	/*  for delete  */
+##	RANGE OF e IS emp
+##	DECLARE CURSOR c3 FOR
+##		RETRIEVE (e.name)
+##		WHERE e.mgr = "Clark"
+##		FOR UPDATE OF ( name )
+
+	/*  for update  */
+##	RANGE OF d IS dept
+##	DECLARE CURSOR c4 FOR
+##		RETRIEVE ( d.dname, d.sales )
+##		WHERE d.sales = 0
+##		FOR DIRECT UPDATE OF ( sales )
+
+	/*  GENERIC RERIEVE BEGIN  */
+
+	printf( "EQUEL CURSOR Tests, Multiple Cursors Open at once \n\n" );
+
+##	BEGIN TRANSACTION
+
+##	OPEN CURSOR c1
+##	INQUIRE_EQUEL (err1 = errorno)
+##	OPEN CURSOR c2
+##	INQUIRE_EQUEL (err2 = errorno)
+##	OPEN CURSOR c3
+##	INQUIRE_EQUEL (err3 = errorno)
+##	OPEN CURSOR c4
+##	INQUIRE_EQUEL (err4 = errorno)
+
+	printf( "(1) EMP(all) WHERE e.dept = sales \n" );
+	done = 0;
+	while ( !done && !err1 )
+		{
+##		RETRIEVE CURSOR c1 (ename, esalary, edept, ediv, emgr,
+##			ebirthdate, enum_dep)
+##		INQUIRE_EQUEL (done = endquery, err1 = errorno)
+		if (!done && !err1)
+			printf( "%11s, %6d, %4s, %3s, %11s, %13s, %3d\n",
+			ename,esalary,edept,ediv,emgr,ebirthdate,enum_dep);
+		}
+
+	printf( "\n(2) EMP(name, mgr, dept) where div=NC \n" );
+	done = 0;
+	while (!done && !err2)
+		{
+##		RETRIEVE CURSOR c2 ( ename, emgr, edept )
+##		INQUIRE_EQUEL (done = endquery, err2 = errorno);
+		if (!done && !err2)
+			{
+			printf("%-11s, %-11s, %-9s\n", ename,emgr,edept);
+##			REPLACE CURSOR c2 ( dept = UPPERCASE( edept ))
+			}
+		}
+
+	printf( "\n(3) EMP(name) where mgr = Clark \n" );
+	done = 0;
+	while (!done && !err3)
+		{
+##		RETRIEVE CURSOR c3 ( ename )
+##		INQUIRE_EQUEL (done = endquery, err3 = errorno);
+		if (!done && !err3)
+			{
+			printf( "%-11s \n", ename );
+##			DELETE CURSOR c3
+			}
+		}
+
+	printf( "\n(4) DEPT(dname, sales) where sales = 0 \n" );
+	done = 0;
+	while (!done && !err4)
+		{
+##		RETRIEVE CURSOR c4 ( ddname, dsales )
+##		INQUIRE_EQUEL (done = endquery, err4 = errorno);
+		if (!done && !err4)
+			{
+			printf( "%-9s, %10.3f \n", ddname, dsales );
+/*  when bug is fixed use ( sales = dsales - 100 )  */
+##			REPLACE CURSOR c4 ( sales = -100 )
+			}
+		}
+
+##	CLOSE CURSOR c1
+##	CLOSE CURSOR c2
+##	CLOSE CURSOR c3
+##	CLOSE CURSOR c4
+##	SAVEPOINT save1
+
+##	RETRIEVE (
+##		ename		= e.name,
+##		esalary		= e.salary,
+##		edept		= e.dept,
+##		ediv		= e.div,
+##		emgr		= e.mgr,
+##		ebirthdate	= e.birthdate,
+##		enum_dep	= e.num_dep)
+##		{
+			printf( "%11s, %6d, %4s, %3s, %11s, %13s, %3d\n\n",
+			ename,esalary,edept,ediv,emgr,ebirthdate,enum_dep);
+##		}
+##	RETRIEVE (
+##		ddname	= d.dname,
+##		ddiv	= d.div,
+##		dsales	= d.sales,
+##		dbldg	= d.bldg,
+##		dfloor	= d.floor,
+##		dnum_emp= d.num_emp)
+##		{
+			printf( "%9s, %4s, %10.3f, %3s, %3d, %3d\n",
+			ddname,ddiv,dsales,dbldg,dfloor,dnum_emp);
+##		}
+
+	/*  GENERIC RERIEVE BEGIN  */
+
+	printf( "EQUEL CURSOR Tests, Multiple Cursors Open at once \n\n" );
+	printf( "Second time around \n\n" );
+
+##	OPEN CURSOR c1
+##	INQUIRE_EQUEL (err1 = errorno)
+##	OPEN CURSOR c2
+##	INQUIRE_EQUEL (err2 = errorno)
+##	OPEN CURSOR c3
+##	INQUIRE_EQUEL (err3 = errorno)
+##	OPEN CURSOR c4
+##	INQUIRE_EQUEL (err4 = errorno)
+
+	printf( "(1) EMP(all) WHERE e.dept = sales \n" );
+	done = 0;
+	while ( !done && !err1 )
+		{
+##		RETRIEVE CURSOR c1 (ename, esalary, edept, ediv, emgr,
+##			ebirthdate, enum_dep)
+##		INQUIRE_EQUEL (done = endquery, err1 = errorno)
+		if (!done && !err1)
+			printf( "%11s, %6d, %4s, %3s, %11s, %13s, %3d\n",
+			ename,esalary,edept,ediv,emgr,ebirthdate,enum_dep);
+		}
+
+	printf( "\n(2) EMP(name, mgr, dept) where div=NC \n" );
+	done = 0;
+	while (!done && !err2)
+		{
+##		RETRIEVE CURSOR c2 ( ename, emgr, edept )
+##		INQUIRE_EQUEL (done = endquery, err2 = errorno);
+		if (!done && !err2)
+			{
+			printf("%-11s, %-11s, %-9s\n", ename,emgr,edept);
+##			REPLACE CURSOR c2 ( dept = LOWERCASE( edept ))
+			}
+		}
+
+	printf( "\n(3) EMP(name) where mgr = Clark \n" );
+	done = 0;
+	while (!done && !err3)
+		{
+##		RETRIEVE CURSOR c3 ( ename )
+##		INQUIRE_EQUEL (done = endquery, err3 = errorno);
+		if (!done && !err3)
+			printf( "%-11s \n", ename );
+		}
+
+	printf( "\n(4) DEPT(dname, sales) where sales = 0 \n" );
+	done = 0;
+	while (!done && !err4)
+		{
+##		RETRIEVE CURSOR c4 ( ddname, dsales )
+##		INQUIRE_EQUEL (done = endquery, err4 = errorno);
+		if (!done && !err4)
+			{
+			printf( "%-9s, %10.3f \n", ddname, dsales );
+/*  when bug is fixed use ( sales = dsales - 100 )  */
+##			REPLACE CURSOR c4 ( sales = -999 )
+			}
+		}
+
+##	CLOSE CURSOR c1
+##	CLOSE CURSOR c2
+##	CLOSE CURSOR c3
+##	CLOSE CURSOR c4
+
+##	RETRIEVE (
+##		ename		= e.name,
+##		esalary		= e.salary,
+##		edept		= e.dept,
+##		ediv		= e.div,
+##		emgr		= e.mgr,
+##		ebirthdate	= e.birthdate,
+##		enum_dep	= e.num_dep)
+##		{
+			printf( "%11s, %6d, %4s, %3s, %11s, %13s, %3d\n\n",
+			ename,esalary,edept,ediv,emgr,ebirthdate,enum_dep);
+##		}
+##	RETRIEVE (
+##		ddname	= d.dname,
+##		ddiv	= d.div,
+##		dsales	= d.sales,
+##		dbldg	= d.bldg,
+##		dfloor	= d.floor,
+##		dnum_emp= d.num_emp)
+##		{
+			printf( "%9s, %4s, %10.3f, %3s, %3d, %3d\n",
+			ddname,ddiv,dsales,dbldg,dfloor,dnum_emp);
+##		}
+
+##	ABORT TO save1
+
+##	RETRIEVE (
+##		ename		= e.name,
+##		esalary		= e.salary,
+##		edept		= e.dept,
+##		ediv		= e.div,
+##		emgr		= e.mgr,
+##		ebirthdate	= e.birthdate,
+##		enum_dep	= e.num_dep)
+##		{
+			printf( "%11s, %6d, %4s, %3s, %11s, %13s, %3d\n\n",
+			ename,esalary,edept,ediv,emgr,ebirthdate,enum_dep);
+##		}
+##	RETRIEVE (
+##		ddname	= d.dname,
+##		ddiv	= d.div,
+##		dsales	= d.sales,
+##		dbldg	= d.bldg,
+##		dfloor	= d.floor,
+##		dnum_emp= d.num_emp)
+##		{
+			printf( "%9s, %4s, %10.3f, %3s, %3d, %3d\n",
+			ddname,ddiv,dsales,dbldg,dfloor,dnum_emp);
+##		}
+
+##	END TRANSACTION
+##	EXIT
+	printf( "\n===END OF TEST RUN===\n" );
+
+	exit(0);	
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop emp\g
+<<
+~
+>>
+* drop dept\g
+<<
+~
+>>
+*	create table emp(
+<<
+>>
+*	name c10 not null with default,
+<<
+>>
+*	salary float not null with default,
+<<
+>>
+*	dept c8 not null with default,
+<<
+>>
+*	div c3 not null with default,
+<<
+>>
+*	mgr c10 not null with default,
+<<
+>>
+*	birthdate c25 not null with default,
+<<
+>>
+*	num_dep smallint not null with default)
+<<
+>>
+*	with noduplicates, page_size=8192\g
+<<
+>>
+*	copy emp(
+<<
+>>
+*	name= varchar(0)tab,
+<<
+>>
+*	salary= c0tab,
+<<
+>>
+*	dept= varchar(0)tab,
+<<
+>>
+*	div= varchar(0)tab,
+<<
+>>
+*	mgr= varchar(0)tab,
+<<
+>>
+*	birthdate= varchar(0)tab,
+<<
+>>
+*	num_dep= c0nl, nl= d1)
+<<
+>>
+*	from 'eea15a.dat'\g
+<<
+(24 rows)
+>>
+* create table dept ( dname c8, div c3, sales f8, bldg c2,
+<<
+>>
+*		floor  i1, num_emp i2)with page_size=8192\g
+<<
+>>
+* copy dept (	dname = c8, div = c3, sales = c20, bldg = c2,
+<<
+>>
+*		floor = c2, num_emp = c0nl)	
+<<
+>>
+*		from 'eea15b.dat'\g
+<<
+(11 rows)
+>>
+* commit\g
+<<
+>>
+* \q
+<<
+>>
+? sepesqlc eea15.qc 
+<<
+EQUEL eea15.qc:
+>>
+? sepcc eea15.c 
+<<
+>>
+<< IF (NT_GENERIC)
+eea15.c
+>>
+? seplnk eea15 
+<<
+>>
+? run eea15.exe SEPPARAMDB
+<<
+***************
+*    EEA15    *
+***************
+
+connecting with database...
+EQUEL CURSOR Tests, Multiple Cursors Open at once
+
+(1) EMP(all) WHERE e.dept = sales
+ Aitken    ,  50000, sales   , NE ,  Verducci  , 12-mar-1947              ,   2
+ Clark     ,  40000, sales   , NC ,  Verducci  , 18-nov-1949              ,   1
+ Gregori   ,  31000, sales   , NW ,  Verducci  , 21-oct-1949              ,   2
+ Mandic    ,  43000, sales   , SE ,  Verducci  , 10-jul-1964              ,   0
+ McTigue   ,  41000, sales   , NW ,  Verducci  ,  9-apr-1953              ,   1
+ Robinson  ,  80000, sales   , NE ,  Verducci  , 20-nov-1952              ,   1
+ Shigio    ,  28000, sales   , SE ,  Verducci  ,  9-jul-1948              ,   3
+ Stein     ,  40000, sales   , NE ,  Verducci  , 25-dec-1952              ,   1
+
+(2) EMP(name, mgr, dept) where div=NC
+Clark      , Verducci   , sales
+Gordon     , Shigio     , tech sup
+Kreseski   , Shigio     , tech sup
+Saxena     , Shigio     , tech sup
+
+(3) EMP(name) where mgr = Clark
+
+(4) DEPT(dname, sales) where sales = 0
+admin    ,      0.000
+sales    ,      0.000
+tech sup ,      0.000
+tech sup ,      0.000
+ Aitken    ,  50000, sales   , NE ,  Verducci  , 12-mar-1947              ,   2
+
+ Cameron   ,  35000, tech sup, SE ,  Shigio    , 15-aug-1960              ,   0
+
+ Clark     ,  40000, SALES   , NC ,  Verducci  , 18-nov-1949              ,   1
+
+ Curan     ,  30000, tech sup, NW ,  Shigio    , 20-aug-1959              ,   0
+
+ Curry     ,  32000, tech sup, NW ,  Shigio    , 30-nov-1955              ,   3
+
+ Gordon    ,  27000, TECH SUP, NC ,  Shigio    , 23-may-1963              ,   0
+
+ Green     ,  26000, market  , NW ,  McTigue   , 19-dec-1961              ,   0
+
+ Gregori   ,  31000, sales   , NW ,  Verducci  , 21-oct-1949              ,   2
+
+ Kreseski  ,  24000, TECH SUP, NC ,  Shigio    , 11-sep-1955              ,   0
+
+ Mandic    ,  43000, sales   , SE ,  Verducci  , 10-jul-1964              ,   0
+
+ McTigue   ,  41000, sales   , NW ,  Verducci  ,  9-apr-1953              ,   1
+
+ Ming      ,  22000, tech sup, SE ,  Shigio    ,  4-may-1956              ,   1
+
+ Ramos     ,  30000, tech sup, NW ,  Shigio    , 21-jan-1941              ,   0
+
+ Robinson  ,  80000, sales   , NE ,  Verducci  , 20-nov-1952              ,   1
+
+ Sabel     ,  21000, tech sup, SE ,  Shigio    ,  8-jan-1958              ,   0
+
+ Saxena    ,  22000, TECH SUP, NC ,  Shigio    ,  8-may-1950              ,   0
+
+ Shigio    ,  28000, sales   , SE ,  Verducci  ,  9-jul-1948              ,   3
+
+ Stannich  ,  33000, market  , NW ,  McTigue   , 13-dec-1961              ,   0
+
+ Stein     ,  40000, sales   , NE ,  Verducci  , 25-dec-1952              ,   1
+
+ Sullivan  ,  35000, tech sup, NW ,  Shigio    , 10-oct-1960              ,   1
+
+ Verducci  ,  55000, admin   , NW ,            , 25-dec-1958              ,   2
+
+ Zimmerman ,  25000, tech sup, NE ,  Shigio    , 28-aug-1962              ,   0
+
+ DiTallo   ,  65000, Contract, unk,  Robinson  , 02-sep-1955              ,   0
+
+ Herbert   ,  35000, banking ,    ,  Emprinham , 17-mar-1945              ,   0
+
+ admin   ,  NW ,   -100.000,  C ,   2,   4
+ market  ,  NW ,   9200.000,  A ,   1,   2
+ sales   ,  NC , 120000.000,  A ,   2,   1
+ sales   ,  NE ,   -100.000,  D ,  18,   4
+ sales   ,  NW , 200000.000,  A ,   2,   1
+ sales   ,  SC ,  95000.000,  E ,   1,   1
+ sales   ,  SE , 175000.000,  D ,  18,   1
+ tech sup,  NC ,   5000.000,  C ,   2,   3
+ tech sup,  NE ,  20000.000,  D ,  17,   2
+ tech sup,  NW ,   -100.000,  B ,   1,   1
+ tech sup,  SE ,   -100.000,  D ,  19,   1
+EQUEL CURSOR Tests, Multiple Cursors Open at once
+
+Second time around
+
+(1) EMP(all) WHERE e.dept = sales
+ Aitken    ,  50000, sales   , NE ,  Verducci  , 12-mar-1947              ,   2
+ Gregori   ,  31000, sales   , NW ,  Verducci  , 21-oct-1949              ,   2
+ Mandic    ,  43000, sales   , SE ,  Verducci  , 10-jul-1964              ,   0
+ McTigue   ,  41000, sales   , NW ,  Verducci  ,  9-apr-1953              ,   1
+ Robinson  ,  80000, sales   , NE ,  Verducci  , 20-nov-1952              ,   1
+ Shigio    ,  28000, sales   , SE ,  Verducci  ,  9-jul-1948              ,   3
+ Stein     ,  40000, sales   , NE ,  Verducci  , 25-dec-1952              ,   1
+
+(2) EMP(name, mgr, dept) where div=NC
+Clark      , Verducci   , SALES
+Gordon     , Shigio     , TECH SUP
+Kreseski   , Shigio     , TECH SUP
+Saxena     , Shigio     , TECH SUP
+
+(3) EMP(name) where mgr = Clark
+
+(4) DEPT(dname, sales) where sales = 0
+ Aitken    ,  50000, sales   , NE ,  Verducci  , 12-mar-1947              ,   2
+
+ Cameron   ,  35000, tech sup, SE ,  Shigio    , 15-aug-1960              ,   0
+
+ Clark     ,  40000, sales   , NC ,  Verducci  , 18-nov-1949              ,   1
+
+ Curan     ,  30000, tech sup, NW ,  Shigio    , 20-aug-1959              ,   0
+
+ Curry     ,  32000, tech sup, NW ,  Shigio    , 30-nov-1955              ,   3
+
+ Gordon    ,  27000, tech sup, NC ,  Shigio    , 23-may-1963              ,   0
+
+ Green     ,  26000, market  , NW ,  McTigue   , 19-dec-1961              ,   0
+
+ Gregori   ,  31000, sales   , NW ,  Verducci  , 21-oct-1949              ,   2
+
+ Kreseski  ,  24000, tech sup, NC ,  Shigio    , 11-sep-1955              ,   0
+
+ Mandic    ,  43000, sales   , SE ,  Verducci  , 10-jul-1964              ,   0
+
+ McTigue   ,  41000, sales   , NW ,  Verducci  ,  9-apr-1953              ,   1
+
+ Ming      ,  22000, tech sup, SE ,  Shigio    ,  4-may-1956              ,   1
+
+ Ramos     ,  30000, tech sup, NW ,  Shigio    , 21-jan-1941              ,   0
+
+ Robinson  ,  80000, sales   , NE ,  Verducci  , 20-nov-1952              ,   1
+
+ Sabel     ,  21000, tech sup, SE ,  Shigio    ,  8-jan-1958              ,   0
+
+ Saxena    ,  22000, tech sup, NC ,  Shigio    ,  8-may-1950              ,   0
+
+ Shigio    ,  28000, sales   , SE ,  Verducci  ,  9-jul-1948              ,   3
+
+ Stannich  ,  33000, market  , NW ,  McTigue   , 13-dec-1961              ,   0
+
+ Stein     ,  40000, sales   , NE ,  Verducci  , 25-dec-1952              ,   1
+
+ Sullivan  ,  35000, tech sup, NW ,  Shigio    , 10-oct-1960              ,   1
+
+ Verducci  ,  55000, admin   , NW ,            , 25-dec-1958              ,   2
+
+ Zimmerman ,  25000, tech sup, NE ,  Shigio    , 28-aug-1962              ,   0
+
+ DiTallo   ,  65000, Contract, unk,  Robinson  , 02-sep-1955              ,   0
+
+ Herbert   ,  35000, banking ,    ,  Emprinham , 17-mar-1945              ,   0
+
+ admin   ,  NW ,   -100.000,  C ,   2,   4
+ market  ,  NW ,   9200.000,  A ,   1,   2
+ sales   ,  NC , 120000.000,  A ,   2,   1
+ sales   ,  NE ,   -100.000,  D ,  18,   4
+ sales   ,  NW , 200000.000,  A ,   2,   1
+ sales   ,  SC ,  95000.000,  E ,   1,   1
+ sales   ,  SE , 175000.000,  D ,  18,   1
+ tech sup,  NC ,   5000.000,  C ,   2,   3
+ tech sup,  NE ,  20000.000,  D ,  17,   2
+ tech sup,  NW ,   -100.000,  B ,   1,   1
+ tech sup,  SE ,   -100.000,  D ,  19,   1
+ Aitken    ,  50000, sales   , NE ,  Verducci  , 12-mar-1947              ,   2
+
+ Cameron   ,  35000, tech sup, SE ,  Shigio    , 15-aug-1960              ,   0
+
+ Clark     ,  40000, SALES   , NC ,  Verducci  , 18-nov-1949              ,   1
+
+ Curan     ,  30000, tech sup, NW ,  Shigio    , 20-aug-1959              ,   0
+
+ Curry     ,  32000, tech sup, NW ,  Shigio    , 30-nov-1955              ,   3
+
+ Gordon    ,  27000, TECH SUP, NC ,  Shigio    , 23-may-1963              ,   0
+
+ Green     ,  26000, market  , NW ,  McTigue   , 19-dec-1961              ,   0
+
+ Gregori   ,  31000, sales   , NW ,  Verducci  , 21-oct-1949              ,   2
+
+ Kreseski  ,  24000, TECH SUP, NC ,  Shigio    , 11-sep-1955              ,   0
+
+ Mandic    ,  43000, sales   , SE ,  Verducci  , 10-jul-1964              ,   0
+
+ McTigue   ,  41000, sales   , NW ,  Verducci  ,  9-apr-1953              ,   1
+
+ Ming      ,  22000, tech sup, SE ,  Shigio    ,  4-may-1956              ,   1
+
+ Ramos     ,  30000, tech sup, NW ,  Shigio    , 21-jan-1941              ,   0
+
+ Robinson  ,  80000, sales   , NE ,  Verducci  , 20-nov-1952              ,   1
+
+ Sabel     ,  21000, tech sup, SE ,  Shigio    ,  8-jan-1958              ,   0
+
+ Saxena    ,  22000, TECH SUP, NC ,  Shigio    ,  8-may-1950              ,   0
+
+ Shigio    ,  28000, sales   , SE ,  Verducci  ,  9-jul-1948              ,   3
+
+ Stannich  ,  33000, market  , NW ,  McTigue   , 13-dec-1961              ,   0
+
+ Stein     ,  40000, sales   , NE ,  Verducci  , 25-dec-1952              ,   1
+
+ Sullivan  ,  35000, tech sup, NW ,  Shigio    , 10-oct-1960              ,   1
+
+ Verducci  ,  55000, admin   , NW ,            , 25-dec-1958              ,   2
+
+ Zimmerman ,  25000, tech sup, NE ,  Shigio    , 28-aug-1962              ,   0
+
+ DiTallo   ,  65000, Contract, unk,  Robinson  , 02-sep-1955              ,   0
+
+ Herbert   ,  35000, banking ,    ,  Emprinham , 17-mar-1945              ,   0
+
+ admin   ,  NW ,   -100.000,  C ,   2,   4
+ market  ,  NW ,   9200.000,  A ,   1,   2
+ sales   ,  NC , 120000.000,  A ,   2,   1
+ sales   ,  NE ,   -100.000,  D ,  18,   4
+ sales   ,  NW , 200000.000,  A ,   2,   1
+ sales   ,  SC ,  95000.000,  E ,   1,   1
+ sales   ,  SE , 175000.000,  D ,  18,   1
+ tech sup,  NC ,   5000.000,  C ,   2,   3
+ tech sup,  NE ,  20000.000,  D ,  17,   2
+ tech sup,  NW ,   -100.000,  B ,   1,   1
+ tech sup,  SE ,   -100.000,  D ,  19,   1
+
+===END OF TEST RUN===
+
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop emp\g
+<<
+~
+>>
+* drop dept\g
+<<
+~
+>>
+* \q
+<<
+>>
+? delete eea15.exe 
+<<
+~
+>>
+? delete eea15.c 
+<<
+~
+>>
+? delete eea15.obj 
+<<
+~
+>>
+? delete eea15.o 
+<<
+~
+>>
+
+
+Ending at:  7-AUG-1991 09:11:50

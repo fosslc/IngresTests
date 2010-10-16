@@ -1,0 +1,2195 @@
+/*
+	Test Name: wfa03.sep
+	Time: 27-FEB-1991 17:16:30
+	User Name: testenv     
+	Terminal type: septerm
+ 
+	Test ID : wfa03
+	Module  : SREPORT, REPORT
+	Filename: wfa03.sep
+	Purpose	: Basic Test.
+	Input Files  : wfa03.rw, wfa03rpt.rw, wfa03_pg.rw, wfa03ftr.rw
+	Output Files : wfa03, wfa03.out, wfa03.arc
+	Database     : SEPPARAMDB
+	Tables       : wfa03a, wfa03b, wfa03c
+	Synopsis     : Create a specs using variables in all arguments to
+			commands (.output, .data, .table, .view, .sort,
+			.header, .footer, .position, .width, .format, .print
+			.within, .break).  Run REPORT (-i flag).  Save spec
+			with SREPORT and run REPORT from database.
+
+	      WARNING: wfa03.rw contains the statement "set lockmode
+		       session where readlock = nolock". The 
+		       parameter "lockmode" is not supported in
+		       distributed INGRES. In other words, this
+		       will not work for STAR.
+
+	History: 27-FEB-1991	Created			Doans
+		 03-jul-1991    (dufour)
+			Removed table drops and creates required for 
+			initialization to a separate initilization 
+			script in basis/fe.
+		 17-JUN-1992 (gillnh2o)
+			Added a warning note above. This test 
+			contains a report file wfa03.rw that contains
+			the statement "set lockmode session where
+			readlock = nolock". readlock parameter is not 
+			supported in distributed INGRES.
+			I also fixed the history comment for dufour
+			so that it did not wrap.
+		15-Jul-1992 (gillnh2o)
+			Removed from the notes that mkrwopn.sep must
+			be run prior to execution of this script.
+			mkrwopn.sep does not exist anymore. I re-numbered
+			the statements in Notes.
+		17-JUL-1992 (gillnh2o)
+			Fixed test bug. The calculation 
+			sum(det_tot)/ord_sum was not quite right. This
+			is supposed to be a percentage. I changed it
+			to be (sum(det_tot)/ord_sum) * 100 (f4.2), "%"
+			I also accepted an alternate canon on VMS due
+			to extra lines produced at the bottom of the
+			report. I tested this on VMS, Sun4 and, HP8.
+                13-Jan-1993       victor the cleaner
+                        Removed altcanons for sreport and added ignore results
+                        since sreport is already tested in this suite.
+		29-Mar-1993  (sandhya)
+			changed filename to 8 characters to make the test
+			more portable.
+		23-Jun-1993  (sandhya)
+		        When I made the previous change, last few commands
+			were deleted somehow by mistake.  Including those
+			commands back again.	
+********************************************************************************
+				     Notes
+1.	A SEPPARAMDB logical/variable must be assigned.
+2.	All additions and/or modifications to this script are limited to Open
+	SQL syntax and data types.
+********************************************************************************
+          27-Aug-1993	(daniel lee) changed the canon to reflect changes
+				     in 6.5
+				     - New menuitem : ChooseColumns
+				     - MODIFY: deleted `v' from the table name
+          24-Nov-1993	(daniel lee) changed the canon to reflect changes
+				     in 6.5
+				     - added a comment "Level: 1" in report
+				     - RBF: Disallow ChooseColumns option
+				       when executing Preview option
+          21-Feb-1997	(vissu01)	modified for NT, chaged deleter to delobj
+          06-Jun-1997	(hsuji01)Modified 1st command 'deleter SEPPARAMDB 
+				 -rwfa03' to 
+				 'delete SEPPARAMDB -rwfa03' and Updated
+				 canons to work for NT
+          10-Jun-1997	(hsuji01) Updated canons to work on both NT & UNIX
+          03-Sep-1997	(Author)
+           8-Dec-1997	(zhaqi01)  Modify cannon
+          23-Mar-2000	(vande02) Adding new UNIX canons with 'This is a short
+				  remark' from moreinfo and utilities.
+          26-Jun-2001	(rogch01)
+		Lose a few dozen pointless NT_GENERIC canons and make the UNIX
+		ones generic to try to get the previous change to apply
+		everywhere.  One exception to this is the penultimate archive
+		canon which is one line different on Unix compared to NT; it's
+		a blank line at the start of the screen on NT which I can't
+		remove.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delete SEPPARAMDB -rwfa03 
+<<
+~
+>>
+? fill wfa03.rw 
+!!
+.name  wfa03
+.output wfa03 
+
+.declare
+	/*
+	** set according to order type, used in page header
+	*/
+	rpt_title = varchar(80),
+
+	/*
+	** Column positioning  variables
+	*/
+	col_1 = integer, col_2 = integer, col_3 = integer,
+	col_4 = integer, col_5 = integer
+
+.setup
+	/*
+	** Exclusive access unecessary for summary report
+	*/
+	set lockmode session where readlock=nolock;
+
+	/*
+	** Create view with calculated total for each detail
+	** in order to be able to sum() the value
+	*/
+	create view podetail_view
+	as select orderno, det_tot=qty*unit_pr
+   	     from wfa03a;
+
+	/*
+	** Create a view which contains the sum of all orders
+	** of this type.
+	*/
+	create view tot_orders_view as
+		select ord_sum = sum(det_tot)
+		from podetail_view d, wfa03b h
+		where d.orderno = h.orderno;
+
+.cleanup
+	drop tot_orders_view;
+	drop podetail_view;
+
+.query
+	select v.vendorno, v.vname, h.orderno, d.det_tot, t.ord_sum
+	from wfa03c v, wfa03b h, podetail_view d, tot_orders_view t
+	where d.orderno = h.orderno and h.vendorno = v.vendorno
+
+.sort vendorno 
+
+.header report
+	/*
+	** Initialize column posistions and report title
+	*/
+	.let col_1 = 0
+	.let col_2 = 25
+	.let col_3 = 35
+	.let col_4 = 50
+	.let col_5 = 65
+	.let rpt_title = "Vendor Order Summary"
+	.include wfa03rpt.rw
+
+.header page
+	.include wfa03_pg.rw
+	/* 
+	** Center column headings for each column
+	** Column headings may be more than one line
+	*/
+	.block
+		.nl 2
+		.tab $col_1          .println "Vendor"
+		.tab $col_2          .println "------"
+		.top
+		.center $col_2 + 3/2 .println "Number"
+		.center $col_2 + 3/2 .println "of"
+		.center $col_2 + 3/2 .println "Orders"
+		.tab    $col_2       .println "------"
+		.top
+		.nl
+		.center $col_3 + 9/2 .println "Total"
+		.center $col_3 + 9/2 .println "Amount"
+		.tab    $col_3       .println "---------"
+		.top
+		.nl
+		.center $col_4 + 9/2 .println "Average"
+		.center $col_4 + 9/2 .println "Amount"
+		.tab    $col_4       .println "---------"
+		.top
+		.center $col_5 + 4/2 .println "Percentage"
+		.center $col_5 + 4/2 .println "of all"
+		.center $col_5 + 4/2 .println "Orders"
+		.tab    $col_5       .println "----------"
+	.endblock
+	.nl
+
+.footer page
+	.include wfa03ftr.rw
+
+.footer vendorno
+	.tab $col_1 .print vname
+	.tab $col_2 .print count(orderno) ("zzn")
+	.tab $col_3 .print sum(det_tot) ("$$,$$$.$$")
+	.tab $col_4 .print avg(det_tot) ("$$,$$$.$$")
+	.tab $col_5 .print (sum(det_tot)/ord_sum) * 100 (f4.2),"%"
+	.nl
+!!
+? fill wfa03rpt.rw 
+!!
+.pagewidth   80
+.pagelength  22
+.leftmargin   0
+.rightmargin 80
+.newpage
+!!
+? fill wfa03_pg.rw 
+!!
+.newline
+.underline
+.center
+.print $rpt_title
+.nounderline
+.if page_number != 1 .then
+	.right
+	.print page_number ("n")
+.endif
+.newline 2
+!!
+? fill wfa03ftr.rw 
+!!
+.newline
+.left
+.print "ABC Corporation"
+.if page_number = 1 .then
+	.center
+	.print page_number ("zn")
+.endif
+!!
+? report SEPPARAMDB -iwfa03.rw 
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+File 'wfa03.rw': Start of specifications for Report 'wfa03'.
+   Including file 'wfa03rpt.rw'.
+   File 'wfa03rpt.rw' included successfully.
+   Including file 'wfa03_pg.rw'.
+   File 'wfa03_pg.rw' included successfully.
+   Including file 'wfa03ftr.rw'.
+   File 'wfa03ftr.rw' included successfully.
+Retrieving data . . .
+>>
+? type wfa03 
+<<
+
+                              ______ _____ _______                              Ven-
+dor Order Summary
+
+                       Number                                 Percentage
+                         of          Total         Average      of all
+Vendor                 Orders       Amount         Amount       Orders
+                         ------    ---------      ---------      ----------
+
+PC TIME DATA               2       $3,902.70      $1,951.35      ****%
+Whole Earth Access         5       $2,283.10        $456.62      ****%
+Tower Computer Inc.        4         $128.78         $32.20      2.03%
+Weird Stuff Warehous       2          $21.48         $10.74      0.34%
+
+
+
+
+
+
+
+
+
+ABC Corporation                         1
+
+>>
+<<
+
+                              ______ _____ _______                              Ven-
+dor Order Summary
+
+                       Number                                 Percentage
+                         of          Total         Average      of all
+Vendor                 Orders       Amount         Amount       Orders
+                         ------    ---------      ---------      ----------
+
+PC TIME DATA               2       $3,902.70      $1,951.35      ****%
+Whole Earth Access         5       $2,283.10        $456.62      ****%
+Tower Computer Inc.        4         $128.78         $32.20      2.03%
+Weird Stuff Warehous       2          $21.48         $10.74      0.34%
+
+
+
+
+
+
+
+
+
+ABC Corporation                         1
+>>
+? delete wfa03 
+<<
+file was deleted
+>>
+? sreport SEPPARAMDB wfa03.rw 
+<<
+~
+>>
+? report -fwfa03.out SEPPARAMDB wfa03 
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+? type wfa03.out 
+<<
+
+                              ______ _____ _______                              Ven-
+dor Order Summary
+
+                       Number                                 Percentage
+                         of          Total         Average      of all
+Vendor                 Orders       Amount         Amount       Orders
+                         ------    ---------      ---------      ----------
+
+PC TIME DATA               2       $3,902.70      $1,951.35      ****%
+Whole Earth Access         5       $2,283.10        $456.62      ****%
+Tower Computer Inc.        4         $128.78         $32.20      2.03%
+Weird Stuff Warehous       2          $21.48         $10.74      0.34%
+
+
+
+
+
+
+
+
+
+ABC Corporation                         1
+
+>>
+<<
+
+                              ______ _____ _______                              Ven-
+dor Order Summary
+
+                       Number                                 Percentage
+                         of          Total         Average      of all
+Vendor                 Orders       Amount         Amount       Orders
+                         ------    ---------      ---------      ----------
+
+PC TIME DATA               2       $3,902.70      $1,951.35      ****%
+Whole Earth Access         5       $2,283.10        $456.62      ****%
+Tower Computer Inc.        4         $128.78         $32.20      2.03%
+Weird Stuff Warehous       2          $21.48         $10.74      0.34%
+
+
+
+
+
+
+
+
+
+ABC Corporation                         1
+>>
+? delete wfa03.out 
+<<
+file was deleted
+>>
+? rbf -e SEPPARAMDB 
+<<
+
+%%     
+%% INGRES RBF Copyright (c) 1982, 1996 Ingres Corporation
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%%     
+%% INGRES RBF Copyright (c) 1982, 1996 Ingres Corporation
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+>>
+^^ WFA03`ESC'
+<<
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Name
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |WFA03                   |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|_  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Name
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |WFA03                   |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|_  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+>>
+^^ edit`CR'h`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Edit
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Edit"
+
+%% Retrieving RBF Report catalogs . . .
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Report 'wfa03' created with SREPORT rather than ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Report 'wfa03' created with SREPORT rather than RBF.                      
+
+%%  You can only use RBF to edit reports created by default or in a previous 
+
+%% RBF session. (E_RW12C6)                                                   
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Edit
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Edit"
+
+%% Retrieving RBF Report catalogs . . .
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Report 'wfa03' created with SREPORT rather than ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+LONG ERROR MESSAGE IS:
+
+%% Report 'wfa03' created with SREPORT rather than RBF.                      
+
+%%  You can only use RBF to edit reports created by default or in a previous 
+
+%% RBF session. (E_RW12C6)                                                   
+
+%% 
+END OF LONG ERROR MESSAGE.
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ `CR'wfa03`ESC'
+<<
+
+%% MENU RESPONSE: 
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Name
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|_  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: 
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Name
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|_  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+>>
+^^ preview`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Preview
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "Preview"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |+-----------------------------------------------+                           | |
+| ||RBF - Run a Report Based on a Table            |                           | |
+| ||                                               |                           | |
+| ||          Table Name: _                         |                           | |
+| |+-----------------------------------------------+                           | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  OK  Cancel  ListChoices  Help                                                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Preview
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "Preview"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |+-----------------------------------------------+                           | |
+| ||RBF - Run a Report Based on a Table            |                           | |
+| ||                                               |                           | |
+| ||          Table Name: _                         |                           | |
+| |+-----------------------------------------------+                           | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  OK  Cancel  ListChoices  Help                                                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ cancel`CR'wfa03`ESC'
+<<
+
+%% MENU RESPONSE: Cancel
+%% MENU:   OK  Cancel  ListChoices  Help
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Cancel"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Name
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|_  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: Cancel
+%% MENU:   OK  Cancel  ListChoices  Help
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Cancel"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Name
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|_  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+>>
+^^ moreinfo`CR'This is a short remark!`ESC'
+<<
+
+%% MENU RESPONSE: MoreInfo
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "MoreInfo"
+
+%% Retrieving Report catalogs . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  06-jun-1997 14:50:10        |
+|                                                                                |
+| Owner: testenv                           Modified: 06-jun-1997 14:59:22        |
+|                                                                                |
+| Short Remark: _This is a short remark!                                          |
+|                                                                                |
+| Long Remark:                                                                   |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|                                                                                |
+|  Next  Previous  Save  Go  Help  End                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Short Remark:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  06-jun-1997 14:50:10        |
+|                                                                                |
+| Owner: testenv                           Modified: 06-jun-1997 14:59:22        |
+|                                                                                |
+| Short Remark: This is a short remark!_                                          |
+|                                                                                |
+| Long Remark:                                                                   |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|                                                                                |
+|  Next  Previous  Save  Go  Help  End                                           |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: MoreInfo
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "MoreInfo"
+
+%% Retrieving Report catalogs . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  10-jun-1997 14:05:16        |
+|                                                                                |
+| Owner: testenv                           Modified: 10-jun-1997 14:11:24        |
+|                                                                                |
+| Short Remark: _This is a short remark!                                          |
+|                                                                                |
+| Long Remark:                                                                   |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|  Next  Previous  Save  Go  Help  End                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Short Remark:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  10-jun-1997 14:05:16        |
+|                                                                                |
+| Owner: testenv                           Modified: 10-jun-1997 14:11:24        |
+|                                                                                |
+| Short Remark: This is a short remark!_                                          |
+|                                                                                |
+| Long Remark:                                                                   |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|  Next  Previous  Save  Go  Help  End                                           |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: MoreInfo
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "MoreInfo"
+
+%% Retrieving Report catalogs . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  23-mar-2000 18:08:05        |
+|                                                                                |
+| Owner: testenv                           Modified: 23-mar-2000 18:08:05        |
+|                                                                                |
+| Short Remark: _                                                                 |
+|                                                                                |
+| Long Remark:                                                                   |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|  Next  Previous  Save  Go  Help  End                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Short Remark:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  23-mar-2000 18:08:05        |
+|                                                                                |
+| Owner: testenv                           Modified: 23-mar-2000 18:08:05        |
+|                                                                                |
+| Short Remark: This is a short remark!_                                          |
+|                                                                                |
+| Long Remark:                                                                   |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|  Next  Previous  Save  Go  Help  End                                           |
+__________________________________________________________________________________
+@@
+>>
+^^ save`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Save
+%% MENU:   Next  Previous  Save  Go  Help  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Save"
+
+%% Saving Report-Writer Report 'wfa03' . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  06-jun-1997 14:50:10        |
+|                                                                                |
+| Owner: testenv                           Modified: 06-jun-1997 14:59:22        |
+|                                                                                |
+| Short Remark: _This is a short remark!                                          |
+|                                                                                |
+| Long Remark:                                                                   |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|                                                                                |
+|  Next  Previous  Save  Go  Help  End                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Save
+%% MENU:   Next  Previous  Save  Go  Help  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Save"
+
+%% Saving Report-Writer Report 'wfa03' . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  10-jun-1997 14:05:16        |
+|                                                                                |
+| Owner: testenv                           Modified: 10-jun-1997 14:11:24        |
+|                                                                                |
+| Short Remark: _This is a short remark!                                          |
+|                                                                                |
+| Long Remark:                                                                   |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|  Next  Previous  Save  Go  Help  End                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ go`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   Next  Previous  Save  Go  Help  End
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Go"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  06-jun-1997 14:50:10        |
+|                                                                                |
+| Owner: testenv                           Modified: 06-jun-1997 14:59:22        |
+|                                                                                |
+| Short Remark: This is a short remark!                                          |
+|               +-----------------------------+                                  |
+| Long Remark:  |Select a Destination         |                                  |
+| +-------------|-----------------------------|-------------------------------+  |
+| |             |_Default|To the screen or file|                               |  |
+| |             |Printer|To the printer       |                               |  |
+| |             |File   |To a file            |                               |  |
+| |             +-----------------------------+                               |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|                                                                                |
+|  Select  Cancel  Help                                                          |
+__________________________________________________________________________________
+@@
+
+%% Running report 'wfa03'. . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  06-jun-1997 14:50:10        |
+|                                                                                |
+| Owner: testenv                           Modified: 06-jun-1997 14:59:22        |
+|                                                                                |
+| Short Remark: _This is a short remark!                                          |
+|                                                                                |
+| Long Remark:                                                                   |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|                                                                                |
+|  Next  Previous  Save  Go  Help  End                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   Next  Previous  Save  Go  Help  End
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Go"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  10-jun-1997 14:05:16        |
+|                                                                                |
+| Owner: testenv                           Modified: 10-jun-1997 14:11:24        |
+|                                                                                |
+| Short Remark: This is a short remark!                                          |
+|               +-----------------------------+                                  |
+| Long Remark:  |Select a Destination         |                                  |
+| +-------------|-----------------------------|-------------------------------+  |
+| |             |_Default|To the screen or file|                               |  |
+| |             |Printer|To the printer       |                               |  |
+| |             |File   |To a file            |                               |  |
+| |             +-----------------------------+                               |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|  Select  Cancel  Help                                                          |
+__________________________________________________________________________________
+@@
+
+%% Running report 'wfa03'. . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - MoreInfo about a Report                                                   |
+|                                                                                |
+| Name:  wfa03                             Created:  10-jun-1997 14:05:16        |
+|                                                                                |
+| Owner: testenv                           Modified: 10-jun-1997 14:11:24        |
+|                                                                                |
+| Short Remark: _This is a short remark!                                          |
+|                                                                                |
+| Long Remark:                                                                   |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|                                                                                |
+| RBF Editable? no                Data Table: wfa03c                             |
+|                                 Query Language:  sql                           |
+|                                                                                |
+|  Next  Previous  Save  Go  Help  End                                           |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'wfa03`ESC'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   Next  Previous  Save  Go  Help  End
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "End"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Name
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|_  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   Next  Previous  Save  Go  Help  End
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "End"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Name
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|_  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+>>
+^^ utility`CR'`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: utility
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Input "utility" is not a correct prefix.  The ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% MENU RESPONSE: 
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_wfa03                   |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: utility
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Input "utility" is not a correct prefix.  The ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% MENU RESPONSE: 
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |_wfa03                   |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >            |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ utilities`CR'arch`CR'wfa03.arch`DEL'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Utilities
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "Utilities"
+
+%% MENU RESPONSE: Archive
+%% MENU:   Archive  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Archive"
+
+%% Retrieving Report catalogs . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |+--------------------------------+                                          | |
+| ||RBF - Archiving a Report        |                                          | |
+| ||                                |                                          | |
+| ||Enter the file name to contain  |                                          | |
+| ||the archived report.            |                                          | |
+| ||                                |                                          | |
+| ||File name: _                     |                                          | |
+| |+--------------------------------+                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD File name:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |+--------------------------------+                                          | |
+| ||RBF - Archiving a Report        |                                          | |
+| ||                                |                                          | |
+| ||Enter the file name to contain  |                                          | |
+| ||the archived report.            |                                          | |
+| ||                                |                                          | |
+| ||File name: wfa03.arc_            |                                          | |
+| |+--------------------------------+                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Utilities
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "Utilities"
+
+%% MENU RESPONSE: Archive
+%% MENU:   Archive  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Archive"
+
+%% Retrieving Report catalogs . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |+--------------------------------+                                          | |
+| ||RBF - Archiving a Report        |                                          | |
+| ||                                |                                          | |
+| ||Enter the file name to contain  |                                          | |
+| ||the archived report.            |                                          | |
+| ||                                |                                          | |
+| ||File name: _                     |                                          | |
+| |+--------------------------------+                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD File name:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |        |                                          | |
+| |+--------------------------------+                                          | |
+| ||RBF - Archiving a Report        |                                          | |
+| ||                                |                                          | |
+| ||Enter the file name to contain  |                                          | |
+| ||the archived report.            |                                          | |
+| ||                                |                                          | |
+| ||File name: wfa03.arc_            |                                          | |
+| |+--------------------------------+                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Utilities
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "Utilities"
+
+%% MENU RESPONSE: Archive
+%% MENU:   Archive  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Archive"
+
+%% Retrieving Report catalogs . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |testenv |This is a short remark!                   | |
+| |+--------------------------------+                                          | |
+| ||RBF - Archiving a Report        |                                          | |
+| ||                                |                                          | |
+| ||Enter the file name to contain  |                                          | |
+| ||the archived report.            |                                          | |
+| ||                                |                                          | |
+| ||File name: _                     |                                          | |
+| |+--------------------------------+                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD File name:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |testenv |This is a short remark!                   | |
+| |+--------------------------------+                                          | |
+| ||RBF - Archiving a Report        |                                          | |
+| ||                                |                                          | |
+| ||Enter the file name to contain  |                                          | |
+| ||the archived report.            |                                          | |
+| ||                                |                                          | |
+| ||File name: wfa03.arc_            |                                          | |
+| |+--------------------------------+                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% MENU RESPONSE: Utilities
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Preview  Utilities  Go  >
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "Utilities"
+
+%% MENU RESPONSE: Archive
+%% MENU:   Archive  Help  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Archive"
+
+%% Retrieving Report catalogs . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |testenv |This is a short remark!                   | |
+| |+--------------------------------+                                          | |
+| ||RBF - Archiving a Report        |                                          | |
+| ||                                |                                          | |
+| ||Enter the file name to contain  |                                          | |
+| ||the archived report.            |                                          | |
+| ||                                |                                          | |
+| ||File name: _                     |                                          | |
+| |+--------------------------------+                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD File name:
+##
+__________________________________________________________________________________
+|RBF - Report Catalog                                                            |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| |Name                    |Owner   |Short Remark                              | |
+| |------------------------+--------+------------------------------------------| |
+| |wfa03                   |testenv |This is a short remark!                   | |
+| |+--------------------------------+                                          | |
+| ||RBF - Archiving a Report        |                                          | |
+| ||                                |                                          | |
+| ||Enter the file name to contain  |                                          | |
+| ||the archived report.            |                                          | |
+| ||                                |                                          | |
+| ||File name: wfa03.arc_            |                                          | |
+| |+--------------------------------+                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| |                        |        |                                          | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|                                                                                |
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ quit`CR'
+<<
+~
+>>
+? type wfa03 
+<<
+
+                              ______ _____ _______                              Ven-
+dor Order Summary
+
+                       Number                                 Percentage
+                         of          Total         Average      of all
+Vendor                 Orders       Amount         Amount       Orders
+                         ------    ---------      ---------      ----------
+
+PC TIME DATA               2       $3,902.70      $1,951.35      ****%
+Whole Earth Access         5       $2,283.10        $456.62      ****%
+Tower Computer Inc.        4         $128.78         $32.20      2.03%
+Weird Stuff Warehous       2          $21.48         $10.74      0.34%
+
+
+
+
+
+
+
+
+
+ABC Corporation                         1
+
+>>
+<<
+
+                              ______ _____ _______                              Ven-
+dor Order Summary
+
+                       Number                                 Percentage
+                         of          Total         Average      of all
+Vendor                 Orders       Amount         Amount       Orders
+                         ------    ---------      ---------      ----------
+
+PC TIME DATA               2       $3,902.70      $1,951.35      ****%
+Whole Earth Access         5       $2,283.10        $456.62      ****%
+Tower Computer Inc.        4         $128.78         $32.20      2.03%
+Weird Stuff Warehous       2          $21.48         $10.74      0.34%
+
+
+
+
+
+
+
+
+
+ABC Corporation                         1
+>>
+? delete wfa03 
+<<
+file was deleted
+>>
+? type wfa03.arc 
+<<
+
+/*
+**	Report: wfa03
+**
+**		Last Modified: 1993_11_24 19:10:55 GMT  
+**		Level: 1
+*/
+
+.NAME	wfa03
+.SHORTREMARK	This is a short remark!
+.OUTPUT	wfa03
+.PAGEWIDTH	80
+.SETUP
+	set lockmode session where readlock = nolock ; create view podetail_view as select -
+orderno , det_tot
+	 = qty*unit_pr from wfa03a ; create view tot_orders_view as select ord_sum = sum (d-
+et_tot ) from
+	podetail_view d , wfa03b h where d.orderno = h.orderno ;
+.DECLARE
+	rpt_title = varchar(80),
+	col_1 = integer,
+	col_2 = integer,
+	col_3 = integer,
+	col_4 = integer,
+	col_5 = integer
+.QUERY
+	SELECT  v.vendorno, v.vname, h.orderno, d.det_tot, t.ord_sum
+	FROM	 wfa03c v, wfa03b h, podetail_view d, tot_orders_view t
+	WHERE	 d.orderno = h.orderno and h.vendorno = v.vendorno
+.SORT	vendorno : a
+
+.HEADER	report
+	.LET col_1=0
+	.LET col_2=25
+	.LET col_3=35
+	.LET col_4=50
+	.LET col_5=65
+	.LET rpt_title="Vendor Order Summary"
+	.PAGELENGTH 22
+	.LEFTMARGIN 0
+	.RIGHTMARGIN 80
+	.NEWPAGE 
+
+.HEADER	page
+	.NEWLINE 
+	.UNDERLINE 
+		.CENTER 
+		.PRINT $rpt_title
+	.NOUNDERLINE 
+	.IF page_number!=1 .THEN
+		.RIGHT 
+		.PRINT page_number("n")
+	.ENDIF 
+	.NEWLINE 2
+	.BLOCK 
+		.NL 2
+		.TAB $col_1
+		.PRINTLN "Vendor"
+		.TAB $col_2
+		.PRINTLN "------"
+		.TOP 
+		.CENTER $col_2+3/2
+		.PRINTLN "Number"
+		.CENTER $col_2+3/2
+		.PRINTLN "of"
+		.CENTER $col_2+3/2
+		.PRINTLN "Orders"
+		.TAB $col_2
+		.PRINTLN "------"
+		.TOP 
+		.NL 
+		.CENTER $col_3+9/2
+		.PRINTLN "Total"
+		.CENTER $col_3+9/2
+		.PRINTLN "Amount"
+		.TAB $col_3
+		.PRINTLN "---------"
+		.TOP 
+		.NL 
+		.CENTER $col_4+9/2
+		.PRINTLN "Average"
+		.CENTER $col_4+9/2
+		.PRINTLN "Amount"
+		.TAB $col_4
+		.PRINTLN "---------"
+		.TOP 
+		.CENTER $col_5+4/2
+		.PRINTLN "Percentage"
+		.CENTER $col_5+4/2
+		.PRINTLN "of all"
+		.CENTER $col_5+4/2
+		.PRINTLN "Orders"
+		.TAB $col_5
+		.PRINTLN "----------"
+	.ENDBLOCK 
+	.NL 
+
+.FOOTER	page
+	.NEWLINE 
+	.LEFT 
+	.PRINT "ABC Corporation"
+	.IF page_number=1 .THEN
+		.CENTER 
+		.PRINT page_number("zn")
+	.ENDIF 
+
+.FOOTER	vendorno
+	.TAB $col_1
+	.PRINT vname
+	.TAB $col_2
+	.PRINT count(orderno)("zzn")
+	.TAB $col_3
+	.PRINT sum(det_tot)("$$,$$$.$$")
+	.TAB $col_4
+	.PRINT avg(det_tot)("$$,$$$.$$")
+	.TAB $col_5
+	.PRINT (sum(det_tot)/ord_sum)*100(f4.2),"%"
+	.NL 
+
+.CLEANUP
+	drop tot_orders_view ; drop podetail_view ;
+
+>>
+? delete wfa03.arc 
+<<
+file was deleted
+>>
+
+
+Ending at: Tue Jun 26 16:35:50 2001

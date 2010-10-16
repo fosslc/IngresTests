@@ -1,0 +1,930 @@
+/*
+	Test Name: sga06_a03
+	Time: 27-JUL-1989 14:59:49
+	User Name: testenv      
+ 
+	Test ID : 	sga06_a03 (formerly af009)
+	Module  : 	qryproc
+	Filename: 	sga06_a03.sep
+	Purpose	:	Test subqueries involving IN and nested IN's
+			on BTREE tables and secondary indices.
+	Input Files  : 	None
+	Output Files :	None
+	Database     :	some star ddb
+	Tables       :	sga06_s1, sga06_p2, sga06_sp1
+	Synopsis     :
+
+	History	: 27-Jul-1989	Created				srr
+
+		10-may-1990	jds
+		converted for STAR
+
+		split the test into 2 - SGA05, the setup
+		SGA06, the actual test, and SGA07 the clean-up.  
+		They must be run in that
+		order; SGA06 may be executed any number of times
+		after the base objects exist.
+
+		Expect 2 "did not match any canon" messages from
+		the bug in view column sorting (5/10/90)
+
+	These tables must be registered from SOMEWHERE for this test
+	to work.
+
+
+	MUST DEFINE SEPPARAM_DDB as "dbname/star"
+
+		9-May-1991	Stever
+			Added ORDER BY clause as indicated by the comments
+			in the body of the test.
+			Fixed canon for \q command.
+
+               21-Jun-1993      malee
+	       Removed set trace point op132. This trace point has no effect
+               on Star. In addition, the testenv user on VMS does not have
+               enough permissions to set trace points. 
+                        
+	  16-09-93     barbh
+		       Changed SEPPARAM_DDB to SEPPARAMDB. This makes the
+		       star test consistent with testkit standards.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop view sga06_p_v; \g
+/*
+	either no comment, or 'it's not there' is OK
+*/
+<<
+>>
+<<
+E_US0AC1 DROP: 'sga06_p_v' does not exist or is not owned by you.
+    (10-MAY-1990 15:02:56)
+
+>>
+* create view sga06_p_v as select * from sga06_p2;\g\r
+<<
+>>
+* drop view sga06_s_v; \g
+<<
+>>
+<<
+E_US0AC1 DROP: 'sga06_s_v' does not exist or is not owned by you.
+    (10-MAY-1990 15:03:47)
+
+>>
+* create view sga06_s_v as select * from sga06_s1;\g\r
+<<
+>>
+* drop view sga06_sp_v; \g
+<<
+>>
+<<
+E_US0AC1 DROP: 'sga06_sp_v' does not exist or is not owned by you.
+    (10-MAY-1990 15:04:20)
+
+>>
+* create view sga06_sp_v as select * from sga06_sp1;\g\r
+<<
+>>
+* select * from sga06_p_v order by pno, pname, color, weight, city;\g
+<<
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |red   |    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* select * from sga06_s_v order by sno, sname, status, city;\g
+<<
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    20|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* select * from sga06_sp_v order by sno, pno, qty;\g
+/*
+**
+**	known bug in order by handling in views
+**	2nd of 3 is not done
+**	jds	10-may-1990
+**
+*/
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select * from sga06_s1 where city in  ( select city from sga06_p2 where color='red-
+');\g\r
+<<
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s4    |Clark               |    20|London         |
++------+--------------------+------+---------------+
+(2 rows)
+>>
+* select * from sga06_sp1 spx where spx.qty in  ( select avg(qty) from sga06_sp1 spy-
+ );\g\r
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
++------+------+------+
+(0 rows)
+>>
+* select sname from sga06_s1 where 'p2' in  ( select pno from sga06_sp1 where sno = -
+sga06_s1.sno ) order by sname;\g\r
+/*
+Stever: Added order by clause
+*/
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sname from sga06_s1 where sno in  ( select sno from sga06_sp1 where pno = '-
+p2' ) order by sname;\g\r
+/*
+Stever: Added order by clause
+*/
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sno from sga06_s1 where city =  (select city from sga06_s1 where sno = 's1'-
+);\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s4    |
++------+
+(2 rows)
+>>
+* select sno from sga06_s1 where city in  (select city from sga06_s1 where sno = 's1-
+');\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s4    |
++------+
+(2 rows)
+>>
+* select distinct sno from sga06_sp1 where pno in  (select pno from sga06_sp1 where -
+sno = 's2');\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s2    |
+|s3    |
+|s4    |
++------+
+(4 rows)
+>>
+* select distinct pno from sga06_sp1 spx where pno in  (select pno from sga06_sp1 wh-
+ere sno <> spx.sno);\g\r
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct spx.pno from sga06_sp1 spx where spx.pno in  ( select spy.pno from-
+ sga06_sp1 spy where spy.sno <> spx.sno );\g\r
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct sname from sga06_s1 where city in   (select city from sga06_s1 whe-
+re sno = 's1')\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Smith               |
++--------------------+
+(2 rows)
+>>
+* select sname from sga06_s1 where sno in   ( select sno from sga06_sp1 where pno in-
+   (select pno from sga06_sp1 where sno='s1')) order by sname\g\r
+/*
+Stever: Added order by clause
+*/
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sname from sga06_s1 where sno in  (select sno from sga06_sp1 where pno in  -
+ (select pno from sga06_p2 where color='red'));\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(3 rows)
+>>
+* select distinct sname from sga06_s1 where sno in  (select sno from sga06_sp1 where-
+ pno in   (select pno from sga06_p2 where color = 'red'));\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(3 rows)
+>>
+* select * from sga06_sp1 where sno in 
+<<
+>>
+* ( select sno from sga06_s1 where city like 'Lon%') and pno in 
+<<
+>>
+* ( select pno from sga06_p2 where color like 're%') order by sno, pno;\g\r
+/*
+Stever: Added order by clause
+*/
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p4    |   200|
+|s1    |p6    |   100|
+|s4    |p4    |   300|
++------+------+------+
+(4 rows)
+>>
+* select * from sga06_s_v where city in  ( select city from sga06_p_v where color='r-
+ed');\g\r
+<<
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s4    |Clark               |    20|London         |
++------+--------------------+------+---------------+
+(2 rows)
+>>
+* select * from sga06_sp_v spx where spx.qty in  ( select avg(qty) from sga06_sp_v s-
+py );\g\r
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
++------+------+------+
+(0 rows)
+>>
+* select sname from sga06_s_v where 'p2' in  ( select pno from sga06_sp_v where sno -
+= sga06_s_v.sno );\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sname from sga06_s_v where sno in  ( select sno from sga06_sp_v where pno =-
+ 'p2' );\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sno from sga06_s_v where city =  (select city from sga06_s_v where sno = 's-
+1');\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s4    |
++------+
+(2 rows)
+>>
+* select sno from sga06_s_v where city in  (select city from sga06_s_v where sno = '-
+s1');\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s4    |
++------+
+(2 rows)
+>>
+* select distinct sno from sga06_sp_v where pno in  (select pno from sga06_sp_v wher-
+e sno = 's2');\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s2    |
+|s3    |
+|s4    |
++------+
+(4 rows)
+>>
+* select distinct pno from sga06_sp_v spx where pno in  (select pno from sga06_sp_v -
+where sno <> spx.sno);\g\r
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct spx.pno from sga06_sp_v spx where spx.pno in  ( select spy.pno fro-
+m sga06_sp_v spy where spy.sno <> spx.sno );\g\r
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct sname from sga06_s_v where city in   (select city from sga06_s_v w-
+here sno = 's1')\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Smith               |
++--------------------+
+(2 rows)
+>>
+* select sname from sga06_s_v where sno in   ( select sno from sga06_sp_v where pno -
+in   (select pno from sga06_sp_v where sno='s1'));\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sname from sga06_s_v where sno in  (select sno from sga06_sp_v where pno in-
+   (select pno from sga06_p_v where color='red'));\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(3 rows)
+>>
+* select distinct sname from sga06_s_v where sno in  (select sno from sga06_sp_v whe-
+re pno in   (select pno from sga06_p_v where color = 'red'));\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(3 rows)
+>>
+* select * from sga06_sp_v where sno in 
+<<
+>>
+* ( select sno from sga06_s_v where city like 'Lon%') and pno in 
+<<
+>>
+* ( select pno from sga06_p_v where color like 're%') order by sno, pno;\g\r
+/*
+Stever: Added order by clause
+*/
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p4    |   200|
+|s1    |p6    |   100|
+|s4    |p4    |   300|
++------+------+------+
+(4 rows)
+>>
+* select * from sga06_s1 where city in  ( select city from sga06_p2 where color='red-
+');\g\r
+<<
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s4    |Clark               |    20|London         |
++------+--------------------+------+---------------+
+(2 rows)
+>>
+* select * from sga06_sp1 spx where spx.qty in  ( select avg(qty) from sga06_sp1 spy-
+ );\g\r
+<<
+
++------+------+------+ 
+|sno   |pno   |qty   | 
++------+------+------+
++------+------+------+ 
+(0 rows) 
+>>
+* select sname from sga06_s1 where 'p2' in  (select pno from sga06_sp1 where sno = s-
+ga06_s1.sno ) order by sname;\g\r
+/*
+Stever: Added order by clause
+*/
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sname from sga06_s1 where sno in  ( select sno from sga06_sp1 where pno = '-
+p2' ) order by sname;\g\r
+/*
+Stever: Added order by clause
+*/
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sno from sga06_s1 where city =  (select city from sga06_s1 where sno = 's1'-
+);\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s4    |
++------+
+(2 rows)
+>>
+* select sno from sga06_s1 where city in  (select city from sga06_s1 where sno = 's1-
+');\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s4    |
++------+
+(2 rows)
+>>
+* select distinct sno from sga06_sp1 where pno in  (select pno from sga06_sp1 where -
+sno = 's2');\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s2    |
+|s3    |
+|s4    |
++------+
+(4 rows)
+>>
+* select distinct pno from sga06_sp1 spx where pno in  (select pno from sga06_sp1 wh-
+ere sno <> spx.sno);\g\r
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct spx.pno from sga06_sp1 spx where spx.pno in  ( select spy.pno from-
+ sga06_sp1 spy where spy.sno <> spx.sno );\g\r
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct sname from sga06_s1 where city in   (select city from sga06_s1 whe-
+re sno = 's1')\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Smith               |
++--------------------+
+(2 rows)
+>>
+* select sname from sga06_s1 where sno in   ( select sno from sga06_sp1 where pno in-
+   (select pno from sga06_sp1 where sno='s1')) order by sname;\g\r
+/*
+Stever: Added order by clause
+*/
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sname from sga06_s1 where sno in  (select sno from sga06_sp1 where pno in  -
+ (select pno from sga06_p2 where color='red'));\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(3 rows)
+>>
+* select distinct sname from sga06_s1 where sno in  (select sno from sga06_sp1 where-
+ pno in   (select pno from sga06_p2 where color = 'red'));\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(3 rows)
+>>
+* select * from sga06_sp1 where sno in 
+<<
+>>
+* ( select sno from sga06_s1 where city like 'Lon%') and pno in 
+<<
+>>
+* ( select pno from sga06_p2 where color like 're%') order by sno, pno;\g\r
+/*
+Stever: Added order by clause
+*/
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p4    |   200|
+|s1    |p6    |   100|
+|s4    |p4    |   300|
++------+------+------+
+(4 rows)
+>>
+* select * from sga06_s_v where city in  ( select city from sga06_p_v where color='r-
+ed');\g\r
+<<
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s4    |Clark               |    20|London         |
++------+--------------------+------+---------------+
+(2 rows)
+>>
+* select * from sga06_sp_v spx where spx.qty in  ( select avg(qty) from sga06_sp_v s-
+py );\g\r
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
++------+------+------+
+(0 rows)
+>>
+* select sname from sga06_s_v where 'p2' in  ( select pno from sga06_sp_v where sno -
+= sga06_s_v.sno );\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sname from sga06_s_v where sno in  ( select sno from sga06_sp_v where pno =-
+ 'p2' );\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sno from sga06_s_v where city =  (select city from sga06_s_v where sno = 's-
+1');\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s4    |
++------+
+(2 rows)
+>>
+* select sno from sga06_s_v where city in  (select city from sga06_s_v where sno = '-
+s1');\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s4    |
++------+
+(2 rows)
+>>
+* select distinct sno from sga06_sp_v where pno in  (select pno from sga06_sp_v wher-
+e sno = 's2');\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s2    |
+|s3    |
+|s4    |
++------+
+(4 rows)
+>>
+* select distinct pno from sga06_sp_v spx where pno in  (select pno from sga06_sp_v -
+where sno <> spx.sno);\g\r
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct spx.pno from sga06_sp_v spx where spx.pno in  ( select spy.pno fro-
+m sga06_sp_v spy where spy.sno <> spx.sno );\g\r
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct sname from sga06_s_v where city in   (select city from sga06_s_v w-
+here sno = 's1')\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Smith               |
++--------------------+
+(2 rows)
+>>
+* select sname from sga06_s_v where sno in   ( select sno from sga06_sp_v where pno -
+in   (select pno from sga06_sp_v where sno='s1'));\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Blake               |
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(4 rows)
+>>
+* select sname from sga06_s_v where sno in  (select sno from sga06_sp_v where pno in-
+ (select pno from sga06_p_v where color='red'));\g\r 
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(3 rows)
+>>
+* select distinct sname from sga06_s_v where sno in  (select sno from sga06_sp_v whe-
+re pno in   (select pno from sga06_p_v where color = 'red'));\g\r
+<<
+
++--------------------+
+|sname               |
++--------------------+
+|Clark               |
+|Jones               |
+|Smith               |
++--------------------+
+(3 rows)
+>>
+* select * from sga06_sp_v where sno in 
+<<
+>>
+* ( select sno from sga06_s_v where city like 'Lon%') and pno in 
+<<
+>>
+* ( select pno from sga06_p_v where color like 're%') order by sno, pno;\g\r 
+/*
+Stever: Added order by clause
+*/
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p4    |   200|
+|s1    |p6    |   100|
+|s4    |p4    |   300|
++------+------+------+
+(4 rows)
+>>
+* \q
+<<
+>>
+
+
+Ending at: Thu May  9 13:11:32 1991

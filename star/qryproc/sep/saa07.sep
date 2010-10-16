@@ -1,0 +1,291 @@
+/*
+	Test Name: SAA07
+	Time: 28-MAY-1992 10:11:37
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : saa07
+	Module  : 
+	Filename: SAA07.SEP
+	Purpose	: Check for correctness of returns in UNION ALL
+		as described in technotes r6032.dbms
+	Input Files  :
+	Output Files :saa07_a.tes, saa07_b.tes created with FILL commands
+	Database     :
+	Tables       :
+	Synopsis     : perform outer join - STAR version of EAA05
+
+		use FILL to create data files - these tables
+			were supplied by a customer, and include
+			duplicate names
+
+> If you have support then use Ingres/ADVISOR and go look at document
+> number US-13272 which discusses this. 
+
+		drop and create test tables
+		copy in the data from files
+		display table content
+		do normal join
+		do "outer join", test for correctly retained
+			duplicates in UNION ALL
+
+	REQUIRES SEPPARAM_DDB variable/logical
+
+	This version creates tables in ldb1 and ldb2 on 
+		snode1 and snode2.  Be sure the NETU info
+		is up to date.
+
+	This test should take about 5 minutes to execute.
+
+
+ History: 28-MAY-1992	jds	Created
+				canonized against 6.4/02
+
+          28-MAY-1992	jds	test against 6.3, alt canons for drop
+				table
+
+          28-MAY-1992	jds	recanonize to accomodate SEP's idea
+				of what the sql statemants should be
+				look like when continued.
+
+	  21-JUL-1992	jds	change SEPPARAMDB to SEPPARAM_DDB to
+				be consistent with the rest of the tests.
+
+          18-JUN-1993	(malee)
+          To accomodate the new star behavior for "drop".
+          Registered table cannot be dropped from star.
+          To delete the registered table:
+          - remove the registration link (e.g. remove tablename)
+          - direct connect to the appropriate ldb and drop the table
+
+	  16-09-93     barbh
+		       Changed SEPPARAM_DDB to SEPPARAMDB. This makes the
+		       star test consistent with testkit standards.
+*/
+? fill saa07_a.tes 
+!!
+    5Adams
+
+    5Adams
+
+    5Brown
+
+    5Brown
+
+    8Campbell
+
+    5Dixon
+
+    5Estes
+
+!!
+? fill saa07_b.tes 
+!!
+    5Adams	      7.500
+
+    5Dixon	      9.400
+
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* set autocommit on \g
+<<
+>>
+* remove saa07_a,saa07_b; \p\g
+<<
+ remove saa07_a,saa07_b; 
+>>
+<<
+ remove saa07_a,saa07_b; 
+E_US0AC1 REMOVE: 'saa07_a' does not exist or is not owned by you.
+    (18-JUN-1993 11:11:53)
+
+E_US0AC1 REMOVE: 'saa07_b' does not exist or is not owned by you.
+    (18-JUN-1993 11:11:54)
+
+>>
+* commit;\p\g
+<<
+ commit;
+>>
+* direct connect with database=ldb1,node=snode1;\p\g
+<<
+ direct connect with database=ldb1,node=snode1;
+>>
+* drop table saa07_b;\p\g
+<<
+ drop table saa07_b;
+>>
+<<
+ drop table saa07_b;
+E_US0AC1 DROP: 'saa07_b' does not exist or is not owned by you.
+    (18-JUN-1993 11:12:13)
+
+>>
+* create table saa07_b(name char(12) with null,rating float with null) with duplicat-
+es,location = (ii_database)\p\g
+<<
+ create table saa07_b(name char(12) with null,rating float with null) with duplicate-
+s,location = (ii_database)
+>>
+* copy saa07_b(name= varchar(0)tab with null(']^NULL^['), rating= c0nl with null(']^-
+NULL^['),nl= d1)from 'saa07_b.tes'\p\g
+<<
+ copy saa07_b(name= varchar(0)tab with null(']^NULL^['), rating= c0nl with null(']^N-
+ULL^['),nl= d1)from 'saa07_b.tes'
+(2 rows)
+>>
+* direct disconnect;\p\g
+<<
+ direct disconnect;
+>>
+* register saa07_b as link with database=ldb1,node=snode1;\p\g
+<<
+ register saa07_b as link with database=ldb1,node=snode1;
+>>
+* commit;\p\g
+<<
+ commit;
+>>
+* direct connect with database=ldb2,node=snode2;\p\g
+<<
+ direct connect with database=ldb2,node=snode2;
+>>
+* drop table saa07_a;\p\g
+<<
+ drop table saa07_a;
+>>
+<<
+ drop table saa07_a;
+E_US0AC1 DROP: 'saa07_a' does not exist or is not owned by you.
+    (18-JUN-1993 11:12:46)
+
+>>
+* create table saa07_a(name char(12) with null)with duplicates, location = (ii_datab-
+ase)\p\g
+<<
+ create table saa07_a(name char(12) with null)with duplicates, location = (ii_databa-
+se)
+>>
+* copy saa07_a(name= varchar(0)nl with null(']^NULL^['),nl= d1)from 'saa07_a.tes'\p\-
+g
+<<
+ copy saa07_a(name= varchar(0)nl with null(']^NULL^['),nl= d1)from 'saa07_a.tes'
+(7 rows)
+>>
+* direct disconnect;\p\g
+<<
+ direct disconnect;
+>>
+* register saa07_a as link with database=ldb2,node=snode2;\p\g
+<<
+ register saa07_a as link with database=ldb2,node=snode2;
+>>
+* select * from saa07_a ;\p\g
+<<
+ select * from saa07_a ;
+
++------------+
+|name        |
++------------+
+|Adams       |
+|Adams       |
+|Brown       |
+|Brown       |
+|Campbell    |
+|Dixon       |
+|Estes       |
++------------+
+(7 rows)
+>>
+* select * from saa07_b ;\p\g
+<<
+ select * from saa07_b ;
+
++------------+-----------+
+|name        |rating     |
++------------+-----------+
+|Adams       |      7.500|
+|Dixon       |      9.400|
++------------+-----------+
+(2 rows)
+>>
+* select saa07_a.name, saa07_b.rating from saa07_a , saa07_b   where saa07_a.name = -
+saa07_b.name   union select saa07_a.name, 0.0 from saa07_a where not exists   (selec-
+t * from saa07_b where saa07_b.name = saa07_a.name) order by name;\p\g
+<<
+ select saa07_a.name, saa07_b.rating from saa07_a , saa07_b   where saa07_a.name = s-
+aa07_b.name   union select saa07_a.name, 0.0 from saa07_a where not exists   (select-
+ * from saa07_b where saa07_b.name = saa07_a.name) order by name;
+
++------------+-----------+
+|name        |rating     |
++------------+-----------+
+|Adams       |      7.500|
+|Brown       |      0.000|
+|Campbell    |      0.000|
+|Dixon       |      9.400|
+|Estes       |      0.000|
++------------+-----------+
+(5 rows)
+>>
+* select saa07_a.name, saa07_b.rating from saa07_a , saa07_b   where saa07_a.name = -
+saa07_b.name union all select saa07_a.name, 0.0 from saa07_a where not exists   (sel-
+ect * from saa07_b where saa07_b.name = saa07_a.name) order by name ;\p\g
+<<
+ select saa07_a.name, saa07_b.rating from saa07_a , saa07_b   where saa07_a.name = s-
+aa07_b.name union all select saa07_a.name, 0.0 from saa07_a where not exists   (sele-
+ct * from saa07_b where saa07_b.name = saa07_a.name) order by name ;
+
++------------+-----------+
+|name        |rating     |
++------------+-----------+
+|Adams       |      7.500|
+|Adams       |      7.500|
+|Brown       |      0.000|
+|Brown       |      0.000|
+|Campbell    |      0.000|
+|Dixon       |      9.400|
+|Estes       |      0.000|
++------------+-----------+
+(7 rows)
+>>
+* remove saa07_a,saa07_b; \p\g
+<<
+ remove saa07_a,saa07_b; 
+>>
+* commit; \p\g
+<<
+ commit; 
+>>
+* direct connect with database=ldb1,node=snode1;\p\g
+<<
+ direct connect with database=ldb1,node=snode1;
+>>
+* drop saa07_b; \p\g
+<<
+ drop saa07_b; 
+>>
+* direct disconnect; \p\g
+<<
+ direct disconnect; 
+>>
+* direct connect with database=ldb2,node=snode2;\p\g
+<<
+ direct connect with database=ldb2,node=snode2;
+>>
+* drop saa07_a; \p\g
+<<
+ drop saa07_a; 
+>>
+* direct disconnect; \p\g
+<<
+ direct disconnect; 
+>>
+* \q
+<<
+>>
+
+
+Ending at: 18-JUN-1993 11:14:25

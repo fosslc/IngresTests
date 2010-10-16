@@ -1,0 +1,804 @@
+/*
+Copyright (c) 2005 Ingres Corporation
+
+
+	Test Name: ttpp29.sep
+	Time: Mon Dec 16 11:36:45 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : ttpp29.sep 
+	Module  : 
+	Filename:
+	Purpose	: This is an ESQL version of ttpp11.sep. The purpose 
+ 		  of this test is to pass a global temporary table
+                  as a parameter to a database procedure for the
+                  float4 datatype.
+	Input Files  :	runme.sc
+	Output Files :	*.c, *.o, *.exe
+	Database     :  ttppdb	
+	Tables       :  session.gt, t1, t2
+	Synopsis     :
+
+ History: 16-Dec-1996	(wanya01)	Created
+	  28-Map-1997	(cheis01)	ESQL version of ttpp11.sep created.
+          17-Sep-1998   (kinte01)       Cleanup files left around after
+                                        test has completed (VMS specific)
+	  23-Mar-1999   (vande02)	Hard-coded VPG_SZ to 2K
+	  08-Jul-2002  	(shafa01) 	Test cleanup Bug: 108167
+          22-Mar-2005   (sarjo01) Fixed cursor fetch loop to exit on error
+                        rather than loop infinitely; changed runme.sc to
+                        consist of 1 rather than multiple filled files.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? fill runme.sc 
+!!
+#include <stdio.h>
+
+exec sql include sqlca;
+
+void print1()
+{
+        exec sql begin declare section;
+        float    one;
+        exec sql end declare section;
+ 
+        exec sql whenever sqlerror call sqlprint;
+        exec sql whenever sqlmessage call sqlprint;
+ 
+        exec sql declare c1 cursor for select * from t1;
+
+        exec sql open c1 for readonly;
+        printf("\nt1\n");
+        printf("------------------\n");
+        printf("   col1\n");
+        printf("------------------\n");
+        while (sqlca.sqlcode == 0) {
+           exec sql fetch c1 into :one;
+           if (sqlca.sqlcode != 100)
+	   	printf("%10f\n", one);
+        }
+        exec sql close c1;
+        printf("\n");
+}
+void print2()
+{
+        exec sql begin declare section;
+        int	two;
+        float   three;
+        exec sql end declare section;
+ 
+        exec sql whenever sqlerror call sqlprint;
+        exec sql whenever sqlmessage call sqlprint;
+ 
+        exec sql declare c2 cursor for select * from t2;
+
+        exec sql open c2 for readonly;
+        printf("\nt2\n");
+        printf("--------------------------\n");
+        printf("   col1		col2\n");
+        printf("--------------------------\n");
+        while (sqlca.sqlcode == 0) {
+           exec sql fetch c2 into :two, :three;
+           if (sqlca.sqlcode != 100)
+		printf("%5d\t%10f\n", two, three);
+        }
+        exec sql close c2;
+        printf("\n");
+}
+void ttpp1()
+{
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+exec sql set autocommit on;
+exec sql drop session.gt;
+exec sql drop procedure p1;
+exec sql drop procedure p2;
+exec sql drop procedure p3;
+exec sql drop procedure p4;
+exec sql drop procedure p5;
+exec sql drop procedure p6;
+exec sql drop table t1;
+exec sql drop table t2;
+
+
+exec sql declare global temporary table session.gt(col1 int, col2 float4)
+	on commit preserve rows with norecovery, page_size= 2048;
+exec sql insert into session.gt values (1000, 99999);
+exec sql insert into session.gt values (2000, -99999);
+exec sql insert into session.gt values (3000, 0);
+exec sql insert into session.gt values (4000,23456 );
+exec sql insert into session.gt values (5000,12345 );
+
+exec sql create table t1(col1 float4 ) with page_size=2048;
+exec sql insert into t1 values(20000);
+exec sql insert into t1 values(11000);
+
+exec sql create table t2(col1 int, col2 float4) with page_size= 2048;
+
+exec sql create procedure p1( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    insert into t1 select col2 from gtt1 where col2=23456;
+end;
+
+exec sql create procedure p2( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    insert into t2 select * from gtt1;
+end;
+
+exec sql create procedure p3( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    insert into gtt1 values (500,10000);
+    insert into t2 select * from gtt1 where col2=10000;
+end;
+
+exec sql create procedure p4( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    update t2 from gtt1 set col2=-90 where t2.col1=gtt1.col1 and 
+    gtt1.col1=4000;
+end;
+
+exec sql create procedure p5( gtt1 set of (col1 int, col2 float4 )) as
+begin
+   delete from t2 where t2.col1 in (select gtt1.col1 from gtt1 
+   where t2.col1=gtt1.col1 and gtt1.col2=99999 and gtt1.col1<=3000);
+   delete from t1 where t1.col1 in (select col2 from gtt1);
+end;
+
+exec sql create procedure p6 (gtt1 set of (col1 int, col2 float4)) as
+begin
+   delete from t2 where t2.col1 in (select gtt1.col1 from gtt1);
+end;
+
+print1();
+printf("execute procedure p1 (gtt1=session.gt);\n");
+exec sql execute procedure p1 (gtt1=session.gt);
+print1();
+
+print2();
+printf("execute procedure p2 (gtt1=session.gt);\n");
+exec sql execute procedure p2 (gtt1=session.gt);
+print2();
+
+printf("execute procedure p3 (gtt1=session.gt);\n");
+exec sql execute procedure p3 (gtt1=session.gt);
+print2();
+
+printf("execute procedure p4 (gtt1=session.gt);\n");
+exec sql execute procedure p4 (gtt1=session.gt);
+print2();
+print1();
+
+printf("execute procedure p5 (gtt1=session.gt);\n");
+exec sql execute procedure p5 (gtt1=session.gt);
+print2();
+print1();
+
+printf("execute procedure p6 (gtt1=session.gt);\n");
+exec sql execute procedure p6 (gtt1=session.gt);
+print2();
+
+exec sql drop table t1;
+exec sql drop table t2;        
+exec sql drop procedure p1;
+exec sql drop procedure p2;
+exec sql drop procedure p3;
+exec sql drop procedure p4;
+exec sql drop procedure p5;
+exec sql drop procedure p6;
+exec sql drop table session.gt;
+}
+void ttpp2()
+{
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+exec sql set autocommit on;
+exec sql drop session.gt;
+exec sql drop procedure p1;
+exec sql drop procedure p2;
+exec sql drop procedure p3;
+exec sql drop procedure p4;
+exec sql drop procedure p5;
+exec sql drop procedure p6;
+exec sql drop table t1;
+exec sql drop table t2;
+
+
+exec sql declare global temporary table session.gt(col1 int, col2 float4)
+	on commit preserve rows with norecovery, page_size= 2048;
+exec sql insert into session.gt values (1000, 99999);
+exec sql insert into session.gt values (2000, -99999);
+exec sql insert into session.gt values (3000, 0);
+exec sql insert into session.gt values (4000,23456 );
+exec sql insert into session.gt values (5000,12345 );
+
+exec sql create table t1(col1 float ) with page_size=2048;
+exec sql insert into t1 values(20000);
+exec sql insert into t1 values(11000);
+
+exec sql create table t2(col1 int, col2 float) with page_size= 2048;
+
+exec sql create procedure p1( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    insert into t1 select col2 from gtt1 where col2=23456;
+end;
+
+exec sql create procedure p2( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    insert into t2 select * from gtt1;
+end;
+
+exec sql create procedure p3( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    insert into gtt1 values (500,10000);
+    insert into t2 select * from gtt1 where col2=10000;
+end;
+
+exec sql create procedure p4( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    update t2 from gtt1 set col2=-90 where t2.col1=gtt1.col1 and 
+    gtt1.col1=4000;
+end;
+
+exec sql create procedure p5( gtt1 set of (col1 int, col2 float4 )) as
+begin
+   delete from t2 where t2.col1 in (select gtt1.col1 from gtt1 
+   where t2.col1=gtt1.col1 and gtt1.col2=99999 and gtt1.col1<=3000);
+   delete from t1 where t1.col1 in (select col2 from gtt1);
+end;
+
+exec sql create procedure p6 (gtt1 set of (col1 int, col2 float4)) as
+begin
+   delete from t2 where t2.col1 in (select gtt1.col1 from gtt1);
+end;
+
+print1();
+printf("execute procedure p1 (gtt1=session.gt);\n");
+exec sql execute procedure p1 (gtt1=session.gt);
+print1();
+
+print2();
+printf("execute procedure p2 (gtt1=session.gt);\n");
+exec sql execute procedure p2 (gtt1=session.gt);
+print2();
+
+printf("execute procedure p3 (gtt1=session.gt);\n");
+exec sql execute procedure p3 (gtt1=session.gt);
+print2();
+
+printf("execute procedure p4 (gtt1=session.gt);\n");
+exec sql execute procedure p4 (gtt1=session.gt);
+print2();
+print1();
+
+printf("execute procedure p5 (gtt1=session.gt);\n");
+exec sql execute procedure p5 (gtt1=session.gt);
+print2();
+print1();
+
+printf("execute procedure p6 (gtt1=session.gt);\n");
+exec sql execute procedure p6 (gtt1=session.gt);
+print2();
+
+exec sql drop table t1;
+exec sql drop table t2;        
+exec sql drop procedure p1;
+exec sql drop procedure p2;
+exec sql drop procedure p3;
+exec sql drop procedure p4;
+exec sql drop procedure p5;
+exec sql drop procedure p6;
+exec sql drop table session.gt;
+}
+void ttpp3()
+{
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+exec sql set autocommit on;
+exec sql drop session.gt;
+exec sql drop procedure p1;
+exec sql drop procedure p2;
+exec sql drop procedure p3;
+exec sql drop procedure p4;
+exec sql drop procedure p5;
+exec sql drop procedure p6;
+exec sql drop table t1;
+exec sql drop table t2;
+
+
+exec sql declare global temporary table session.gt(col1 int, col2 float4)
+	on commit preserve rows with norecovery, page_size= 2048;
+exec sql insert into session.gt values (1000, 99999);
+exec sql insert into session.gt values (2000, -99999);
+exec sql insert into session.gt values (3000, 0);
+exec sql insert into session.gt values (4000,23456 );
+exec sql insert into session.gt values (5000,12345 );
+
+exec sql create table t1(col1 decimal(10,5) ) with page_size=2048;
+exec sql insert into t1 values(20000);
+exec sql insert into t1 values(11000);
+
+exec sql create table t2(col1 int, col2 decimal(10,5) ) with page_size= 2048;
+
+exec sql create procedure p1( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    insert into t1 select col2 from gtt1 where col2=23456;
+end;
+
+exec sql create procedure p2( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    insert into t2 select * from gtt1;
+end;
+
+exec sql create procedure p3( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    insert into gtt1 values (500,10000);
+    insert into t2 select * from gtt1 where col2=10000;
+end;
+
+exec sql create procedure p4( gtt1 set of (col1 int, col2 float4 )) as 
+begin 
+    update t2 from gtt1 set col2=-90 where t2.col1=gtt1.col1 and 
+    gtt1.col1=4000;
+end;
+
+exec sql create procedure p5( gtt1 set of (col1 int, col2 float4 )) as
+begin
+   delete from t2 where t2.col1 in (select gtt1.col1 from gtt1 
+   where t2.col1=gtt1.col1 and gtt1.col2=99999 and gtt1.col1<=3000);
+   delete from t1 where t1.col1 in (select col2 from gtt1);
+end;
+
+exec sql create procedure p6 (gtt1 set of (col1 int, col2 float4)) as
+begin
+   delete from t2 where t2.col1 in (select gtt1.col1 from gtt1);
+end;
+
+print1();
+printf("execute procedure p1 (gtt1=session.gt);\n");
+exec sql execute procedure p1 (gtt1=session.gt);
+print1();
+
+print2();
+printf("execute procedure p2 (gtt1=session.gt);\n");
+exec sql execute procedure p2 (gtt1=session.gt);
+print2();
+
+printf("execute procedure p3 (gtt1=session.gt);\n");
+exec sql execute procedure p3 (gtt1=session.gt);
+print2();
+
+printf("execute procedure p4 (gtt1=session.gt);\n");
+exec sql execute procedure p4 (gtt1=session.gt);
+print2();
+print1();
+
+printf("execute procedure p5 (gtt1=session.gt);\n");
+exec sql execute procedure p5 (gtt1=session.gt);
+print2();
+print1();
+
+printf("execute procedure p6 (gtt1=session.gt);\n");
+exec sql execute procedure p6 (gtt1=session.gt);
+print2();
+
+exec sql drop table t1;
+exec sql drop table t2;        
+exec sql drop procedure p1;
+exec sql drop procedure p2;
+exec sql drop procedure p3;
+exec sql drop procedure p4;
+exec sql drop procedure p5;
+exec sql drop procedure p6;
+exec sql drop table session.gt;
+}
+main(argc, argv)
+int argc;
+char **argv;
+{
+	exec sql begin declare section;
+	char	dbname[20];
+	exec sql end declare section;
+
+	strcpy(dbname, argv[1]);
+	exec sql connect :dbname;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+	exec sql whenever sqlerror continue;
+
+        ttpp1();
+	ttpp2();
+	ttpp3();
+
+	exec sql commit;
+	exec sql disconnect;
+}
+!!
+? sepesqlc runme 
+<<
+ESQL runme.sc:
+>>
+? sepcc runme 
+<<
+>>
+<<
+runme.c
+>>
+? seplnk runme 
+<<
+>>
+? run runme.exe SEPPARAMDB 
+<<
+E_US0ACC DROP: 'gt' is not owned by $Sess000000A9.
+    (Wed May 28 12:32:16 1997)
+E_US0965 Procedure 'p1' not found.
+    (Wed May 28 12:32:16 1997)
+E_US0965 Procedure 'p2' not found.
+    (Wed May 28 12:32:16 1997)
+E_US0965 Procedure 'p3' not found.
+    (Wed May 28 12:32:16 1997)
+E_US0965 Procedure 'p4' not found.
+    (Wed May 28 12:32:16 1997)
+E_US0965 Procedure 'p5' not found.
+    (Wed May 28 12:32:16 1997)
+E_US0965 Procedure 'p6' not found.
+    (Wed May 28 12:32:16 1997)
+E_US0AC1 DROP: 't1' does not exist or is not owned by you.
+    (Wed May 28 12:32:16 1997)
+E_US0AC1 DROP: 't2' does not exist or is not owned by you.
+    (Wed May 28 12:32:16 1997)
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+
+execute procedure p1 (gtt1=session.gt);
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+23456.000000
+
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+
+execute procedure p2 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 1000	99999.000000
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	23456.000000
+ 5000	12345.000000
+
+execute procedure p3 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 1000	99999.000000
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	23456.000000
+ 5000	12345.000000
+  500	10000.000000
+
+execute procedure p4 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 1000	99999.000000
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	-90.000000
+ 5000	12345.000000
+  500	10000.000000
+
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+23456.000000
+
+execute procedure p5 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	-90.000000
+ 5000	12345.000000
+  500	10000.000000
+
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+
+execute procedure p6 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+
+E_US0ACC DROP: 'gt' is not owned by $Sess000000A9.
+    (Wed May 28 12:32:23 1997)
+E_US0965 Procedure 'p1' not found.
+    (Wed May 28 12:32:23 1997)
+E_US0965 Procedure 'p2' not found.
+    (Wed May 28 12:32:23 1997)
+E_US0965 Procedure 'p3' not found.
+    (Wed May 28 12:32:23 1997)
+E_US0965 Procedure 'p4' not found.
+    (Wed May 28 12:32:23 1997)
+E_US0965 Procedure 'p5' not found.
+    (Wed May 28 12:32:23 1997)
+E_US0965 Procedure 'p6' not found.
+    (Wed May 28 12:32:23 1997)
+E_US0AC1 DROP: 't1' does not exist or is not owned by you.
+    (Wed May 28 12:32:23 1997)
+E_US0AC1 DROP: 't2' does not exist or is not owned by you.
+    (Wed May 28 12:32:23 1997)
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+
+execute procedure p1 (gtt1=session.gt);
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+23456.000000
+
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+
+execute procedure p2 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 1000	99999.000000
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	23456.000000
+ 5000	12345.000000
+
+execute procedure p3 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 1000	99999.000000
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	23456.000000
+ 5000	12345.000000
+  500	10000.000000
+
+execute procedure p4 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 1000	99999.000000
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	-90.000000
+ 5000	12345.000000
+  500	10000.000000
+
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+23456.000000
+
+execute procedure p5 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	-90.000000
+ 5000	12345.000000
+  500	10000.000000
+
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+
+execute procedure p6 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+
+E_US0ACC DROP: 'gt' is not owned by $Sess000000A9.
+    (Wed May 28 12:32:29 1997)
+E_US0965 Procedure 'p1' not found.
+    (Wed May 28 12:32:29 1997)
+E_US0965 Procedure 'p2' not found.
+    (Wed May 28 12:32:29 1997)
+E_US0965 Procedure 'p3' not found.
+    (Wed May 28 12:32:29 1997)
+E_US0965 Procedure 'p4' not found.
+    (Wed May 28 12:32:29 1997)
+E_US0965 Procedure 'p5' not found.
+    (Wed May 28 12:32:29 1997)
+E_US0965 Procedure 'p6' not found.
+    (Wed May 28 12:32:29 1997)
+E_US0AC1 DROP: 't1' does not exist or is not owned by you.
+    (Wed May 28 12:32:29 1997)
+E_US0AC1 DROP: 't2' does not exist or is not owned by you.
+    (Wed May 28 12:32:29 1997)
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+
+execute procedure p1 (gtt1=session.gt);
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+23456.000000
+
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+
+execute procedure p2 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 1000	99999.000000
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	23456.000000
+ 5000	12345.000000
+
+execute procedure p3 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 1000	99999.000000
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	23456.000000
+ 5000	12345.000000
+  500	10000.000000
+
+execute procedure p4 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 1000	99999.000000
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	-90.000000
+ 5000	12345.000000
+  500	10000.000000
+
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+23456.000000
+
+execute procedure p5 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+ 2000	-99999.000000
+ 3000	  0.000000
+ 4000	-90.000000
+ 5000	12345.000000
+  500	10000.000000
+
+
+t1
+------------------
+   col1
+------------------
+20000.000000
+11000.000000
+
+execute procedure p6 (gtt1=session.gt);
+
+t2
+--------------------------
+   col1		col2
+--------------------------
+
+>>
+? delete runme.c
+<<
+~
+>>
+? delete runme.o
+<<
+~
+>>
+? delete runme.exe
+<<
+~
+>>
+? delete runme.obj
+<<
+~
+>>
+
+
+Ending at: Wed May 28 12:32:45 1997

@@ -1,0 +1,410 @@
+/*
+        Test Name: qp298.sep
+        Time: Fri May 11 13:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp298.sep
+        Module  : be/qryproc
+        Filename: qp298.sep
+        Purpose : To test the new feature SQL syntax of 'select first'.
+        Input Files  : setup.sql
+        Output Files :
+        Database     : qryprocdb
+        Tables       : qp298_table1, qp298_table2, qp298_table3
+        Synopsis     : A new reserved (keyword) word of 'FIRST' has been added
+                       to SQL to enable the ability to quantify a select for so
+                       many of the first rows in a query.  This test will use
+		       valid and invalid syntax within Terminal Monitor queries
+		       of selects and subselects.  This feature is available
+		       starting with Ingres II 2.6/0106
+
+ History: 11-May-2001   (sarjo01) Created
+          17-May-2001	(sarjo01) Recanonized, added new cases for 
+			SUBSELECT. New STAR issue opened for case of
+			SELECT  FIRST 1A ...  which is currently getting an
+		        incorrect error (10983067).
+          16-Sep-2002   (hanch04) Update to run again 32/64-bit server
+
+**
+**  SELECT FIRST ... SYNTAX   
+**
+**  DYNAMIC SQL 
+**
+**  Known Problems:
+**
+**  1) SELECT FIRST 0 ... returns rows, Issue 10891825 (RESOLVED)
+**     Note: DEV maintains that this is the correct behavior. See
+**     See comments in STAR issue.
+**  2) SELECT FIRST ... ignored in a SUBSELECT,
+**     no error given, Issue 10842919 (RESOLVED)
+**  3) SELECT FIRST 1A ... produces inappropriate error msg (10983067).
+**
+*/
+? fill setup.sql 
+!!
+drop table qp298_table1\g
+drop table qp298_table2\g
+drop table qp298_table3\g
+create table qp298_table1 (a1 int)\g
+insert into qp298_table1 values (0)\g
+insert into qp298_table1 select a1 + 1 from qp298_table1\g
+insert into qp298_table1 select a1 + 2 from qp298_table1\g
+insert into qp298_table1 select a1 + 4 from qp298_table1\g
+insert into qp298_table1 select a1 + 8 from qp298_table1\g
+insert into qp298_table1 select a1 + 16 from qp298_table1\g
+insert into qp298_table1 select a1 + 32 from qp298_table1\g
+insert into qp298_table1 select a1 + 64 from qp298_table1\g
+insert into qp298_table1 select a1 + 128 from qp298_table1\g
+insert into qp298_table1 select a1 from qp298_table1\g
+create table qp298_table2 as select a1 from qp298_table1 where a1 < 10\g
+commit\g
+!!
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* select first 1a from qp298_table2\p\g
+<<
+ select first 1a from qp298_table2
+Executing . . .
+
+E_US0836 line 1, Column 'a' not found in any specified table.
+    (Thu May 17 10:01:27 2001)
+
+continue
+* 
+>>
+* select first a1 from qp298_table2\p\g
+<<
+ select first a1 from qp298_table2
+Executing . . .
+
+E_US09C5 line 1, Syntax error on 'a1'.  The correct syntax is: 
+    SELECT [ALL|DISTINCT] target_list 
+      FROM table(s) 
+      [WHERE search_cond] 
+      [GROUP BY col(s)] 
+      [HAVING search_cond] 
+ [UNION subselect] 
+ [ORDER BY col(s)]
+    (Mon Apr 16 16:24:45 2001)
+
+continue
+* 
+>>
+<<
+ select first a1 from qp298_table2
+Executing . . .
+
+E_US0836 line 1, Column 'first' not found in any specified table.
+    (Wed Sep 11 05:12:18 2002)
+
+continue
+*
+>>
+* select first junk a1 from qp298_table2\p\g
+<<
+ select first junk a1 from qp298_table2
+Executing . . .
+
+E_US09C5 line 1, Syntax error on 'junk'.  The correct syntax is: 
+    SELECT [ALL|DISTINCT] target_list 
+      FROM table(s) 
+      [WHERE search_cond] 
+      [GROUP BY col(s)] 
+      [HAVING search_cond] 
+ [UNION subselect] 
+ [ORDER BY col(s)]
+    (Mon Apr 16 16:24:50 2001)
+
+continue
+* 
+>>
+<<
+ select first junk a1 from qp298_table2
+Executing . . .
+
+E_US0837 line 1, FROM clause is mandatory when a column ('first') has been
+    specified in the target list.
+    (Wed Sep 11 05:12:18 2002)
+
+continue
+*
+>>
+* select first 1.1 a1 from qp298_table2\p\g
+<<
+ select first 1.1 a1 from qp298_table2
+Executing . . .
+
+E_US09C5 line 1, Syntax error on '1.1'.  The correct syntax is: 
+    SELECT [ALL|DISTINCT] target_list 
+      FROM table(s) 
+      [WHERE search_cond] 
+      [GROUP BY col(s)] 
+      [HAVING search_cond] 
+ [UNION subselect] 
+ [ORDER BY col(s)]
+    (Mon Apr 16 16:24:52 2001)
+
+continue
+* 
+>>
+* select first -1 a1 from qp298_table2\p\g
+<<
+ select first -1 a1 from qp298_table2
+Executing . . .
+
+E_US09C5 line 1, Syntax error on '-'.  The correct syntax is: 
+    SELECT [ALL|DISTINCT] target_list 
+      FROM table(s) 
+      [WHERE search_cond] 
+      [GROUP BY col(s)] 
+      [HAVING search_cond] 
+ [UNION subselect] 
+ [ORDER BY col(s)]
+    (Mon Apr 16 16:24:55 2001)
+
+continue
+* 
+>>
+<<
+ select first -1 a1 from qp298_table2
+Executing . . .
+
+E_US0836 line 1, Column 'first' not found in any specified table.
+    (Wed Sep 11 05:12:19 2002)
+
+continue
+*
+>>
+* select first 0 a1 from qp298_table2\p\g
+<<
+ select first 0 a1 from qp298_table2
+Executing . . .
+
+
++-------------+
+|a1           |
++-------------+
+|            0|
+|            1|
+|            2|
+|            3|
+|            4|
+|            5|
+|            6|
+|            7|
+|            8|
+|            9|
+|            0|
+|            1|
+|            2|
+|            3|
+|            4|
+|            5|
+|            6|
+|            7|
+|            8|
+|            9|
++-------------+
+(20 rows)
+continue
+* 
+>>
+* select first 1 a1 from qp298_table1\p\g
+<<
+ select first 1 a1 from qp298_table1
+Executing . . .
+
+
++-------------+
+|a1           |
++-------------+
+|            0|
++-------------+
+(1 row)
+continue
+* 
+>>
+* select first 10 a1 from qp298_table1 order by 1\p\g
+<<
+ select first 10 a1 from qp298_table1 order by 1
+Executing . . .
+
+
++-------------+
+|a1           |
++-------------+
+|            0|
+|            0|
+|            1|
+|            1|
+|            2|
+|            2|
+|            3|
+|            3|
+|            4|
+|            4|
++-------------+
+(10 rows)
+continue
+* 
+>>
+* create table qp298_table3 as select first 1a from qp298_table2\p\g
+<<
+ create table qp298_table3 as select first 1a from qp298_table2
+Executing . . .
+
+E_US0836 line 1, Column 'a' not found in any specified table.
+    (Thu May 17 10:01:41 2001)
+
+continue
+* 
+>>
+* create table qp298_table3 as select first a1 from qp298_table2\p\g
+<<
+ create table qp298_table3 as select first a1 from qp298_table2
+Executing . . .
+
+E_US0F0F line 1, Syntax error on 'a1'.  The correct syntax is: 
+    CREATE TABLE tablename ( 
+       columnname format [default_clause] [null_clause]  [column_constraint]
+    
+     | table_constraint 
+       {, ... } ) 
+       [with_clause] 
+     
+     CREATE TABLE tablename [(colname_list)] 
+       AS subselect 
+   [with_clause] 
+    (Thu May 17 10:01:44 2001)
+
+continue
+* 
+>>
+<<
+ create table qp298_table3 as select first a1 from qp298_table2
+Executing . . .
+
+E_US0836 line 1, Column 'first' not found in any specified table.
+    (Thu Sep 12 05:31:05 2002)
+
+continue
+*
+>>
+* create table qp298_table3 as select first junk a1 from qp298_table2\p\g
+<<
+ create table qp298_table3 as select first junk a1 from qp298_table2
+Executing . . .
+
+E_US0F0F line 1, Syntax error on 'junk'.  The correct syntax is: 
+    CREATE TABLE tablename ( 
+       columnname format [default_clause] [null_clause]  [column_constraint]
+    
+     | table_constraint 
+       {, ... } ) 
+       [with_clause] 
+     
+     CREATE TABLE tablename [(colname_list)] 
+       AS subselect 
+   [with_clause] 
+    (Thu May 17 10:01:49 2001)
+
+continue
+* 
+>>
+<<
+ create table qp298_table3 as select first junk a1 from qp298_table2
+Executing . . .
+
+E_US0837 line 1, FROM clause is mandatory when a column ('first') has been
+    specified in the target list.
+    (Thu Sep 12 05:31:05 2002)
+
+continue
+*
+>>
+* create table qp298_table3 as select first 1.1 a1 from qp298_table2\p\g
+<<
+ create table qp298_table3 as select first 1.1 a1 from qp298_table2
+Executing . . .
+
+E_US0F0F line 1, Syntax error on '1.1'.  The correct syntax is: 
+    CREATE TABLE tablename ( 
+       columnname format [default_clause] [null_clause]  [column_constraint]
+    
+     | table_constraint 
+       {, ... } ) 
+       [with_clause] 
+     
+     CREATE TABLE tablename [(colname_list)] 
+       AS subselect 
+   [with_clause] 
+    (Thu May 17 10:01:52 2001)
+
+continue
+* 
+>>
+* create table qp298_table3 as select first -1 a1 from qp298_table2\p\g
+<<
+ create table qp298_table3 as select first -1 a1 from qp298_table2
+Executing . . .
+
+E_US0F0F line 1, Syntax error on '-'.  The correct syntax is: 
+    CREATE TABLE tablename ( 
+       columnname format [default_clause] [null_clause]  [column_constraint]
+    
+     | table_constraint 
+       {, ... } ) 
+       [with_clause] 
+     
+     CREATE TABLE tablename [(colname_list)] 
+       AS subselect 
+   [with_clause] 
+    (Thu May 17 10:01:55 2001)
+
+continue
+* 
+>>
+<<
+ create table qp298_table3 as select first -1 a1 from qp298_table2
+Executing . . .
+
+E_US0836 line 1, Column 'first' not found in any specified table.
+    (Thu Sep 12 05:31:06 2002)
+
+continue
+*
+>>
+* create table qp298_table3 as select first 0 a1 from qp298_table2\p\g
+<<
+ create table qp298_table3 as select first 0 a1 from qp298_table2
+Executing . . .
+
+(20 rows)
+continue
+* 
+>>
+* create table qp298_table3 as select first 10 a1 from qp298_table2\p\g
+<<
+ create table qp298_table3 as select first 10 a1 from qp298_table2
+Executing . . .
+
+E_US07DA Duplicate object name 'qp298_table3'.
+    (Thu May 17 10:02:01 2001)
+
+continue
+* 
+>>
+* \q
+<<
+~
+>>
+
+
+Ending at: Thu May 17 10:02:10 2001

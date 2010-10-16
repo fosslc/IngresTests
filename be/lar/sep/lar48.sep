@@ -1,0 +1,1692 @@
+/*
+Copyright (c) 2004 Ingres Corporation
+
+
+	Test Name: lar48.sep
+	Time: Mon Jun  3 16:06:53 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : be/lar  
+	Filename: lar48.sep
+	Purpose	: To check the abilities of table-level checkpointing
+		  with a multi-location database.
+	Input Files  : data.txt
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : lar48tab
+	Synopsis     : 1) Checkpoint the database with journaling enabled.
+		       2) Create a table across multiple locations and fill
+			  it with values.
+                       3) Checkpoint the table (table-level checkpoint).
+		       4) Attempt to rollforward the entire database.
+		       5) Rollforward the table (table-level rollforward).
+		       6) Attempt to use the -d flag while doing a table-level
+			  checkpoint.
+                       7) Do a table-level checkpoint and disable journaling.
+		       8) Delete the last row from the table and commit.
+		       9) Do a table-level rollforward.
+		       10) See if the deleted value has returned (it shouldn't).
+		       11) Clean up.
+
+	Assertions   : 1) If you attempt a table-level checkpoint using the
+			  -d flag, you will get an error message
+			  (E_DM103C_JSP_INCON_ARG).
+                       2) If you attempt to rollforward a database from a
+			  table-level checkpoint, you will get an error
+			  message (E_DM1361_RFP_CO_DB_RECOV_TBL_CKP).
+                       3) If you rollforward a database and journaling has
+			  been disabled, the database will go back to the
+			  state it was in at the last checkpoint.
+                       4) You can do a table-level rollforward from a table
+			  level checkpoint.
+                       5) You can ckpdb a table (or database) that is located
+			  across multiple locations.
+                       6) You can not disable journaling while doing
+			  a table-level checkpoint.
+
+ History:  3-Jun-1996	(Author)	Created
+	  25-MAR-1997   (vissu01) This test cannot run on NT due to bug 81228
+          29-Apr-1997	(Author)
+          14-May-1997	(Author)
+           4-Dec-1997	(zhaqi01) Modify cannon because ckpdb has new option
+	  15-mar-1999	(popri01) Implement sed post-processing option.
+	  25-aug--1999	(popri01) Update transaction counts.
+				  Remove erroneous "testdb" canon.
+	  27-Jan-2000	(vande02) Corrected canon from ckpdb with inconsistant
+				  arguments.  In II 2.5 the -s flag has been
+				  removed from usage msg. E_DM103C_JSP_INCON_ARG
+          28-Jan-2000	(vande02) Corrected canon from ckpdb with inconsistant
+				  arguments.  In II 2.5 the -s flag has been
+				  removed from usage msg. E_DM103C_JSP_INCON_ARG
+				  and added missing info.msgs. from ckpdb.
+          07-Feb-2001	(sheco02) Add NT canon for ckpdb/rollforwarddb for 2.5.
+          05-Mar-2001	(sheco02) Because previous test (lar47.sep has turned 
+			journaling off, re-modify NT canon for ckpdb -d +j.
+	  19-Jul-2001   (sheco02) Fix the typo in previous revision. 
+          22-Oct-2004   (vande02) Update NT_GENERIC ckpdb result.  New behavior
+                        with Ingres r3 per Development. This change is not in
+                        Ingres r3 Linux.  When it is, the main canons will need
+                        to be updated.  Updated ckpdb NT_GENERIC canon as
+			additional files are being copied for Ingres r3 and
+			canons for rollforwarddb which had quotes around paths
+			were replaced - no quotes is correct. Removed SEDCKPFILE
+                        and any other masking in the NT_GENERIC canons so the
+			masking only takes place during test execution.
+          02-Dec-2004   (vande02) Reverted back to 'Preparing stall of database'
+                        on ckpdb output - see issue 13829385.
+          22-Mar-2005   (vande02) Update NT_GENERIC canons, one less file needed
+                        during ckpdb/or rollforwarddb processing as of r3.0.2.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? sepset sed @file(ing_tst,be,lar,data,larmasks) 
+<<
+>>
+? fill data.txt 
+!!
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+gggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii 
+jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
+llllllllllllllllllllllllllllllllllllllllllllllllllllllll
+mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
+nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+oooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+pppppppppppppppppppppppppppppppppppppppppppppppppppppppp
+!!
+? ckpdb -d +j SEPPARAMDB 
+<<
+Thu Dec  4 10:14:02 1997 CPP: Preparing to checkpoint database: lardb
+beginning checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 6 locations
+Thu Dec  4 10:14:03 1997 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0005001.ckp'
+executing checkpoint to disk
+Thu Dec  4 10:14:05 1997 CPP: Start checkpoint of location: loc1 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0005002.ckp'
+executing checkpoint to disk
+Thu Dec  4 10:14:05 1997 CPP: Start checkpoint of location: loc2 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0005003.ckp'
+executing checkpoint to disk
+Thu Dec  4 10:14:05 1997 CPP: Start checkpoint of location: loc3 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0005004.ckp'
+executing checkpoint to disk
+Thu Dec  4 10:14:06 1997 CPP: Start checkpoint of location: loc4 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0005005.ckp'
+executing checkpoint to disk
+Thu Dec  4 10:14:06 1997 CPP: Start checkpoint of location: loc5 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0005006.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 6 locations
+>>
+<<
+Fri Jan 28 13:31:36 2000 CPP: Preparing to checkpoint database: lardb
+Fri Jan 28 13:31:36 2000 CPP: Archiver must drain log records from log file
+                           : to journal file.  If Archiver is not running
+                           : this program will not continue.  Exit the program
+                           : and have the appropriate person restart the archiver.
+beginning checkpoint to disk /ingres/ii25_vande02/ingres/ckp/default/lardb of 6 loca-
+tions
+Fri Jan 28 13:31:36 2000 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/ingres/ii25_vande02/ingres/ckp/default/lardb'
+    file = 'c0086001.ckp'
+executing checkpoint to disk
+Fri Jan 28 13:31:37 2000 CPP: Start checkpoint of location: loc1 to disk:
+    path = '/ingres/ii25_vande02/ingres/ckp/default/lardb'
+    file = 'c0086002.ckp'
+executing checkpoint to disk
+Fri Jan 28 13:31:37 2000 CPP: Start checkpoint of location: loc2 to disk:
+    path = '/ingres/ii25_vande02/ingres/ckp/default/lardb'
+    file = 'c0086003.ckp'
+executing checkpoint to disk
+Fri Jan 28 13:31:37 2000 CPP: Start checkpoint of location: loc3 to disk:
+    path = '/ingres/ii25_vande02/ingres/ckp/default/lardb'
+    file = 'c0086004.ckp'
+executing checkpoint to disk
+Fri Jan 28 13:31:37 2000 CPP: Start checkpoint of location: loc4 to disk:
+    path = '/ingres/ii25_vande02/ingres/ckp/default/lardb'
+    file = 'c0086005.ckp'
+executing checkpoint to disk
+Fri Jan 28 13:31:37 2000 CPP: Start checkpoint of location: loc5 to disk:
+    path = '/ingres/ii25_vande02/ingres/ckp/default/lardb'
+    file = 'c0086006.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /ingres/ii25_vande02/ingres/ckp/default/lardb of 6 locatio-
+ns
+>>
+<< IF (NT_GENERIC) 
+Mon Mar 05 16:43:40 2001 CPP: Preparing to checkpoint database: lardb
+Beginning checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 6 locations.
+Mon Mar 05 16:43:40 2001 CPP: Start checkpoint of location: ii_database to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0001001.ckp'
+executing checkpoint
+D:\IngresII\ingres\data\default\lardb\aaaaaalm.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaln.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalo.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaama.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamb.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamc.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamd.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaame.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanb.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanc.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaand.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaane.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaang.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaani.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaank.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanl.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanm.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaann.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaano.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoa.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaob.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoc.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaod.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoe.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaof.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaog.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoi.t00
+D:\IngresII\ingres\data\default\lardb\zzzz0329.ali
+D:\IngresII\ingres\data\default\lardb\aaaaaaaa.cnf
+D:\IngresII\ingres\data\default\lardb\aaaaaaab.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaac.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaad.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaae.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabg.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaach.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaef.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaado.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadk.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadl.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaij.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadm.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadn.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaca.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaacb.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaacc.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaacd.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaih.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaai.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabe.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabi.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabm.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabk.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabl.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaace.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabn.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadg.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaei.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadi.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaeh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaacg.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaacf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaain.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaale.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaakp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaali.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaala.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalb.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalc.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaald.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalg.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalk.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaami.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamk.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaana.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaml.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamm.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamn.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamo.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaall.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaok.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaol.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaom.t00
+104 File(s) copied
+Mon Mar 05 16:43:40 2001 CPP: Start checkpoint of location: loc1 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0001002.ckp'
+executing checkpoint
+D:\ingresII\loc1\ingres\data\default\lardb\zzzz0329.ali
+1 File(s) copied
+Mon Mar 05 16:43:40 2001 CPP: Start checkpoint of location: loc2 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0001003.ckp'
+executing checkpoint
+D:\ingresII\loc2\ingres\data\default\lardb\zzzz0329.ali
+1 File(s) copied
+Mon Mar 05 16:43:40 2001 CPP: Start checkpoint of location: loc3 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0001004.ckp'
+executing checkpoint
+D:\ingresII\loc3\ingres\data\default\lardb\zzzz0329.ali
+1 File(s) copied
+Mon Mar 05 16:43:40 2001 CPP: Start checkpoint of location: loc4 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0001005.ckp'
+executing checkpoint
+D:\ingresII\loc4\ingres\data\default\lardb\zzzz0329.ali
+1 File(s) copied
+Mon Mar 05 16:43:41 2001 CPP: Start checkpoint of location: loc5 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0001006.ckp'
+executing checkpoint
+D:\ingresII\loc5\ingres\data\default\lardb\zzzz0329.ali
+1 File(s) copied
+Ending checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 6 locations
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table lar48tab\g
+<<
+~
+>>
+* create table lar48tab (name varchar(80)) with location = (loc1, loc2, loc3, loc4, -
+loc5);commit;\g 
+<<
+>>
+* copy table lar48tab (name=char(0)nl) from 'data.txt';commit;\g 
+<<
+(16 rows)
+>>
+* insert into lar48tab select * from lar48tab;commit;\g 
+<<
+(16 rows)
+>>
+* insert into lar48tab select * from lar48tab;commit;\g 
+<<
+(32 rows)
+>>
+* insert into lar48tab select * from lar48tab;commit;\g 
+<<
+(64 rows)
+>>
+* insert into lar48tab select * from lar48tab;commit;\g 
+<<
+(128 rows)
+>>
+* \q 
+<<
+>>
+? ckpdb +j SEPPARAMDB 
+<<
+~
+>>
+? ckpdb -table=lar48tab SEPPARAMDB 
+<<
+Thu Dec  4 10:14:38 1997 CPP: Preparing to checkpoint database: lardb
+The following tables will be checkpointed : 
+ lar48tab
+Additional tables required to maintain physical consistency of the database :
+ NONE
+Tables found to be invalid : 
+ NONE
+Thu Dec  4 10:14:39 1997 CPP: Preparing stall of database, active xact cnt: 0
+Thu Dec  4 10:14:39 1997 CPP: Finished stall of database
+PARTIAL: beginning checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 5 -
+locations
+Thu Dec  4 10:14:41 1997 CPP: Start checkpoint of location: loc1 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0006002.ckp'
+executing checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 5 locations
+Thu Dec  4 10:14:41 1997 CPP: Start checkpoint of location: loc2 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0006003.ckp'
+executing checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 5 locations
+Thu Dec  4 10:14:42 1997 CPP: Start checkpoint of location: loc3 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0006004.ckp'
+executing checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 5 locations
+Thu Dec  4 10:14:42 1997 CPP: Start checkpoint of location: loc4 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0006005.ckp'
+executing checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 5 locations
+Thu Dec  4 10:14:42 1997 CPP: Start checkpoint of location: loc5 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0006006.ckp'
+executing checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 5 locations
+PARTIAL: ending checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 5 loc-
+ations
+>>
+<< IF (NT_GENERIC) 
+Wed Feb 07 15:28:26 2001 CPP: Preparing to checkpoint database: lardb
+The following tables will be checkpointed : 
+ lar48tab
+Additional tables required to maintain physical consistency of the database :
+ NONE
+Tables found to be invalid : 
+ NONE
+Wed Feb 07 15:28:26 2001 CPP: Preparing stall of database, active xact cnt: 0
+Wed Feb 07 15:28:26 2001 CPP: Finished stall of database
+PARTIAL: Beginning checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 5 loca-
+tions.
+Wed Feb 07 15:28:26 2001 CPP: Start checkpoint of location: loc1 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0003002.ckp'
+executing checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 5 locations
+D:\ingresII\loc1\ingres\data\default\lardb\aaaaaaom.t00
+1 File(s) copied
+Wed Feb 07 15:28:26 2001 CPP: Start checkpoint of location: loc2 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0003003.ckp'
+executing checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 5 locations
+D:\ingresII\loc2\ingres\data\default\lardb\aaaaaaom.t01
+1 File(s) copied
+Wed Feb 07 15:28:26 2001 CPP: Start checkpoint of location: loc3 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0003004.ckp'
+executing checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 5 locations
+D:\ingresII\loc3\ingres\data\default\lardb\aaaaaaom.t02
+1 File(s) copied
+Wed Feb 07 15:28:27 2001 CPP: Start checkpoint of location: loc4 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0003005.ckp'
+executing checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 5 locations
+D:\ingresII\loc4\ingres\data\default\lardb\aaaaaaom.t03
+1 File(s) copied
+Wed Feb 07 15:28:27 2001 CPP: Start checkpoint of location: loc5 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0003006.ckp'
+executing checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 5 locations
+D:\ingresII\loc5\ingres\data\default\lardb\aaaaaaom.t04
+1 File(s) copied
+PARTIAL: Ending checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 5 locatio-
+ns
+>>
+? rollforwarddb SEPPARAMDB 
+<<
+Tue Apr 29 10:12:17 1997 RFP: Preparing for database rollforward on : lardb         -
+                  
+Tue Apr 29 10:12:17 1997 E_DM1361_RFP_NO_DB_RECOV_TBL_CKP	Database recovery from tab-
+le level checkpoint disallowed.
+Tue Apr 29 10:12:17 1997 E_DM1301_RFP_ROLL_FORWARD	An error occurred that prevents f-
+urther processing.
+>>
+? rollforwarddb -table=lar48tab SEPPARAMDB 
+<<
+Thu Dec  4 10:15:20 1997 RFP: Preparing for table level rollforward on : lardb      -
+                     
+Thu Dec  4 10:15:20 1997 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Thu Dec  4 10:15:20 1997 CPP: Completed drain of log file for database: lardb
+The following tables will be recovered : 
+ lar48tab
+Additional tables required to maintain physical consistency of the database :
+ NONE
+Tables found to be invalid : 
+ NONE
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+PARTIAL: beginning restore of disk /qa4/install/I9/ingres/ckp/default/lardb of 5 loc-
+ations
+beginning table level recovery
+deleting table lar48tab in database location /qa4/install/I9/loc1/ingres/data/defaul-
+t/lardb
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab in database location /qa4/install/I9/loc2/ingres/data/defaul-
+t/lardb
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab in database location /qa4/install/I9/loc3/ingres/data/defaul-
+t/lardb
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab in database location /qa4/install/I9/loc4/ingres/data/defaul-
+t/lardb
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab in database location /qa4/install/I9/loc5/ingres/data/defaul-
+t/lardb
+ending table level recovery
+done with disk operations
+beginning restore of journals
+Thu Dec  4 10:15:27 1997 RFP: Start processing journal file sequence 6.
+done with disk operations
+Thu Dec  4 10:15:27 1997 Completed processing of 1 transactions.
+>>
+<< IF (NT_GENERIC) 
+Fri Oct 22 13:23:27 2004 RFP: Preparing for table level rollforward on : lardb      -
+                     
+Fri Oct 22 13:23:27 2004 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Fri Oct 22 13:23:27 2004 CPP: Completed drain of log file for database: lardb
+The following tables will be recovered : 
+ lar48tab
+Additional tables required to maintain physical consistency of the database :
+ NONE
+Tables found to be invalid : 
+ NONE
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+PARTIAL: Beginning restore of disk C:\Ingres3_D5\ingres\ckp\default\lardb of 5 locat-
+ions.
+beginning table level recovery
+deleting table lar48tab                         in database location C:\Ingres3_D5\l-
+oc1\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0003002.ckp\aaaaaaon.t00
+1 File(s) copied
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab                         in database location C:\Ingres3_D5\l-
+oc2\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0003003.ckp\aaaaaaon.t01
+1 File(s) copied
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab                         in database location C:\Ingres3_D5\l-
+oc3\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0003004.ckp\aaaaaaon.t02
+1 File(s) copied
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab                         in database location C:\Ingres3_D5\l-
+oc4\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0003005.ckp\aaaaaaon.t03
+1 File(s) copied
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab                         in database location C:\Ingres3_D5\l-
+oc5\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0003006.ckp\aaaaaaon.t04
+1 File(s) copied
+ending table level recovery
+Done with disk checkpoint operations.
+beginning restore of journals
+Fri Oct 22 13:23:29 2004 RFP: Start processing journal file sequence 3.
+Done with disk checkpoint operations.
+Fri Oct 22 13:23:29 2004 Completed processing of 2 transactions.
+>>
+? ckpdb -d -table=lar48tab SEPPARAMDB 
+<<
+Mon Jan 24 15:48:01 2000 E_DM103C_JSP_INCON_ARG	ckpdb: The argument, -table=lar48tab-
+, is inconsistent with other options specified.
+usage: ckpdb [-d] [+j|-j] [-l] [#m ] [-mdevice1,device2,...] 
+	[-table=tbl1,tbl2,...] [-uusername] [-v] [+w|-w] dbname
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* insert into lar48tab values ('aaaaa');commit;\g 
+<<
+(1 row)
+>>
+* select * from lar48tab;commit;\g
+<<
+
++--------------------------------------------------------------------------------+
+|name                                                                            |
++--------------------------------------------------------------------------------+
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaa                                                                           |
++--------------------------------------------------------------------------------+
+(257 rows)
+>>
+* \q 
+<<
+>>
+? ckpdb +j SEPPARAMDB 
+<<
+~
+>>
+? ckpdb -j -table=lar48tab SEPPARAMDB 
+<<
+Mon Jan 24 15:48:22 2000 E_DM103C_JSP_INCON_ARG	ckpdb: The argument, -table=lar48tab-
+, is inconsistent with other options specified.
+usage: ckpdb [-d] [+j|-j] [-l] [#m ] [-mdevice1,device2,...] 
+	[-table=tbl1,tbl2,...] [-uusername] [-v] [+w|-w] dbname
+>>
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* delete from lar48tab where name = 'aaaaa';commit;\g 
+<<
+(1 row)
+>>
+* select * from lar48tab;commit;\g 
+<<
+
++--------------------------------------------------------------------------------+
+|name                                                                            |
++--------------------------------------------------------------------------------+
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
++--------------------------------------------------------------------------------+
+(256 rows)
+>>
+* \q 
+<<
+>>
+? rollforwarddb -table=lar48tab SEPPARAMDB 
+<<
+Thu Dec  4 10:17:33 1997 RFP: Preparing for table level rollforward on : lardb      -
+                     
+Thu Dec  4 10:17:33 1997 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Thu Dec  4 10:17:33 1997 CPP: Completed drain of log file for database: lardb
+The following tables will be recovered : 
+ lar48tab
+Additional tables required to maintain physical consistency of the database :
+ NONE
+Tables found to be invalid : 
+ NONE
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+PARTIAL: beginning restore of disk /qa4/install/I9/ingres/ckp/default/lardb of 5 loc-
+ations
+beginning table level recovery
+deleting table lar48tab in database location /qa4/install/I9/loc1/ingres/data/defaul-
+t/lardb
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab in database location /qa4/install/I9/loc2/ingres/data/defaul-
+t/lardb
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab in database location /qa4/install/I9/loc3/ingres/data/defaul-
+t/lardb
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab in database location /qa4/install/I9/loc4/ingres/data/defaul-
+t/lardb
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab in database location /qa4/install/I9/loc5/ingres/data/defaul-
+t/lardb
+ending table level recovery
+done with disk operations
+beginning restore of journals
+Thu Dec  4 10:17:40 1997 RFP: Start processing journal file sequence 6.
+done with disk operations
+Thu Dec  4 10:17:40 1997 Completed processing of 3 transactions.
+>>
+<< IF (NT_GENERIC) 
+Fri Oct 22 13:26:16 2004 RFP: Preparing for table level rollforward on : lardb      -
+                     
+Fri Oct 22 13:26:16 2004 RFP: The Archiver must drain any active log records
+                            : from the Log File to the Journal Files before
+                            : Rollforward can proceed.  If the Archiver is
+                            : not running this program will not continue.
+                            : If this is the case, exit this program and have
+                            : the appropriate person restart the archiver.
+Fri Oct 22 13:26:16 2004 CPP: Completed drain of log file for database: lardb
+The following tables will be recovered : 
+ lar48tab
+Additional tables required to maintain physical consistency of the database :
+ NONE
+Tables found to be invalid : 
+ NONE
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+Checking database snapshot for table level recovery
+PARTIAL: Beginning restore of disk C:\Ingres3_D5\ingres\ckp\default\lardb of 5 locat-
+ions.
+beginning table level recovery
+deleting table lar48tab                         in database location C:\Ingres3_D5\l-
+oc1\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0004002.ckp\aaaaaaon.t00
+1 File(s) copied
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab                         in database location C:\Ingres3_D5\l-
+oc2\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0004003.ckp\aaaaaaon.t01
+1 File(s) copied
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab                         in database location C:\Ingres3_D5\l-
+oc3\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0004004.ckp\aaaaaaon.t02
+1 File(s) copied
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab                         in database location C:\Ingres3_D5\l-
+oc4\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0004005.ckp\aaaaaaon.t03
+1 File(s) copied
+ending table level recovery
+beginning table level recovery
+deleting table lar48tab                         in database location C:\Ingres3_D5\l-
+oc5\ingres\data\default\lardb
+C:\Ingres3_D5\ingres\ckp\default\lardb\c0004006.ckp\aaaaaaon.t04
+1 File(s) copied
+ending table level recovery
+Done with disk checkpoint operations.
+beginning restore of journals
+Fri Oct 22 13:26:18 2004 RFP: Start processing journal file sequence 4.
+Done with disk checkpoint operations.
+Fri Oct 22 13:26:18 2004 Completed processing of 3 transactions.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from lar48tab;commit;\g 
+<<
+
++--------------------------------------------------------------------------------+
+|name                                                                            |
++--------------------------------------------------------------------------------+
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
+|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                        |
+|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb                        |
+|cccccccccccccccccccccccccccccccccccccccccccccccccccccccc                        |
+|dddddddddddddddddddddddddddddddddddddddddddddddddddddddd                        |
+|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee                        |
+|ffffffffffffffffffffffffffffffffffffffffffffffffffffffff                        |
+|gggggggggggggggggggggggggggggggggggggggggggggggggggggggg                        |
+|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh                        |
+|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii                        |
+|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj                        |
+|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk                        |
+|llllllllllllllllllllllllllllllllllllllllllllllllllllllll                        |
+|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm                        |
+|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn                         |
+|oooooooooooooooooooooooooooooooooooooooooooooooooooooooo                        |
+|pppppppppppppppppppppppppppppppppppppppppppppppppppppppp                        |
++--------------------------------------------------------------------------------+
+(256 rows)
+>>
+* drop table lar48tab;commit;\g 
+<<
+
+>>
+* \q 
+<<
+
+>>
+? ckpdb -d SEPPARAMDB 
+<<
+Thu Dec  4 10:18:31 1997 CPP: Preparing to checkpoint database: lardb
+Thu Dec  4 10:18:32 1997 CPP: Preparing stall of database, active xact cnt: 0
+Thu Dec  4 10:18:32 1997 CPP: Finished stall of database
+beginning checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 6 locations
+Thu Dec  4 10:18:34 1997 CPP: Start checkpoint of location: ii_database to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0007001.ckp'
+executing checkpoint to disk
+Thu Dec  4 10:18:35 1997 CPP: Start checkpoint of location: loc1 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0007002.ckp'
+executing checkpoint to disk
+Thu Dec  4 10:18:36 1997 CPP: Start checkpoint of location: loc2 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0007003.ckp'
+executing checkpoint to disk
+Thu Dec  4 10:18:36 1997 CPP: Start checkpoint of location: loc3 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0007004.ckp'
+executing checkpoint to disk
+Thu Dec  4 10:18:37 1997 CPP: Start checkpoint of location: loc4 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0007005.ckp'
+executing checkpoint to disk
+Thu Dec  4 10:18:37 1997 CPP: Start checkpoint of location: loc5 to disk:
+    path = '/qa4/install/I9/ingres/ckp/default/lardb'
+    file = 'c0007006.ckp'
+executing checkpoint to disk
+ending checkpoint to disk /qa4/install/I9/ingres/ckp/default/lardb of 6 locations
+>>
+<< IF (NT_GENERIC) 
+Wed Feb 07 15:32:58 2001 CPP: Preparing to checkpoint database: lardb
+Wed Feb 07 15:32:58 2001 CPP: Preparing stall of database, active xact cnt: 0
+Wed Feb 07 15:32:58 2001 CPP: Finished stall of database
+Beginning checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 6 locations.
+Wed Feb 07 15:32:58 2001 CPP: Start checkpoint of location: ii_database to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0005001.ckp'
+executing checkpoint
+D:\IngresII\ingres\data\default\lardb\aaaaaaaa.cnf
+D:\IngresII\ingres\data\default\lardb\aaaaaaab.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaac.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaad.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaae.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabg.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaach.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaef.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaado.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadk.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadl.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaij.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadm.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadn.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaca.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaacb.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaacc.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaacd.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaih.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaai.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabe.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabi.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabm.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabk.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabl.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaace.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabn.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadg.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaei.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadi.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaadj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaeh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaacg.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaabp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaacf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaain.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaale.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaakp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaali.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaala.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalb.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalc.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaald.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalg.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalk.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaami.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamk.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaana.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaml.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamm.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamn.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamo.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaall.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalm.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaln.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalo.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaalp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaama.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamb.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamc.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamd.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaame.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanb.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaamh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanc.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaand.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaane.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanf.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaang.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaani.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanp.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaank.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanl.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaanm.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaann.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaano.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoa.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaob.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoc.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaod.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoe.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaof.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaog.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoh.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaoi.t00
+D:\IngresII\ingres\data\default\lardb\zzzz0014.ali
+D:\IngresII\ingres\data\default\lardb\aaaaaaoj.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaok.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaol.t00
+D:\IngresII\ingres\data\default\lardb\aaaaaaom.t00
+104 File(s) copied
+Wed Feb 07 15:32:58 2001 CPP: Start checkpoint of location: loc1 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0005002.ckp'
+executing checkpoint
+D:\ingresII\loc1\ingres\data\default\lardb\zzzz0014.ali
+1 File(s) copied
+Wed Feb 07 15:33:00 2001 CPP: Start checkpoint of location: loc2 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0005003.ckp'
+executing checkpoint
+D:\ingresII\loc2\ingres\data\default\lardb\zzzz0014.ali
+1 File(s) copied
+Wed Feb 07 15:33:00 2001 CPP: Start checkpoint of location: loc3 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0005004.ckp'
+executing checkpoint
+D:\ingresII\loc3\ingres\data\default\lardb\zzzz0014.ali
+1 File(s) copied
+Wed Feb 07 15:33:00 2001 CPP: Start checkpoint of location: loc4 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0005005.ckp'
+executing checkpoint
+D:\ingresII\loc4\ingres\data\default\lardb\zzzz0014.ali
+1 File(s) copied
+Wed Feb 07 15:33:00 2001 CPP: Start checkpoint of location: loc5 to disk:
+    path = 'D:\IngresII\ingres\ckp\default\lardb'
+    file = 'c0005006.ckp'
+executing checkpoint
+D:\ingresII\loc5\ingres\data\default\lardb\zzzz0014.ali
+1 File(s) copied
+Ending checkpoint to disk D:\IngresII\ingres\ckp\default\lardb of 6 locations
+>>
+? delete data.txt 
+<<
+~
+>>
+
+
+Ending at: Fri Oct 22 13:27:02 2004

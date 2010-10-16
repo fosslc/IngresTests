@@ -1,0 +1,340 @@
+/*
+	Test Name: dtu09.sep
+	Time: Fri Nov  9 23:31:47 2001
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : dtu09.sep
+	Module  : be/datatypes
+	Filename: dtu09.sep
+	Purpose	: To test the new unicode data types first available with
+                  II 2.6/0106 and later releases.
+	Input Files  : dtu09.sc
+	Output Files : dtu09.exe
+	Database     : unidb
+	Tables       : test_nchar, test_nchar2, test_nchar3, test_nvarchar,
+                       test_nvarchar2, test_lnvarchar, test_lnvarchar2
+	Synopsis     : This test will select tables with order by and search
+                       condition on unicode columns. 
+
+ History:  9-Nov-2001	(wu$ca01)	Created
+          28-May-2002   (sarjo01) Change %ls to %S, modularize canon.
+*/
+? fill dtu09.sc 
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i, i1, i2;
+  wchar_t wc1[9], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, k2;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *wvals[] =
+{
+    L"a",
+    L"A",
+    L"b",
+    L"B",
+    L"z",
+    L"Z",
+    L"1",
+    L"$",
+    L"aa",
+    L"ab",
+    L"Aa",
+    L"Ab",
+    L"ba",
+    L"bb",
+    L"Bb",
+    L"za",
+    L"zb",
+    L"Za",
+    L"Zb",
+    L"1a",
+    L"1b",
+    L"$a",
+    L"$b",
+    L"aA",
+    L"AA",
+    L"bA",
+    L"BA",
+    L"zA",
+    L"ZA",
+    L"1A",
+    L"$A",
+    L"a A",
+    L"A A",
+    L"b A",
+    L"B A",
+    L"z A",
+    L"Z A",
+    L"1 A",
+    L"$ A",
+    NULL
+};
+
+
+static char ln[] = "=======================================================\n";
+void print_header(char *s)
+{
+   printf("%s\n%s", s, ln);
+}
+
+void print_trailer()
+{
+   printf(ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   switch (testid)
+   {
+      case 1:
+         EXEC SQL drop table test_nchar3;
+         EXEC SQL create table test_nchar3
+               (col1 int, col2 nchar(3), col3 nvarchar(3));
+
+         for (i = 0; wvals[i] != NULL; i++) 
+         {
+            wcscpy(wc1, wvals[i]);
+            EXEC SQL INSERT INTO test_nchar3 VALUES (:i, :wc1, :wc1);
+         }
+
+         print_header("Order by nchar...");
+         EXEC SQL SELECT col1, col2
+         INTO :i1, :nv1 FROM test_nchar3 order by 2;
+         EXEC SQL BEGIN;
+            UC_TERM(nv1);
+            printf("|%3d|%S|\n", i1, nv1.text);
+         EXEC SQL END;
+         break;
+
+      case 2:
+         print_header("Order by nvarchar...");
+         EXEC SQL SELECT col1, col3
+         INTO :i1, :nv1 FROM test_nchar3 order by 2;
+         EXEC SQL BEGIN;
+            UC_TERM(nv1);
+            printf("|%3d|%S|\n", i1, nv1.text);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         wcscpy(wc1, L"b");
+         print_header("Order by nchar (searched)...");
+         EXEC SQL SELECT col1, col2
+         INTO :i1, :nv1 FROM test_nchar3 where col2 > :wc1 order by 2;
+         EXEC SQL BEGIN;
+            UC_TERM(nv1);
+            printf("|%3d|%S|\n", i1, nv1.text);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         wcscpy(wc1, L"b");
+         print_header("Order by nvarchar (searched)...");
+         EXEC SQL SELECT col1, col3
+         INTO :i1, :nv1 FROM test_nchar3  where col3 > :wc1 order by 2;
+         EXEC SQL BEGIN;
+            UC_TERM(nv1);
+            printf("|%3d|%S|\n", i1, nv1.text);
+         EXEC SQL END;
+         break;
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu09.sc 
+<<
+~
+>>
+? sepcc dtu09 
+<<
+~
+>>
+? seplnk dtu09 
+<<
+~
+>>
+? run dtu09.exe SEPPARAMDB3 1
+<<
+Order by nchar...
+=======================================================
+|  7|$  |
+| 21|$a |
+| 38|$ A|
+| 30|$A |
+| 22|$b |
+|  6|1  |
+| 19|1a |
+| 37|1 A|
+| 29|1A |
+| 20|1b |
+|  0|a  |
+|  1|A  |
+|  8|aa |
+| 31|a A|
+| 23|aA |
+| 10|Aa |
+| 32|A A|
+| 24|AA |
+|  9|ab |
+| 11|Ab |
+|  2|b  |
+|  3|B  |
+| 12|ba |
+| 33|b A|
+| 25|bA |
+| 34|B A|
+| 26|BA |
+| 13|bb |
+| 14|Bb |
+|  4|z  |
+|  5|Z  |
+| 15|za |
+| 35|z A|
+| 27|zA |
+| 17|Za |
+| 36|Z A|
+| 28|ZA |
+| 16|zb |
+| 18|Zb |
+=======================================================
+>>
+? run dtu09.exe SEPPARAMDB3 2
+<<
+Order by nvarchar...
+=======================================================
+|  7|$|
+| 21|$a|
+| 38|$ A|
+| 30|$A|
+| 22|$b|
+|  6|1|
+| 19|1a|
+| 37|1 A|
+| 29|1A|
+| 20|1b|
+|  0|a|
+|  1|A|
+|  8|aa|
+| 31|a A|
+| 23|aA|
+| 10|Aa|
+| 32|A A|
+| 24|AA|
+|  9|ab|
+| 11|Ab|
+|  2|b|
+|  3|B|
+| 12|ba|
+| 33|b A|
+| 25|bA|
+| 34|B A|
+| 26|BA|
+| 13|bb|
+| 14|Bb|
+|  4|z|
+|  5|Z|
+| 15|za|
+| 35|z A|
+| 27|zA|
+| 17|Za|
+| 36|Z A|
+| 28|ZA|
+| 16|zb|
+| 18|Zb|
+=======================================================
+>>
+? run dtu09.exe SEPPARAMDB3 3
+<<
+Order by nchar (searched)...
+=======================================================
+|  3|B  |
+| 12|ba |
+| 33|b A|
+| 25|bA |
+| 34|B A|
+| 26|BA |
+| 13|bb |
+| 14|Bb |
+|  4|z  |
+|  5|Z  |
+| 15|za |
+| 35|z A|
+| 27|zA |
+| 17|Za |
+| 36|Z A|
+| 28|ZA |
+| 16|zb |
+| 18|Zb |
+=======================================================
+>>
+? run dtu09.exe SEPPARAMDB3 4
+<<
+Order by nvarchar (searched)...
+=======================================================
+|  3|B|
+| 12|ba|
+| 33|b A|
+| 25|bA|
+| 34|B A|
+| 26|BA|
+| 13|bb|
+| 14|Bb|
+|  4|z|
+|  5|Z|
+| 15|za|
+| 35|z A|
+| 27|zA|
+| 17|Za|
+| 36|Z A|
+| 28|ZA|
+| 16|zb|
+| 18|Zb|
+=======================================================
+>>
+? delete dtu09.c 
+<<
+~
+>>
+? delete dtu09.o 
+<<
+~
+>>
+? delete dtu09.obj 
+<<
+~
+>>
+? delete dtu09.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Nov  9 23:33:14 2001

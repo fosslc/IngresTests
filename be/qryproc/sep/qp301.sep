@@ -1,0 +1,946 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+        Test Name: qp301.sep
+        Time: Thu Nov 21 12:53:08 2002
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp301.sep
+        Module  : be/qryproc
+        Filename: qp301.sep
+        Purpose : Test hash join feature, first available with Ingres
+                  2.6/0106 and later releases.
+        Input Files  :
+        Output Files :
+        Database     : SEPPARAMDB
+        Tables       : qp301_tbl1, qp301_tbl2
+        Synopsis     : This test is designed to the assumption that hash join
+                       is OFF by default(as of 2.6/0207 SP1 hash join is OFF by
+                       default in the installation). This is testing hash join 
+                       with different combination of data type columns(int1, 
+                       int2, int4, integer, float4, float8, decimal, smallint, 
+                       money, c, char, text, and varchar, byte, byte varying, 
+                       date), and null. This test will create two tables, and 
+                       three views. Turn hash join ON. Execute various types 
+                       of queries.
+
+
+		       As of 2.6/0303 SP2 hash join is ON by default in the
+		       installation with a default configuration.
+
+** Known problem:
+** Issue 12354624 - E_OP0082 ON SELECT VIEW - getting error: "E_OP0082
+** consistency check".
+
+ History: 21-Nov-2002   (wu$ca01) Created
+          11-Mar-2003   (vande02) Removed command 'set trace point op162' which
+                        now (as of SP2) turns hash join OFF in a single session
+                        and we want the default which is ON installation-wide.
+			Added more order by syntax to ensure row order.
+          15-Sep-2008	(vande02) Added conditional canon to allow for UTF8
+                                  collation sequence order. Header cleanup.
+                                  Removed the 'p' print syntax and printed
+                                  commands from the canons to avoid the clutter.
+                                  Might be able to remove all comments about the
+                                  old issue and consistency check errors.
+*/
+? fill drop.sql 
+!!
+drop table qp301_tbl1\g
+drop table qp301_tbl2\g
+drop view qp301_v1\g
+drop view qp301_v2\g
+!!
+? fill tbl1.dat 
+!!
+10	20	30	40	50	60	aaaaa	aaaaaaaaaa	aaaaaaaaaaaaaaa	aaaaaaaaaaaaaaaaaaaa	AA	1-1-2000
+11	22	33	44	55	66	zzzzz	zzzzzzzzzz	zzzzzzzzzzzzzzz	zzzzzzzzzzzzzzzzzzzz	ZZ	2-2-2000
+20	30	40	50	60	70	bbbbb	bbbbbbbbbb	bbbbbbbbbbbbbbb	bbbbbbbbbbbbbbbbbbbb	BB	2-1-2000
+30	40	50	60	70	80	ccccc	cccccccccc	ccccccccccccccc	cccccccccccccccccccc	CC	3-1-2000
+40	50	60	70	80	90	ddddd	dddddddddd	ddddddddddddddd	dddddddddddddddddddd	DD	4-1-2000
+44	55	66	77	88	99	qqqqq	qqqqqqqqqq	qqqqqqqqqqqqqqq	qqqqqqqqqqqqqqqqqqqq	QQ	5-2-2000
+50	60	70	80	90	100	eeeee	eeeeeeeeee	eeeeeeeeeeeeeee	eeeeeeeeeeeeeeeeeeee	EE	5-1-2000
+60	70	80	90	100	110	fffff	ffffffffff	fffffffffffffff	ffffffffffffffffffff	FF	6-1-200-
+0
+66	77	88	99	101	111	ppppp	pppppppppp	ppppppppppppppp	pppppppppppppppppppp	PP	4-2-200-
+0
+70	80	90	100	110	120	ggggg	gggggggggg	ggggggggggggggg	gggggggggggggggggggg	GG	7-1-20-
+00
+80	90	100	110	120	130	hhhhh	hhhhhhhhhh	hhhhhhhhhhhhhhh	hhhhhhhhhhhhhhhhhhhh	HH	8-1-2-
+000
+90	100	110	120	130	140	iiiii	iiiiiiiiii	iiiiiiiiiiiiiii	iiiiiiiiiiiiiiiiiiii	II	9-1--
+2000
+100	110	120	130	140	150	jjjjj	jjjjjjjjjj	jjjjjjjjjjjjjjj	jjjjjjjjjjjjjjjjjjjj	JJ	10--
+1-2000
+						yyyyy	yyyyyyyyyy	yyyyyyyyyyyyyyy	yyyyyyyyyyyyyyyyyyyy	YY	1-2-2000
+						sssss	ssssssssss	sssssssssssssss	ssssssssssssssssssss	SS	7-2-2000
+!!
+? fill tbl2.dat 
+!!
+						vvvvv	vvvvvvvvvv	vvvvvvvvvvvvvvv	vvvvvvvvvvvvvvvvvvvv	VV	10-2-2000
+10	20	30	40	50	60	aaaaa	aaaaaaaaaa	aaaaaaaaaaaaaaa	aaaaaaaaaaaaaaaaaaaa	AA	1-1-2000
+20	30	40	50	60	70	bbbbb	bbbbbbbbbb	bbbbbbbbbbbbbbb	bbbbbbbbbbbbbbbbbbbb	BB	2-1-2000
+22	33	44	55	66	77	mmmmm	mmmmmmmmmm	mmmmmmmmmmmmmmm	mmmmmmmmmmmmmmmmmmmm	MM	1-2-2000
+30	40	50	60	70	80	ccccc	cccccccccc	ccccccccccccccc	cccccccccccccccccccc	CC	3-1-2000
+40	50	60	70	80	90	ddddd	dddddddddd	ddddddddddddddd	dddddddddddddddddddd	DD	4-1-2000
+50	60	70	80	90	100	eeeee	eeeeeeeeee	eeeeeeeeeeeeeee	eeeeeeeeeeeeeeeeeeee	EE	5-1-2000
+60	70	80	90	100	110	fffff	ffffffffff	fffffffffffffff	ffffffffffffffffffff	FF	6-1-200-
+0
+70	80	90	100	110	120	ggggg	gggggggggg	ggggggggggggggg	gggggggggggggggggggg	GG	7-1-20-
+00
+77	88	99	101	111	121	kkkkk	kkkkkkkkkk	kkkkkkkkkkkkkkk	kkkkkkkkkkkkkkkkkkkk	KK	11-1-2-
+000
+80	90	100	110	120	130	hhhhh	hhhhhhhhhh	hhhhhhhhhhhhhhh	hhhhhhhhhhhhhhhhhhhh	HH	8-1-2-
+000
+90	100	110	120	130	140	iiiii	iiiiiiiiii	iiiiiiiiiiiiiii	iiiiiiiiiiiiiiiiiiii	II	9-1--
+2000
+100	110	120	130	140	150	jjjjj	jjjjjjjjjj	jjjjjjjjjjjjjjj	jjjjjjjjjjjjjjjjjjjj	JJ	10--
+1-2000
+101	111	121	131	141	151	wwwww	wwwwwwwwww	wwwwwwwwwwwwwww	wwwwwwwwwwwwwwwwwwww	WW	11--
+2-2000
+						ttttt	tttttttttt	ttttttttttttttt	tttttttttttttttttttt	TT	8-2-2000
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i drop.sql
+<<
+~
+>>
+* create table qp301_tbl1(c1 int1, c2 int2, c3 integer, c4 float4, c5 float8, c6 dec-
+imal(8,2), c7 c(5), c8 char(10), c9 text(15), c10 varchar(20), c11 byte(2), c12 date-
+)\g
+<<
+>>
+* create table qp301_tbl2(c1 int4, c2 smallint, c3 decimal, c4 float4, c5 float8, c6-
+ money, c7 text(10), c8 c(15), c9 char(20), c10 varchar(25), c11 byte varying(2), c1-
+2 date)\g
+<<
+>>
+* copy table qp301_tbl1(c1=c0tab, c2=c0tab, c3=c0tab, c4=c0tab, c5=c0tab, c6=c0tab, -
+c7=c0tab, c8=c0tab, c9=c0tab, c10=c0tab, c11=c0tab, c12=c0nl) from 'tbl1.dat'\g
+<<
+(15 rows)
+>>
+* copy table qp301_tbl2(c1=c0tab, c2=c0tab, c3=c0tab, c4=c0tab, c5=c0tab, c6=c0tab, -
+c7=c0tab, c8=c0tab, c9=c0tab, c10=c0tab, c11=c0tab, c12=c0nl) from 'tbl2.dat'\g  
+<<
+(15 rows) 
+>>
+* create view qp301_v1(c11) as select distinct c11 from qp301_tbl1 union select dist-
+inct c11 from qp301_tbl2\g
+<<
+>> 
+* create view qp301_v2(c7,c12) as select distinct t1.c7, t1.c12 from qp301_tbl1 t1 u-
+nion select t2.c7, t2.c12 from qp301_tbl2 t2\g
+<<
+>>
+* create view qp301_v3 as select t1.c4, t1.c5, t1.c6 from qp301_tbl1 t1 union select-
+ t2.c4, t2.c5, decimal(t2.c6) from qp301_tbl2 t2\g
+<<
+>>
+* select * from qp301_tbl1 order by c1\g
+<<
+
++------+------+-------------+-----------+-----------+----------+------+----------+---
+-------------+--------------------+------+-------------------------+
+|c1    |c2    |c3           |c4         |c5         |c6        |c7    |c8        |c9-
+             |c10                 |c11   |c12                      |
++------+------+-------------+-----------+-----------+----------+------+----------+---
+-------------+--------------------+------+-------------------------+
+|    10|    20|           30|     40.000|     50.000|     60.00|aaaaa |aaaaaaaaaa|aa-
+aaaaaaaaaaaaa|aaaaaaaaaaaaaaaaaaaa|AA    |01-jan-2000              |
+|    11|    22|           33|     44.000|     55.000|     66.00|zzzzz |zzzzzzzzzz|zz-
+zzzzzzzzzzzzz|zzzzzzzzzzzzzzzzzzzz|ZZ    |02-feb-2000              |
+|    20|    30|           40|     50.000|     60.000|     70.00|bbbbb |bbbbbbbbbb|bb-
+bbbbbbbbbbbbb|bbbbbbbbbbbbbbbbbbbb|BB    |01-feb-2000              |
+|    30|    40|           50|     60.000|     70.000|     80.00|ccccc |cccccccccc|cc-
+ccccccccccccc|cccccccccccccccccccc|CC    |01-mar-2000              |
+|    40|    50|           60|     70.000|     80.000|     90.00|ddddd |dddddddddd|dd-
+ddddddddddddd|dddddddddddddddddddd|DD    |01-apr-2000              |
+|    44|    55|           66|     77.000|     88.000|     99.00|qqqqq |qqqqqqqqqq|qq-
+qqqqqqqqqqqqq|qqqqqqqqqqqqqqqqqqqq|QQ    |02-may-2000              |
+|    50|    60|           70|     80.000|     90.000|    100.00|eeeee |eeeeeeeeee|ee-
+eeeeeeeeeeeee|eeeeeeeeeeeeeeeeeeee|EE    |01-may-2000              |
+|    60|    70|           80|     90.000|    100.000|    110.00|fffff |ffffffffff|ff-
+fffffffffffff|ffffffffffffffffffff|FF    |01-jun-2000              |
+|    66|    77|           88|     99.000|    101.000|    111.00|ppppp |pppppppppp|pp-
+ppppppppppppp|pppppppppppppppppppp|PP    |02-apr-2000              |
+|    70|    80|           90|    100.000|    110.000|    120.00|ggggg |gggggggggg|gg-
+ggggggggggggg|gggggggggggggggggggg|GG    |01-jul-2000              |
+|    80|    90|          100|    110.000|    120.000|    130.00|hhhhh |hhhhhhhhhh|hh-
+hhhhhhhhhhhhh|hhhhhhhhhhhhhhhhhhhh|HH    |01-aug-2000              |
+|    90|   100|          110|    120.000|    130.000|    140.00|iiiii |iiiiiiiiii|ii-
+iiiiiiiiiiiii|iiiiiiiiiiiiiiiiiiii|II    |01-sep-2000              |
+|   100|   110|          120|    130.000|    140.000|    150.00|jjjjj |jjjjjjjjjj|jj-
+jjjjjjjjjjjjj|jjjjjjjjjjjjjjjjjjjj|JJ    |01-oct-2000              |
+|      |      |             |           |           |          |yyyyy |yyyyyyyyyy|yy-
+yyyyyyyyyyyyy|yyyyyyyyyyyyyyyyyyyy|YY    |02-jan-2000              |
+|      |      |             |           |           |          |sssss |ssssssssss|ss-
+sssssssssssss|ssssssssssssssssssss|SS    |02-jul-2000              |
++------+------+-------------+-----------+-----------+----------+------+----------+---
+-------------+--------------------+------+-------------------------+
+(15 rows)
+>>
+* select * from qp301_tbl2 order by c1\g
+<<
+
++-------------+------+------+-----------+-----------+--------------------+-----------
++---------------+--------------------+-------------------------+------+--------------
+------------+
+|c1           |c2    |c3    |c4         |c5         |c6                  |c7        -
+|c8             |c9                  |c10                      |c11   |c12          -
+            |
++-------------+------+------+-----------+-----------+--------------------+-----------
++---------------+--------------------+-------------------------+------+--------------
+------------+
+|           10|    20|    30|     40.000|     50.000|              $60.00|aaaaa     -
+|aaaaaaaaaa     |aaaaaaaaaaaaaaa     |aaaaaaaaaaaaaaaaaaaa     |AA    |01-jan-2000  -
+            |
+|           20|    30|    40|     50.000|     60.000|              $70.00|bbbbb     -
+|bbbbbbbbbb     |bbbbbbbbbbbbbbb     |bbbbbbbbbbbbbbbbbbbb     |BB    |01-feb-2000  -
+            |
+|           22|    33|    44|     55.000|     66.000|              $77.00|mmmmm     -
+|mmmmmmmmmm     |mmmmmmmmmmmmmmm     |mmmmmmmmmmmmmmmmmmmm     |MM    |02-jan-2000  -
+            |
+|           30|    40|    50|     60.000|     70.000|              $80.00|ccccc     -
+|cccccccccc     |ccccccccccccccc     |cccccccccccccccccccc     |CC    |01-mar-2000  -
+            |
+|           40|    50|    60|     70.000|     80.000|              $90.00|ddddd     -
+|dddddddddd     |ddddddddddddddd     |dddddddddddddddddddd     |DD    |01-apr-2000  -
+            |
+|           50|    60|    70|     80.000|     90.000|             $100.00|eeeee     -
+|eeeeeeeeee     |eeeeeeeeeeeeeee     |eeeeeeeeeeeeeeeeeeee     |EE    |01-may-2000  -
+            |
+|           60|    70|    80|     90.000|    100.000|             $110.00|fffff     -
+|ffffffffff     |fffffffffffffff     |ffffffffffffffffffff     |FF    |01-jun-2000  -
+            |
+|           70|    80|    90|    100.000|    110.000|             $120.00|ggggg     -
+|gggggggggg     |ggggggggggggggg     |gggggggggggggggggggg     |GG    |01-jul-2000  -
+            |
+|           77|    88|    99|    101.000|    111.000|             $121.00|kkkkk     -
+|kkkkkkkkkk     |kkkkkkkkkkkkkkk     |kkkkkkkkkkkkkkkkkkkk     |KK    |01-nov-2000  -
+            |
+|           80|    90|   100|    110.000|    120.000|             $130.00|hhhhh     -
+|hhhhhhhhhh     |hhhhhhhhhhhhhhh     |hhhhhhhhhhhhhhhhhhhh     |HH    |01-aug-2000  -
+            |
+|           90|   100|   110|    120.000|    130.000|             $140.00|iiiii     -
+|iiiiiiiiii     |iiiiiiiiiiiiiii     |iiiiiiiiiiiiiiiiiiii     |II    |01-sep-2000  -
+            |
+|          100|   110|   120|    130.000|    140.000|             $150.00|jjjjj     -
+|jjjjjjjjjj     |jjjjjjjjjjjjjjj     |jjjjjjjjjjjjjjjjjjjj     |JJ    |01-oct-2000  -
+            |
+|          101|   111|   121|    131.000|    141.000|             $151.00|wwwww     -
+|wwwwwwwwww     |wwwwwwwwwwwwwww     |wwwwwwwwwwwwwwwwwwww     |WW    |02-nov-2000  -
+            |
+|             |      |      |           |           |                    |vvvvv     -
+|vvvvvvvvvv     |vvvvvvvvvvvvvvv     |vvvvvvvvvvvvvvvvvvvv     |VV    |02-oct-2000  -
+            |
+|             |      |      |           |           |                    |ttttt     -
+|tttttttttt     |ttttttttttttttt     |tttttttttttttttttttt     |TT    |02-aug-2000  -
+            |
++-------------+------+------+-----------+-----------+--------------------+-----------
++---------------+--------------------+-------------------------+------+--------------
+------------+
+(15 rows)
+>>
+* select * from qp301_v1 order by c11\g
+<<
+
++------+
+|c11   |
++------+
+|AA    |
+|BB    |
+|CC    |
+|DD    |
+|EE    |
+|FF    |
+|GG    |
+|HH    |
+|II    |
+|JJ    |
+|KK    |
+|MM    |
+|PP    |
+|QQ    |
+|SS    |
+|TT    |
+|VV    |
+|WW    |
+|YY    |
+|ZZ    |
++------+
+(20 rows)
+>>
+* select * from qp301_v2 order by c7\g
+<<
+
++----------+-------------------------+
+|c7        |c12                      |
++----------+-------------------------+
+|aaaaa     |01-jan-2000              |
+|bbbbb     |01-feb-2000              |
+|ccccc     |01-mar-2000              |
+|ddddd     |01-apr-2000              |
+|eeeee     |01-may-2000              |
+|fffff     |01-jun-2000              |
+|ggggg     |01-jul-2000              |
+|hhhhh     |01-aug-2000              |
+|iiiii     |01-sep-2000              |
+|jjjjj     |01-oct-2000              |
+|kkkkk     |01-nov-2000              |
+|mmmmm     |02-jan-2000              |
+|ppppp     |02-apr-2000              |
+|qqqqq     |02-may-2000              |
+|sssss     |02-jul-2000              |
+|ttttt     |02-aug-2000              |
+|vvvvv     |02-oct-2000              |
+|wwwww     |02-nov-2000              |
+|yyyyy     |02-jan-2000              |
+|zzzzz     |02-feb-2000              |
++----------+-------------------------+
+(20 rows)
+>>
+* select * from qp301_v3 order by c4\g
+<<
+
++-----------+-----------+-------------------+
+|c4         |c5         |c6                 |
++-----------+-----------+-------------------+
+|     40.000|     50.000|              60.00|
+|     44.000|     55.000|              66.00|
+|     50.000|     60.000|              70.00|
+|     55.000|     66.000|              77.00|
+|     60.000|     70.000|              80.00|
+|     70.000|     80.000|              90.00|
+|     77.000|     88.000|              99.00|
+|     80.000|     90.000|             100.00|
+|     90.000|    100.000|             110.00|
+|     99.000|    101.000|             111.00|
+|    100.000|    110.000|             120.00|
+|    101.000|    111.000|             121.00|
+|    110.000|    120.000|             130.00|
+|    120.000|    130.000|             140.00|
+|    130.000|    140.000|             150.00|
+|    131.000|    141.000|             151.00|
+|           |           |                   |
++-----------+-----------+-------------------+
+(17 rows)
+>>
+* select t1.c1, t2.c1 from (qp301_tbl1 t1 left join qp301_tbl2 t2 on t1.c1=t2.c1 and-
+ t1.c2=t2.c2 and t1.c3=t2.c3 and t1.c4=t2.c4 and t1.c5=t2.c5 and t1.c1 is null) orde-
+r by t1.c1\g
+<<
+
++------+-------------+
+|c1    |c1           |
++------+-------------+
+|    10|             |
+|    11|             |
+|    20|             |
+|    30|             |
+|    40|             |
+|    44|             |
+|    50|             |
+|    60|             |
+|    66|             |
+|    70|             |
+|    80|             |
+|    90|             |
+|   100|             |
+|      |             |
+|      |             |
++------+-------------+
+(15 rows)
+>>
+* select t1.c9, t2.c9 from (qp301_tbl1 t1 right join qp301_tbl2 t2 on t1.c7=t2.c7 an-
+d t1.c8=t2.c8 and t1.c9=t2.c9 and t1.c10=t2.c10 and t1.c11=t2.c11 and t1.c12=t2.c12)-
+ order by t1.c9, t2.c9\g
+<<
+
++---------------+--------------------+
+|c9             |c9                  |
++---------------+--------------------+
+|aaaaaaaaaaaaaaa|aaaaaaaaaaaaaaa     |
+|bbbbbbbbbbbbbbb|bbbbbbbbbbbbbbb     |
+|ccccccccccccccc|ccccccccccccccc     |
+|ddddddddddddddd|ddddddddddddddd     |
+|eeeeeeeeeeeeeee|eeeeeeeeeeeeeee     |
+|fffffffffffffff|fffffffffffffff     |
+|ggggggggggggggg|ggggggggggggggg     |
+|hhhhhhhhhhhhhhh|hhhhhhhhhhhhhhh     |
+|iiiiiiiiiiiiiii|iiiiiiiiiiiiiii     |
+|jjjjjjjjjjjjjjj|jjjjjjjjjjjjjjj     |
+|               |kkkkkkkkkkkkkkk     |
+|               |mmmmmmmmmmmmmmm     |
+|               |ttttttttttttttt     |
+|               |vvvvvvvvvvvvvvv     |
+|               |wwwwwwwwwwwwwww     |
++---------------+--------------------+
+(15 rows)
+>>
+* select t1.c11, t2.c11 from (qp301_tbl1 t1 full join qp301_tbl2 t2 on
+<<
+>>
+* t1.c1=t2.c1  and t1.c2=t2.c2 and t1.c3=t2.c3 and t1.c4=t2.c4 and 
+<<
+>>
+* t1.c5=t2.c5 and t1.c6=t2.c6 and t1.c7=t2.c7 and t1.c8=t2.c8 and 
+<<
+>>
+* t1.c9=t2.c9 and t1.c10=t2.c10 and t1.c12=t2.c12) order by t1.c11, t2.c11\g
+<<
+
++------+------+
+|c11   |c11   |
++------+------+
+|AA    |AA    |
+|BB    |BB    |
+|CC    |CC    |
+|DD    |DD    |
+|EE    |EE    |
+|FF    |FF    |
+|GG    |GG    |
+|HH    |HH    |
+|II    |II    |
+|JJ    |JJ    |
+|PP    |      |
+|QQ    |      |
+|SS    |      |
+|YY    |      |
+|ZZ    |      |
+|      |KK    |
+|      |MM    |
+|      |TT    |
+|      |VV    |
+|      |WW    |
++------+------+
+(20 rows)
+>>
+* select t1.c11, t2.c11 from qp301_tbl1 t1, qp301_tbl2 t2 where t1.c1=t2.c1 
+<<
+>>
+* and t1.c2=t2.c2 and t1.c3=t2.c3 and t1.c4=t2.c4 and t1.c5=t2.c5 and 
+<<
+>>
+* t1.c6=t2.c6 and t1.c7=t2.c7 and t1.c8=t2.c8 and t1.c9=t2.c9 and 
+<<
+>>
+* t1.c10=t2.c10 and t1.c12=t2.c12 order by t1.c11, t2.c11\g
+<<
+
++------+------+
+|c11   |c11   |
++------+------+
+|AA    |AA    |
+|BB    |BB    |
+|CC    |CC    |
+|DD    |DD    |
+|EE    |EE    |
+|FF    |FF    |
+|GG    |GG    |
+|HH    |HH    |
+|II    |II    |
+|JJ    |JJ    |
++------+------+
+(10 rows)
+>>
+* select t1.c12 from qp301_tbl1 t1 where c12 not in(select t2.c12 from qp301_tbl2 t2-
+ where t1.c12=t2.c12) order by t1.c12\g
+<<
+
++-------------------------+
+|c12                      |
++-------------------------+
+|02-feb-2000              |
+|02-apr-2000              |
+|02-may-2000              |
+|02-jul-2000              |
++-------------------------+
+(4 rows)
+>>
+* select t2.c12 from qp301_tbl2 t2 where not exists (select t1.c12 from qp301_tbl1 t-
+1 where t2.c12=t1.c12) order by t2.c12\g
+<<
+
++-------------------------+
+|c12                      |
++-------------------------+
+|02-aug-2000              |
+|02-oct-2000              |
+|01-nov-2000              |
+|02-nov-2000              |
++-------------------------+
+(4 rows)
+>>
+* select t1.c1, t2.c1 from qp301_tbl1 t1, qp301_tbl2 t2 where t1.c1=t2.c1 and t1.c2=-
+t2.c2 and t1.c3=t2.c3 and t1.c4=t2.c4 and t1.c5=t2.c5 and t1.c6=t2.c6\g
+<<
+
++------+-------------+
+|c1    |c1           |
++------+-------------+
+|    10|           10|
+|    20|           20|
+|    30|           30|
+|    40|           40|
+|    50|           50|
+|    60|           60|
+|    70|           70|
+|    80|           80|
+|    90|           90|
+|   100|          100|
++------+-------------+
+(10 rows)
+>>
+* select t1.c11, t2.c11 from qp301_tbl1 t1, qp301_tbl2 t2 where t1.c11=t2.c11 and t1-
+.c12=t2.c12 and t1.c1>10 and t2.c1<100 order by t1.c11, t2.c11\g
+<<
+
++------+------+
+|c11   |c11   |
++------+------+
+|BB    |BB    |
+|CC    |CC    |
+|DD    |DD    |
+|EE    |EE    |
+|FF    |FF    |
+|GG    |GG    |
+|HH    |HH    |
+|II    |II    |
++------+------+
+(8 rows)
+>>
+* select t1.c7, t2.c7 from qp301_tbl1 t1, qp301_tbl2 t2 where t1.c7=t2.c7 and t1.c8=-
+t2.c8 and t1.c9=t2.c9 and t1.c10=t2.c10 and t1.c11=t2.c11 and t1.c12=t2.c12 order by-
+ t1.c7, t2.c7\g
+<<
+
++------+----------+
+|c7    |c7        |
++------+----------+
+|aaaaa |aaaaa     |
+|bbbbb |bbbbb     |
+|ccccc |ccccc     |
+|ddddd |ddddd     |
+|eeeee |eeeee     |
+|fffff |fffff     |
+|ggggg |ggggg     |
+|hhhhh |hhhhh     |
+|iiiii |iiiii     |
+|jjjjj |jjjjj     |
++------+----------+
+(10 rows)
+>>
+* select c11 from qp301_tbl1 where c11 not in (select c11 from qp301_tbl2) union sel-
+ect t2.c11 from qp301_tbl2 t2 where not exists (select c12 from qp301_tbl1 t1 where -
+t1.c11=t2.c11) order by c11\g 
+<<
+
++------+
+|c11   |
++------+
+|KK    |
+|MM    |
+|PP    |
+|QQ    |
+|SS    |
+|TT    |
+|VV    |
+|WW    |
+|YY    |
+|ZZ    |
++------+
+(10 rows)
+>>
+* select varchar(v1.c11) from qp301_v1 v1 where v1.c11 not in 
+<<
+>>
+* (select c11 from qp301_tbl2) union select varchar(v2.c7) 
+<<
+>>
+* from qp301_v2 v2 where v2.c7 not in (select c7 from qp301_tbl2) union 
+<<
+>>
+* select varchar(v2.c12) from qp301_v2 v2 where v2.c12 not in 
+<<
+>>
+* (select c12 from qp301_tbl2) order by 1\g
+<< IF (ING_CHARSET == "UTF8")
+ 
++-------------------------+
+|col1                     |
++-------------------------+
+|02-apr-2000              |
+|02-feb-2000              |
+|02-jul-2000              |
+|02-may-2000              |
+|PP                       |
+|ppppp                    |
+|QQ                       |
+|qqqqq                    |
+|SS                       |
+|sssss                    |
+|YY                       |
+|yyyyy                    |
+|ZZ                       |
+|zzzzz                    |
++-------------------------+
+(14 rows)
+>>
+<<
+
++-------------------------+
+|col1                     |
++-------------------------+
+|02-apr-2000              |
+|02-feb-2000              |
+|02-jul-2000              |
+|02-may-2000              |
+|PP                       |
+|QQ                       |
+|SS                       |
+|YY                       |
+|ZZ                       |
+|ppppp                    |
+|qqqqq                    |
+|sssss                    |
+|yyyyy                    |
+|zzzzz                    |
++-------------------------+
+(14 rows)
+>>
+* select distinct t1.c9 from qp301_tbl1 t1, qp301_v2 v2 where t1.c7 like 'sss%' and -
+t1.c7 like 'ssss' and t1.c12=v2.c12 order by t1.c9\g
+<<
+
++---------------+
+|c9             |
++---------------+
++---------------+
+(0 rows)
+>>
+* select c1 from qp301_tbl1 where c1 <any (select distinct c6 from qp301_tbl2) and c-
+1 >any (select distinct c1 from qp301_tbl2) order by c1\g
+<<
+ 
++------+
+|c1    |
++------+
+|    11|
+|    20|
+|    30|
+|    40|
+|    44|
+|    50|
+|    60|
+|    66|
+|    70|
+|    80|
+|    90|
+|   100|
++------+
+(12 rows)
+>>
+* select t1.c8, t2.c8 from qp301_tbl1 t1, qp301_tbl2 t2 where t1.c8 not like 'zzzzz%-
+' and t2.c8 not like 'aaaaa%' and t1.c8=t2.c8 order by t1.c8, t2.c8\g
+<<
+
++----------+---------------+
+|c8        |c8             |
++----------+---------------+
+|bbbbbbbbbb|bbbbbbbbbb     |
+|cccccccccc|cccccccccc     |
+|dddddddddd|dddddddddd     |
+|eeeeeeeeee|eeeeeeeeee     |
+|ffffffffff|ffffffffff     |
+|gggggggggg|gggggggggg     |
+|hhhhhhhhhh|hhhhhhhhhh     |
+|iiiiiiiiii|iiiiiiiiii     |
+|jjjjjjjjjj|jjjjjjjjjj     |
++----------+---------------+
+(9 rows)
+>>
+* select c11 from qp301_v1 where c11 =any (select c11 from qp301_tbl1) and c11 not i-
+n (select c11 from qp301_tbl2) order by c11\g
+<<
+
++------+
+|c11   |
++------+
+|PP    |
+|QQ    |
+|SS    |
+|YY    |
+|ZZ    |
++------+
+(5 rows)
+>>
+* select t1.c1*2 as c1, t2.c2*2 as c2 from qp301_tbl1 t1, qp301_tbl2 t2 where t1.c6=-
+t2.c6 and t1.c7=t2.c7 and t1.c1>20 and t2.c2<100 order by 1\g 
+<<
+
++-------------+-------------+
+|c1           |c2           |
++-------------+-------------+
+|           60|           80|
+|           80|          100|
+|          100|          120|
+|          120|          140|
+|          140|          160|
+|          160|          180|
++-------------+-------------+
+(6 rows)
+>>
+* select v2.c7 from qp301_v2 v2, qp301_tbl1 t1, qp301_tbl2 t2 where t1.c7=v2.c7 and -
+t2.c7=v2.c7 order by v2.c7\g
+/*
+Issue 12354624 - E_OP0082 ON SELECT VIEW - getting error:
+"E_OP0082 consistency check".
+*/
+<<
+
++----------+
+|c7        |
++----------+
+|aaaaa     |
+|bbbbb     |
+|ccccc     |
+|ddddd     |
+|eeeee     |
+|fffff     |
+|ggggg     |
+|hhhhh     |
+|iiiii     |
+|jjjjj     |
++----------+
+(10 rows)
+>>
+* select v3.c4, v3.c5, v3.c6 from qp301_v3 v3, qp301_tbl1 t1,
+<<
+>>
+* qp301_tbl2 t2 where t1.c4=v3.c4 and t2.c4=v3.c4 and t1.c5=v3.c5
+<<
+>>
+* and t2.c5=v3.c5 and t1.c6=v3.c6 and t2.c6=v3.c6 order by v3.c4\g
+/*
+Issue 12354624 - E_OP0082 ON SELECT VIEW - getting error:
+"E_OP0082 consistency check".
+*/
+<<
+
++-----------+-----------+-------------------+
+|c4         |c5         |c6                 |
++-----------+-----------+-------------------+
+|     40.000|     50.000|              60.00|
+|     50.000|     60.000|              70.00|
+|     60.000|     70.000|              80.00|
+|     70.000|     80.000|              90.00|
+|     80.000|     90.000|             100.00|
+|     90.000|    100.000|             110.00|
+|    100.000|    110.000|             120.00|
+|    110.000|    120.000|             130.00|
+|    120.000|    130.000|             140.00|
+|    130.000|    140.000|             150.00|
++-----------+-----------+-------------------+
+(10 rows)
+>>
+* select v3.c4, v3.c5, v3.c6 from (qp301_v3 v3 inner join 
+<<
+>>
+* qp301_tbl1 t1 on v3.c4=t1.c1 and v3.c5=t1.c2 and v3.c6=t1.c3)
+<<
+>>
+* union (select t2.c4, t2.c5, t2.c6 from qp301_tbl2 t2, qp301_tbl1 t1
+<<
+>>
+* where t2.c1=t1.c2 and t2.c2=t1.c3 and t2.c3=t1.c4)
+<<
+>>
+* order by v3.c4, v3.c5, v3.c6\g
+<<
+
++-----------+-----------+--------------------+
+|c4         |c5         |c6                  |
++-----------+-----------+--------------------+
+|     40.000|     50.000|              $60.00|
+|     44.000|     55.000|              $66.00|
+|     50.000|     60.000|              $70.00|
+|     55.000|     66.000|              $77.00|
+|     60.000|     70.000|              $80.00|
+|     70.000|     80.000|              $90.00|
+|     80.000|     90.000|             $100.00|
+|     90.000|    100.000|             $110.00|
+|    100.000|    110.000|             $120.00|
+|    101.000|    111.000|             $121.00|
+|    110.000|    120.000|             $130.00|
+|    120.000|    130.000|             $140.00|
+|    130.000|    140.000|             $150.00|
++-----------+-----------+--------------------+
+(13 rows)
+>>
+* select distinct t2.c1 from qp301_tbl2 t2, qp301_v3 v3 where
+<<
+>>
+* (t2.c1+11)=t2.c2 and (t2.c2+11)=t2.c3 and t2.c4 in
+<<
+>>
+* (select c4 from qp301_v3) union (select distinct t1.c1 from
+<<
+>>
+* qp301_tbl1 t1, qp301_v3 v3 where (t1.c4+11)=t1.c5 and
+<<
+>>
+* (t1.c5+11)=t1.c6 and t1.c4=v3.c4) order by t2.c1\g
+<<
+
++-------------+
+|c1           |
++-------------+
+|           11|
+|           22|
+|           44|
+|           77|
++-------------+
+(4 rows)
+>>
+* select distinct v1.c11 from qp301_v1 v1, qp301_v2 v2, qp301_v3 v3,
+<<
+>>
+* qp301_tbl1 t1, qp301_tbl2 t2 where t1.c11=v1.c11 and v1.c11=t2.c11
+<<
+>>
+* and v2.c12=t1.c12 and v2.c12=t2.c12 and v3.c4=t2.c4 and v3.c4=t1.c4
+<<
+>>
+* and t2.c5=v3.c5 and t1.c5=v3.c5 and v3.c6=t1.c6 and v3.c6=t2.c6
+<<
+>>
+* order by v1.c11\g
+/*
+Issue 12354624 - E_OP0082 ON SELECT VIEW - getting error:
+"E_OP0082 consistency check".
+*/
+<<
+
++------+
+|c11   |
++------+
+|AA    |
+|BB    |
+|CC    |
+|DD    |
+|EE    |
+|FF    |
+|GG    |
+|HH    |
+|II    |
+|JJ    |
++------+
+(10 rows)
+>>
+* select t1.c6, case when t1.c6<90 then 'x' when t1.c6 between 90
+<<
+>>
+* and 120 then 'y' else 'z' end from qp301_tbl1 t1, qp301_v3 v3 where
+<<
+>>
+* t1.c6=v3.c6 and t1.c6 in(select t2.c6 from qp301_tbl2 t2) order by t1.c6\g
+<<
+
++----------+------+
+|c6        |col2  |
++----------+------+
+|     60.00|x     |
+|     70.00|x     |
+|     80.00|x     |
+|     90.00|y     |
+|    100.00|y     |
+|    110.00|y     |
+|    120.00|y     |
+|    130.00|z     |
+|    140.00|z     |
+|    150.00|z     |
++----------+------+
+(10 rows)
+>>
+* select v1.c11, case when v1.c11 like 'A%' or v1.c11 like 'I%'
+<<
+>>
+*  then 'AI' when v1.c11 like 'B%' or v1.c11 like 'F%' then 'FB'
+<<
+>>
+*  when v1.c11 like 'D%' or v1.c11 like 'J%' then 'DJ' when v1.c11
+<<
+>>
+*  like 'E%' or v1.c11 like 'T%' then 'ET' when v1.c11 like 'C%'
+<<
+>>
+*  or v1.c11 like 'W%' then 'CW' end from qp301_v1 v1,
+<<
+>>
+* qp301_tbl2 t2 where t2.c11=v1.c11 order by v1.c11\g
+<<
+
++------+------+
+|c11   |col2  |
++------+------+
+|AA    |AI    |
+|BB    |FB    |
+|CC    |CW    |
+|DD    |DJ    |
+|EE    |ET    |
+|FF    |FB    |
+|GG    |      |
+|HH    |      |
+|II    |AI    |
+|JJ    |DJ    |
+|KK    |      |
+|MM    |      |
+|TT    |ET    |
+|VV    |      |
+|WW    |CW    |
++------+------+
+(15 rows)
+>>
+* select distinct v2.c12 from qp301_v2 v2, qp301_tbl1 t1, qp301_tbl2 t2
+<<
+>>
+* where v2.c12=t1.c12 and t2.c12=v2.c12 and v2.c12 between '1-1-2000'
+<<
+>>
+* and '5-1-2000' and v2.c12 not between '4-1-2000' and '7-1-2000'
+<<
+>>
+* order by v2.c12\g
+/*
+Issue 12354624 - E_OP0082 ON SELECT VIEW - getting error:
+"E_OP0082 consistency check".
+*/
+<<
+
++-------------------------+
+|c12                      |
++-------------------------+
+|01-jan-2000              |
+|02-jan-2000              |
+|01-feb-2000              |
+|01-mar-2000              |
++-------------------------+
+(4 rows)
+>>
+* drop table qp301_tbl1\g
+<<
+>>
+* drop table qp301_tbl2\g
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: Mon Sep 15 17:39:13 2008

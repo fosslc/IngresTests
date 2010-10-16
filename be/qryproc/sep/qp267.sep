@@ -1,0 +1,211 @@
+/*
+	Test Name: qp267.sep
+	Time: Wed Jan 31 10:12:13 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (qp267.sep)
+	Module  : be/qryproc
+	Filename: qp267.sep
+	Purpose	: To test for bug 34308.  Commit statement in a dbp will not
+		  always close open cursors.  If the cursor's select has a
+		  "select distinct" or "order by" clause, the cursor will
+		  remain open after a dbp (called inside the cursor fetch
+		  loop) issues a commit statement.  After the last row is
+		  fetched, a LIBQ error occurs: E_LQ0059 "Unable to start
+		  up 'fetch C1' command, Unexpected initial protocol".
+	Input Files  : qp267.sc
+	Output Files : none
+	Database     : SEPPARAMDB (qryprocdb)
+	Tables       : curstbl
+	Synopsis     : This sep compiles the .sc and creates an executable which,
+		       when ran, tests the bug described above.  If the output is
+		       as described in the canon, the bug doesn't exist.  But if
+		       the output consists of the four names and ages inserted
+		       into curstbl, which will diff, of course.
+
+History : 31-Jan-1996	(fcch01)	Created
+		07-MAR-1997   (vissu01)	Modified for NT
+           8-Sep-1997	(cheis01)
+           05-Mar-1999	(kamra01)
+			created alternate canon to eliminate sequence order diffs
+	   26-March-1999  (kamra01) modified VPG_SZ to 8192
+*/
+? fill qp267.sc 
+!!
+#include <stdio.h>
+
+exec sql include sqlca;
+main(int argc, char *argv[]) {
+  if (argc < 2) {
+    printf("Usage: %s <database name>\n",argv[0]);
+    exit(1);
+  }
+
+  cursorSep(argv[1]);
+
+} /* end main */ 
+
+cursorSep(dbname) 
+exec sql begin declare section;
+   char 	*dbname;
+exec sql end declare section;
+{
+exec sql begin declare section;
+   char 	customerid[6];
+   int 		customerage;
+   int 		i = 0;
+exec sql end declare section;
+
+exec sql whenever sqlerror call sqlprint;
+
+exec sql connect :dbname;
+
+exec sql create table curstbl (id char(6), age i4) with page_size=8192;
+exec sql insert into curstbl values('foxx', 23);
+exec sql insert into curstbl values('abe', 26);
+exec sql insert into curstbl values('veeru', 13);
+exec sql insert into curstbl values('hooha', 13);
+   
+exec sql create procedure cursproc (custid	char(6),
+			   	    custage	i4) as
+	begin
+	   update curstbl
+	      set age = :custage + 1
+	      where id = :custid;
+	   commit;
+	end;
+
+exec sql declare curs cursor for 
+   select * from curstbl order by age asc;
+
+exec sql open curs;
+exec sql whenever not found goto closecurs;
+
+do {
+   i++;   
+   exec sql fetch curs into :customerid, :customerage;
+	printf("\nCustomer id: %s", customerid);
+	printf("\nCustomer age: %d", customerage);
+	printf("\n");
+
+   exec sql execute procedure cursproc (custid = :customerid, custage = :customerage-
+);
+
+   if (i > 5) {      /* Then break out of the infinite loop... */
+	printf("\nCursor closed when commit was issued in dbproc...  Bug 34308 doesn't occu-
+r!\n");
+	break;
+   }
+      
+} while (1);
+
+closecurs:
+   exec sql drop table curstbl;  
+   exec sql drop procedure cursproc; 
+   exec sql close curs;
+   printf("\nCursor Closed..");
+   exec sql disconnect;
+   printf("\nDisconnected..\n");
+
+} /* end cursorSep */
+!!
+? sepesqlc qp267 
+<<
+ESQL qp267.sc:
+>>
+? sepcc qp267 
+<<
+>>
+<<
+qp267.c
+>>
+? seplnk qp267 
+<<
+>>
+? run qp267.exe SEPPARAMDB 
+<<
+
+Customer id: veeru
+Customer age: 13
+E_LQ0058 Cursor 'curs' not open for 'fetch' command.
+
+Customer id: veeru
+Customer age: 13
+E_LQ0058 Cursor 'curs' not open for 'fetch' command.
+
+Customer id: veeru
+Customer age: 13
+E_LQ0058 Cursor 'curs' not open for 'fetch' command.
+
+Customer id: veeru
+Customer age: 13
+E_LQ0058 Cursor 'curs' not open for 'fetch' command.
+
+Customer id: veeru
+Customer age: 13
+E_LQ0058 Cursor 'curs' not open for 'fetch' command.
+
+Customer id: veeru
+Customer age: 13
+
+Cursor closed when commit was issued in dbproc...  Bug 34308 doesn't occur!
+E_LQ0058 Cursor 'curs' not open for 'close' command.
+
+Cursor Closed..
+Disconnected..
+>>
+<<
+
+Customer id: hooha
+Customer age: 13
+E_LQ0058 Cursor 'curs' not open for 'fetch' command.
+
+Customer id: hooha
+Customer age: 13
+E_LQ0058 Cursor 'curs' not open for 'fetch' command.
+
+Customer id: hooha
+Customer age: 13
+E_LQ0058 Cursor 'curs' not open for 'fetch' command.
+
+Customer id: hooha
+Customer age: 13
+E_LQ0058 Cursor 'curs' not open for 'fetch' command.
+
+Customer id: hooha
+Customer age: 13
+E_LQ0058 Cursor 'curs' not open for 'fetch' command.
+
+Customer id: hooha
+Customer age: 13
+
+Cursor closed when commit was issued in dbproc...  Bug 34308 doesn't occur!
+E_LQ0058 Cursor 'curs' not open for 'close' command.
+
+Cursor Closed..
+Disconnected..
+>>
+? delete qp267.c 
+<<
+file was deleted
+>>
+.if (UNIX) 
+? delete qp267.o 
+<<
+file was deleted
+>>
+.endif 
+.if (NT_GENERIC) 
+? delete qp267.obj 
+<<
+file was deleted
+>>
+.endif 
+? delete qp267.exe 
+<<
+file was deleted
+>>
+
+
+Ending at: Fri Mar 05 13:01:08 1999

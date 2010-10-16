@@ -1,0 +1,262 @@
+/*
+	Test Name: efa15.sep
+	Time: Tue May  8 19:26:29 1990
+	User Name: testenv
+ 
+	Test ID : efa15
+	Module  : 
+	Filename: efa15.sep
+	Purpose	: Test that parameters passed to a procedure don't get changed
+		  globally when they are changed locally.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : none
+	Synopsis     : create a procedure that changes a value of a parameter
+			print the variable first then run the procedure that
+			changes the variable locally, then exit the procedure 
+			and print the variable in the parent scope again to 
+			make sure it didn't change.
+
+	History	: xx-xxx-1989	Created				Author
+		  7-MAR-1997    (vissu01) Modified for NT
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa15.sc 
+!!
+/*
+**	efa15.sc
+**
+**	parameters: scope
+**
+**	history:
+**		oct 13/89 sgp
+**			- created.
+*/
+
+#define EFA15
+
+#include "driverefstub.h"
+
+exec sql include 'dbph.sc';
+#include <stdio.h>
+
+exec sql include sqlca;
+
+/************/
+/* efa15() */
+/************/
+
+efa15()
+{
+	exec sql begin declare section;
+		int	i4;
+	exec sql end declare section;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa15: scope\n");
+
+	/**********/
+	/* test 1 */
+	/**********/
+
+	printf("\n    test 1:\n");
+
+	/* drop the proc */
+	exec sql drop procedure efa15_01;
+
+	/* create the proc */
+	exec sql create procedure efa15_01 (
+		i4		i4		not null with default
+	)as
+	declare
+		mesg_buf	varchar(81)	not null with default;
+	begin
+
+		i4 = i4 + 12;
+		mesg_buf = 'efa15_01 sets i4 = '
+			+ vchar(i4);
+		message mesg_buf;
+
+	end;
+
+	i4 = 6;
+	printf("i4 in prog = %d\n",i4);
+	exec sql execute procedure efa15_01 (
+			i4		= :i4
+	);
+	printf("i4 in prog = %d\n",i4);
+
+} /* efa15() */
+!!
+? sepesqlc efa15.sc 
+<<
+ESQL efa15.sc:
+>>
+? sepcc efa15.c 
+<<
+>>
+<<
+efa15.c
+>>
+? sepesqlc driver.sc
+<<
+ESQL driver.sc:
+>>
+? sepesqlc dbpmisc.sc
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc driver.c
+<<
+>>
+<<
+driver.c
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa15 
+<<
+>>
+? sql SEPPARAMDB -s
+<<
+~
+>>
+* drop procedure efa15_01;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa15 
+<<
+TEST DRIVER
+source : driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa15
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa15 XX
+
+  efa15: scope
+
+    test 1:
+E_US0965 Procedure 'efa15_01' not found.
+    (Tue May  8 19:26:36 1990)
+i4 in prog = 6
+MESSAGE 0: efa15_01 sets i4 = 18
+i4 in prog = 6
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~  
+>>
+? delete driver.obj 
+<<
+~  
+>>
+? delete driver.o
+<<
+~
+>>
+? delete driver.c
+<<
+~  
+>>
+? delete driver.sc
+<<
+~  
+>>
+? delete driverefstub.h 
+<<
+~  
+>>
+? delete driveref.c 
+<<
+~  
+>>
+? delete driveref.obj 
+<<
+~  
+>>
+? delete driveref.o
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~  
+>>
+? delete dbph.c 
+<<
+~  
+>>
+? delete dbpmisc.sc 
+<<
+~  
+>>
+? delete dbpmisc.c 
+<<
+~  
+>>
+? delete dbpmisc.obj 
+<<
+~  
+>>
+? delete dbpmisc.o
+<<
+~
+>>
+? delete efa15.c 
+<<
+~  
+>>
+? delete efa15.obj 
+<<
+~  
+>>
+? delete efa15.o
+<<
+~
+>>
+
+
+Ending at: Tue May  8 19:26:42 1990

@@ -1,0 +1,259 @@
+/*
+	Test Name: dt37.sep
+	Time: Thu Apr 19 12:56:53 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : dt37.sep 
+	Module  : be/datatypes
+	Filename: dt37.sep
+	Purpose	: To test the maximum size of 32K for character data types.
+	Input Files  : chartype.sc
+	Output Files : chartype.exe
+	Database     : datatypedb2
+	Tables       : dt37_table
+	Synopsis     : This sep test is to test the character data type 'char' 
+                       with the maximum size of 32K bytes column. And using
+                       various string functions to retrieve the data from the 
+                       table.
+
+ History: 19-Apr-2001	(wu$ca01)	Created
+*/
+? fill chartype.sc
+!!
+/* This program is to test the 'char' character data type with the maximum size
+** of 32K bytes per column, and the retrieval of the data using various string
+** functions.
+*/
+ 
+#include <stdio.h>
+exec sql include sqlca;
+
+main(int argc, char* argv[])
+{
+    exec sql begin declare section;
+      char   *dbname;
+	varchar struct {
+	    short	buf_size;
+	    char	buf[32000];
+	} vch;
+
+	varchar struct {
+	    short	buf_size;
+	    char	buf[32000];
+	} vch2;
+   
+    exec sql end declare section;
+
+    exec sql whenever sqlerror call sqlprint;
+
+    dbname = argv[1];
+
+    exec sql connect :dbname;
+    /* Ignore errors from drop table */
+    exec sql whenever sqlerror continue;
+    exec sql drop table dt37_table;
+
+    exec sql whenever sqlerror call sqlprint;
+    exec sql create table dt37_table(col_char char(32000));
+
+    /* To set all the bytes in a block of memory with the character '$' */
+    memset(vch.buf, '$', 32000);
+    vch.buf_size = 32000;
+    /* Between the 2nd through 11th character, change the character to '8' */
+    memset(vch.buf+1, '8', 10);
+    /* Replace the 31991th through 31999th characters with ':' */
+    memset(vch.buf+31990, ':', 9);
+    /* Replace the last character with 'p' */
+    memset(vch.buf+31999, 'p', 1);
+
+    exec sql insert into dt37_table values (:vch);
+
+    exec sql select col_char into :vch2 from dt37_table;
+
+    /* If the table is successfully created, print success. Follow by */
+    /* testing various string functions. Otherwise, print failure. */ 
+    if (vch.buf_size == vch2.buf_size &&
+	memcmp(vch.buf, vch2.buf, 32000) == 0)
+    {
+        printf("Success!!!\n");
+
+        printf("Test the left() function.\n"); 
+        printf("Query:select varchar(left(col_char, 20), 60) from dt37_table.\n");
+        /* All the string functions are enclosed by a varchar() function */
+        /* to make the displayed output easier to read instead of ending */
+        /* up with 32K byte record(with trailing blanks and all) put to */
+        /* standard output with each select statement. */ 
+        exec sql select varchar(left(col_char, 20), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the right()function.\n");
+        printf("Query:select varchar(right(col_char, 20), 60)from dt37_table.\n");
+        exec sql select varchar(right(col_char, 20), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the locate() function.\n");
+        printf("Query:select varchar(locate(col_char,'$'),60) from dt37_table.\n");
+        exec sql select varchar(locate(col_char, '$'), 60) into :vch2.buf from dt37_table;
+        printf("The first occurrence of '$' is in location: %s\n", vch2.buf);
+        printf("Query:select varchar(locate(col_char,'8'),60) from dt37_table.\n");
+        exec sql select varchar(locate(col_char, '8'), 60) into :vch2.buf from dt37_table;
+        printf("The first occurrence of '8' is in location: %s\n", vch2.buf);
+        printf("Query:select varchar(locate(col_char,':'),60) from dt37_table.\n");
+        exec sql select varchar(locate(col_char, ':'), 60) into :vch2.buf from dt37_table;
+        printf("The first occurrence of ':' is in location: %s\n", vch2.buf);
+
+        printf("Test the shift() function.\n");
+        printf("Query:select varchar(shift(left(col_char,20),10),60) from dt37_table.\n");
+        exec sql select varchar(shift(left(col_char, 20), 10), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+        printf("Query:select varchar(shift(left(col_char, 20),-10),60) from dt37_table.\n");
+        exec sql select varchar(shift(left(col_char, 20), -10), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the charextract() function.\n");
+        printf("Query:select varchar(charextract(col_char,32000),60) from dt37_table.\n");
+        exec sql select varchar(charextract(col_char, 32000), 60) into :vch2.buf from dt37_table;
+        printf("The 32000th character is: %s\n", vch2.buf);
+
+        printf("Test the concat() function.\n");
+        printf("Query:select varchar(concat(trim(right(col_char,2)),' Smile!'),60) from dt37_table.\n"); 
+        exec sql select varchar(concat(trim(right(col_char, 2)), ' Smile!'), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the length() function.\n");
+        printf("Query:select varchar(length(col_char), 60) from dt37_table.\n");
+        exec sql select varchar(length(col_char), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the pad() function.\n");
+        printf("Query:select varchar(length(pad(col_char)), 60) from dt37_table.\n");
+        exec sql select varchar(length(pad(col_char)), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the lowercase() function.\n");
+        printf("Query:select varchar(lowercase(right(col_char,5)), 60) from dt37_table.\n");
+        exec sql select varchar(lowercase(right(col_char,5)), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the uppercase() function.\n");
+        printf("Query:select varchar(uppercase(right(col_char,5)), 60) from dt37_table.\n");
+        exec sql select varchar(uppercase(right(col_char,5)), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the size() function.\n");
+        printf("Query:select varchar(size(col_char),60) from dt37_table.\n");
+        exec sql select varchar(size(col_char), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the soundex() function.\n");
+        printf("Query:select varchar(soundex(col_char), 60) from dt37_table.\n");
+        exec sql select varchar(soundex(col_char), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the squeeze() function.\n");
+        printf("Query:select varchar(squeeze(col_char), 60) from dt37_table.\n");
+        exec sql select varchar(squeeze(col_char), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("Test the trim() function.\n");
+        printf("Query:select varchar(trim(col_char), 60) from dt37_table.\n");
+        exec sql select varchar(trim(col_char), 60) into :vch2.buf from dt37_table;
+        printf("%s\n", vch2.buf);
+
+        printf("End Testing.\n");
+    }
+    else
+	printf("Failure!!!\n");
+    exec sql disconnect;
+}
+
+!!
+? esqlc chartype.sc 
+<<
+~
+>>
+? sepcc chartype 
+<<
+~
+>>
+? seplnk chartype 
+<<
+~
+>>
+? run chartype.exe SEPPARAMDB 
+<<
+Success!!!
+Test the left() function.
+Query:select varchar(left(col_char, 20), 60) from dt37_table.
+$8888888888$$$$$$$$$
+Test the right()function.
+Query:select varchar(right(col_char, 20), 60)from dt37_table.
+$$$$$$$$$$:::::::::p
+Test the locate() function.
+Query:select varchar(locate(col_char,'$'),60) from dt37_table.
+The first occurrence of '$' is in location: 1
+Query:select varchar(locate(col_char,'8'),60) from dt37_table.
+The first occurrence of '8' is in location: 2
+Query:select varchar(locate(col_char,':'),60) from dt37_table.
+The first occurrence of ':' is in location: 31991
+Test the shift() function.
+Query:select varchar(shift(left(col_char,20),10),60) from dt37_table.
+          $8888888888$$$$$$$$$
+Query:select varchar(shift(left(col_char, 20),-10),60) from dt37_table.
+8$$$$$$$$$
+Test the charextract() function.
+Query:select varchar(charextract(col_char,32000),60) from dt37_table.
+The 32000th character is: p
+Test the concat() function.
+Query:select varchar(concat(trim(right(col_char,2)),' Smile!'),60) from dt37_table.
+:p Smile!
+Test the length() function.
+Query:select varchar(length(col_char), 60) from dt37_table.
+32000
+Test the pad() function.
+Query:select varchar(length(pad(col_char)), 60) from dt37_table.
+32000
+Test the lowercase() function.
+Query:select varchar(lowercase(right(col_char,5)), 60) from dt37_table.
+::::p
+Test the uppercase() function.
+Query:select varchar(uppercase(right(col_char,5)), 60) from dt37_table.
+::::P
+Test the size() function.
+Query:select varchar(size(col_char),60) from dt37_table.
+32000
+Test the soundex() function.
+Query:select varchar(soundex(col_char), 60) from dt37_table.
+P000
+Test the squeeze() function.
+Query:select varchar(squeeze(col_char), 60) from dt37_table.
+$8888888888$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+Test the trim() function.
+Query:select varchar(trim(col_char), 60) from dt37_table.
+$8888888888$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+End Testing.
+>>
+? delete chartype.sc
+<<
+~
+>> 
+? delete chartype.c 
+<<
+~
+>>
+? delete chartype.o 
+<<
+~
+>>
+? delete chartype.obj 
+<<
+~
+>>
+? delete chartype.exe 
+<<
+~
+>>
+
+
+Ending at: Thu Apr 19 13:10:14 2001

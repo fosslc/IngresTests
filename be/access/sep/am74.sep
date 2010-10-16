@@ -1,0 +1,717 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: frank1.sep
+	Time: Fri Feb  2 09:01:49 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	: Test the tm handling table_keys. Tests bugs in the BUGS
+		  system #'s 67402 and 49383 besides the other tests it does.
+	Input Files  : None.
+	Output Files : None.
+	Database     : SEPPARAMDB
+	Tables       : tfrank, created and dropped by this sep.
+	Synopsis     : Test the tm's ability to handle table_keys,
+		       which few seps previously tested.  Creates a
+		       table which has an table_key which is also 
+		       the primary key. Tries to add odd hex values, 
+		       such as null, cr, backspace, etc. Tries to add
+		       values that are too small. Tries to add duplicate
+		       values. Displays the column, first as is and then
+		       masked to char, then masked to hex.
+
+ History:  2-Feb-1996	(frank)	Created
+           5-Feb-1996   (frank)   Added part near the end of the test which will
+                                  verify that if you make a system_maintained
+                                  table_key column reference another
+                                  system_maintained table_key column, you are
+                                  pretty much screwed up. Why would ingres let
+                                  you create the reference in the first place?
+          14-Feb-1996   (frank)   Added more basic tests, such as text(),
+                                  varchar(), IN, NOT IN, BETWEEN, NOT BETWEEN,
+                                  EXISTS, NOT EXISTS, IS NULL, IS NOT NULL.
+          28-May-1998   (vande02) Removed a period that was left where an end
+                                  of canon symbol (i.e. >>) should have been.
+           8-Mar-1999   (vande02) Hard-coded VPG_SZ to 8K
+          09-Jul-2001   (rogch01) Update row orders.
+          21-Mar-2007	(vande02) Added order by statements to ensure row order,
+				  updated canons accordingly, removed SQL ignore
+				  canon, removed Executing, and continue
+				  statements for clarity, aligned history
+				  comments, added copyright.
+          16-Sep-2008	(vande02) Added conditional canons to allow for UTF8
+                                  collation sequence order/or results. Header
+                                  cleanup.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table tfrank \g 
+<<
+~
+>>
+* create table tfrank (col1 table_key primary key not null not system_maintained, 
+<<
+~
+>>
+* col2 char(10)) with page_size=8192 \g 
+<<
+
+>>
+* insert into tfrank values (X'1122334455667788', 'asdf') \g 
+<<
+(1 row)
+>>
+* insert into tfrank values ('                ', 'blank') \g 
+<<
+(1 row)
+>>
+* insert into tfrank values (X'0000000000000000', 'nulls') \g 
+<<
+(1 row)
+>>
+* insert into tfrank values (X'000000000000000D', 'cr') \g 
+<<
+(1 row)
+>>
+* insert into tfrank values (X'0000000000000007', 'bell') \g 
+<<
+(1 row)
+>>
+* insert into tfrank values (X'0000000000000008', 'backspace')\g 
+<<
+(1 row)
+>>
+* insert into tfrank values (X'0000000000000009', 'tab') \g 
+<<
+(1 row)
+>>
+* insert into tfrank values (X'000000000000007F', 'del') \g 
+<<
+(1 row)
+>>
+* insert into tfrank values ('12345678', 'original') \g 
+<<
+(1 row)
+>>
+* insert into tfrank values ('23456789', 'another') \g 
+<<
+(1 row)
+>>
+* insert into tfrank values ('12345678', 'duplicate') \g 
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Fri Feb  2 09:08:15 1996)
+
+>>
+* insert into tfrank values (X'3132333435363738', 'duplicate') \g 
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Fri Feb  2 09:08:54 1996)
+
+>>
+* insert into tfrank values ('1234', 'sizesmall') \g 
+<<
+E_AD5080 The conversion from the datatype specified (length 4 bytes) to
+    logical key type (ie. table_key or object_key with length 8 bytes) failed
+    because the lengths of the two datatypes were not the same.
+    (Wed Feb 14 05:06:59 1996)
+
+>>
+* insert into tfrank values ('', 'nosize') \g 
+<<
+E_AD5080 The conversion from the datatype specified (length 0 bytes) to
+    logical key type (ie. table_key or object_key with length 8 bytes) failed
+    because the lengths of the two datatypes were not the same.
+    (Wed Feb 14 05:07:09 1996)
+
+>>
+* insert into tfrank values (table_key('small'), 'small') \g 
+<<
+E_AD5080 The conversion from the datatype specified (length 5 bytes) to
+    logical key type (ie. table_key or object_key with length 8 bytes) failed
+    because the lengths of the two datatypes were not the same.
+    (Wed Feb 14 05:07:12 1996)
+
+>>
+* insert into tfrank values ('223456789','too big?') \g 
+<<
+(1 row)
+>>
+* select max(col1) from tfrank \g 
+<<
+
++--------+
+|col1    |
++--------+
+|23456789|
++--------+
+(1 row)
+>>
+* select min(col1) from tfrank \g 
+<<
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
++--------+
+(1 row)
+>>
+* select * from tfrank  order by 1\g 
+<< IF (ING_CHARSET == "UTF8") 
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|        |blank     |
+|\000\000\000\000\000\000\000\177|del       |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
+|\021"3DUfw |asdf      |
++--------+----------+
+(11 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|\000\000\000\000\000\000\000\177|del       |
+|\021"3DUfw\210|asdf      |
+|        |blank     |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
++--------+----------+
+(11 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|\000\000\000\000\000\000\000\177|del       |
+|\021"3DUfwˆ|asdf      |
+|        |blank     |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
++--------+----------+
+(11 rows)
+>>
+* select char(col1), col2 from tfrank order by 1\g 
+<< IF (ING_CHARSET == "UTF8") 
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|        |blank     |
+|\000\000\000\000\000\000\000\177|del       |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
+|\021"3DUfwˆ|asdf      |
++--------+----------+
+(11 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|\000\000\000\000\000\000\000\177|del       |
+|\021"3DUfw\210|asdf      |
+|        |blank     |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
++--------+----------+
+(11 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|\000\000\000\000\000\000\000\177|del       |
+|\021"3DUfwˆ|asdf      |
+|        |blank     |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
++--------+----------+
+(11 rows)
+>>
+* select hex(char(col1)), col2 from tfrank order by 2\g 
+<<
+
++----------------+----------+
+|col1            |col2      |
++----------------+----------+
+|3233343536373839|another   |
+|1122334455667788|asdf      |
+|0000000000000008|backspace |
+|0000000000000007|bell      |
+|2020202020202020|blank     |
+|000000000000000D|cr        |
+|000000000000007F|del       |
+|0000000000000000|nulls     |
+|3132333435363738|original  |
+|0000000000000009|tab       |
+|3232333435363738|too big?  |
++----------------+----------+
+(11 rows)
+>>
+* select varchar(col1), col2 from tfrank order by 1\g
+<< IF (ING_CHARSET == "UTF8") 
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|        |blank     |
+|\000\000\000\000\000\000\000\177|del       |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
+|\021"3DUfwˆ|asdf      |
++--------+----------+
+(11 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|\000\000\000\000\000\000\000\177|del       |
+|\021"3DUfw\210|asdf      |
+|        |blank     |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
++--------+----------+
+(11 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|\000\000\000\000\000\000\000\177|del       |
+|\021"3DUfwˆ|asdf      |
+|        |blank     |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
++--------+----------+
+(11 rows)
+>>
+* select text(col1), col2 from tfrank order by 1\g
+<< IF (ING_CHARSET == "UTF8") 
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|        |blank     |
+|\000\000\000\000\000\000\000\177|del       |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
+|\021"3DUfwˆ|asdf      |
++--------+----------+
+(11 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|\000\000\000\000\000\000\000\177|del       |
+|\021"3DUfw\210|asdf      |
+|        |blank     |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
++--------+----------+
+(11 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|\000\000\000\000\000\000\000\177|del       |
+|\021"3DUfwˆ|asdf      |
+|        |blank     |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
++--------+----------+
+(11 rows)
+>>
+* select col1 from tfrank group by col1
+<<
+~
+>>
+* having col1 between min(col1) and max(col1) order by 1\g
+<<
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\b|
+|\000\000\000\000\000\000\000\t|
+|\000\000\000\000\000\000\000\r|
+|\000\000\000\000\000\000\000\177|
+|\021"3DUfw\210|
+|        |
+|12345678|
+|22345678|
+|23456789|
++--------+
+(11 rows)
+>>
+<<
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\b|
+|\000\000\000\000\000\000\000\t|
+|\000\000\000\000\000\000\000\r|
+|\000\000\000\000\000\000\000\177|
+|\021"3DUfwˆ|
+|        |
+|12345678|
+|22345678|
+|23456789|
++--------+
+(11 rows)
+>>
+* select col1 from tfrank group by col1
+<<
+~
+>>
+* having col1 not between min(col1) and max(col1) \g
+<<
+
++--------+
+|col1    |
++--------+
++--------+
+(0 rows)
+>>
+* select col1 from tfrank group by col1
+<<
+~
+>>
+* having col1 in (select max(col1) from tfrank) \g
+<<
+
++--------+
+|col1    |
++--------+
+|23456789|
++--------+
+(1 row)
+>>
+* select col1 from tfrank group by col1
+<<
+~
+>>
+* having col1 not in (select max(col1) from tfrank) order by 1\g
+<< IF (ING_CHARSET == "UTF8") 
+
++--------+
+|col1    |
++--------+
+|        |
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\t|
+|\000\000\000\000\000\000\000\r|
+|12345678|
+|22345678|
+|\021"3DUfw |
++--------+
+(7 rows)
+>>
+<<
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\b|
+|\000\000\000\000\000\000\000\t|
+|\000\000\000\000\000\000\000\r|
+|\000\000\000\000\000\000\000\177|
+|\021"3DUfw\210|
+|        |
+|12345678|
+|22345678|
++--------+
+(10 rows)
+>>
+<<
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\b|
+|\000\000\000\000\000\000\000\t|
+|\000\000\000\000\000\000\000\r|
+|\000\000\000\000\000\000\000\177|
+|\021"3DUfwˆ|
+|        |
+|12345678|
+|22345678|
++--------+
+(10 rows)
+>>
+* select col1 from tfrank where exists (select max(col1) from tfrank) order by 1\g
+<<
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\b|
+|\000\000\000\000\000\000\000\t|
+|\000\000\000\000\000\000\000\r|
+|\000\000\000\000\000\000\000\177|
+|\021"3DUfw\210|
+|        |
+|12345678|
+|22345678|
+|23456789|
++--------+
+(11 rows)
+>>
+<<
+
++--------+
+|col1    |
++--------+
+|\000\000\000\000\000\000\000\000|
+|\000\000\000\000\000\000\000\007|
+|\000\000\000\000\000\000\000\b|
+|\000\000\000\000\000\000\000\t|
+|\000\000\000\000\000\000\000\r|
+|\000\000\000\000\000\000\000\177|
+|\021"3DUfwˆ|
+|        |
+|12345678|
+|22345678|
+|23456789|
++--------+
+(11 rows)
+>>
+* select col1 from tfrank where not exists (select max(col1) from tfrank) \g
+<<
+
++--------+
+|col1    |
++--------+
++--------+
+(0 rows)
+>>
+* select * from tfrank where col1 is null \g
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
++--------+----------+
+(0 rows)
+>>
+* select * from tfrank where col1 is not null order by 1\g
+<< IF (ING_CHARSET == "UTF8") 
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|        |blank     |
+|\000\000\000\000\000\000\000\177|del       |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
+|\021"3DUfw |asdf      |
++--------+----------+
+(11 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|\000\000\000\000\000\000\000\177|del       |
+|\021"3DUfw\210|asdf      |
+|        |blank     |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
++--------+----------+
+(11 rows)
+>>
+<<
+
++--------+----------+
+|col1    |col2      |
++--------+----------+
+|\000\000\000\000\000\000\000\000|nulls     |
+|\000\000\000\000\000\000\000\007|bell      |
+|\000\000\000\000\000\000\000\b|backspace |
+|\000\000\000\000\000\000\000\t|tab       |
+|\000\000\000\000\000\000\000\r|cr        |
+|\000\000\000\000\000\000\000\177|del       |
+|\021"3DUfwˆ|asdf      |
+|        |blank     |
+|12345678|original  |
+|22345678|too big?  |
+|23456789|another   |
++--------+----------+
+(11 rows)
+>>
+* create table t_r_c (col1 table_key primary key with system_maintained, col2 char(1-
+0))  with page_size=8192\g
+<<
+
+>>
+* create table t_r_c_2 (col1 char(10), col2 table_key with system_maintained constra-
+int tempconstraint references t_r_c) with page_size=8192 \g
+<<
+
+>>
+* insert into t_r_c (col2) values ('frank') \g
+<<
+(1 row)
+>>
+* delete from t_r_c where col2='frank' \g
+<<
+(1 row)
+>>
+* insert into t_r_c (col2) values ('frank') \g
+<<
+(1 row)
+>>
+* insert into t_r_c_2 (col1) values ('no way') \g
+<<
+E_US1906 Cannot INSERT into table '"t_r_c_2"' because the values do not
+    match those in table '"t_r_c"' (violation of REFERENTIAL constraint
+    '"tempconstraint"').
+    (Wed Feb 14 05:08:37 1996)
+>>
+* rollback \g 
+<<
+
+>>
+* drop table tfrank \g 
+<<
+E_US0AC1 DROP: 'tfrank' does not exist or is not owned by you.
+    (Fri Feb  2 09:12:23 1996)
+>>
+* drop table t_r_c \g
+<<
+E_US0AC1 DROP: 't_r_c' does not exist or is not owned by you.
+    (Mon Feb  5 11:15:30 1996)
+>>
+* drop table t_r_c_2 \g
+<<
+E_US0AC1 DROP: 't_r_c_2' does not exist or is not owned by you.
+    (Mon Feb  5 11:15:35 1996)
+>>
+* commit \g 
+<<
+
+>>
+* \q 
+<<
+
+>>
+
+
+Ending at: Tue Sep 16 17:53:23 2008

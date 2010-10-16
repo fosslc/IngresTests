@@ -1,0 +1,1571 @@
+/*
+	Test Name: SWA01.SEP
+	Time: 08-Oct1990
+	User Name: pvusr2
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:	2-phase commit basic functionality
+	Input Files  :
+	Output Files :
+	Database     : STARDDB1
+	Tables       :
+	Synopsis     :
+
+	History	: 10/8/1990	Created		jds		Author
+
+		seppified from plain sql
+
+		12/10. 12/11/90		jds
+
+		Converted to new tpf_ table naming convention
+		Added 'order by' clause to all selects - order changes
+		were causing diffs.
+
+		change away from transddb1 DDB, use SEPPARAM_DDB
+
+	Second STAR transaction processing test.  
+	Two phase commit basic test.
+	Last transaction allowed to COMMIT, then
+	changes removed.  Test sequence repeated 3 x to be sure
+	STAR tolerates re-use of savepoints, a little stress
+
+	REQUIRES DDB, LDB1 LDB2 LDB3 on any node 
+
+	REQUIRES _TEST_SETUP5DB.COM which sets up the tables with 
+		TESTENV as the DBA, registers the tables
+
+	REQUIRES that PVUSR2 exist, have SNODES defined
+
+	Running time on an unloaded system, VMS, 1 dbms is ~ 7 min.
+
+		02-oct-1992		jds
+
+		get rid of qasetuser - now does different, odd
+		things.   It wasn't being used, anyway.
+	  16-09-93     barbh
+		       Changed SEPPARAM_DDB to SEPPARAMDB. This makes the
+		       star test consistent with testkit standards.
+	27-Dec-1999 (vande02)
+			Added empty canon to confirm db sql connection
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* begin transaction; \p \g
+<<
+/* SQL Startup File */
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    20|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 23 where status = 20; \p \g
+<<
+ update tpf_s3 set status = 23 where status = 20; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty + 1; \p \g
+<<
+ update tpf_sp2 set qty = qty + 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |red   |    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'cerise' where color = 'red'; \p \g
+<<
+ update tpf_p1 set color = 'cerise' where color = 'red'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
++------+--------------------+------+---------------+
+(0 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'cerise' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'cerise' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p4    |screw               |cerise|    14|London         |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    23|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    23|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 20 where status = 23; \p \g
+<<
+ update tpf_s3 set status = 20 where status = 23; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty - 1; \p \g
+<<
+ update tpf_sp2 set qty = qty - 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |cerise|    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'red' where color = 'cerise'; \p \g
+<<
+ update tpf_p1 set color = 'red' where color = 'cerise'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s4    |Clark               |    20|London         |
++------+--------------------+------+---------------+
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'red' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'red' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p4    |screw               |red   |    14|London         |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    20|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 23 where status = 20; \p \g
+<<
+ update tpf_s3 set status = 23 where status = 20; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty + 1; \p \g
+<<
+ update tpf_sp2 set qty = qty + 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |red   |    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'cerise' where color = 'red'; \p \g
+<<
+ update tpf_p1 set color = 'cerise' where color = 'red'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
++------+--------------------+------+---------------+
+(0 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'cerise' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'cerise' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p4    |screw               |cerise|    14|London         |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    23|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    23|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 20 where status = 23; \p \g
+<<
+ update tpf_s3 set status = 20 where status = 23; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty - 1; \p \g
+<<
+ update tpf_sp2 set qty = qty - 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |cerise|    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'red' where color = 'cerise'; \p \g
+<<
+ update tpf_p1 set color = 'red' where color = 'cerise'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s4    |Clark               |    20|London         |
++------+--------------------+------+---------------+
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'red' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'red' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p4    |screw               |red   |    14|London         |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    20|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 23 where status = 20; \p \g
+<<
+ update tpf_s3 set status = 23 where status = 20; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty + 1; \p \g
+<<
+ update tpf_sp2 set qty = qty + 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |red   |    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'cerise' where color = 'red'; \p \g
+<<
+ update tpf_p1 set color = 'cerise' where color = 'red'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
++------+--------------------+------+---------------+
+(0 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'cerise' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'cerise' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p4    |screw               |cerise|    14|London         |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    23|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    23|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 20 where status = 23; \p \g
+<<
+ update tpf_s3 set status = 20 where status = 23; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty - 1; \p \g
+<<
+ update tpf_sp2 set qty = qty - 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |cerise|    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'red' where color = 'cerise'; \p \g
+<<
+ update tpf_p1 set color = 'red' where color = 'cerise'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s4    |Clark               |    20|London         |
++------+--------------------+------+---------------+
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'red' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'red' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p4    |screw               |red   |    14|London         |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    20|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 23 where status = 20; \p \g
+<<
+ update tpf_s3 set status = 23 where status = 20; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty + 1; \p \g
+<<
+ update tpf_sp2 set qty = qty + 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |red   |    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'cerise' where color = 'red'; \p \g
+<<
+ update tpf_p1 set color = 'cerise' where color = 'red'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
++------+--------------------+------+---------------+
+(0 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'cerise' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'cerise' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p4    |screw               |cerise|    14|London         |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    23|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    23|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 20 where status = 23; \p \g
+<<
+ update tpf_s3 set status = 20 where status = 23; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty - 1; \p \g
+<<
+ update tpf_sp2 set qty = qty - 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |cerise|    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'red' where color = 'cerise'; \p \g
+<<
+ update tpf_p1 set color = 'red' where color = 'cerise'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s4    |Clark               |    20|London         |
++------+--------------------+------+---------------+
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'red' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'red' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p4    |screw               |red   |    14|London         |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    20|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 23 where status = 20; \p \g
+<<
+ update tpf_s3 set status = 23 where status = 20; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty + 1; \p \g
+<<
+ update tpf_sp2 set qty = qty + 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |red   |    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'cerise' where color = 'red'; \p \g
+<<
+ update tpf_p1 set color = 'cerise' where color = 'red'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
++------+--------------------+------+---------------+
+(0 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'cerise' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'cerise' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p4    |screw               |cerise|    14|London         |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    23|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    23|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 20 where status = 23; \p \g
+<<
+ update tpf_s3 set status = 20 where status = 23; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty - 1; \p \g
+<<
+ update tpf_sp2 set qty = qty - 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |cerise|    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'red' where color = 'cerise'; \p \g
+<<
+ update tpf_p1 set color = 'red' where color = 'cerise'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s4    |Clark               |    20|London         |
++------+--------------------+------+---------------+
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'red' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'red' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p4    |screw               |red   |    14|London         |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    20|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 23 where status = 20; \p \g
+<<
+ update tpf_s3 set status = 23 where status = 20; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty + 1; \p \g
+<<
+ update tpf_sp2 set qty = qty + 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |red   |    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'cerise' where color = 'red'; \p \g
+<<
+ update tpf_p1 set color = 'cerise' where color = 'red'; 
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* select * from tpf_s3 where status = 20 order by sno; \p \g
+<<
+ select * from tpf_s3 where status = 20 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
++------+--------------------+------+---------------+
+(0 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* select * from tpf_p1 where color = 'cerise' order by pno; \p \g
+<<
+ select * from tpf_p1 where color = 'cerise' order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p4    |screw               |cerise|    14|London         |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(3 rows)
+>>
+* commit; \p \g
+<<
+ commit; 
+>>
+* begin transaction; \p \g
+<<
+ begin transaction; 
+>>
+* savepoint T1; \p \g
+<<
+ savepoint T1; 
+>>
+* select * from tpf_s3 order by sno; \p \g
+<<
+ select * from tpf_s3 order by sno; 
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    23|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    23|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* update tpf_s3 set status = 20 where status = 23; \p \g
+<<
+ update tpf_s3 set status = 20 where status = 23; 
+(2 rows)
+>>
+* select * from tpf_sp2 order by sno, pno; \p \g
+<<
+ select * from tpf_sp2 order by sno, pno; 
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   301|
+|s1    |p2    |   201|
+|s1    |p3    |   401|
+|s1    |p4    |   201|
+|s1    |p5    |   101|
+|s1    |p6    |   101|
+|s2    |p1    |   301|
+|s2    |p2    |   401|
+|s3    |p2    |   201|
+|s4    |p2    |   201|
+|s4    |p4    |   301|
+|s4    |p5    |   401|
++------+------+------+
+(12 rows)
+>>
+* update tpf_sp2 set qty = qty - 1; \p \g
+<<
+ update tpf_sp2 set qty = qty - 1; 
+(12 rows)
+>>
+* select * from tpf_p1 order by pno; \p \g
+<<
+ select * from tpf_p1 order by pno; 
+
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |cerise|    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |cerise|    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |cerise|    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* update tpf_p1 set color = 'red' where color = 'cerise'; \p \g
+<<
+ update tpf_p1 set color = 'red' where color = 'cerise'; 
+(3 rows) 
+>>
+* commit; \p\g
+<<
+ commit; 
+>>
+* \q
+<<
+>>
+
+Ending at: 11-DEC-1990 10:53:05

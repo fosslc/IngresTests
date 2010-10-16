@@ -1,0 +1,327 @@
+/*
+        Test Name    : eea05.sep
+        User Name    : testenv
+        Test ID      : eea05
+        Module       : 
+        Filename     : eea05.sep
+        Purpose      : Open cursors declared for update in readonly 
+			and try to update.
+        Input Files  : none
+        Output Files : none
+        Database     : SEPPARAMDB
+        Tables       : dept, bldg.
+        Synopsis     : Declare cursors for update. Open in READONLY mode 
+			and try to delete with them. Look at errors.
+        History      : 02-apr-1987 - written for 6.0 tests (pad)
+                       05-jun-1990 - rewritten for SQL by Olga Pekelny 
+                       03-aug-1990 - sepified by Olga Pekelny
+		       22-jul-1991 - rewritten by Troy Camacho for portability
+	
+           3-Mar-1994	(camacho) Took out driver because it was not
+		needed.
+	   7-MAR-1997  (vissu01) Modified for NT	
+	  23-Mar-1999   (vande02) Hard-coded VPG_SZ to 8K and changed 'sql -s
+                                SEPPARAMDB' canon to be empty, in order to catch
+                                the msg. "TM could not connect ..." if the test
+                                database did not exist.
+	11-jun-2003 (abbjo03)
+		Add includes and other changes to avoid warnings on VMS.
+*/
+? fill eea05b.dat 
+!!
+admin   NW                 0.00C  2     4
+market  NW              9200.00A  1     2
+sales   NC            120000.00A  2     1
+sales   NE                 0.00D 18     4
+sales   NW            200000.00A  2     1
+sales   SC             95000.00E  1     1
+sales   SE            175000.00D 18     1
+tech supNC              5000.00C  2     3
+tech supNE             20000.00D 17     2
+tech supNW                 0.00B  1     1
+tech supSE                 0.00D 19     1
+!!
+? fill eea05c.dat 
+!!
+    1A	   191000 University Ave	    8Berkeley	    2CA	    594000
+
+    1B	   171800 Shattuck Ave	    8Berkeley	    2CA	    594100
+
+    1C	   19900 Lake Shore Blvd	    7Chicago	    2IL	    560080
+
+    1D	   2224130 Pennsylvania Ave	   10Washington	    2DC	    520198
+
+    1E	   1842318 Woodsay Blvd	    7Houston	    2TX	    577009
+
+    1F	   111585 Eye St	   10Washington	    2DC	    520199
+
+!!
+? fill eea05.sc 
+!!
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+exec sql include sqlca;
+/***************/
+/*    eea05    */
+/***************/
+
+main(argc, argv)
+exec sql begin declare section;
+        int argc;
+        char **argv;
+exec sql end declare section;
+{
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever not found call sqlprint;
+exec sql whenever sqlwarning call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+EXEC SQL BEGIN DECLARE SECTION;
+	/* Declarations for EMP basis table */
+	char	ename[11];
+	char	edept[9];
+	char	ediv[4];
+	char	emgr[11];
+	char	ebirthdate[26];
+	short	enum_dep;
+	/* Declarations for DEPT basis table */
+	char	ddname[9];
+	char	ddiv[4];
+	float	dsales;		/* Really money but no decimal places */
+	char	dbldg[3];
+	short	dfloor;
+	short	dnum_emp;
+	/* Declarations for  BLDG basis table */
+	char	bbldg[3];
+	char	bst_adr[31];
+	char	bcity[16];
+	char	bstate[3];
+	char	bzip[6];
+	/* Useful vars */
+	int	done;		/* to signal end of cursor */
+	int	err;		/* Error number */
+	/* Utility variables/clauses */
+	int	NEW_ZIP = 99999;
+	char	astring10[10];
+	char	*astring     = "A String";
+	int	countvar;
+EXEC SQL END DECLARE SECTION;
+
+printf("connecting with database...\n");
+exec sql connect :argv[1];
+
+	/*  update with DEFERRED mode */
+EXEC SQL DECLARE c2 CURSOR FOR
+		SELECT dname, sales, floor
+		FROM dept
+		WHERE floor > 1
+		FOR DEFERRED UPDATE OF dname, sales, floor;
+
+	/*  update with DIRECT mode */
+EXEC SQL DECLARE c3 CURSOR FOR
+		SELECT bldg, state, zip
+		FROM bldg
+		FOR DIRECT UPDATE OF state;
+
+
+	printf( "\n(1) DEPT(dname, sales, floor) where <d.floor > 1>\n" );
+	done = 0;
+	err  = 0;
+EXEC SQL OPEN c2 FOR READONLY;
+EXEC SQL INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+		{
+EXEC SQL 	FETCH c2 INTO :ddname, :dsales, :dfloor;
+EXEC SQL 	INQUIRE_INGRES (:done = endquery, :err = errorno);
+		if (!done && !err)
+			{
+			printf( "%-9.9s, %-10.3f, %3d\n",
+				   ddname, dsales, dfloor );
+
+			if (dfloor > 5)
+EXEC SQL 		DELETE FROM dept
+			WHERE CURRENT OF c2;
+			}
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL CLOSE c2;
+EXEC SQL INQUIRE_INGRES (:err = errorno);
+	if (err) 
+		printf( "Error closing c2 = %d\n", err );
+	printf( "\n(2) BLDG( <b.bldg,b.state,b.zip> \n" );
+	done = 0;
+	err  = 0;
+EXEC SQL OPEN c3 FOR READONLY;
+EXEC SQL INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+	{
+EXEC SQL 	FETCH c3 INTO :bbldg, :bstate, :bzip;
+EXEC SQL 	INQUIRE_INGRES (:done = endquery, :err = errorno);
+		if (!done && !err)
+		{
+			printf( "%-3.3s, %-31.31s, %-6.6s\n",
+				   bbldg, bstate, bzip);
+			if (!strcmp(bstate,"DC"))
+EXEC SQL 		UPDATE bldg set state = char(:NEW_ZIP)
+			WHERE CURRENT OF c3;
+		}
+	}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL CLOSE c3;
+EXEC SQL INQUIRE_INGRES (:err = errorno);
+	if (err) 
+		printf( "Error closing c3 = %d\n", err );
+EXEC SQL ROLLBACK;
+EXEC SQL DISCONNECT;
+	printf( "\n===END OF TEST RUN===\n" );
+
+exec sql disconnect;
+
+exit(0);
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop dept\g
+<<
+~
+>>
+* drop bldg\g
+<<
+~
+>>
+* create table dept ( dname c8, div c3, sales f8, bldg c2,
+<<
+>>
+*		floor  i1, num_emp i2)with page_size=8192\g
+<<
+>>
+* copy dept (	dname = c8, div = c3, sales = c20, bldg = c2,
+<<
+>>
+*		floor = c2, num_emp = c0nl)	
+<<
+>>
+*		from 'eea05b.dat'\g
+<<
+(11 rows)
+>>
+* create table bldg( bldg c2 not null with default,
+<<
+>>
+*	st_adr c30 not null with default, city c15 not null with default,
+<<
+>>
+*	state c2 not null with default, zip c5 not null with default)
+<<
+>>
+*	with noduplicates, page_size=8192\g
+<<
+>>
+* copy bldg (bldg= varchar(0)tab,
+<<
+>>
+*	st_adr= varchar(0)tab, city= varchar(0)tab,
+<<
+>>
+*	state= varchar(0)tab, zip= varchar(0)nl, nl= d1)
+<<
+>>
+*	from 'eea05c.dat'\g
+<<
+(6 rows)
+>>
+* commit\g
+<<
+>>
+*\q
+<<
+>>
+? sepesqlc eea05.sc 
+<<
+ESQL eea05.sc:
+>>
+? sepcc eea05.c 
+<<
+>>
+<< IF (NT_GENERIC)
+eea05.c
+>>
+? seplnk eea05 
+<<
+>>
+? run eea05.exe SEPPARAMDB 
+<<
+connecting with database...
+
+(1) DEPT(dname, sales, floor) where <d.floor > 1>
+admin    , 0.000     ,   2
+sales    , 120000.000,   2
+sales    , 0.000     ,  18
+E_US08A3 line 1, Cursor 'c2' does not have delete permission.
+    (Thu Mar  3 14:14:56 1994)
+sales    , 200000.000,   2
+sales    , 175000.000,  18
+E_US08A3 line 1, Cursor 'c2' does not have delete permission.
+    (Thu Mar  3 14:14:56 1994)
+tech sup , 5000.000  ,   2
+tech sup , 20000.000 ,  17
+E_US08A3 line 1, Cursor 'c2' does not have delete permission.
+    (Thu Mar  3 14:14:56 1994)
+tech sup , 0.000     ,  19
+E_US08A3 line 1, Cursor 'c2' does not have delete permission.
+    (Thu Mar  3 14:14:56 1994)
+
+(2) BLDG( <b.bldg,b.state,b.zip> 
+A  , CA                             , 94000 
+B  , CA                             , 94100 
+C  , IL                             , 60080 
+D  , DC                             , 20198 
+E_US08A9 Cursor 'c3' has not been opened for update.
+    (Thu Mar  3 14:14:56 1994)
+E  , TX                             , 77009 
+F  , DC                             , 20199 
+E_US08A9 Cursor 'c3' has not been opened for update.
+    (Thu Mar  3 14:14:56 1994)
+
+===END OF TEST RUN===
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop dept\g
+<<
+~
+>>
+* drop bldg\g
+<<
+~
+>>
+* \q
+<<
+>>
+? delete eea05.exe 
+<<
+~
+>>
+? delete eea05.c 
+<<
+~
+>>
+? delete eea05.obj 
+<<
+~
+>>
+? delete eea05.o 
+<<
+~
+>>
+
+
+Ending at: Thu Mar  3 14:15:01 1994

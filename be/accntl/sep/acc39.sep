@@ -1,0 +1,411 @@
+/*
+Test Name: dba31
+Time: march 12th 15:10
+User Name: rch
+Test ID : dba31
+Module  :qrymod
+Filename:dba31.sep
+Purpose :tests inheritance of permits between groups users and roles
+Input Files :none
+Output Files:none
+Database    :SEPPARAMDB3
+Tables      :dba31_p1(a database procedure)
+Synopsis    :Grants execute privilege to a role. Then checks
+		a) other group members don't get the privilege
+		b) user cannot perform the execute
+		c) unprivileged user can assume a role id and obtain
+		   the privilege.
+	     
+	     Initialization test = dba00.sep
+
+
+History :Created by rch		Created: 3.12.90	Author :rch
+10-3-91  rewritten to use driver program to make more portable by Troy Camacho
+23-Jan-1992 (fredv)
+	Fixed typos taht cause cc errors.
+23-Jan-1992 (fredv)
+	Can't have '_' in the file name for portability reason. Removed
+	underscore from all file names.
+4-nov-1992 (Camacho)
+        Deleted out the compiling and linking of files : DBPH.SC and
+        DBMISC.SC because they were not needed. Also moved the driver
+        files to a location under accntl rather than qryproc.
+13-Mar-1997 (vissu01)	Modified for NT
+22-mar-1999     (yu$pe02) Hard code page size to 4K.
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,accntl,src,dbstub.h) dbstub.h 
+<<
+>>
+? cp @file(ing_tst,be,accntl,src,driverdb.c) driverdb.c 
+<<
+>>
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepcc driverdb.c 
+<<
+>>
+<<
+driverdb.c
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop procedure dba31_p1;\g
+<<
+~
+>>
+* create procedure dba31_p1 as
+<<
+>>
+* begin
+<<
+>>
+* 	message 'executing dba31_p1';
+<<
+>>
+* end;\p\g
+<<
+ create procedure dba31_p1 as
+ begin
+ 	message 'executing dba31_p1';
+ end;
+>>
+* grant execute
+<<
+>>
+* on procedure dba31_p1
+<<
+>>
+* to role pvusr3_role;\p\g
+<<
+ grant execute
+ on procedure dba31_p1
+ to role pvusr3_role;
+>>
+* \q
+<<
+>>
+? fill dba31group.sc 
+!!
+#define DBA31
+
+#include "dbstub.h"
+
+#include <stdio.h>
+
+exec sql begin declare section;
+extern char     db_name_str[32];
+exec sql end declare section;
+
+dba31()
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+    exec sql disconnect;
+    exec sql connect :db_name_str options='-Gpvusr3_group';
+    exec sql execute procedure dba31_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba31group 
+<<
+ESQL dba31group.sc:
+>>
+? sepcc dba31group 
+<<
+>>
+<<
+dba31group.c
+>>
+? seplnk driver driverdb dba31group 
+<<
+>>
+? qasetuser pvusr2 run driver.exe SEPPARAMDRIVERDB -tdba31 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba31
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba31 XX
+
+E_US0D36 User has no permission to execute database procedure 'dba31_p1'.
+    (Thu Oct  3 14:32:18 1991)
+
+disconnecting with database...
+>>
+? qasetuser pvusr3 run driver.exe SEPPARAMDRIVERDB -tdba31 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba31
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba31 XX
+
+E_US0D36 User has no permission to execute database procedure 'dba31_p1'.
+    (Thu Oct  3 14:32:26 1991)
+
+disconnecting with database...
+>>
+? fill dba31user.sc 
+!!
+#define DBA31
+
+#include "dbstub.h"
+
+#include <stdio.h>
+
+exec sql begin declare section;
+extern char     db_name_str[32];
+exec sql end declare section;
+
+dba31()
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+    exec sql disconnect;
+    exec sql connect :db_name_str;
+    exec sql execute procedure dba31_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba31user 
+<<
+ESQL dba31user.sc:
+>>
+? sepcc dba31user 
+<<
+>>
+<<
+dba31user.c
+>>
+? seplnk driver driverdb dba31user 
+<<
+>>
+? qasetuser pvusr3 run driver.exe SEPPARAMDRIVERDB -tdba31 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba31
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba31 XX
+
+E_US0D36 User has no permission to execute database procedure 'dba31_p1'.
+    (Thu Oct  3 14:32:43 1991)
+
+disconnecting with database...
+>>
+? fill dba31role.sc 
+!!
+#define DBA31
+
+#include "dbstub.h"
+
+#include <stdio.h>
+
+exec sql begin declare section;
+extern char     db_name_str[32];
+exec sql end declare section;
+
+dba31()
+{
+    exec sql include sqlca;
+    exec sql whenever sqlerror call sqlprint;
+    exec sql whenever sqlmessage call sqlprint;
+    exec sql disconnect;
+    exec sql connect :db_name_str options='-Rpvusr3_role';
+    exec sql execute procedure dba31_p1;
+    exec sql disconnect;
+}
+!!
+? sepesqlc dba31role 
+<<
+ESQL dba31role.sc:
+>>
+? sepcc dba31role 
+<<
+>>
+<<
+dba31role.c
+>>
+? seplnk driver driverdb dba31role 
+<<
+>>
+? qasetuser pvusr1 run driver.exe SEPPARAMDRIVERDB -tdba31 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba31
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba31 XX
+
+MESSAGE 0: executing dba31_p1
+
+disconnecting with database...
+>>
+? qasetuser pvusr2 run driver.exe SEPPARAMDRIVERDB -tdba31 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   dba31
+XX-----------------XX
+
+connecting with database...
+
+XX running test dba31 XX
+
+MESSAGE 0: executing dba31_p1
+
+disconnecting with database...
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop procedure dba31_p1;\p\g
+<<
+/* SQL Startup File */
+ drop procedure dba31_p1;
+>>
+* \q
+<<
+>>
+? delete dba31group.c 
+<<
+~
+>>
+? delete dba31group.exe 
+<<
+~
+>>
+? delete dba31group.obj 
+<<
+~
+>>
+? delete dba31group.o 
+<<
+~
+>>
+? delete dba31role.c 
+<<
+~
+>>
+? delete dba31role.exe 
+<<
+~
+>>
+? delete dba31role.obj 
+<<
+~
+>>
+? delete dba31role.o 
+<<
+~
+>>
+? delete dba31user.c 
+<<
+~
+>>
+? delete dba31user.exe 
+<<
+~
+>>
+? delete dba31user.obj 
+<<
+~
+>>
+? delete dba31user.o 
+<<
+~
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete dbstub.h 
+<<
+~
+>>
+? delete driverdb.c 
+<<
+~
+>>
+? delete driverdb.o 
+<<
+~
+>>
+? delete driverdb.obj 
+<<
+~
+>>
+
+Ending at: Thu Oct  3 14:33:17 1991

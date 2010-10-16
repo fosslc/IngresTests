@@ -1,0 +1,406 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: fld06.sep
+	Time: Tue Oct 15 10:41:04 1996
+	User Name: testenv 
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename: fld06.sep
+	Purpose	:  To test 'fastload' with table structure of cheap,cheapsort.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : test1, test2
+	Synopsis     :
+	Assertions   : 1. If a table is cheap, cheapsort, 'fastload' could 
+			  only load data into the table corectly if the 
+			  table is empty.
+
+ History: 15-Oct-1996	(chosh01) Created
+          11-Dec-1996	(panph01)
+          24-Mar-1997	(Author)
+	  28-Jul-1998   (chegu01) added "delete data.out*" command for cleanup.
+	  23-Mar-1999   (vande02) Hard-coded VPG_SZ to 2K and changed 'sql -s
+                                  SEPPARAMDB' canon to be empty, therfore, if
+                                  the test db does not exist, you will catch
+                                  the msg. "TM could not connect to db."
+          30-Apr-2003	(sinra04) Corrected "delete data.out*" command to 
+                                  "delete data.out" so that file does gets
+                                  deleted from output directory.
+          24-Jun-2004   (vande02) Updating canons with new text for expected
+                       		  warning message as of Ingres r3.  Aligned 
+				  history comments.
+           5-Sep-2008	(vande02) Added new main canons when fastload info
+                                  is displayed in a certain order from MAIN
+                                  versus the order from II 9.2.
+*/
+? fill data 
+!!
+aaaaaaa	1111111111	13-apr-1996	22222	33333.444444	4444.555	22222222	127	$444444.55	3-
+333	bbbbbbbbbb	cccccccccc
+bbbbbbb	1111111111	13-apr-1996	22222	33333.444444	4444.555	22222222	127	$444444.55	3-
+333	bbbbbbbbbb	cccccccccc
+ccccccc	1111111111	13-apr-1996	22222	33333.444444	4444.555	22222222	127	$444444.55	3-
+333	bbbbbbbbbb	cccccccccc
+!!
+? fill setup.sql 
+!!
+create table test1 (col1 c(10),
+		col2 char(10),
+		col3 date,
+		col4 decimal,
+		col5 float,
+		col6 float4,
+		col7 integer,
+		col8 integer1,
+		col9 money,
+		col10 smallint,
+		col11 text(10),
+		col12 varchar(10)) with page_size=2048; \p\g
+create table test2 (col1 c(10),
+		col2 char(10),
+		col3 date,
+		col4 decimal,
+		col5 float,
+		col6 float4,
+		col7 integer,
+		col8 integer1,
+		col9 money,
+		col10 smallint,
+		col11 text(10),
+		col12 varchar(10)) with page_size=2048; \p\g
+
+copy table test2 ( col1=c(0)tab, 
+		col2=char(0)tab,
+		col3=char(0)tab,
+		col4=char(0)tab,
+		col5=char(0)tab,
+		col6=char(0)tab,
+		col7=char(0)tab,
+		col8=char(0)tab,
+		col9=char(0)tab,
+		col10=char(0)tab,
+		col11=char(0)tab,
+		col12=char(0)nl)
+from 'data';\p\g	
+copy table test2() into 'data.out'; \p\g 
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop test1, test2; \g
+<<
+~
+>>
+* \i setup.sql
+<<
+ create table test1 (col1 c(10),
+		col2 char(10),
+		col3 date,
+		col4 decimal,
+		col5 float,
+		col6 float4,
+		col7 integer,
+		col8 integer1,
+		col9 money,
+		col10 smallint,
+		col11 text(10),
+		col12 varchar(10)) with page_size=2048; 
+create table test2 (col1 c(10),
+		col2 char(10),
+		col3 date,
+		col4 decimal,
+		col5 float,
+		col6 float4,
+		col7 integer,
+		col8 integer1,
+		col9 money,
+		col10 smallint,
+		col11 text(10),
+		col12 varchar(10)) with page_size=2048; 
+
+copy table test2 ( col1=c(0)tab, 
+		col2=char(0)tab,
+		col3=char(0)tab,
+		col4=char(0)tab,
+		col5=char(0)tab,
+		col6=char(0)tab,
+		col7=char(0)tab,
+		col8=char(0)tab,
+		col9=char(0)tab,
+		col10=char(0)tab,
+		col11=char(0)tab,
+		col12=char(0)nl)
+from 'data';
+(3 rows)
+	
+copy table test2() into 'data.out'; 
+(3 rows)
+>>
+* modify test1 to cheap with page_size=2048;commit;\g
+<<
+(0 rows)
+>>
+* \q
+<<
+~
+>>
+? fastload SEPPARAMDB -table=test1 -file=data.out 
+<<
+Row size   : 98
+Rows loaded: 3
+Total bytes: 294
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 98 bytes in length.  Fastload will load a record from
+each contiguous 98 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+>>
+<<
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 98 bytes in length.  Fastload will load a record from
+each contiguous 98 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+Row size   : 98
+Rows loaded: 3
+Total bytes: 294
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from test1; commit;\g
+<<
+
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+|col1      |col2      |col3                     |col4  |col5       |col6       |col7-
+         |col8  |col9                |col10 |col11     |col12     |
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+|aaaaaaa   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|bbbbbbb   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|ccccccc   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+(3 rows)
+>>
+* \q
+<<
+~
+>>
+? fastload SEPPARAMDB -table=test1 -file=data.out 
+<<
+Row size   : 98
+Rows loaded: 3
+Total bytes: 294
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 98 bytes in length.  Fastload will load a record from
+each contiguous 98 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+>>
+<<
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 98 bytes in length.  Fastload will load a record from
+each contiguous 98 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+Row size   : 98
+Rows loaded: 3
+Total bytes: 294
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from test1; commit;\g
+<<
+
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+|col1      |col2      |col3                     |col4  |col5       |col6       |col7-
+         |col8  |col9                |col10 |col11     |col12     |
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+|aaaaaaa   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|bbbbbbb   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|ccccccc   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|aaaaaaa   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|bbbbbbb   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|ccccccc   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+(6 rows)
+>>
+* delete from test1;commit;\g
+<<
+(6 rows)
+>>
+* modify test1 to cheapsort with page_size=2048;commit;\g
+<<
+(0 rows)
+>>
+* \q
+<<
+~
+>>
+? fastload SEPPARAMDB -table=test1 -file=data.out 
+<<
+Row size   : 98
+Rows loaded: 3
+Total bytes: 294
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 98 bytes in length.  Fastload will load a record from
+each contiguous 98 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+>>
+<<
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 98 bytes in length.  Fastload will load a record from
+each contiguous 98 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+Row size   : 98
+Rows loaded: 3
+Total bytes: 294
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from test1; \g
+<<
+
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+|col1      |col2      |col3                     |col4  |col5       |col6       |col7-
+         |col8  |col9                |col10 |col11     |col12     |
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+|aaaaaaa   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|bbbbbbb   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|ccccccc   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+(3 rows)
+>>
+* \q
+<<
+~
+>>
+? fastload SEPPARAMDB -table=test1 -file=data.out 
+<<
+Row size   : 98
+Rows loaded: 3
+Total bytes: 294
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 98 bytes in length.  Fastload will load a record from
+each contiguous 98 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+>>
+<<
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of 98 bytes in length.  Fastload will load a record from
+each contiguous 98 bytes of the file; a bad file format
+will result in corrupted data being loaded into the table.
+
+Begin load...
+Load finished
+Row size   : 98
+Rows loaded: 3
+Total bytes: 294
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from test1;commit;\g 
+<<
+
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+|col1      |col2      |col3                     |col4  |col5       |col6       |col7-
+         |col8  |col9                |col10 |col11     |col12     |
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+|aaaaaaa   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|bbbbbbb   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|ccccccc   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|aaaaaaa   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|bbbbbbb   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
+|ccccccc   |1111111111|13-apr-1996              | 22222|  33333.444|   4444.555|    -
+ 22222222|   127|          $444444.55|  3333|bbbbbbbbbb|cccccccccc|
++----------+----------+-------------------------+------+-----------+-----------+-----
+---------+------+--------------------+------+----------+----------+
+(6 rows)
+>>
+* drop table test1, test2;commit;\g
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? delete data.out 
+<<
+~
+>>
+
+
+Ending at: Fri Sep  5 12:54:53 2008

@@ -1,0 +1,305 @@
+/*
+	Test Name: dtu08.sep
+	Time: Fri Nov  9 23:18:42 2001
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : dtu08.sep
+	Module  : be/datatypes
+	Filename: dtu08.sep
+	Purpose	: To test the new unicode data types first available with
+                  II 2.6/0106 and later releases.
+	Input Files  : dtu08.sc
+	Output Files : dtu08.exe
+	Database     : unidb
+	Tables       : test_nchar, test_nchar2, test_nchar3, test_nvarchar,
+                       test_nvarchar2, test_lnvarchar, test_lnvarchar2
+	Synopsis     : This test will modify tables, then select join on
+                       key values.
+
+ History:  9-Nov-2001	(wu$ca01)	Created
+          17-Dec-2001	(devjo01)	Correct bad canons.
+          28-May-2002   (sarjo01) Change %ls to %S, modularize canon.
+*/
+? fill dtu08.sc 
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  wchar_t wc1[9], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, k2;
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|===============================================================-
+==============|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint; 
+
+   switch (testid)
+   {
+      case 1:
+         EXEC SQL modify test_nchar2 to hash on col2;
+         EXEC SQL modify test_nvarchar2 to hash on col2;
+
+         print_header("Nchar = nchar(hash)...");
+         EXEC SQL SELECT test_nchar.col1, test_nchar2.col2
+         INTO :i1, :wc1
+         FROM test_nchar, test_nchar2
+         WHERE test_nchar.col2 = test_nchar2.col2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|\n", i1, wc1);
+         EXEC SQL END;
+         print_trailer();
+
+         print_header("Nvarchar = nvarchar(hash)...");
+         EXEC SQL SELECT test_nchar.col1, test_nvarchar2.col2
+         INTO :i1, :wc1
+         FROM test_nchar, test_nvarchar2
+         WHERE test_nchar.col2 = test_nvarchar2.col2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|\n", i1, wc1);
+         EXEC SQL END;
+
+         EXEC SQL rollback;
+         break;
+
+      case 2:
+         EXEC SQL modify test_nchar2 to btree on col2;
+         EXEC SQL modify test_nvarchar2 to btree on col2;
+
+         print_header("Nchar = nchar(btree)...");
+         EXEC SQL SELECT test_nchar.col1, test_nchar2.col2
+         INTO :i1, :wc1
+         FROM test_nchar, test_nchar2
+         WHERE test_nchar.col2 = test_nchar2.col2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|\n", i1, wc1);
+         EXEC SQL END;
+         print_trailer();
+
+         print_header("Nvarchar = nvarchar(btree)...");
+         EXEC SQL SELECT test_nchar.col1, test_nvarchar2.col2
+         INTO :i1, :wc1
+         FROM test_nchar, test_nvarchar2
+         WHERE test_nchar.col2 = test_nvarchar2.col2 order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|\n", i1, wc1);
+         EXEC SQL END;
+
+         EXEC SQL rollback; 
+         break;
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu08.sc 
+<<
+~
+>>
+? sepcc dtu08 
+<<
+~
+>>
+? seplnk dtu08 
+<<
+~
+>>
+? run dtu08.exe SEPPARAMDB3 1
+<<
+Nchar = nchar(hash)...
+|=============================================================================|
+|  0|ABC     |
+|  0|ABC     |
+|  0|ABC     |
+|  0|ABC     |
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF     |
+|  2|DEF     |
+|  2|DEF     |
+|  2|DEF     |
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI     |
+|  4|GHI     |
+|  4|GHI     |
+|  4|GHI     |
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  7|Z       |
+|  7|Z       |
+|  7|Z       |
+|  7|Z       |
+|=============================================================================|
+Nvarchar = nvarchar(hash)...
+|=============================================================================|
+|  0|ABC|
+|  0|ABC|
+|  0|ABC|
+|  0|ABC|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF|
+|  2|DEF|
+|  2|DEF|
+|  2|DEF|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI|
+|  4|GHI|
+|  4|GHI|
+|  4|GHI|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE|
+|  6|ABCDE|
+|  6|ABCDE|
+|  6|ABCDE|
+|  7|Z|
+|  7|Z|
+|  7|Z|
+|  7|Z|
+|=============================================================================|
+>>
+? run dtu08.exe SEPPARAMDB3 2
+<<
+Nchar = nchar(btree)...
+|=============================================================================|
+|  0|ABC     |
+|  0|ABC     |
+|  0|ABC     |
+|  0|ABC     |
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF     |
+|  2|DEF     |
+|  2|DEF     |
+|  2|DEF     |
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI     |
+|  4|GHI     |
+|  4|GHI     |
+|  4|GHI     |
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  7|Z       |
+|  7|Z       |
+|  7|Z       |
+|  7|Z       |
+|=============================================================================|
+Nvarchar = nvarchar(btree)...
+|=============================================================================|
+|  0|ABC     |
+|  0|ABC     |
+|  0|ABC     |
+|  0|ABC     |
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF     |
+|  2|DEF     |
+|  2|DEF     |
+|  2|DEF     |
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI     |
+|  4|GHI     |
+|  4|GHI     |
+|  4|GHI     |
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  7|Z       |
+|  7|Z       |
+|  7|Z       |
+|  7|Z       |
+|=============================================================================|
+>>
+? delete dtu08.c 
+<<
+~
+>>
+? delete dtu08.o 
+<<
+~
+>>
+? delete dtu08.obj 
+<<
+~
+>>
+? delete dtu08.exe 
+<<
+~
+>>
+
+
+Ending at: Mon Dec 17 16:02:26 2001

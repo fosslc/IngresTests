@@ -1,0 +1,210 @@
+/*
+	Test Name: alttbl16.sep
+	Time: Wed Dec  4 22:25:57 2002
+	User Name: testenv
+	Terminal type: septerm
+ 
+        Test ID : alttbl16
+        Module  : BE/ALTTBL
+        Filename: alttbl16.sep
+        Purpose : Test bug#79064 and alter table command
+        Input Files  : alttbl16_insert1.sql, alttbl16_insert2.sql,
+		       alttbl16_select.sql, alttbl16_update.sql
+        Output Files :
+        Database     : alttbldb
+        Tables       : alttbl16_tbl1, alttbl16_tbl2, alttbl16_tbl3
+        Synopsis     : To test bug#79064, alter table... add column...
+                       references... fails, terminating the sql session
+                       and corrupting the transaction log. Sometimes the
+                       database is also corrupted and unusable.
+
+ History:  18-Dec-1996  (clate01)       Created
+
+           23-Mar-1999  (kamra01)       Modified the page_size to 8K instead of
+                                        vpg_sz
+
+           03-Dec-2002  (marwi08)       Modified test to make smaller canons,
+                                        to do better testing, and expanded test
+                                        to use the restrict/cascade options.
+					Also changed table names to go with
+					this test.
+*/
+? fill alttbl16_insert1.sql 
+!!
+insert into alttbl16_tbl1 values(1,'small')\p\g
+insert into alttbl16_tbl1 values(2,'medium')\p\g
+insert into alttbl16_tbl1 values(3,'large')\p\g
+!!
+? fill alttbl16_insert2.sql 
+!!
+insert into alttbl16_tbl3 values('site1',1)\p\g
+insert into alttbl16_tbl3 values('site2',1)\p\g
+insert into alttbl16_tbl3 values('site3',2)\p\g
+insert into alttbl16_tbl3 values('site4',3)\p\g
+insert into alttbl16_tbl3 values('site5',4)\p\g
+!!
+? fill alttbl16_select.sql 
+!!
+select * from alttbl16_tbl3\g
+!!
+? fill alttbl16_update.sql 
+!!
+update alttbl16_tbl3 set size=2 where site='site2'\p\g
+update alttbl16_tbl3 set size=3 where site='site3'\p\g
+delete from alttbl16_tbl3 where site='site4'\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* set autocommit on\g 
+<<
+>>
+* drop table alttbl16_tbl1\g 
+<<
+E_US0AC1 DROP: 'alttbl16_tbl1' does not exist or is not owned by you.
+    (Wed Dec  4 22:28:42 2002)
+
+>>
+* create table alttbl16_tbl1 (id integer unique not null, name char(10))\g 
+<<
+>>
+* \i alttbl16_insert1.sql 
+<<
+ 
+insert into alttbl16_tbl1 values(1,'small')
+(1 row)
+insert into alttbl16_tbl1 values(2,'medium')
+(1 row)
+insert into alttbl16_tbl1 values(3,'large')
+(1 row)
+>>
+* modify alttbl16_tbl1 to btree unique on id with page_size=8192\g 
+<<
+(3 rows)
+>>
+* drop table alttbl16_tbl2\g 
+<<
+E_US0AC1 DROP: 'alttbl16_tbl2' does not exist or is not owned by you.
+    (Wed Dec  4 22:31:15 2002)
+
+>>
+* create table alttbl16_tbl2 (site char(5), size integer references alttbl16_tbl1(id-
+))\g 
+<<
+>>
+* drop table alttbl16_tbl3\g 
+<<
+E_US0AC1 DROP: 'alttbl16_tbl3' does not exist or is not owned by you.
+    (Wed Dec  4 22:32:39 2002)
+
+>>
+* create table alttbl16_tbl3 (site char(5))\g 
+<<
+>>
+* alter table alttbl16_tbl3 add column size integer constraint alttbl16_const refere-
+nces alttbl16_tbl1(id)\g 
+<<
+E_QE009D Alter Table ADD/DROP column support for pages greater than 2k
+    only.
+    (Wed Dec  4 22:34:02 2002)
+
+>>
+* modify alttbl16_tbl3 to btree with page_size=8192\g 
+<<
+(0 rows)
+>>
+* alter table alttbl16_tbl3 add column size integer constraint alttbl16_const refere-
+nces alttbl16_tbl1(id)\g 
+<<
+>>
+* \i alttbl16_insert2.sql 
+<<
+ 
+insert into alttbl16_tbl3 values('site1',1)
+(1 row)
+insert into alttbl16_tbl3 values('site2',1)
+(1 row)
+insert into alttbl16_tbl3 values('site3',2)
+(1 row)
+insert into alttbl16_tbl3 values('site4',3)
+(1 row)
+insert into alttbl16_tbl3 values('site5',4)
+E_US1906 Cannot INSERT into table '"alttbl16_tbl3"' because the values do
+    not match those in table '"alttbl16_tbl1"' (violation of REFERENTIAL
+    constraint '"alttbl16_const"').
+    (Wed Dec  4 22:35:36 2002)
+
+>>
+* \i alttbl16_select.sql 
+<<
+
++------+-------------+
+|site  |size         |
++------+-------------+
+|site1 |            1|
+|site2 |            1|
+|site3 |            2|
+|site4 |            3|
++------+-------------+
+(4 rows)
+>>
+* \i alttbl16_update.sql 
+<<
+update alttbl16_tbl3 set size=2 where site='site2'
+(1 row)
+update alttbl16_tbl3 set size=3 where site='site3'
+(1 row)
+delete from alttbl16_tbl3 where site='site4'
+(1 row)
+>>
+* \i alttbl16_select.sql 
+<<
+
++------+-------------+
+|site  |size         |
++------+-------------+
+|site1 |            1|
+|site2 |            2|
+|site3 |            3|
++------+-------------+
+(3 rows)
+>>
+* alter table alttbl16_tbl3 drop column size restrict\g 
+<<
+E_QE016B ALTER TABLE DROP COLUMN RESTRICT:  restricted destruction of base
+    table column cannot proceed as it  has one or more dependent objects
+    which would become abandoned.
+    (Wed Dec  4 22:37:28 2002)
+
+>>
+* alter table alttbl16_tbl3 drop column size cascade\g 
+<<
+>>
+* \i alttbl16_select.sql 
+<<
+
++------+
+|site  |
++------+
+|site1 |
+|site2 |
+|site3 |
++------+
+(3 rows)
+>>
+* drop table alttbl16_tbl1\g 
+<<
+>>
+* drop table alttbl16_tbl2\g 
+<<
+>>
+* drop table alttbl16_tbl3\g 
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Wed Dec  4 22:39:53 2002

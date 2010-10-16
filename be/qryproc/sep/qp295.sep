@@ -1,0 +1,200 @@
+/*
+        Test Name: qp295.sep
+        Time: Fri May 11 13:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp295.sep
+        Module  : be/qryproc
+        Filename: qp295.sep
+        Purpose : To test the new feature row producing procedure. 
+        Input Files  : rp1.sc
+        Output Files : rp1.exe
+        Database     : qryprocdb
+        Tables       : qp295_table1, qp295_table2
+        Synopsis     : This is to test a PROCEDURE calling another PROCEDURE of
+                       row producing procedure first from within Terminal
+		       Monitor then from within an embedded C program.
+
+ History: 11-May-2001   (wu$ca01)       Created
+**
+**  ROW PRODUCING PROCEDURE
+**
+**  - PROCEDURE CALLING PROCEDURE:
+**    DYNAMIC & ESQLC 
+**
+**  Known Problems:
+**  1) DBMS server exception on ESQLC pgm: 10879106.
+**
+**
+**  24-Apr-2001  sarjo01: new error message now seen 
+**
+	08-oct-2001 (devjo01) Removed error canon.  Bug is now fixed.
+*/
+? fill setup.sql 
+!!
+\i cleanup.sql
+create table qp295_table1 (a1 int, a2 char(10), a3 date)\g
+insert into qp295_table1 values(100, 'abcd', 'now')\g
+insert into qp295_table1 values(101, 'xyz', 'now')\g
+insert into qp295_table1 values(102, 'xxx', 'now')\g
+insert into qp295_table1 values(103, 'qqqqq', 'now')\g
+insert into qp295_table1 values(104, 'junk', 'now')\g
+create table qp295_table2 (a1 int, a2 char(10), a3 date)\g
+insert into qp295_table2 values(200, 'abcd', 'now')\g
+insert into qp295_table2 values(201, 'xyz', 'now')\g
+insert into qp295_table2 values(202, 'xxx', 'now')\g
+insert into qp295_table2 values(203, 'qqqqq', 'now')\g
+insert into qp295_table2 values(204, 'junk', 'now')\g
+!!
+? fill cleanup.sql 
+!!
+drop procedure qp295_rp1\g
+drop procedure qp295_rp2\g
+drop table qp295_table1\g
+drop table qp295_table2\g
+!!
+? fill rp1.sql 
+!!
+create procedure qp295_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp295_table1 order by 1 do
+      message 'Procedure 1 got a row';
+   endfor;
+end;\g
+
+create procedure qp295_rp2
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp295_table2 order by 1 do
+      message 'Procedure 2 got a row'; 
+      execute procedure qp295_rp1;
+   endfor;
+   message 'Operation Completed';
+end;\g
+
+execute procedure qp295_rp2;\g
+!!
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* \i rp1.sql
+<<
+MESSAGE 0: Procedure 2 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 2 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 2 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 2 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 2 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Procedure 1 got a row
+MESSAGE 0: Operation Completed
+continue
+* 
+>>
+* \q
+<<
+~
+>>
+? fill rp1.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+      int       v1;
+      int       v2;
+   EXEC SQL END DECLARE SECTION;
+
+   int       i;
+
+   EXEC SQL WHENEVER SQLERROR stop;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+   EXEC SQL execute procedure qp295_rp2
+                    result row (:v1);
+   EXEC SQL begin;
+      printf("Proc Loop: %d\n", v1);
+   EXEC SQL end;
+
+   EXEC SQL disconnect;
+}
+!!
+? esqlc rp1.sc 
+<<
+~
+>>
+? sepcc rp1.c 
+<<
+~
+>>
+? seplnk rp1 
+<<
+~
+>>
+? run rp1.exe SEPPARAMDB 
+<<
+>>
+? delete rp1.c 
+<<
+~
+>>
+? delete rp1.o 
+<<
+~
+>>
+? delete rp1.obj 
+<<
+~
+>>
+? delete rp1.exe 
+<<
+~
+>>
+
+
+Ending at: Mon Oct  8 16:54:50 2001

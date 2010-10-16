@@ -1,0 +1,200 @@
+/*
+	Test Name: efa42.sep
+	Time: Thu Apr  8 15:30:05 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename: efa42.sep
+	Purpose	: Test nested dbproc using execute immediate.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     : Test nested dbproc using execute immediate.
+
+ 	History:  16-Nov-1993	(malee)	Created
+		   7-MAR-1997   (vissu01) Modified for NT
+		  27-May-1998   (upta01) cleaned up DGUX runtime problems
+                                modified test to return the correct messages.
+                                renamed procedures and added extra printfs to
+                                clarify which procedure the result matches.
+		  01-JUL-1998   (vande02) Removed control characters ^M which
+				caused difs on some platforms.
+		  23-Mar-1999   (vande02) Changed 'sql -s
+                                SEPPARAMDB' canon to be empty, in order to catch
+                                the msg. "TM could not connect ..." if the test
+                                database did not exist.
+*/
+? fill efa42.sc 
+!!
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+exec sql include sqlca;
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever not found call sqlprint;
+exec sql whenever sqlwarning call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+void efa42_1(); /* prototype here  */
+
+void main(argc, argv)
+exec sql begin declare section;
+  int  argc;
+  char **argv;
+exec sql end declare section;
+{
+	exec sql connect :argv[1];
+	efa42_1();
+	exec sql disconnect;
+}  /* main */
+
+
+void efa42_1()
+{
+exec sql begin declare section;
+  char  *teststr, *procstr;
+exec sql end declare section;
+
+teststr = malloc(6);
+strcpy(teststr,"hello");
+         
+
+	printf ("\ntest1:  test nested dbproc using execute immediate\n\n");
+
+	exec sql drop procedure efa42_Test_1;
+        printf("\n\n");
+
+
+
+	exec sql create procedure efa42_Test_1 (teststr  varchar(20)     
+                                            not null with default) as
+	begin
+		message :teststr;
+                
+	end;
+
+
+	exec sql drop procedure efa42_Test_2;
+        printf("\n\n");
+
+	exec sql create procedure efa42_Test_2 (teststr  varchar(20)     
+                                            not null with default) as
+	begin
+		message :teststr;
+		execute procedure efa42_Test_1 (teststr = byref(:teststr));
+	end;
+
+
+	
+
+	procstr = "execute procedure efa42_Test_1";
+	exec sql execute immediate :procstr;
+	printf ("execute procedure efa42_Test_1\n");  
+        printf("returned teststr = %s\n\n", teststr);
+
+	procstr = "execute procedure efa42_Test_1 (teststr = 'aaa')";
+	exec sql execute immediate :procstr;
+	printf ("execute procedure efa42_Test_1 (teststr = 'aaa') \n");
+	printf("returned teststr = %s\n\n", teststr);
+
+	procstr = "execute procedure efa42_Test_2 (teststr = 'bbb')";
+	exec sql execute immediate :procstr;
+	printf ("execute procedure efa42_Test_2 (teststr = 'bbb')\n");
+	printf("returned teststr = %s\n\n", teststr);
+
+	exec sql execute procedure efa42_Test_2 (teststr = :teststr);
+	printf ("execute procedure efa42_Test_2 (teststr = :teststr) \n");
+	printf("returned teststr = %s\n\n", teststr);
+
+	exec sql execute procedure efa42_Test_2 (teststr = byref(:teststr));
+	printf ("execute procedure efa42_Test_2 (teststr = byref(:teststr) \n");
+	printf("returned teststr = %s\n\n", teststr);
+
+	exec sql commit;
+
+} /* efa42_1() */
+!!
+? sepesqlc efa42.sc 
+<<
+~
+>>
+? sepcc efa42.c 
+<<
+~
+>>
+? seplnk efa42 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop procedure efa42_Test_1\g
+<<
+~
+>>
+* drop procedure efa42_Test_2\g
+<<
+~
+>>
+* \q
+<<
+>>
+? run efa42.exe SEPPARAMDB 
+<<
+
+test1:  test nested dbproc using execute immediate
+
+E_US0965 Procedure 'efa42_test_1' not found.
+    (Fri Jun 05 09:46:05 1998)
+
+
+E_US0965 Procedure 'efa42_test_2' not found.
+    (Fri Jun 05 09:46:05 1998)
+
+
+MESSAGE: 0
+execute procedure efa42_Test_1
+returned teststr = hello
+
+MESSAGE 0: aaa
+execute procedure efa42_Test_1 (teststr = 'aaa') 
+returned teststr = hello
+
+MESSAGE 0: bbb
+execute procedure efa42_Test_2 (teststr = 'bbb')
+returned teststr = hello
+
+MESSAGE 0: hello
+MESSAGE 0: hello
+execute procedure efa42_Test_2 (teststr = :teststr) 
+returned teststr = hello
+
+MESSAGE 0: hello
+MESSAGE 0: hello
+execute procedure efa42_Test_2 (teststr = byref(:teststr) 
+returned teststr = hello
+
+>>
+? delete efa42.c 
+<<
+~
+>>
+? delete efa42.o 
+<<
+~
+>>
+? delete efa42.obj 
+<<
+~
+>>
+? delete efa42.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Jun 05 09:46:14 1998

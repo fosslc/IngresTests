@@ -1,0 +1,1463 @@
+/*
+	Test Name: pha14.sep
+	Time: Thu May 31 08:51:06 1990
+	User Name: testenv
+ 
+	Test ID : pha14
+	Module  : 4gl
+	Filename: pha14.sep
+	Purpose	: confirmatory basic test of sequence_value() function.
+	Input Files  : (none)
+	Output Files : (none)
+	Database     : SEPPARAMDB
+	Tables       : pha14_table
+	Synopsis     : Create database table pha14_table using ISQL. With
+		       SQL, remove the entry in ii_sequence_value that applies
+		       to pha14_number (if any). Invoke abf and create appli		       cation pha14.-
+  Run it. Clean up and exit.
+	
+	History	: 31-may-1990	Created			                 www
+                  26-jun-1990   Adapted for VMS                          www
+                  21-aug-1990   ii_sequence_value => ii_sequence_values  www
+		  26-jul-1991   (dufour) Removed table drops and creates
+				required for initialization to a separate 
+				initilization script in basis/fe.
+********************************************************************************
+				     Notes
+1.	A SEPPARAMDB logical/variable must be assigned.
+2.	Ingres superuser privilege is required to run this test, since
+        the user must access the system catalogs (ii_sequence_value).
+        
+********************************************************************************
+          21-Jun-1993	(sandhya) changed filename to 8 characters
+			to make it more portable.
+                  06-Jan-1995   changed deleter to delobj and edit into
+                                correct format.                 (QA)
+          24-Apr-1996	(clate01)
+		Modified for NT
+          26-Aug-1996	(li$to01) Added canon for new OI.
+          06-Mar-1997	(wanya01) add canon for nt
+          17-Apr-2000	(vande02) Adding new main UNIX canon to avoid dif on
+			extra "Processing procedure" msg during building app.
+          08-Feb-2001	(xu$we01) Adding an alternate canon for NT to eliminate 
+			dif on "Processing procedure" msg during building app.
+	23-Nov-2001	(rogch01)
+		Removed NT canons to allow test to run clean in 24 lines.
+          02-Oct-2003	(Sinra04) Results of "Go" command are diffing because
+				  sep fetching is captured at different lines.
+				  So compilation of "Go" command are ignored and
+				  `ESC'`CR' command added, which displays the
+				  fteching screen and confirms successful 
+				  compilation. 
+				  Removed extra copyright year canons.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -application pha14 
+<<
+~
+>>
+? delobj SEPPARAMDB -form pha14uf1 pha14uf2 
+<<
+~
+>>
+? fill pha14.frm 
+!!
+COPYFORM:	6.4	1990_05_31 15:59:07 GMT  
+FORM:	pha14uf1		 
+	80	23	0	0	1	0	6	8	0	0	0	0	0	0	0	3
+FIELD:
+	0	c26uf1_tbl	0	4	0	2	11	33	10	24	1	3	0		1	1	0	1	0	0	0					1	0
+	0	lname	21	17	0	15	1	15	0	1	15	3	1	Last Name	1	1	0	0	0	0	0		c15			2	1
+	1	fname	21	17	0	15	1	15	0	17	15	3	17	First Name	17	1	0	0	0	0	0		c15			2	2
+TRIM:
+	7	3	Enter a list of names and then select 'Append' from the menu line.	0	0	0	0
+	7	4	The names will be assigned sequence numbers and appended to the	0	0	0	0
+	7	5	database table. Select 'View' to see records from the database.	0	0	0	0
+	7	7	Select 'Proc' to call a procedure to insert the records. In this	0	0	0	0
+	7	8	case, the sequence numbers increment by 2 instead of 1.	0	0	0	0
+	32	1	This is pha14uf1	0	0	0	0
+FORM:	pha14uf2		 
+	80	23	0	0	1	0	1	8	0	0	0	0	0	0	0	4
+FIELD:
+	0	c26uf2_table	0	6	0	3	15	49	4	16	1	3	0		1	1	0	1	0	0	0					1	0
+	0	pha14_number	30	4	0	4	1	15	0	1	4	0	1	Sequence Number	1	1	0	0	0	0	0		-i4			2	1
+	1	lname	21	17	0	15	1	15	0	17	15	0	17	Last Name	17	1	0	0	0	0	0		c15			2	2
+	2	fname	21	17	0	15	1	15	0	33	15	0	33	First Name	33	1	0	0	0	0	0		c15			2	3
+TRIM:
+	31	1	This is  pha14uf2	0	0	0	0
+!!
+? copyform -s -i SEPPARAMDB pha14.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+>>
+? sql -s "+U" SEPPARAMDB 
+<<
+~
+>>
+* delete from ii_sequence_values where sequence_table = 'pha14_table';\g
+<<
+~
+>>
+* delete from pha14_table;\g\q
+<<
+~
+>>
+? fill pha14uf1.osq 
+!!
+initialize (rangevalue = integer, this_lname = varchar(20),
+            this_fname = varchar(20), this_number=integer,
+            this_state=integer, rowcount = integer,
+            c26uf1_ar = ARRAY OF TYPE OF TABLE FIELD 
+                           pha14uf1.c26uf1_tbl) = {
+   inittable c26uf1_tbl;
+}
+
+'Append' = {
+   unloadtable c26uf1_tbl (this_lname=lname, this_fname=fname,
+               this_state = _state) 
+   {
+      if this_state > 0 and this_state < 4 then
+         this_number = sequence_value(table_name  = 'pha14_table',
+				      column_name = 'pha14_number',
+				      increment = 1);
+         insert into pha14_table (pha14_number,lname,fname)
+                     values (this_number, this_lname, this_fname);
+         commit;
+      endif;
+   };
+   inittable c26uf1_tbl;
+   redisplay;
+}
+
+'Proc' = {
+   rowcount = 0;
+   unloadtable c26uf1_tbl (this_lname=lname, this_fname=fname,
+               this_state = _state) {
+      insertrow c26uf1_ar [rowcount]
+                (lname=this_lname, fname=this_fname);
+      rowcount = rowcount + 1;
+   };
+   callproc pha14_4p1 (c26uf1_ar = c26uf1_ar, rowcount = rowcount);
+   inittable c26uf1_tbl;
+   redisplay;
+}
+
+'View'= {
+   clear screen;
+   callframe pha14uf2;
+   redisplay;
+}
+
+'End', key frskey3 = {
+   clear screen;
+   return;
+}
+!!
+? fill pha14uf2.osq 
+!!
+initialize () = {
+   inittable c26uf2_table read;
+   c26uf2_table = select * from pha14_table
+   order by pha14_number;
+   }
+
+'Resume' = {
+   clear screen;
+   return;
+   }
+!!
+? fill pha14_4p1.osq 
+!!
+procedure pha14_4p1 (rowcount = integer, this_lname = varchar(20),
+                      this_fname = varchar(20), this_number = integer,
+                      c26uf1_ar = ARRAY OF TYPE OF TABLE FIELD 
+                                  pha14uf1.c26uf1_tbl) = {
+
+   unloadtable c26uf1_ar (this_lname=lname, this_fname=fname) {
+         this_number = sequence_value(table_name  = 'pha14_table',
+				      column_name = 'pha14_number',
+				      increment = 2);
+         insert into pha14_table (pha14_number,lname,fname)
+                     values (this_number, this_lname, this_fname);
+         commit;
+   };
+   return;
+   }
+!!
+? abf -e SEPPARAMDB 
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ create`CR'pha14`CR'basic confirmatory test of sequence_value() function`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`ESC'
+<<
+~
+>>
+^^ select`CR'pha14uf1`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`ESC'
+<<
+~
+>>
+^^ select`CR'pha14uf2`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`^J'`CR'`ESC'
+<<
+~
+>>
+^^ select`CR'pha14_4p1`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >
+%% MENU AT POSITION `9' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `9' is "End"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: pha14                            Default Start:                         |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_pha14_4p1               |4GL Procedure|                                       ||
+||pha14uf1               |User Frame   |                                       ||
+||pha14uf2               |User Frame   |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ `CR'`^J'`ESC'
+<<
+~
+>>
+^^ go`CR'yes`CR'
+<<
+~
+>>
+^^ `ESC'`CR'
+<<
+
+%% MENU KEY selected
+
+%% MENU RESPONSE: 
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                                |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |_               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+>>
+^^ slocum`CR'joshua`CR'burlingame`CR'henry`CR'edison`CR'thomas`CR'zappa`CR'frank`ESC-
+'
+<<
+
+%% CHANGED FIELD Last Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum_         |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD First Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum         |joshua_         |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum         |joshua         |                       |
+|                        |---------------+---------------|                       |
+|                        |_               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Last Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum         |joshua         |                       |
+|                        |---------------+---------------|                       |
+|                        |burlingame_     |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD First Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum         |joshua         |                       |
+|                        |---------------+---------------|                       |
+|                        |burlingame     |henry_          |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum         |joshua         |                       |
+|                        |---------------+---------------|                       |
+|                        |burlingame     |henry          |                       |
+|                        |---------------+---------------|                       |
+|                        |_               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Last Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum         |joshua         |                       |
+|                        |---------------+---------------|                       |
+|                        |burlingame     |henry          |                       |
+|                        |---------------+---------------|                       |
+|                        |edison_         |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD First Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum         |joshua         |                       |
+|                        |---------------+---------------|                       |
+|                        |burlingame     |henry          |                       |
+|                        |---------------+---------------|                       |
+|                        |edison         |thomas_         |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum         |joshua         |                       |
+|                        |---------------+---------------|                       |
+|                        |burlingame     |henry          |                       |
+|                        |---------------+---------------|                       |
+|                        |edison         |thomas         |                       |
+|                        |---------------+---------------|                       |
+|                        |_               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Last Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum         |joshua         |                       |
+|                        |---------------+---------------|                       |
+|                        |burlingame     |henry          |                       |
+|                        |---------------+---------------|                       |
+|                        |edison         |thomas         |                       |
+|                        |---------------+---------------|                       |
+|                        |zappa_          |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD First Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |slocum         |joshua         |                       |
+|                        |---------------+---------------|                       |
+|                        |burlingame     |henry          |                       |
+|                        |---------------+---------------|                       |
+|                        |edison         |thomas         |                       |
+|                        |---------------+---------------|                       |
+|                        |zappa          |frank_          |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+>>
+^^ append`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Append
+%% MENU:   Append  Proc  View  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Append"
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End  : append                                             |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |_               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ view`CR'`ESC'
+<<
+
+%% MENU RESPONSE: View
+%% MENU:   Append  Proc  View  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "View"
+
+%% Fetching 'pha14uf2' from the database ...
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                               This is  pha14uf2                               |
+|                                                                                |
+|                                                                                |
+|                +-----------------------------------------------+               |
+|                |Sequence Number|Last Name      |First Name     |               |
+|                |---------------+---------------+---------------|               |
+|                |_1              |slocum         |joshua         |               |
+|                |---------------+---------------+---------------|               |
+|                |2              |burlingame     |henry          |               |
+|                |---------------+---------------+---------------|               |
+|                |3              |edison         |thomas         |               |
+|                |---------------+---------------+---------------|               |
+|                |4              |zappa          |frank          |               |
+|                |---------------+---------------+---------------|               |
+|                |               |               |               |               |
+|                |---------------+---------------+---------------|               |
+|                |               |               |               |               |
+|                +-----------------------------------------------+               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Resume                                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ resume`CR'marx`CR'groucho`CR'newman`CR'alfred`CR'columbus`CR'christopher`ESC'
+<<
+
+%% MENU RESPONSE: Resume
+%% MENU:   Resume
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Resume"
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |_               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Last Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |marx_           |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD First Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |marx           |groucho_        |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |marx           |groucho        |                       |
+|                        |---------------+---------------|                       |
+|                        |_               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Last Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |marx           |groucho        |                       |
+|                        |---------------+---------------|                       |
+|                        |newman_         |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD First Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |marx           |groucho        |                       |
+|                        |---------------+---------------|                       |
+|                        |newman         |alfred_         |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |marx           |groucho        |                       |
+|                        |---------------+---------------|                       |
+|                        |newman         |alfred         |                       |
+|                        |---------------+---------------|                       |
+|                        |_               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Last Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |marx           |groucho        |                       |
+|                        |---------------+---------------|                       |
+|                        |newman         |alfred         |                       |
+|                        |---------------+---------------|                       |
+|                        |columbus_       |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD First Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |marx           |groucho        |                       |
+|                        |---------------+---------------|                       |
+|                        |newman         |alfred         |                       |
+|                        |---------------+---------------|                       |
+|                        |columbus       |christopher_    |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+>>
+^^ proc`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Proc
+%% MENU:   Append  Proc  View  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Proc"
+
+%% Fetching 'pha14_4p1' from the database ...
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|Fetching 'pha14_4p1' from the database ...                                      |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                This is pha14uf1                               |
+|                                                                                |
+|       Enter a list of names and then select 'Append' from the menu line.       |
+|       The names will be assigned sequence numbers and appended to the          |
+|       database table. Select 'View' to see records from the database.          |
+|                                                                                |
+|       Select 'Proc' to call a procedure to insert the records. In this         |
+|       case, the sequence numbers increment by 2 instead of 1.                  |
+|                                                                                |
+|                        +-------------------------------+                       |
+|                        |Last Name      |First Name     |                       |
+|                        |---------------+---------------|                       |
+|                        |_               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        |---------------+---------------|                       |
+|                        |               |               |                       |
+|                        +-------------------------------+                       |
+|                                                                                |
+|                                                                                |
+|  Append  Proc  View  End                                                       |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ view`CR'`^J'`^J'`^J'`^J'`^J'`^J'`^J'`ESC'
+<<
+
+%% MENU RESPONSE: View
+%% MENU:   Append  Proc  View  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "View"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                               This is  pha14uf2                               |
+|                                                                                |
+|                                                                                |
+|                +-----------------------------------------------+               |
+|                |Sequence Number|Last Name      |First Name     |               |
+|                |---------------+---------------+---------------|               |
+|                |_1              |slocum         |joshua         |               |
+|                |---------------+---------------+---------------|               |
+|                |2              |burlingame     |henry          |               |
+|                |---------------+---------------+---------------|               |
+|                |3              |edison         |thomas         |               |
+|                |---------------+---------------+---------------|               |
+|                |4              |zappa          |frank          |               |
+|                |---------------+---------------+---------------|               |
+|                |6              |marx           |groucho        |               |
+|                |---------------+---------------+---------------|               |
+|                |8              |newman         |alfred         |               |
+|                +-----------------------------------------------+               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Resume                                                                        |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                               This is  pha14uf2                               |
+|                                                                                |
+|                                                                                |
+|                +-----------------------------------------------+               |
+|                |Sequence Number|Last Name      |First Name     |               |
+|                |---------------+---------------+---------------|               |
+|                |1              |slocum         |joshua         |               |
+|                |---------------+---------------+---------------|               |
+|                |_2              |burlingame     |henry          |               |
+|                |---------------+---------------+---------------|               |
+|                |3              |edison         |thomas         |               |
+|                |---------------+---------------+---------------|               |
+|                |4              |zappa          |frank          |               |
+|                |---------------+---------------+---------------|               |
+|                |6              |marx           |groucho        |               |
+|                |---------------+---------------+---------------|               |
+|                |8              |newman         |alfred         |               |
+|                +-----------------------------------------------+               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Resume                                                                        |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                               This is  pha14uf2                               |
+|                                                                                |
+|                                                                                |
+|                +-----------------------------------------------+               |
+|                |Sequence Number|Last Name      |First Name     |               |
+|                |---------------+---------------+---------------|               |
+|                |1              |slocum         |joshua         |               |
+|                |---------------+---------------+---------------|               |
+|                |2              |burlingame     |henry          |               |
+|                |---------------+---------------+---------------|               |
+|                |_3              |edison         |thomas         |               |
+|                |---------------+---------------+---------------|               |
+|                |4              |zappa          |frank          |               |
+|                |---------------+---------------+---------------|               |
+|                |6              |marx           |groucho        |               |
+|                |---------------+---------------+---------------|               |
+|                |8              |newman         |alfred         |               |
+|                +-----------------------------------------------+               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Resume                                                                        |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                               This is  pha14uf2                               |
+|                                                                                |
+|                                                                                |
+|                +-----------------------------------------------+               |
+|                |Sequence Number|Last Name      |First Name     |               |
+|                |---------------+---------------+---------------|               |
+|                |1              |slocum         |joshua         |               |
+|                |---------------+---------------+---------------|               |
+|                |2              |burlingame     |henry          |               |
+|                |---------------+---------------+---------------|               |
+|                |3              |edison         |thomas         |               |
+|                |---------------+---------------+---------------|               |
+|                |_4              |zappa          |frank          |               |
+|                |---------------+---------------+---------------|               |
+|                |6              |marx           |groucho        |               |
+|                |---------------+---------------+---------------|               |
+|                |8              |newman         |alfred         |               |
+|                +-----------------------------------------------+               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Resume                                                                        |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                               This is  pha14uf2                               |
+|                                                                                |
+|                                                                                |
+|                +-----------------------------------------------+               |
+|                |Sequence Number|Last Name      |First Name     |               |
+|                |---------------+---------------+---------------|               |
+|                |1              |slocum         |joshua         |               |
+|                |---------------+---------------+---------------|               |
+|                |2              |burlingame     |henry          |               |
+|                |---------------+---------------+---------------|               |
+|                |3              |edison         |thomas         |               |
+|                |---------------+---------------+---------------|               |
+|                |4              |zappa          |frank          |               |
+|                |---------------+---------------+---------------|               |
+|                |_6              |marx           |groucho        |               |
+|                |---------------+---------------+---------------|               |
+|                |8              |newman         |alfred         |               |
+|                +-----------------------------------------------+               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Resume                                                                        |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                               This is  pha14uf2                               |
+|                                                                                |
+|                                                                                |
+|                +-----------------------------------------------+               |
+|                |Sequence Number|Last Name      |First Name     |               |
+|                |---------------+---------------+---------------|               |
+|                |1              |slocum         |joshua         |               |
+|                |---------------+---------------+---------------|               |
+|                |2              |burlingame     |henry          |               |
+|                |---------------+---------------+---------------|               |
+|                |3              |edison         |thomas         |               |
+|                |---------------+---------------+---------------|               |
+|                |4              |zappa          |frank          |               |
+|                |---------------+---------------+---------------|               |
+|                |6              |marx           |groucho        |               |
+|                |---------------+---------------+---------------|               |
+|                |_8              |newman         |alfred         |               |
+|                +-----------------------------------------------+               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Resume                                                                        |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                               This is  pha14uf2                               |
+|                                                                                |
+|                                                                                |
+|                +-----------------------------------------------+               |
+|                |Sequence Number|Last Name      |First Name     |               |
+|                |---------------+---------------+---------------|               |
+|                |2              |burlingame     |henry          |               |
+|                |---------------+---------------+---------------|               |
+|                |3              |edison         |thomas         |               |
+|                |---------------+---------------+---------------|               |
+|                |4              |zappa          |frank          |               |
+|                |---------------+---------------+---------------|               |
+|                |6              |marx           |groucho        |               |
+|                |---------------+---------------+---------------|               |
+|                |8              |newman         |alfred         |               |
+|                |---------------+---------------+---------------|               |
+|                |_10             |columbus       |christopher    |               |
+|                +-----------------------------------------------+               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Resume                                                                        |
+__________________________________________________________________________________
+@@
+
+%% Out of data
+%% FT(s)winerr: WAIT = '0'; SILENT = '1'.
+Message was "Out of data"
+
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                               This is  pha14uf2                               |
+|                                                                                |
+|                                                                                |
+|                +-----------------------------------------------+               |
+|                |Sequence Number|Last Name      |First Name     |               |
+|                |---------------+---------------+---------------|               |
+|                |2              |burlingame     |henry          |               |
+|                |---------------+---------------+---------------|               |
+|                |3              |edison         |thomas         |               |
+|                |---------------+---------------+---------------|               |
+|                |4              |zappa          |frank          |               |
+|                |---------------+---------------+---------------|               |
+|                |6              |marx           |groucho        |               |
+|                |---------------+---------------+---------------|               |
+|                |8              |newman         |alfred         |               |
+|                |---------------+---------------+---------------|               |
+|                |_10             |columbus       |christopher    |               |
+|                +-----------------------------------------------+               |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Resume                                                                        |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ resume`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ quit`CR'
+<<
+~
+>>
+? sql -s "+U" SEPPARAMDB 
+<<
+~
+>>
+* delete from ii_sequence_values where sequence_table = 'pha14_table';\g
+<<
+~
+>>
+* delete from pha14_table;\g\q
+<<
+~
+>>
+? delobj SEPPARAMDB -application pha14 
+<<
+~
+>>
+? delobj SEPPARAMDB -form pha14uf1 pha14uf2 
+<<
+~
+>>
+
+
+Ending at: Thu Oct 02 09:38:02 2003

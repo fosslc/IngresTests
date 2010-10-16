@@ -1,0 +1,308 @@
+/*
+	Test Name    : eba03.sep
+	Time         : 31-JUL-1989 08:46:04
+	User Name    : testenv      
+ 
+	Test ID      : eba03 (formerly ag006)
+	Module       : 
+	Filename     : eba03.sep
+	Purpose	     :
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : s, p, sp
+	Synopsis     : select using subselect and distinct
+	History	     : xx-xxx-1989	Created			Author
+		       claire l. created.
+		       mar 28/89 sgp modified to add to test suite.
+		       jul 31/89 lah converted to sep format
+		       Nov. 6,91 converted to using setup test. CAMACHO
+	Setup Test   : eaa00.sep
+
+	23-Mar-1999   (vande02) Changed 'sql -s SEPPARAMDB' canon to be empty,
+                                in order to catch the msg. "TM could not connect
+                                ..." if the test database did not exist.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from p\g
+<<
+
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p1    |nut       |red   |    12|london    |
+|p2    |bolt      |green |    17|paris     |
+|p3    |screw     |blue  |    17|rome      |
+|p4    |screw     |red   |    14|london    |
+|p5    |cam       |blue  |    12|paris     |
+|p6    |cog       |red   |    19|london    |
++------+----------+------+------+----------+
+(6 rows)
+>>
+* select * from s\g
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s5    |adams |    30|athens    |
+|s3    |blake |    30|paris     |
+|s4    |clark |    20|london    |
+|s2    |jones |    10|paris     |
+|s1    |smith |    20|london    |
++------+------+------+----------+
+(5 rows)
+>>
+* select * from sp\g
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select sname from s where exists 
+<<
+>>
+*	(select * from sp where sno = s.sno and pno='p2')\g
+<<
+
++------+
+|sname |
++------+
+|blake |
+|clark |
+|jones |
+|smith |
++------+
+(4 rows)
+>>
+<<
+
++------+
+|sname |
++------+
+|smith |
+|jones |
+|blake |
+|clark |
++------+
+(4 rows)
+>>
+* select sname from s where not exists 
+<<
+>>
+* 	(select * from sp where sno = s.sno and pno = 'p2')\g
+<<
+
++------+
+|sname |
++------+
+|adams |
++------+
+(1 row)
+>>
+* select sname from s where not exists 
+<<
+>>
+* 	(select * from sp where sno = s.sno and pno = 'p2')\g
+<<
+
++------+
+|sname |
++------+
+|adams |
++------+
+(1 row)
+>>
+* select distinct sno from sp spx where not exists 
+<<
+>>
+* 	(select * from sp spy where sno = 's2' and not exists 
+<<
+>>
+* 	(select * from sp spz 
+<<
+>>
+*			where spz.sno = spx.sno and spz.pno = spy.pno ))\g
+/*
+ all suppliers supplying parts supplied by s2 
+*/
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s2    |
++------+
+(2 rows)
+>>
+* select pno from p where exists 
+<<
+>>
+*	(select * from sp spx  where spx.pno = p.pno and exists 
+<<
+>>
+*		(select * from sp spy where spy.pno = p.pno 
+<<
+>>
+*				and spy.sno != spx.sno ))\g
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select sname from s where not exists 
+<<
+>>
+*	(select * from p where not exists 
+<<
+>>
+*		(select * from sp where sno = s.sno and pno = p.pno))\g
+/*
+ what suppliers have all parts 
+*/
+<<
+
++------+
+|sname |
++------+
+|smith |
++------+
+(1 row)
+>>
+* select sname from s where not exists 
+<<
+>>
+*	(select pno from p where not exists 
+<<
+>>
+*	(select sno from sp where sp.sno = s.sno and sp.pno = p.pno))\g
+/*
+ what suppliers have all parts 
+*/
+<<
+
++------+
+|sname |
++------+
+|smith |
++------+
+(1 row)
+>>
+* select sno from s where not exists ( select distinct pno from sp )\g
+<<
+
++------+
+|sno   |
++------+
++------+
+(0 rows)
+>>
+* select city from s where exists ( select * from sp where sp.sno = s.sno )\g
+<<
+
++----------+
+|city      |
++----------+
+|london    |
+|london    |
+|paris     |
+|paris     |
++----------+
+(4 rows)
+>>
+<<
+
++----------+
+|city      |
++----------+
+|london    |
+|paris     |
+|paris     |
+|london    |
++----------+
+(4 rows)
+>>
+* select distinct city from s where exists 
+<<
+>>
+*	(select * from sp where sp.sno = s.sno )\g
+<<
+
++----------+
+|city      |
++----------+
+|london    |
+|paris     |
++----------+
+(2 rows)
+>>
+* select s.sname from s where exists (select * from sp where sp.sno=s.sno)\g
+<<
+
++------+
+|sname |
++------+
+|blake |
+|clark |
+|jones |
+|smith |
++------+
+(4 rows)
+>>
+<<
+
++------+
+|sname |
++------+
+|smith |
+|jones |
+|blake |
+|clark |
++------+
+(4 rows)
+>>
+* select s.sname from s where not exists 
+<<
+>>
+*	(select * from sp where sp.sno=s.sno)\g
+<<
+
++------+
+|sname |
++------+
+|adams |
++------+
+(1 row)
+>>
+* \q
+<<
+>>
+
+
+Ending at: 18-APR-1991 18:17:13

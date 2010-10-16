@@ -1,0 +1,678 @@
+/*
+	Test Name: dba44.sep 
+	Time:  9-SEP-1991
+	User Name: testenv     
+	Terminal type: septerm
+	Test ID : dba44
+	Module  : 
+	Filename:
+	Purpose	: to test default groups get grants on views.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB3
+	Tables       : dba44t, dba44t_v1(view)
+	Synopsis     : assign default groups to pvusr1,2,3 and then
+                give them permits to views for each type of grant,
+                select, update, delete, insert, and all. Then reconnect
+                as pvusr and see if they get the grant. also connect
+                with a role to make sure they don't lose the grant.
+
+	History:  9-SEP-1991	Created	 by Troy Camacho
+          28-May-1992	(Author)
+          13-Oct-1993	(garys) Updated canon to accept double quotes for
+				delimiter for dba and no quotes for granted
+				user - plus expanded help permit info for
+				grants.
+	  15-Nov-1993	(garys) Updated test to use 'qasetusertm' and sql's 
+				'alter user' instead of 'qasetuserfe' and 
+				'accessdb'.
+          20-Jan-1995  (oertel) Added syntax 'default_privileges=all' to
+				alter user stmnts.
+          31-Jan-1995  (holla02) Minor modifications
+           2-Feb-1995	(Oertel) Added syntax 'default privileges=all' for
+				 alter user and took ALT canon for GRANT ALL
+				 permissions: copy_into, copy_from.
+	  01-Mar-1995 (oerde01)  Added privilege 'maintain_users' to alter
+                                 user pvusr1 stmnt.
+	  16-Mar-1999   (vande02) Hard-coded VPG_SZ to 2K
+*/
+? qasetusertm ingres sql -s iidbdb 
+<<
+>>
+* alter user pvusr1 with group = pvusr1_group, privileges = (createdb,operator,secur-
+ity,trace,maintain_locations,maintain_users), default_privileges=all;\g
+<<
+>>
+* alter user pvusr2 with group = pvusr2_group, privileges = (createdb,trace), default_priv-
+ileges = all;\g
+<<
+>>
+* alter user pvusr3 with group = pvusr3_group, privileges = (createdb,trace), default_priv-
+ileges = all;\g
+<<
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop table dba44t;\g
+<<
+~
+>>
+* create table dba44t(col1 i2, col2 f4) with page_size=2048;\g
+<<
+>>
+* create view dba44t_v1 as select * from dba44t;\g
+<<
+>>
+* insert into dba44t_v1 values (100,200);\g
+<<
+(1 row)
+>>
+* insert into dba44t_v1 values (300,400);\g
+<<
+(1 row)
+>>
+* insert into dba44t_v1 values (500,600);\g
+<<
+(1 row)
+>>
+* grant select on dba44t_v1 to group pvusr3_group;\g
+<<
+>>
+* help permit dba44t_v1;\g
+<<
+Permissions on dba44t_v1 are:
+
+
+Permission 2:
+grant select on "pvusr1".dba44t_v1 to group pvusr3_group              
+
+
+
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 
+<<
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* select dbmsinfo('group');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_group                    |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('username');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3                          |
++--------------------------------+
+(1 row)
+>>
+* \q 
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr3_role" 
+<<
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop permit on dba44t_v1 all;\g
+<<
+>>
+* help permit dba44t_v1;\g
+<<
+Table dba44t_v1 has no permissions granted on it
+
+
+>>
+* grant insert on dba44t_v1 to group pvusr3_group;\g
+<<
+>>
+* help permit dba44t_v1;\g
+<<
+Permissions on dba44t_v1 are:
+
+
+Permission 2:
+grant insert on "pvusr1".dba44t_v1 to group pvusr3_group              
+
+
+
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 
+<<
+>>
+* insert into dba44t_v1 values(700,800)\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr3_role" 
+<<
+>>
+* insert into dba44t_v1 values(1,2)\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
+|   700|    800.000|
+|     1|      2.000|
++------+-----------+
+(5 rows)
+>>
+* drop permit on dba44t_v1 all;\g
+<<
+>>
+* help permit dba44t_v1;\g
+<<
+Table dba44t_v1 has no permissions granted on it
+
+
+>>
+* grant update on dba44t_v1 to group pvusr3_group;\g
+<<
+>>
+* help permit dba44t_v1;\g
+<<
+Permissions on dba44t_v1 are:
+
+
+Permission 2:
+grant update on "pvusr1".dba44t_v1 to group pvusr3_group              
+
+
+
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 
+<<
+>>
+* update dba44t_v1 set col1 = 5;\g
+<<
+(5 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr3_role" 
+<<
+>>
+* update dba44t_v1 set col2 = 6;\g
+<<
+(5 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|     5|      6.000|
+|     5|      6.000|
+|     5|      6.000|
+|     5|      6.000|
+|     5|      6.000|
++------+-----------+
+(5 rows)
+>>
+* drop permit on dba44t_v1 all;\g
+<<
+>>
+* help permit dba44t_v1;\g
+<<
+Table dba44t_v1 has no permissions granted on it
+
+
+>>
+* grant delete on dba44t_v1 to group pvusr3_group;\g
+<<
+>>
+* help permit dba44t_v1;\g
+<<
+Permissions on dba44t_v1 are:
+
+
+Permission 2:
+grant delete on "pvusr1".dba44t_v1 to group pvusr3_group              
+
+
+
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 
+<<
+>>
+* delete from dba44t_v1;\g
+<<
+(5 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
++------+-----------+
+(0 rows)
+>>
+* insert into dba44t_v1 values (1,5);\g
+<<
+(1 row)
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|     1|      5.000|
++------+-----------+
+(1 row)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr3_role" 
+<<
+>>
+* delete from dba44t_v1;\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
++------+-----------+
+(0 rows)
+>>
+* insert into dba44t_v1 values (100,200);\g
+<<
+(1 row)
+>>
+* insert into dba44t_v1 values (300,400);\g
+<<
+(1 row)
+>>
+* insert into dba44t_v1 values (500,600);\g
+<<
+(1 row)
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* drop permit on dba44t_v1 all;\g
+<<
+>>
+* help permit dba44t_v1;\g
+<<
+Table dba44t_v1 has no permissions granted on it
+
+
+>>
+* grant all on dba44t_v1 to group pvusr3_group;\g
+<<
+>>
+* help permit dba44t_v1;\g
+<<
+Permissions on dba44t_v1 are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dba44t_v1 to group pvusr3_group          
+
+Permission 3:
+grant   update   on "pvusr1".dba44t_v1 to group pvusr3_group          
+
+Permission 4:
+grant   delete   on "pvusr1".dba44t_v1 to group pvusr3_group          
+
+Permission 5:
+grant   insert   on "pvusr1".dba44t_v1 to group pvusr3_group          
+
+
+
+>>
+<<
+Permissions on dba44t_v1 are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dba44t_v1 to group pvusr3_group          
+
+Permission 3:
+grant   update   on "pvusr1".dba44t_v1 to group pvusr3_group          
+
+Permission 4:
+grant   delete   on "pvusr1".dba44t_v1 to group pvusr3_group          
+
+Permission 5:
+grant   insert   on "pvusr1".dba44t_v1 to group pvusr3_group          
+
+Permission 6:
+grant  copy_into on "pvusr1".dba44t_v1 to group pvusr3_group          
+
+Permission 7:
+grant  copy_from on "pvusr1".dba44t_v1 to group pvusr3_group          
+
+
+
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 
+<<
+>>
+* select dbmsinfo('group');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_group                    |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('username');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3                          |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('role');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|                                |
++--------------------------------+
+(1 row)
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* insert into dba44t_v1 values(70,80)\g
+<<
+(1 row)
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
+|    70|     80.000|
++------+-----------+
+(4 rows)
+>>
+* update dba44t_v1 set col1 = 15 where col2 = 80;\g
+<<
+(1 row)
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
+|    15|     80.000|
++------+-----------+
+(4 rows)
+>>
+* delete from dba44t_v1 where col2 = 80;\g
+<<
+(1 row)
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr3_role" 
+<<
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* select dbmsinfo('group');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_group                    |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('username');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3                          |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('role');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_role                     |
++--------------------------------+
+(1 row)
+>>
+* insert into dba44t_v1 values(70,80)\g
+<<
+(1 row)
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
+|    70|     80.000|
++------+-----------+
+(4 rows)
+>>
+* update dba44t_v1 set col1 = 15 where col2 = 80;\g
+<<
+(1 row)
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
+|    15|     80.000|
++------+-----------+
+(4 rows)
+>>
+* delete from dba44t_v1 where col2 = 80;\g
+<<
+(1 row)
+>>
+* select * from dba44t_v1;\g
+<<
+
++------+-----------+
+|col1  |col2       |
++------+-----------+
+|   100|    200.000|
+|   300|    400.000|
+|   500|    600.000|
++------+-----------+
+(3 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop table dba44t;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? qasetusertm ingres sql -s iidbdb 
+<<
+>>
+* alter user pvusr1 with nogroup;\g
+<<
+>>
+* alter user pvusr2 with nogroup;\g
+<<
+>>
+* alter user pvusr3 with nogroup;\g
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: Thu Feb  2 10:29:54 1995

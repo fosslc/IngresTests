@@ -1,0 +1,309 @@
+/*
+	Test Name: pza10sc.sep
+	Time: Wed Sep 29 14:24:34 1993
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : pza10sc
+	Module  : 3gl
+	Filename: pza10sc.sep
+	Purpose	: To test the Long Varchar Data Type (BLOB)
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : blobtable
+	Synopsis     : Uses the "standard SQL method" for the BLOB
+		       datatype.  Uses host language variables with
+		       select (cursor, select loop, and singleton),
+		       insert, and update statements to manipulate the
+		       BLOB data type.
+
+ History: 29-Sep-1993	(jbryson)	Created
+          02-Apr-1997  Modified (chiel02)
+                       Added an alternate canon for the sepcc command.
+                       Removed the platform specifications of the canons 
+                       for the esqlc command to make it work under NT. 
+          01-May-2001   (sarjo01) Added ORDER BY to assure consistent result.
+*/
+? delete pza10sc.c 
+<<
+~
+>>
+? delete pza10sc.o 
+<<
+~
+>>
+? delete pza10sc.obj 
+<<
+~
+>>
+? delete pza10sc.exe 
+<<
+~
+>>
+? fill pza10sc.sql 
+!!
+create table blobtable (
+       intcol integer,
+       lvchcol long varchar)\p\g
+insert into blobtable values
+   (1,'This is blob row #1')\p\g
+insert into blobtable values
+   (2,'This is blob row #2 - just a little longer!')\p\g
+insert into blobtable values
+   (3,'This is blob row #3')\p\g
+insert into blobtable values
+   (4,'This is blob row #4')\p\g
+insert into blobtable values
+   (5,null)\p\g
+insert into blobtable values
+   (6,'This is blob row #6 after a NULL row.')\p\g
+
+!!
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* drop table blobtable\g 
+<<
+~
+>>
+* \i pza10sc.sql 
+<<
+ 
+create table blobtable (
+       intcol integer,
+       lvchcol long varchar)
+insert into blobtable values
+   (1,'This is blob row #1')
+(1 row)
+insert into blobtable values
+   (2,'This is blob row #2 - just a little longer!')
+(1 row)
+insert into blobtable values
+   (3,'This is blob row #3')
+(1 row)
+insert into blobtable values
+   (4,'This is blob row #4')
+(1 row)
+insert into blobtable values
+   (5,null)
+(1 row)
+insert into blobtable values
+   (6,'This is blob row #6 after a NULL row.')
+(1 row)
+>>
+* \q 
+<<
+~
+>>
+? fill pza10sc.sc 
+!!
+#include    <stdio.h>
+#include    <string.h>	
+EXEC SQL INCLUDE SQLCA;
+
+main(argc,argv)
+int     argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char*   argv[];
+EXEC SQL END DECLARE SECTION;
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+	char    blob[31];
+	int     i;
+	short	ind;
+	varchar struct {
+	     short vc_len;
+	     char  vc[30];
+        } vch;
+   EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   EXEC SQL CONNECT :argv[1];
+
+   EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+   EXEC SQL declare c1 cursor for SELECT intcol,lvchcol
+	FROM blobtable
+	FOR UPDATE OF intcol,lvchcol;
+
+   printf("Cursor select from blob table...\n");
+   printf("Also deleting blob#3 and updating blob#4\n");
+   EXEC SQL OPEN c1;
+   while(1)
+   {
+      exec sql fetch c1 into :i,:blob:ind;
+      if (sqlca.sqlcode)
+         break;
+
+      printit(i,blob,ind);
+
+      if(i==3)
+	 EXEC SQL DELETE FROM blobtable WHERE CURRENT OF c1;
+      if(i==4)
+	 EXEC SQL UPDATE blobtable 
+	     SET lvchcol = 'New data for blob#4'
+	     WHERE CURRENT OF c1;
+   }
+   EXEC SQL CLOSE c1;
+
+   printf("\nCursor select FOR READONLY from blob table...\n");
+   EXEC SQL OPEN c1 FOR READONLY;
+   while(1)
+   {
+      EXEC SQL FETCH c1 into :i,:blob:ind;
+      if (sqlca.sqlcode)
+         break;
+
+      printit(i,blob,ind);
+   }
+   EXEC SQL CLOSE c1;
+
+   printf("\nInsert into blob table...\n");
+   EXEC SQL INSERT INTO blobtable VALUES (3,'This is new blob #3');
+   
+   printf("\nSelect loop from blob table...\n");
+   EXEC SQL SELECT intcol,lvchcol
+	INTO :i,:blob:ind
+	FROM blobtable order by 1;
+   EXEC SQL BEGIN;
+      printit(i,blob,ind);
+   EXEC SQL END;
+
+   printf("\nSelect loop from blob table using varchar structure...\n");
+   EXEC SQL SELECT intcol,lvchcol
+	INTO :i,:vch:ind
+	FROM blobtable order by 1;
+   EXEC SQL BEGIN;
+      if(ind == -1)
+	 printit(i,vch.vc,ind);
+      else
+	 printit(i,vch.vc,vch.vc_len);
+   EXEC SQL END;
+
+   printf("\nSingleton select from blob table...\n");
+   EXEC SQL SELECT intcol,lvchcol
+	INTO :i,:blob:ind
+	FROM blobtable
+	WHERE intcol=1;
+   printit(i,blob,ind);
+
+   EXEC SQL DISCONNECT;
+}
+
+/******************************************************/
+printit(i,blob,ind)
+EXEC SQL BEGIN DECLARE SECTION;
+   char    *blob;
+   int     i;
+   short   ind;
+EXEC SQL END DECLARE SECTION;
+{
+
+   switch(ind)
+   {
+      case 0:
+         printf("blob#%d blob=%s=\n",i,blob);
+	 break;
+      case -1: 
+         printf("blob#%d **blobind=%d **NULL**\n",i,ind);
+	 break;
+      default:
+	 printf("blob#%d length=%d blob=%.*s=\n",i,ind,ind,blob);
+   }
+
+   if(sqlca.sqlwarn.sqlwarn1 != ' ')
+   {
+      printf("sqlca.sqlwarn.sqlwarn1=%c=\n",sqlca.sqlwarn.sqlwarn1);
+      sqlca.sqlwarn.sqlwarn1 = ' ';
+   }
+}
+!!
+? esqlc pza10sc.sc 
+<< 
+ESQL pza10sc.sc:
+>>
+<< 
+>>
+? sepcc pza10sc 
+<<
+>>
+<<
+pza10sc.c
+>>
+? seplnk pza10sc 
+<<
+>>
+? run pza10sc.exe SEPPARAMDB 
+<<
+Cursor select from blob table...
+Also deleting blob#3 and updating blob#4
+blob#1 blob=This is blob row #1=
+blob#2 length=43 blob=This is blob row #2 - just a l=
+sqlca.sqlwarn.sqlwarn1=W=
+blob#3 blob=This is blob row #3=
+blob#4 blob=This is blob row #4=
+blob#5 **blobind=-1 **NULL**
+blob#6 length=37 blob=This is blob row #6 after a NU=
+sqlca.sqlwarn.sqlwarn1=W=
+
+Cursor select FOR READONLY from blob table...
+blob#1 blob=This is blob row #1=
+blob#2 length=43 blob=This is blob row #2 - just a l=
+sqlca.sqlwarn.sqlwarn1=W=
+blob#4 blob=New data for blob#4=
+blob#5 **blobind=-1 **NULL**
+blob#6 length=37 blob=This is blob row #6 after a NU=
+sqlca.sqlwarn.sqlwarn1=W=
+
+Insert into blob table...
+
+Select loop from blob table...
+blob#1 blob=This is blob row #1=
+blob#2 length=43 blob=This is blob row #2 - just a l=
+sqlca.sqlwarn.sqlwarn1=W=
+blob#3 blob=This is new blob #3=
+blob#4 blob=New data for blob#4=
+blob#5 **blobind=-1 **NULL**
+blob#6 length=37 blob=This is blob row #6 after a NU=
+sqlca.sqlwarn.sqlwarn1=W=
+
+Select loop from blob table using varchar structure...
+blob#1 length=19 blob=This is blob row #1=
+blob#2 length=30 blob=This is blob row #2 - just a l=
+sqlca.sqlwarn.sqlwarn1=W=
+blob#3 length=19 blob=This is new blob #3=
+blob#4 length=19 blob=New data for blob#4=
+blob#5 **blobind=-1 **NULL**
+blob#6 length=30 blob=This is blob row #6 after a NU=
+sqlca.sqlwarn.sqlwarn1=W=
+
+Singleton select from blob table...
+blob#1 blob=This is blob row #1=
+>>
+? delete pza10sc.c 
+<<
+~
+>>
+? delete pza10sc.o 
+<<
+~
+>>
+? delete pza10sc.obj 
+<<
+~
+>>
+? delete pza10sc.exe 
+<<
+~
+>>
+
+
+Ending at: Wed Sep 29 15:16:08 1993

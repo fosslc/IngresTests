@@ -1,0 +1,321 @@
+/*
+	Test Name: eba08.sep
+	Time:  6-JUL-1989 09:18:06
+	User Name: testenv   
+ 
+	Test ID : eba08
+	Module  : 
+	Filename: eba08.sep
+	Purpose	: Test of restrictions
+	Input Files  : none 
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : s, p, sp
+	Synopsis     : selects, group by's, and havings using 
+			restrictions both legal and not.
+
+	History	: xx-xxx-1989	Created				Author
+		  06-JUL-1989	Converted	LARRYH
+		 7-11-91 converted to using setup test. CAMACHO
+	Setup Test   : eaa00.sep
+
+	23-Mar-1999   (vande02) Changed 'sql -s SEPPARAMDB' canon to be empty,
+                                in order to catch the msg. "TM could not connect
+                                ..." if the test database did not exist.
+           1-May-2000	(vande02) Replacing main canons where Ingres used to get
+				  an error E_US0B68 'Illegal expression in the
+				  HAVING clause.'  Due to II 2.5 code changes,
+				  certain expressions in the having clause are
+				  now allowed.  See StarTrack #8585089.
+          17-Jun-2001	(rogch01)
+		Update row orders.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select sno, pno from sp; \g 
+<<
+
++------+------+
+|sno   |pno   |
++------+------+
+|s1    |p1    |
+|s1    |p2    |
+|s1    |p3    |
+|s1    |p4    |
+|s1    |p5    |
+|s1    |p6    |
+|s2    |p1    |
+|s2    |p2    |
+|s3    |p2    |
+|s4    |p2    |
+|s4    |p4    |
+|s4    |p5    |
++------+------+
+(12 rows)
+>>
+* select sno from sp group by sno; \g 
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s2    |
+|s3    |
+|s4    |
++------+
+(4 rows)
+>>
+* select sno, pno from sp group by sno, pno; \g 
+<<
+
++------+------+
+|sno   |pno   |
++------+------+
+|s1    |p1    |
+|s1    |p2    |
+|s1    |p3    |
+|s1    |p4    |
+|s1    |p5    |
+|s1    |p6    |
+|s2    |p1    |
+|s2    |p2    |
+|s3    |p2    |
+|s4    |p2    |
+|s4    |p4    |
+|s4    |p5    |
++------+------+
+(12 rows)
+>>
+* select sum (qty) from sp group by pno order by 1; \g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|          100|
+|          400|
+|          500|
+|          500|
+|          600|
+|         1000|
++-------------+
+(6 rows)
+>>
+* select pno, sum(qty) from sp group by pno order by 1; \g 
+<<
+
++------+-------------+
+|pno   |col2         |
++------+-------------+
+|p1    |          600|
+|p2    |         1000|
+|p3    |          400|
+|p4    |          500|
+|p5    |          500|
+|p6    |          100|
++------+-------------+
+(6 rows)
+>>
+* select pno, sum (qty+1), avg (qty) from sp group by pno order by 1; \g 
+<<
+
++------+-------------+-----------+
+|pno   |col2         |col3       |
++------+-------------+-----------+
+|p1    |          602|    300.000|
+|p2    |         1004|    250.000|
+|p3    |          401|    400.000|
+|p4    |          502|    250.000|
+|p5    |          502|    250.000|
+|p6    |          101|    100.000|
++------+-------------+-----------+
+(6 rows)
+>>
+* select ascii(qty), qty from sp group by qty; \g 
+<<
+
++------+------+
+|col1  |qty   |
++------+------+
+|100   |   100|
+|200   |   200|
+|300   |   300|
+|400   |   400|
++------+------+
+(4 rows)
+>>
+* select ascii(10), 7, 3+5, 'string' from sp group by qty; \g 
+<<
+
++------+------+-------------+------+
+|col1  |col2  |col3         |col4  |
++------+------+-------------+------+
+|10    |     7|            8|string|
++------+------+-------------+------+
+(1 row)
+>>
+* select sno from sp group by pno; \g 
+<<
+E_US0B63 line 1, The columns in the SELECT clause must be contained in the
+    GROUP BY clause.
+    ( 6-JUL-1989 09:42:19)
+
+>>
+* select sno, pno from sp group by pno; \g 
+<<
+E_US0B63 line 1, The columns in the SELECT clause must be contained in the
+    GROUP BY clause.
+    ( 6-JUL-1989 09:42:23)
+
+>>
+* select pno, sno from sp group by pno; \g 
+<<
+E_US0B63 line 1, The columns in the SELECT clause must be contained in the
+    GROUP BY clause.
+    ( 6-JUL-1989 09:42:29)
+
+>>
+* select sno from sp group by pno, qty; \g 
+<<
+E_US0B63 line 1, The columns in the SELECT clause must be contained in the
+    GROUP BY clause.
+    ( 6-JUL-1989 09:42:34)
+
+>>
+* select ascii (sno) from sp group by pno; \g 
+<<
+E_US0B63 line 1, The columns in the SELECT clause must be contained in the
+    GROUP BY clause.
+    ( 6-JUL-1989 09:42:40)
+
+>>
+* select qty+10, sno from sp group by pno; \g 
+<<
+E_US0B63 line 1, The columns in the SELECT clause must be contained in the
+    GROUP BY clause.
+    ( 6-JUL-1989 09:42:45)
+
+>>
+* select pno from sp group by pno having avg (qty) > 300; \g 
+<<
+
++------+
+|pno   |
++------+
+|p3    |
++------+
+(1 row)
+>>
+* select pno from sp group by pno having ascii (avg (qty)) = '400' ; \g 
+<<
+
++------+
+|pno   |
++------+
++------+
+(0 rows)
+>>
+* select pno from sp group by pno having avg (qty) + 20 < 300 order by 1; \g 
+<<
+
++------+
+|pno   |
++------+
+|p2    |
+|p4    |
+|p5    |
+|p6    |
++------+
+(4 rows)
+>>
+* select pno, avg(qty) from sp group by pno having pno != 'p1' order by 1; \g 
+<<
+
++------+-----------+
+|pno   |col2       |
++------+-----------+
+|p2    |    250.000|
+|p3    |    400.000|
+|p4    |    250.000|
+|p5    |    250.000|
+|p6    |    100.000|
++------+-----------+
+(5 rows)
+>>
+* select avg(qty) from sp group by pno having 'p1' !=pno 
+<<
+>>
+*	and min (qty) > 200;\g 
+<<
+
++-----------+
+|col1       |
++-----------+
+|    400.000|
++-----------+
+(1 row)
+>>
+* select max (qty) from sp group by pno, sno having sno != 's1' and pno != 'p1' orde-
+r by 1; \g 
+<<
+
++------+
+|col1  |
++------+
+|   200|
+|   200|
+|   300|
+|   400|
+|   400|
++------+
+(5 rows)
+>>
+* select pno from sp group by pno having qty > 300; \g 
+<<
+E_US0B68 line 1, Illegal expression in the HAVING clause.
+    ( 6-JUL-1989 09:43:30)
+
+>>
+* select pno from sp group by pno having qty+40 < 400; \g 
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
+|p6    |
++------+
+(5 rows)
+>>
+* select avg(qty), pno from sp group by pno 
+<<
+>>
+*	having min(qty) > 200 and 's1' != sno; \g 
+<<
+E_US0B68 line 1, Illegal expression in the HAVING clause.
+    ( 6-JUL-1989 09:43:37)
+
+>>
+* select pno from sp group by pno having ascii(qty)= '300'; \g 
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p4    |
++------+
+(2 rows)
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Sun Jun 17 01:25:53 2001

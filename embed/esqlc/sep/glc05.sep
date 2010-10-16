@@ -1,0 +1,582 @@
+/*
+	Test Name: pza01sc.sep
+	Time: 26-AUG-1991 13:16:28
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : pza01sc
+	Module  : 3gl
+	Filename: pza01sc.sep
+	Purpose	: To test simple database operations using cursors
+	Input Files  :
+	Output Files :
+	Database     :	SEPPARAMDB
+	Tables       :	dept, employee, toberesolved
+	Synopsis     :	This application connects to database personnel, creates
+			table toberesolved and declares and opens cursor deptcsr
+			to update and delete rows from table employee and insert
+			data into table toberesolved.
+
+	History: 26-AUG-1991	Created				Author: saundra
+
+		 01-JUL-1992  	Modified (jpark)
+			Modified filenames to conform to DOS specs of
+			8 character filenames and 3 character extensions.
+			Also, replaced hard-code database names to 
+			SEPPARAMDB.
+		 29-JUL-1992	Modified (bobs)
+			Changed emp.idno from int to long and printf int to
+			long so test would work under MS-DOS.
+                 18-FEB-1993    Modified (bobs)
+                        Added "int" return from main (apxb.sc) and added
+                        "exit(0)" at end of main program, for compatibility
+                        with Tools for Windows.
+		22-FEB-1993	Modified (jpark)
+			Moved all of the delete commands to the beginning
+			of test from the end of test to conform to testing
+			standards.
+                20-Aug-1993	Modified (alices) helping jbryson to update
+			apxb.sc for 6.5.
+			Delete all intermediate files created by the 
+			language compiler at the end of the sep test.
+                13-Oct-1993	Modified (jbryson) Fixing typo and
+			removing ignore canon for compiling and linking.
+                01-Apr-1997  Modified (chiel02)
+                             Added an alternate canon for the sepcc command.
+                             Removed the platform specifications of the canons 
+                             for the esqlc command to make it work under NT.
+*/
+? delete apxb.c 
+<<
+~
+>>
+? delete apxb.o 
+<<
+~
+>>
+? delete apxb.obj 
+<<
+~
+>>
+? delete apxb.exe 
+<<
+~
+>>
+? fill emp.dat 
+!!
+Susan Abraham	31	012345	01-jan-78	toys	31456
+Richard Alanis	26	987654	16-jun-85	toys	26453
+Diane Alter	29	135790	19-aug-84	shoes	33548
+Eric Anderson	30	864209	21-sep-82	toys	28932
+David Andrew	59	024681	19-dec-68	garden	12345
+Robert Andrews	62	975318	14-may-53	toys	44957
+Joan Apodaca	27	036925	14-jul-81	linen	23941
+Ed Archibald	59	741852	01-dec-41	food	56841
+Anita Arellano	43	258147	12-oct-73	linen	23845
+Carrie Austin	71	963074	14-nov-18	toys	45923
+Bruce Badash	21	147036	23-jun-66	linen	12983
+Aiden Baker	52	852963	29-feb-60	toys	33782
+Ron Ballard	59	048261	15-apr-83	food	69812
+Barbara Banks	18	739516	12-feb-85	food	13948
+Greg Batti	38	261593	19-dec-77	toys	58749
+Joan Baulisch	61	840739	07-dec-41	toys	28012
+Mike Berrow	36	159370	12-oct-71	linen	41123
+Mike Besack	48	628407	14-nov-65	shoes	45612
+Robert Bingham	37	370482	25-dec-75	garden	21502
+Nic Birtles	44	951628	01-apr-71	garden	22087
+Brian Bishop	22	051627	01-jun-81	shoes	28715
+Gordon Bishop	33	948372	12-dec-72	tools	33971
+Lylace Blake	25	162738	11-nov-79	shoes	14023
+Robert Bley	35	509483	10-oct-82	toys	18532
+John Bowdle	39	273849	09-sep-76	toys	28333
+Ari Bowes	43	615094	08-aug-77	food	29761
+Suzie Bowman	36	384905	07-jul-80	food	31598
+Mark Boyd	58	726150	06-jun-66	shoes	35490
+Lori Bragg	21	490516	05-may-85	toys	23981
+Terry Braun	30	837261	04-apr-79	toys	33018
+Dave Brower	28	061728	03-mar-82	linen	29814
+Doreen Bueno-V	28	549382	02-feb-83	linen	28750
+Brad Bulger	30	172839	01-jan-81	garden	31602
+Jim Bunte	25	605493	01-dec-78	food	22714
+Gary Burchett	46	283945	02-nov-69	shoes	65012
+Cormac Burke	29	176054	03-oct-78	garden	12104
+Paul Butterwort	39	394506	04-sep-71	garden	67098
+John Calandrelo	32	821760	05-aug-86	toys	25413
+Fred Carter	59	450671	06-jul-71	toys	13845
+Kitty Chan	29	938217	07-jun-83	toys	21982
+!!
+? fill dept.dat 
+!!
+shoes	$45893.00	0
+toys	$89364.00	0
+food	$73591.00	0
+garden	$76123.00	0
+linen	$33578.00	0
+tools	$65728.00	0
+booze	$89928.98	0
+!!
+? fill apxa.qry 
+!!
+create dept (name=c12, totsales=money, employees=i2)
+create employee (name=c20, age=i1, idno=i4, hired=date, dept=c10, salary=money)
+copy employee (name=c0tab, age=c0tab, idno=c0tab, hired=c0tab, dept=c0tab,
+	salary=c0nl) from 
+		"emp.dat"
+copy dept (name=c0tab, totsales=c0tab, employees=c0nl) from
+	        "dept.dat"
+range of d is dept
+range of e is employee
+replace d (employees=count(e.dept by e.dept)) where e.dept=d.name
+replace d (employees=0) where d.name="booze"\p\g
+!!
+? fill apxb.sc 
+!!
+# include <stdio.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+/* The department table */
+EXEC SQL DECLARE dept TABLE
+(name          char(12) not null,  /* Department name */
+ totsales      money not null,     /* Total sales */
+ employees     smallint not null); /* Number of employees */
+
+/* The employee table */
+EXEC SQL DECLARE employee TABLE
+(name       char(20) Not null,  /* employee name */
+ age         integer1 not null, /* employee age */
+ idno        integer not null,  /* unique employee id */
+ hired       date not null,     /* date of hire */
+ dept        char(12) not null, /* department of work */
+ salary      money not null);   /* Yearly salary */
+
+/* "State-of-Limbo" for employees who lose their department */
+EXEC SQL DECLARE toberesolved TABLE
+(name       char(20) not null,
+ age         integer1 not null,
+ idno        integer not null,
+ hired       date not null,
+ dept        char(12) not null,
+ salary       money not null);
+
+EXEC SQL BEGIN DECLARE SECTION;
+# define MIN_DEPT_SALES 50000.00 /* minimum sales of department */
+# define MIN_EMP_SALARY 14000.00 /* minimum employee salary */
+# define NEARLY_RETIRED 58
+# define SALARY_REDUC 0.95
+EXEC SQL END DECLARE SECTION;
+
+/*
+** Procedure: MAIN
+** Purpose:   Main body of the application. Initialize the database,
+**            process each department and terminate the session.
+** Parameters:
+**            None
+*/
+
+int  main(argc,argv)
+int  argc;
+char *argv[];
+{
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+
+   printf( "Entering application to process expenses.\n" );
+   Init_Db(argv[1]);
+   Process_Depts();
+   End_Db();
+   printf( "Successful completion of application.\n" );
+   exit(0);
+}
+
+/*
+** Procedure: Init_Db
+** Purpose:   Initialize the database.
+**            Connect to the database, and abort if an error. Before 
+**            processing employees, create the table for employees
+**            who lose their department, "toberesolved".
+** Parameters:
+**            None
+*/
+Init_Db(dbname)
+EXEC SQL BEGIN DECLARE SECTION;
+   char *dbname;
+EXEC SQL END DECLARE SECTION;
+{
+
+   EXEC SQL WHENEVER SQLERROR STOP;
+   EXEC SQL CONNECT :dbname;
+
+   printf( "creating \"to_be_resolved\" table.\n" );
+   EXEC SQL CREATE TABLE toberesolved
+   (name     char(20) not null,
+    age      integer1 not null,
+    idno     integer not null,
+    hired    date not null,
+    dept     char(12) not null,
+    salary   money not null);
+}
+
+/*
+** Procedure: End_Db
+** Purpose:   Commit the multi-statement transaction and access to
+**            the database.
+** Parameters:
+**            None
+*/
+
+End_Db()
+{
+   EXEC SQL COMMIT;
+   EXEC SQL DISCONNECT;
+}
+
+/*
+** Procedure: Process_Depts
+** Purpose:   Scan through all the departments, processing each one.
+**            If the department has made less than $50,000 in sales, then
+**            the department is dissolved. For each department, process
+**            all the employees (they may even be moved to another table).
+**            If an employee was terminated, then update the department's
+**            employee counter.
+** Parameters:
+**            None
+*/
+
+Process_Depts()
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      struct dept_ {     /* Corresponds to the "dept" table */
+         char         name[13];
+         double      totsales;
+         short       employees;
+         } dept;
+      short emps_term = 0; /* Employees terminated */
+   EXEC SQL END DECLARE SECTION;
+   short deleted_dept;    /* Was the dept deleted? */
+   char *dept_format;     /* Formatting value */
+
+   EXEC SQL DECLARE deptcsr CURSOR FOR
+        SELECT name, totsales, employees
+               FROM dept
+               FOR DIRECT UPDATE OF name, employees;
+
+   /* All errors from this point on close down the application */
+   EXEC SQL WHENEVER SQLERROR CALL Close_Down;
+   EXEC SQL WHENEVER NOT FOUND GOTO Close_Dept_Csr;
+
+   EXEC SQL OPEN deptcsr;
+
+   while (sqlca.sqlcode == 0)
+   {
+      EXEC SQL FETCH deptcsr INTO :dept;
+
+      /* Did the department reach minimum sales? */
+      if (dept.totsales < MIN_DEPT_SALES)
+      {
+         EXEC SQL delete from dept
+            WHERE current of deptcsr;
+         deleted_dept = 1;
+         dept_format = " -- DISSOLVED --";
+      }
+      else
+      {
+         deleted_dept = 0;
+         dept_format = "";
+      }
+
+      /* Log what we have just done */
+      printf( "Department: %14s, Total Sales: %12.3f %s\n",
+            dept.name, dept.totsales, dept_format );
+
+      /* Now process each employee in the department */
+      Process_Employees( dept.name, deleted_dept, &emps_term );
+
+      /* If some employees were terminated, record this fact */
+      if (emps_term > 0 && !deleted_dept)
+      {
+         EXEC SQL update dept
+            SET employees = :dept.employees - :emps_term
+            WHERE current of deptcsr;
+      }
+
+   }
+
+Close_Dept_Csr:
+   EXEC SQL WHENEVER NOT FOUND CONTINUE;
+   EXEC SQL CLOSE deptcsr;
+}
+
+/*
+** Procedure: Process_Employees
+** Purpose:   Scan through all the employees for a particular 
+**            department.Based on given conditions the employee 
+**            may be terminated or given a salary reduction:
+**            1. If an employee was hired since 1985, the employee 
+**               is terminated.
+**            2. If the employee's yearly salary is more
+**               than the minumum company wage of $14,000 and the
+**               employee is not close to retirement (over 58 years
+**               of age), the employee takes a 5% salary reduction.
+**            3. If the employee's department is dissolved and the 
+**               employee is not terminated, then the employee is
+**               into the "toberesolved" table.
+** Parameters:
+**            dept_name    - Name of current department.
+**            deleted_dept - Is current department being dissolved?
+**            emps_term    - Set locally to record how many employees
+**                           were terminated for the current department.
+*/
+
+Process_Employees( dept_name, deleted_dept, emps_term )
+char *dept_name;
+short deleted_dept;
+short *emps_term;
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      struct    emp_ { /* corresponds to "employee" table */
+         char      name[21];
+         short     age;
+         int       idno;
+         char      hired[26];
+         float     salary;
+         int       hired_since_85;
+      } emp;
+      char *dname = dept_name;
+
+   EXEC SQL END DECLARE SECTION;
+   char *title; /* Formatting values */
+   char *description;
+
+   /*
+   ** Note the use of the INGRES function to find out who has been
+   ** hired since 1985.
+   */
+   EXEC SQL DECLARE empcsr CURSOR FOR
+            SELECT name, age, idno, hired, salary,
+                  int4(INTERVAL('days', hired-date('01-jan-1985')))
+            FROM employee
+            WHERE dept = :dname
+            FOR DIRECT UPDATE OF name, salary;
+
+   /* All errors from this point on close down the application */
+   EXEC SQL WHENEVER SQLERROR CALL Close_Down;
+   EXEC SQL WHENEVER NOT FOUND GOTO Close_Emp_Csr;
+
+   EXEC SQL OPEN empcsr;
+
+   *emps_term = 0; /* Record how many */
+   while (sqlca.sqlcode == 0)
+   {
+      EXEC SQL FETCH empcsr INTO :emp;
+
+      if (emp.hired_since_85 > 0)
+      {
+         EXEC SQL DELETE FROM employee
+            WHERE CURRENT OF empcsr;
+         title = "Terminated:";
+         description = "Reason: Hired since 1985.";
+         (*emps_term)++;
+
+      }
+      else
+      {
+         /* Reduce salary if not nearly retired */
+         if (emp.salary > MIN_EMP_SALARY)
+         {
+            if (emp.age < NEARLY_RETIRED)
+            {
+               EXEC SQL UPDATE employee
+                  SET salary = salary * :SALARY_REDUC
+                  WHERE CURRENT OF empcsr;
+               title = "reduction: ";
+               description = "Reason: Salary.";
+            }
+            else
+            {
+               /* Do not reduce salary */
+               title = "No Changes:";
+               description = "Reason: Retiring.";
+            }
+
+         }
+         else /* Leave employee alone */
+         {
+            title = "No Changes:";
+            description = "Reason: Salary.";
+         }
+
+         /* Was employee's department dissolved? */
+         if (deleted_dept)
+         {
+            EXEC SQL INSERT INTO toberesolved
+               SELECT *
+                  FROM employee
+                  WHERE idno = :emp.idno;
+
+            EXEC SQL DELETE FROM employee
+               WHERE CURRENT OF empcsr;
+         }
+      }
+
+      /* Log the employee's information */
+      printf( " %s %6d, %20s, %2d, %8.2f; %s\n",
+         title, emp.idno, emp.name, emp.age, emp.salary, description );
+   }
+
+Close_Emp_Csr:
+   EXEC SQL WHENEVER NOT FOUND CONTINUE;
+   EXEC SQL CLOSE empcsr;
+}
+
+/*
+** Procedure: Close_Down
+** Purpose:   Error handler called any time after Init_Db has been
+**            successfully completed. In all cases, print the cause of
+**            the error and abort the transaction, backing out changes.
+**            Note that disconnecting from the database will implicitly
+**            close any open cursors.
+** Parameters:
+**            None
+*/
+
+Close_Down()
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char errbuf[101];
+   EXEC SQL END DECLARE SECTION;
+
+   EXEC SQL WHENEVER SQLERROR CONTINUE; /* turn off error handling */
+
+   EXEC SQL INQUIRE_SQL (:errbuf = errortext);
+   printf( "Closing Down because of database error:\n" );
+   printf( "%s\n", errbuf );
+
+   EXEC SQL ROLLBACK;
+   EXEC SQL DISCONNECT;
+   exit( -1 );
+}
+!!
+? quel SEPPARAMDB 
+<<
+~
+>>
+* destroy dept, employee, toberesolved\g 
+<<
+~
+>>
+* \i apxa.qry 
+<<
+ create dept (name=c12, totsales=money, employees=i2)
+create employee (name=c20, age=i1, idno=i4, hired=date, dept=c10, salary=money)
+copy employee (name=c0tab, age=c0tab, idno=c0tab, hired=c0tab, dept=c0tab,
+	salary=c0nl) from 
+		"emp.dat"
+copy dept (name=c0tab, totsales=c0tab, employees=c0nl) from
+	        "dept.dat"
+range of d is dept
+range of e is employee
+replace d (employees=count(e.dept by e.dept)) where e.dept=d.name
+replace d (employees=0) where d.name="booze"
+
+(40 rows)
+(7 rows)
+(6 rows)
+(1 row)
+continue
+* 
+>>
+* \q 
+<<
+~
+>>
+? esqlc apxb.sc 
+<< 
+>>
+<< 
+ESQL apxb.sc:
+>>
+? sepcc apxb 
+<<
+>>
+<<
+apxb.c
+>>
+? seplnk apxb 
+<<
+>>
+? run apxb.exe SEPPARAMDB 
+<<
+Entering application to process expenses.
+creating "to_be_resolved" table.
+Department:   shoes       , Total Sales:    45893.000  -- DISSOLVED --
+ reduction:  135790, Diane Alter         , 29, 33548.00; Reason: Salary.
+ reduction:  628407, Mike Besack         , 48, 45612.00; Reason: Salary.
+ reduction:   51627, Brian Bishop        , 22, 28715.00; Reason: Salary.
+ reduction:  162738, Lylace Blake        , 25, 14023.00; Reason: Salary.
+ No Changes: 726150, Mark Boyd           , 58, 35490.00; Reason: Retiring.
+ reduction:  283945, Gary Burchett       , 46, 65012.00; Reason: Salary.
+Department:   toys        , Total Sales:    89364.000 
+ reduction:   12345, Susan Abraham       , 31, 31456.00; Reason: Salary.
+ Terminated: 987654, Richard Alanis      , 26, 26453.00; Reason: Hired since 1985.
+ reduction:  864209, Eric Anderson       , 30, 28932.00; Reason: Salary.
+ No Changes: 975318, Robert Andrews      , 62, 44957.00; Reason: Retiring.
+ No Changes: 963074, Carrie Austin       , 71, 45923.00; Reason: Retiring.
+ reduction:  852963, Aiden Baker         , 52, 33782.00; Reason: Salary.
+ reduction:  261593, Greg Batti          , 38, 58749.00; Reason: Salary.
+ No Changes: 840739, Joan Baulisch       , 61, 28012.00; Reason: Retiring.
+ reduction:  509483, Robert Bley         , 35, 18532.00; Reason: Salary.
+ reduction:  273849, John Bowdle         , 39, 28333.00; Reason: Salary.
+ Terminated: 490516, Lori Bragg          , 21, 23981.00; Reason: Hired since 1985.
+ reduction:  837261, Terry Braun         , 30, 33018.00; Reason: Salary.
+ Terminated: 821760, John Calandrelo     , 32, 25413.00; Reason: Hired since 1985.
+ No Changes: 450671, Fred Carter         , 59, 13845.00; Reason: Salary.
+ reduction:  938217, Kitty Chan          , 29, 21982.00; Reason: Salary.
+Department:   food        , Total Sales:    73591.000 
+ No Changes: 741852, Ed Archibald        , 59, 56841.00; Reason: Retiring.
+ No Changes:  48261, Ron Ballard         , 59, 69812.00; Reason: Retiring.
+ Terminated: 739516, Barbara Banks       , 18, 13948.00; Reason: Hired since 1985.
+ reduction:  615094, Ari Bowes           , 43, 29761.00; Reason: Salary.
+ reduction:  384905, Suzie Bowman        , 36, 31598.00; Reason: Salary.
+ reduction:  605493, Jim Bunte           , 25, 22714.00; Reason: Salary.
+Department:   garden      , Total Sales:    76123.000 
+ No Changes:  24681, David Andrew        , 59, 12345.00; Reason: Salary.
+ reduction:  370482, Robert Bingham      , 37, 21502.00; Reason: Salary.
+ reduction:  951628, Nic Birtles         , 44, 22087.00; Reason: Salary.
+ reduction:  172839, Brad Bulger         , 30, 31602.00; Reason: Salary.
+ No Changes: 176054, Cormac Burke        , 29, 12104.00; Reason: Salary.
+ reduction:  394506, Paul Butterwort     , 39, 67098.00; Reason: Salary.
+Department:   linen       , Total Sales:    33578.000  -- DISSOLVED --
+ reduction:   36925, Joan Apodaca        , 27, 23941.00; Reason: Salary.
+ reduction:  258147, Anita Arellano      , 43, 23845.00; Reason: Salary.
+ No Changes: 147036, Bruce Badash        , 21, 12983.00; Reason: Salary.
+ reduction:  159370, Mike Berrow         , 36, 41123.00; Reason: Salary.
+ reduction:   61728, Dave Brower         , 28, 29814.00; Reason: Salary.
+ reduction:  549382, Doreen Bueno-V      , 28, 28750.00; Reason: Salary.
+Department:   tools       , Total Sales:    65728.000 
+ reduction:  948372, Gordon Bishop       , 33, 33971.00; Reason: Salary.
+Department:   booze       , Total Sales:    89928.980 
+Successful completion of application.
+>>
+? delete apxb.c 
+<<
+~
+>>
+? delete apxb.o 
+<<
+~
+>>
+? delete apxb.obj 
+<<
+~
+>>
+? delete apxb.exe 
+<<
+~
+>>
+
+
+Ending at: Thu Aug 19 13:28:14 1993

@@ -1,0 +1,480 @@
+/*
+	Test Name   : CER-04
+	Time        : 12-JUN-1989 11:54:55
+	User Name   : qatest
+
+	Test ID     : wfa01
+	Module      : REPORT and SREPORT
+	Filename    : wfa01.sep
+	Purpose     : Certification Test
+	Input Files : xwfa01a.rw
+	Output Files: xwfa01a.res, xwfa01b.res, xwfa01c.res
+	Database    : SEPPARAMDB
+	Tables      : qeemp, qedept, qebldg, wfa01c_qetotsales
+	Synopsis    :
+		Run DELETER to remove reports used in this test.
+		Use FILL to write 3 report specifications to a file.
+		Use SREPORT to save the 3 report specifications in database.
+		Use REPORT on each specification, sending results to file.
+
+	History     : 12-jun-1989	edt	Created
+	  13-Jan-1993	(victor) Removed altcanons for sreport and added ignore
+			results since sreport is already tested in this suite.
+	  31-Aug-1993	uncharee should be qebldg and not bldg
+	  01-May-1995	(ciodi01)       Modified
+			Due to SEP bug 66364, running a report command with
+			command-line initialization of variables causes the
+			test to hang.  This test will be removed from the file
+			$TST_CFG/ferw.lis and will now be run by hand. The
+			portion of the test from the "report" command to the
+			end of the file is left in the test for clarity, but is
+			commented.
+	 Automated Instructions:
+	 ======================
+	 Run the sep test wfa01.sep.
+	 Hand Instructions:
+	 =================
+	 Enter the following at the command-line prompt:
+	 report SEPPARAMDB wfa01c -fxwfa01c.res "(cur_month_yr='June 1989')"
+	 Results:
+  	 =======
+	 After all of the report-writer hand tests have been executed,
+	 run the sep test $ING_TST/fe/rw/hand/rwhand.sep. This will check 
+	 all of the output files and should complete with no diffs.
+	   1-May-1996 	(clate01) Modified canons to work for NT
+          10-Sep-1996	(clate01) cleanup the unnecessary diffs
+          23-Mar-2000	(vande02) Adding main canon from type xwba01a.res gets
+				  different sort order.
+          26-Jun-2001	(rogch01) Row order changes.  Because the report sort
+				  order is now forced, several alternate canons
+				  are no longer needed.  Lost some copyright
+				  canons for good measure; the years are
+				  tokenised and if it does return "Relational
+				  Technology", it's a bug.
+          28-Jun-2004   (vande02) Adding if/endif for SEPPARAMFULLQA to set SEP
+                                  flag 'sepset nodelete' for FULL QA only and
+                                  front-end files will remain for hand tests.
+                                  Aligned history comments.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+.if SEPPARAMFULLQA = "TRUE"
+? sepset nodelete
+<<
+SEP internal variable 'nodelete' is set.
+>>
+.else
+.endif
+? delobj SEPPARAMDB -report wfa01a wfa01b wfa01c 
+<<
+~
+>>
+? fill xwfa01a.rw 
+!!
+.NAME	wfa01a
+.SREM	REPORT Certification -- empmail
+.QUERY
+	SELECT	e.qename, d.qedname, d.qefloor, b.qest_adr, b.qecity,
+		b.qestate, b.qezip
+	FROM	qeemp e, qedept d, qebldg b
+	WHERE	e.qedept=d.qedname and e.qediv=d.qediv and d.qebldg=b.qebldg
+.SORT	qezip:a, qename:a
+.NOFORMFEEDS
+.HEADER	report
+	.PAGELENGTH 8
+	.LEFTMARGIN 0
+	.RIGHTMARGIN 91
+	.BLOCK
+.DETAIL
+	.TOP
+	.LINESTART
+	.PRINTLINE qename
+	.PRINTLINE qedname,"   floor ",qefloor(f2)
+	.PRINTLINE qest_adr(cf0.30)
+	.PRINTLINE qecity(c0),", ",qestate(c0),"   ",qezip
+	.IF left_margin+50 < right_margin .THEN
+		.LEFTMARGIN +25
+	.ELSE
+		.ENDBLOCK
+		.NEWPAGE
+		.LEFTMARGIN 0
+		.BLOCK
+	.ENDIF
+.FOOTER	report
+	.ENDBLOCK
+	.NEWPAGE
+
+
+.NAME	wfa01b
+.SREM	REPORT Certification -- mgrcnt
+.QUERY
+	SELECT	e.qemgr, e.qedept, qecntemp=count(e.qename)
+	FROM	qeemp e
+	GROUP BY e.qemgr, e.qedept
+.SORT	qemgr : a
+.NOFORMFEEDS
+.HEADER	report
+	.NP
+.HEADER	page
+	.NL
+	.UL
+		.ULCHARACTER "#"
+		.CE .PR "NUMBER OF EMPLOYEES BY DEPARTMENT MANAGERS"
+	.NOU
+	.NL 2
+	.UL
+		.ULCHAR "-"
+		.PR "MGR NAME"
+		.TAB 30 .PR "ADMIN"
+		.TAB 40 .PR "SALES"
+		.TAB 50 .PR "TECH SUPPORT"
+		.NL 2
+	.NOU
+.FOOTER	page
+	.NL 2
+.HEADER	qemgr
+	.NULLSTRING "[manager name missing]"
+	.TAB 1
+	.PR qemgr(c28)
+.DETAIL
+	.IF qedept="admin" .THEN
+		.TAB 30 .PR qecntemp("zn")
+	.ELSEIF qedept="sales" .THEN
+		.TAB 40 .PR qecntemp("zn")
+	.ELSEIF qedept="tech sup" .THEN
+		.TAB 50 .PR qecntemp("zn")
+	.ELSE
+		.TAB 65 .PR "[market: ",qecntemp("zn"),"]"
+	.ENDIF
+.FOOTER	qemgr
+	.NL
+
+
+.NAME	wfa01c
+.SREM	REPORT Certification -- percentsales
+.QUERY
+	SELECT	QEDIV, QENUM_EMP, QESALES, QETOTSALES
+	FROM	QEDEPT, wfa01c_qetotsales
+	WHERE	lowercase(QEDNAME)='sales'
+.SORT	QESALES : d
+.NOFORMFEEDS
+.DECLARE
+	divcnt = integer,
+	empcnt = integer, emptot = integer, empavg = integer,
+	salesmin = float, salesmin_div = char(3), 
+	salesmax = float, salesmax_div = char(3)
+.HEADER	report
+	.FORMAT QESALES, QETOTSALES("$ZZZ,ZZZ,ZZN")
+	.NEWPAGE
+	.let divcnt := 0
+	.let empcnt := 0
+	.let emptot := 0
+	.let empavg := 0
+	.let salesmin = 0.00
+	.let salesmin_div = ""
+	.let salesmax = 0.00
+	.let salesmax_div = ""
+.HEADER	page
+	.NL 2
+	.CE .PR "CHAS ACKERMAN & COMPANY" .NL 2
+	.CE .PR "PERCENT OF TOTAL SALES BY REGIONAL SALES DIVISIONS" .NL
+	.CE .PR $CUR_MONTH_YR .NL 3
+	.T 5 .PR "REGION   NUMBER OF   MONTHLY SALES   % OF TOTAL SALES" .NL
+	.T 14 .PR "EMPLOYEES      VOLUME"
+.DETAIL
+	.NL
+	.T 5 .PR QEDIV
+	.T 13 .PR QENUM_EMP
+	.T 26 .PR QESALES
+	.T 48 .PR (100*(QESALES/QETOTSALES))(F5.1),"%"
+	.let divcnt = divcnt + 1
+	.let empcnt = empcnt + 1
+	.let emptot = emptot + QENUM_EMP
+	.if QESALES <= salesmin .then
+		.let salesmin := QESALES
+		.let salesmin_div := QEDIV
+	.endif
+	.if QESALES >= salesmax .then
+		.let salesmax := QESALES
+		.let salesmax_div := QEDIV
+	.endif
+.FOOTER	report
+	.NL 2
+	.T 5 .PR "TOTAL SALES VOLUME"
+	.T 26 .PR QETOTSALES
+	.T 48 .PR (100*(QETOTSALES/QETOTSALES))(F5.1),"%"
+	.T 57 .PR "DATE RUN: ",CURRENT_DATE
+	.NEWLINE 2
+	.let empavg = emptot / empcnt
+	.LINESTART .PR "divcnt: ", divcnt(n4)
+	.LINEEND   .PR " count(QEDIV): ", count(QEDIV) .NL
+	.LINESTART .PR "emptot: ", emptot(n4)
+	.LINEEND   .PR " sum(QENUM_EMP): ", sum(QENUM_EMP) .NL
+	.LINESTART .PR "empavg: ", empavg(n4)
+	.LINEEND   .PR " avg(QENUM_EMP): ", avg(QENUM_EMP) .NL
+	.NEWLINE 2
+	.LEFT   .PR "MIN div: ", salesmin_div
+	.CENTER .PR "sales: ", salesmin("$ZZZ,ZZZ,ZZN")
+	.RIGHT  .PR "min(QESALES): ", min(QESALES)("$ZZZ,ZZZ,ZZN")
+	.NEWLINE
+	.LEFT   .PR "MAX div: ", salesmax_div
+	.CENTER .PR "sales: ", salesmax("$ZZZ,ZZZ,ZZN")
+	.RIGHT  .PR "max(QESALES): ", max(QESALES)("$ZZZ,ZZZ,ZZN")
+	.NEWLINE
+!!
+? sreport SEPPARAMDB xwfa01a.rw 
+<<
+~
+>>
+? report SEPPARAMDB wfa01a -fxwfa01a.res 
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+? type xwfa01a.res 
+<<
+Aitken                   Cameron                  Mandic
+sales      floor 18      tech sup   floor 19      sales      floor 18
+24130 Pennsylvania Ave   24130 Pennsylvania Ave   24130 Pennsylvania Ave
+Washington, DC   20198   Washington, DC   20198   Washington, DC   20198
+
+
+
+
+Ming                     Robinson                 Sabel
+tech sup   floor 19      sales      floor 18      tech sup   floor 19
+24130 Pennsylvania Ave   24130 Pennsylvania Ave   24130 Pennsylvania Ave
+Washington, DC   20198   Washington, DC   20198   Washington, DC   20198
+
+
+
+
+Shigio                   Stein                    Zimmerman
+sales      floor 18      sales      floor 18      tech sup   floor 17
+24130 Pennsylvania Ave   24130 Pennsylvania Ave   24130 Pennsylvania Ave
+Washington, DC   20198   Washington, DC   20198   Washington, DC   20198
+
+
+
+
+Gordon                   Kreseski                 McShane
+tech sup   floor  2      tech sup   floor  2      admin      floor  2
+900 Lake Shore Blvd      900 Lake Shore Blvd      900 Lake Shore Blvd
+Chicago, IL   60080      Chicago, IL   60080      Chicago, IL   60080
+
+
+
+
+Saxena                   Stover                   Verducci
+tech sup   floor  2      admin      floor  2      admin      floor  2
+900 Lake Shore Blvd      900 Lake Shore Blvd      900 Lake Shore Blvd
+Chicago, IL   60080      Chicago, IL   60080      Chicago, IL   60080
+
+
+
+
+Blumberg                 Brodie                   Clark
+sales      floor  1      sales      floor  2      sales      floor  2
+42318 Woodsay Blvd       1000 University Ave      1000 University Ave
+Houston, TX   77009      Berkeley, CA   94000     Berkeley, CA   94000
+
+
+
+
+Giller                   Green                    Gregori
+sales      floor  2      market     floor  1      sales      floor  2
+1000 University Ave      1000 University Ave      1000 University Ave
+Berkeley, CA   94000     Berkeley, CA   94000     Berkeley, CA   94000
+
+
+
+
+Huber                    Kay                      McTigue
+sales      floor  2      sales      floor  2      sales      floor  2
+1000 University Ave      1000 University Ave      1000 University Ave
+Berkeley, CA   94000     Berkeley, CA   94000     Berkeley, CA   94000
+
+
+
+
+Stannich                 Curan                    Curry
+market     floor  1      tech sup   floor  1      tech sup   floor  1
+1000 University Ave      1800 Shattuck Ave        1800 Shattuck Ave
+Berkeley, CA   94000     Berkeley, CA   94100     Berkeley, CA   94100
+
+
+
+
+Ramos                    Sullivan
+tech sup   floor  1      tech sup   floor  1
+1800 Shattuck Ave        1800 Shattuck Ave
+Berkeley, CA   94100     Berkeley, CA   94100
+
+
+
+
+>>
+? delete xwfa01a.res 
+<<
+file was deleted
+>>
+? report SEPPARAMDB wfa01b -fxwfa01b.res 
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+? type xwfa01b.res 
+<<
+
+                 NUMBER OF EMPLOYEES BY DEPARTMENT MANAGERS
+                 ###### ## ######### ## ########## ########
+
+MGR NAME                      ADMIN     SALES     TECH SUPPORT
+--- ----                      -----     -----     ---- -------
+
+                               1
+ Clark                         2         5
+ McTigue                                                         [market:  2]
+ Shigio                                           11
+ Verducci                                8
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>
+? delete xwfa01b.res 
+<<
+file was deleted
+>>
+/*
+? report SEPPARAMDB wfa01c -fxwfa01c.res "(cur_month_yr='June 1989')" 
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+? type xwfa01c.res 
+<<
+
+
+                                   CHAS ACKERMAN & COMPANY
+
+                     PERCENT OF TOTAL SALES BY REGIONAL SALES DIVISIONS
+                                          June 1989
+
+
+     REGION   NUMBER OF   MONTHLY SALES   % OF TOTAL SALES
+              EMPLOYEES      VOLUME
+
+     NW           1       $    200,000           33.9%
+     SE           1       $    175,000           29.7%
+     NC           1       $    120,000           20.3%
+     SC           1       $     95,000           16.1%
+     NE           4       $          0            0.0%
+
+     TOTAL SALES VOLUME   $    590,000          100.0%   DATE RUN: 24-aug-1989
+
+divcnt:    5 count(QEDIV):   5
+emptot:    8 sum(QENUM_EMP):      8
+empavg:    1 avg(QENUM_EMP):      2
+
+
+MIN div: NE                          sales: $          0          min(QESALES): $   -
+       0
+MAX div: NW                          sales: $    200,000          max(QESALES): $   -
+ 200,000
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>
+? delete xwfa01c.res 
+<<
+file was deleted
+>>
+? delobj SEPPARAMDB -report wfa01a wfa01b wfa01c 
+<<
+~
+>>
+*/
+
+
+Ending at: Tue Jun 26 04:13:21 2001

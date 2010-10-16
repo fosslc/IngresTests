@@ -1,0 +1,703 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name    : qp045.sep (formerly eea01.sep)
+	User Name    : testenv
+	Module       : ESQLC
+	Filename     : qp045.sep
+	Purpose      : Test read-only cursors inside an MQT
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     :
+	History      :
+	  26-feb-1987 - written for 6.0 tests (pad)
+	  21-may-1990 - rewritten for ESQL instead of EQUEL by Olga Pekelny
+          22-jul-1991 - rewritten by Troy Camacho
+           2-Mar-1994	(camacho) Edited test to remove the use of driver. It
+				  was not needed and slowed down the test.
+	   7-MAR-1997   (vissu01) Modified for NT
+	  23-Mar-1999   (vande02) Hard-coded VPG_SZ to 8K and changed 'sql -s
+                                  SEPPARAMDB' canon to be empty, in order to
+				  catch the msg. "TM could not connect ..." if
+				  the test database did not exist.
+          11-jun-2003	(abbjo03) Add includes and other changes to avoid
+				  warnings on VMS.
+          15-Sep-2008	(vande02) Added conditional canon to allow for UTF8
+                                  collation sequence order. Header cleanup.
+*/
+? fill eea01a.dat 
+!!
+    6Aitken	  50000.000	    5sales	    2NE	    8Verducci	   1112-mar-1947	     2
+
+    7Cameron	  35000.000	    8tech sup	    2SE	    6Shigio	   1115-aug-1960	     0
+
+    5Clark	  40000.000	    5sales	    2NC	    8Verducci	   1118-nov-1949	     1
+
+    5Curan	  30000.000	    8tech sup	    2NW	    6Shigio	   1120-aug-1959	     0
+
+    5Curry	  32000.000	    8tech sup	    2NW	    6Shigio	   1130-nov-1955	     3
+
+    6Gordon	  27000.000	    8tech sup	    2NC	    6Shigio	   1123-may-1963	     0
+
+    5Green	  26000.000	    6market	    2NW	    7McTigue	   1119-dec-1961	     0
+
+    7Gregori	  31000.000	    5sales	    2NW	    8Verducci	   1121-oct-1949	     2
+
+    8Kreseski	  24000.000	    8tech sup	    2NC	    6Shigio	   1111-sep-1955	     0
+
+    6Mandic	  43000.000	    5sales	    2SE	    8Verducci	   1110-jul-1964	     0
+
+    7McTigue	  41000.000	    5sales	    2NW	    8Verducci	   11 9-apr-1953	     1
+
+    4Ming	  22000.000	    8tech sup	    2SE	    6Shigio	   11 4-may-1956	     1
+
+    5Ramos	  30000.000	    8tech sup	    2NW	    6Shigio	   1121-jan-1941	     0
+
+    8Robinson	  80000.000	    5sales	    2NE	    8Verducci	   1120-nov-1952	     1
+
+    5Sabel	  21000.000	    8tech sup	    2SE	    6Shigio	   11 8-jan-1958	     0
+
+    6Saxena	  22000.000	    8tech sup	    2NC	    6Shigio	   11 8-may-1950	     0
+
+    6Shigio	  28000.000	    5sales	    2SE	    8Verducci	   11 9-jul-1948	     3
+
+    8Stannich	  33000.000	    6market	    2NW	    7McTigue	   1113-dec-1961	     0
+
+    5Stein	  40000.000	    5sales	    2NE	    8Verducci	   1125-dec-1952	     1
+
+    8Sullivan	  35000.000	    8tech sup	    2NW	    6Shigio	   1110-oct-1960	     1
+
+    8Verducci	  55000.000	    5admin	    2NW	    0	   1125-dec-1958	     2
+
+    9Zimmerman	  25000.000	    8tech sup	    2NE	    6Shigio	   1128-aug-1962	     0
+
+    7DiTallo	  65000.000	    8Contract	    3unk	    8Robinson	   1102-sep-1955	     -
+0
+
+    7Herbert	  35000.000	    7banking	    0	    9Emprinham	   1117-mar-1945	     0
+
+!!
+? fill eea01b.dat 
+!!
+admin   NW                 0.00C  2     4
+market  NW              9200.00A  1     2
+sales   NC            120000.00A  2     1
+sales   NE                 0.00D 18     4
+sales   NW            200000.00A  2     1
+sales   SC             95000.00E  1     1
+sales   SE            175000.00D 18     1
+tech supNC              5000.00C  2     3
+tech supNE             20000.00D 17     2
+tech supNW                 0.00B  1     1
+tech supSE                 0.00D 19     1
+!!
+? fill eea01.sc 
+!!
+#include <stdio.h>
+#include <stdlib.h>
+exec sql include sqlca;
+
+main(argc, argv)
+exec sql begin declare section;
+  	int argc;
+  	char **argv;
+exec sql end declare section;
+{
+
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever not found call sqlprint;
+exec sql whenever sqlwarning call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+EXEC SQL BEGIN DECLARE SECTION;
+
+	/* Declarations for EMP basis table */
+
+	char	ename[11];
+	int	esalary;	/* Really money but no decimal places */
+	char	edept[9];
+	char	ediv[4];
+	char	emgr[11];
+	char	ebirthdate[26];
+	short	enum_dep;
+	/* Declarations for DEPT basis table */
+	char	ddname[9];
+	char	ddiv[4];
+	double	dsales;		/* Really money but no decimal places */
+	char	dbldg[3];
+	short	dfloor;
+	short	dnum_emp;
+	int	done;				/* to signal end of cursor */
+	int	err;				/* Error number */
+
+EXEC SQL END DECLARE SECTION;
+
+
+printf("\n***************\n");
+printf("*    EEA01    *\n");
+printf("***************\n\n");
+
+printf("connecting with database...\n");
+exec sql connect :argv[1];
+
+
+EXEC SQL DECLARE c1 CURSOR FOR
+	            SELECT DISTINCT name, salary, dept, div, 
+				    mgr, birthdate, num_dep
+		    FROM emp
+		    ORDER BY dept desc, div asc, name desc;
+
+	/* with qualification */
+EXEC SQL DECLARE c2 CURSOR FOR
+			SELECT name, mgr
+			FROM emp WHERE div = 'NC'
+			ORDER BY name;
+
+	/*  more complex qualification, and arithmetic operations  */
+EXEC SQL	DECLARE c3 CURSOR FOR
+			SELECT DISTINCT name, salary FROM emp
+			WHERE mgr = 'Clark' and salary > 32000.00
+			ORDER BY salary desc;
+
+	/*  should be same as previous one  */
+EXEC SQL	DECLARE c4 CURSOR FOR
+			SELECT DISTINCT name, salary FROM emp
+			WHERE mgr = 'Clark' and salary > (32*1000)
+			ORDER BY salary desc;
+
+	/*  uses DISTINCT keyword and ORDER BY  */
+EXEC SQL	DECLARE c5 CURSOR FOR
+			SELECT DISTINCT name, birthdate FROM emp
+			WHERE dept = 'tech sup'
+			ORDER BY name desc;
+
+	/*  uses aggregate  */
+EXEC SQL	DECLARE c6 CURSOR FOR
+			SELECT sum(salary) FROM emp
+			WHERE dept = 'market';
+
+	/*  retrieves only constants  */
+EXEC SQL	DECLARE c7 CURSOR FOR
+			SELECT 'TEST', 'DEPT', 'NOT A DATE' FROM emp
+			WHERE name = 'Ai*';
+
+	/*  a join, and ORDER BY  */
+EXEC SQL DECLARE c8 CURSOR FOR
+	 SELECT DISTINCT e.name, d.dname, d.div, d.bldg, d.floor
+	 FROM emp e, dept d
+	 WHERE e.dept = d.dname and e.div = d.div and d.floor = 2
+	 ORDER BY dname, div, name;
+
+	/*  uses DISTINCT against duplicate values  */
+EXEC SQL	DECLARE c9 CURSOR FOR
+			SELECT DISTINCT dept FROM emp
+			ORDER BY dept desc;
+
+	/*  GENERIC RERIEVE BEGIN  */
+
+	printf( "ESQL SELECT Test\n\n" );
+	printf( "Regular (non-PARAM) SELECTs\n" );
+	printf( "(1) emp(all)\n" );
+	done = 0;
+	err  = 0;
+EXEC SQL OPEN c1;
+EXEC SQL INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+	{
+EXEC SQL FETCH c1 
+	 INTO :ename, :esalary, :edept, :ediv, :emgr,
+	      :ebirthdate, :enum_dep;
+EXEC SQL INQUIRE_INGRES (:done = endquery, :err = errorno);
+	if (!done && !err)
+	      printf("%-11s, %6d, %-4s, %-3s, %-11s, %-13.13s, %3d\n",
+		ename,esalary,edept,ediv,emgr,ebirthdate,enum_dep );
+	}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL CLOSE c1;
+EXEC SQL INQUIRE_INGRES (:err = errorno);
+	if (err) 
+	      printf( "Error closing c1 = %d\n", err );
+	printf( "\n(2) emp(name, mgr) where div=NC\n" );
+	done = 0;
+	err  = 0;
+EXEC SQL OPEN c2;
+EXEC SQL INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+		{
+EXEC SQL FETCH c2 
+	 INTO :ename, :emgr;
+EXEC SQL INQUIRE_INGRES (:done = endquery, :err = errorno);
+		if (!done && !err)
+			printf( "%-11s, %-11s\n", ename, emgr );
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL CLOSE c2;
+EXEC SQL INQUIRE_INGRES (:err = errorno);
+	if (err) 
+	      printf( "Error closing c2 = %d\n", err );
+	printf( "\n(3) emp(name, salary*point_5) where mgr=Clark and \
+salary>32000.00\n" );
+	done = 0;
+	err  = 0;
+EXEC SQL	OPEN c3;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+		{
+EXEC SQL		FETCH c3 
+			INTO :ename, :esalary;
+EXEC SQL		INQUIRE_INGRES (:done = endquery, :err = errorno);
+		if (!done && !err)
+			printf( "%-11.11s, %6d.00\n", ename, esalary );
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL	CLOSE c3;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	if (err) printf( "Error closing c3 = %d\n", err );
+
+	/*  Results should be same as previous query  */
+	printf( "\n(4) emp(name, salary/2) where mgr=Clark and \
+		salary>(32*100)\n" );
+	done = 0;
+	err  = 0;
+EXEC SQL	OPEN c4;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+		{
+EXEC SQL		FETCH c4 
+			INTO :ename, :esalary;
+EXEC SQL		INQUIRE_INGRES (:done = endquery, :err = errorno);
+		if (!done && !err)
+			printf( "%-11.11s, %6d.00\n", ename, esalary );
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL	CLOSE c4;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	if (err) printf( "Error closing c4 = %d\n", err );
+
+	printf( "\n(5) emp(name, birthdate) where dept=<tech sup> \
+ORDER by ename d\n" );
+	done = 0;
+	err  = 0;
+EXEC SQL	OPEN c5;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+		{
+EXEC SQL		FETCH c5 
+			INTO :ename, :ebirthdate;
+EXEC SQL		INQUIRE_INGRES (:done = endquery, :err = errorno);
+		if (!done && !err)
+			printf( "%-11.11s, %-15.15s\n", ename, ebirthdate );
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL	CLOSE c5;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	if (err) printf( "Error closing c5 = %d\n", err );
+
+	printf( "\n(6) SUM emp(salary) where dept=<market>\n" );
+	done = 0;
+	err  = 0;
+EXEC SQL	OPEN c6;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+		{
+EXEC SQL		FETCH c6 INTO :esalary;
+EXEC SQL		INQUIRE_INGRES (:done = endquery, :err = errorno);
+		if (!done && !err)
+			printf( "%8d.00\n", esalary );
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL	CLOSE c6;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	if (err) printf( "Error closing c6 = %d\n", err );
+
+	printf( "\n(7) ename=<TEST>, edept=<DEPT>, ebirthdate=<NOT A DATE> \
+where emp.name=<Ai*>\n" );
+	done = 0;
+	err  = 0;
+EXEC SQL	OPEN c7;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+		{
+EXEC SQL		FETCH c7 
+			INTO :ename, :edept, :ebirthdate;
+EXEC SQL		INQUIRE_INGRES (:done = endquery, :err = errorno);
+		if (!done && !err)
+			printf( "%-11.11s, %-5.5s, %-16.16s\n", 
+				ename, edept, ebirthdate );
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL	CLOSE c7;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	if (err) printf( "Error closing c7 = %d\n", err );
+
+	printf( "\n(8) All employees on floor 2\n" );
+	printf( "emp(name) DEPT(name,div,bldg,floor) JOIN(dept,div) & \
+floor=2\n");
+	done = 0;
+	err  = 0;
+EXEC SQL	OPEN c8;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+		{
+EXEC SQL		FETCH c8 
+			INTO :ename, :ddname, :ddiv, :dbldg, :dfloor;
+EXEC SQL		INQUIRE_INGRES (:done = endquery, :err = errorno);
+		if (!done && !err)
+			printf( "%-11.11s, %-9.9s, %-3.3s, %-2.2s, %2d\n",
+			ename, ddname, ddiv, dbldg, dfloor );
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL	CLOSE c8;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	if (err) printf( "Error closing c8 = %d\n", err );
+
+	printf( "\n(9) UNIQUE of emp(dept) ORDER:d\n" );
+	done = 0;
+	err  = 0;
+EXEC SQL	OPEN c9;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	while (!done && !err)
+		{
+EXEC SQL		FETCH c9 INTO :edept;
+EXEC SQL		INQUIRE_INGRES (:done = endquery, :err = errorno);
+		if (!done && !err)
+			printf( "%-10.10s\n", edept );
+		}
+	if (err) printf( "Error = %d\n", err );
+	err  = 0;
+EXEC SQL	CLOSE c9;
+EXEC SQL	INQUIRE_INGRES (:err = errorno);
+	if (err) printf( "Error closing c9 = %d\n", err );
+
+EXEC SQL DISCONNECT;
+	printf( "\n===END OF TEST RUN===\n" );
+
+exec sql disconnect;
+
+exit(0);
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop emp\g
+<<
+~
+>>
+* drop dept\g
+<<
+~
+>>
+*	create table emp(
+<<
+>>
+*	name c10 not null with default,
+<<
+>>
+*	salary float not null with default,
+<<
+>>
+*	dept c8 not null with default,
+<<
+>>
+*	div c3 not null with default,
+<<
+>>
+*	mgr c10 not null with default,
+<<
+>>
+*	birthdate c25 not null with default,
+<<
+>>
+*	num_dep smallint not null with default)
+<<
+>>
+*	with noduplicates, page_size=8192\p\g
+<<
+	create table emp(
+	name c10 not null with default,
+	salary float not null with default,
+	dept c8 not null with default,
+	div c3 not null with default,
+	mgr c10 not null with default,
+	birthdate c25 not null with default,
+	num_dep smallint not null with default)
+	with noduplicates, page_size=8192
+>>
+*	copy emp(
+<<
+>>
+*	name= varchar(0)tab,
+<<
+>>
+*	salary= c0tab,
+<<
+>>
+*	dept= varchar(0)tab,
+<<
+>>
+*	div= varchar(0)tab,
+<<
+>>
+*	mgr= varchar(0)tab,
+<<
+>>
+*	birthdate= varchar(0)tab,
+<<
+>>
+*	num_dep= c0nl, nl= d1)
+<<
+>>
+*	from 'eea01a.dat'\g
+<<
+(24 rows)
+>>
+* create table dept ( dname c8, div c3, sales f8, bldg c2,
+<<
+>>
+*		floor  i1, num_emp i2) with page_size=8192\g
+<<
+>>
+* copy dept (	dname = c8, div = c3, sales = c20, bldg = c2,
+<<
+>>
+*		floor = c2, num_emp = c0nl)	
+<<
+>>
+*		from 'eea01b.dat'\g
+<<
+(11 rows)
+>>
+* commit\g
+<<
+>>
+* \q
+<<
+>>
+? sepesqlc eea01.sc 
+<<
+ESQL eea01.sc:
+>>
+? sepcc eea01.c 
+<<
+>>
+<< IF (NT_GENERIC)
+eea01.c
+>>
+? seplnk eea01 
+<<
+>>
+? run eea01.exe SEPPARAMDB 
+<<
+
+***************
+*    EEA01    *
+***************
+
+connecting with database...
+ESQL SELECT Test
+
+Regular (non-PARAM) SELECTs
+(1) emp(all)
+Saxena     ,  22000, tech sup, NC , Shigio     ,  8-may-1950  ,   0
+Kreseski   ,  24000, tech sup, NC , Shigio     , 11-sep-1955  ,   0
+Gordon     ,  27000, tech sup, NC , Shigio     , 23-may-1963  ,   0
+Zimmerman  ,  25000, tech sup, NE , Shigio     , 28-aug-1962  ,   0
+Sullivan   ,  35000, tech sup, NW , Shigio     , 10-oct-1960  ,   1
+Ramos      ,  30000, tech sup, NW , Shigio     , 21-jan-1941  ,   0
+Curry      ,  32000, tech sup, NW , Shigio     , 30-nov-1955  ,   3
+Curan      ,  30000, tech sup, NW , Shigio     , 20-aug-1959  ,   0
+Sabel      ,  21000, tech sup, SE , Shigio     ,  8-jan-1958  ,   0
+Ming       ,  22000, tech sup, SE , Shigio     ,  4-may-1956  ,   1
+Cameron    ,  35000, tech sup, SE , Shigio     , 15-aug-1960  ,   0
+Clark      ,  40000, sales   , NC , Verducci   , 18-nov-1949  ,   1
+Stein      ,  40000, sales   , NE , Verducci   , 25-dec-1952  ,   1
+Robinson   ,  80000, sales   , NE , Verducci   , 20-nov-1952  ,   1
+Aitken     ,  50000, sales   , NE , Verducci   , 12-mar-1947  ,   2
+McTigue    ,  41000, sales   , NW , Verducci   ,  9-apr-1953  ,   1
+Gregori    ,  31000, sales   , NW , Verducci   , 21-oct-1949  ,   2
+Shigio     ,  28000, sales   , SE , Verducci   ,  9-jul-1948  ,   3
+Mandic     ,  43000, sales   , SE , Verducci   , 10-jul-1964  ,   0
+Stannich   ,  33000, market  , NW , McTigue    , 13-dec-1961  ,   0
+Green      ,  26000, market  , NW , McTigue    , 19-dec-1961  ,   0
+Herbert    ,  35000, banking ,    , Emprinham  , 17-mar-1945  ,   0
+Verducci   ,  55000, admin   , NW ,            , 25-dec-1958  ,   2
+DiTallo    ,  65000, Contract, unk, Robinson   , 02-sep-1955  ,   0
+
+(2) emp(name, mgr) where div=NC
+Clark      , Verducci   
+Gordon     , Shigio     
+Kreseski   , Shigio     
+Saxena     , Shigio     
+
+(3) emp(name, salary*point_5) where mgr=Clark and salary>32000.00
+
+(4) emp(name, salary/2) where mgr=Clark and 		salary>(32*100)
+
+(5) emp(name, birthdate) where dept=<tech sup> ORDER by ename d
+Zimmerman  , 28-aug-1962    
+Sullivan   , 10-oct-1960    
+Saxena     ,  8-may-1950    
+Sabel      ,  8-jan-1958    
+Ramos      , 21-jan-1941    
+Ming       ,  4-may-1956    
+Kreseski   , 11-sep-1955    
+Gordon     , 23-may-1963    
+Curry      , 30-nov-1955    
+Curan      , 20-aug-1959    
+Cameron    , 15-aug-1960    
+
+(6) SUM emp(salary) where dept=<market>
+   59000.00
+
+(7) ename=<TEST>, edept=<DEPT>, ebirthdate=<NOT A DATE> where emp.name=<Ai*>
+
+(8) All employees on floor 2
+emp(name) DEPT(name,div,bldg,floor) JOIN(dept,div) & floor=2
+Verducci   , admin    , NW , C ,  2
+Clark      , sales    , NC , A ,  2
+Gregori    , sales    , NW , A ,  2
+McTigue    , sales    , NW , A ,  2
+Gordon     , tech sup , NC , C ,  2
+Kreseski   , tech sup , NC , C ,  2
+Saxena     , tech sup , NC , C ,  2
+
+(9) UNIQUE of emp(dept) ORDER:d
+tech sup  
+sales     
+market    
+banking   
+admin     
+Contract  
+
+===END OF TEST RUN===
+>>
+<< IF (ING_CHARSET == "UTF8")
+
+***************
+*    EEA01    *
+***************
+
+connecting with database...
+ESQL SELECT Test
+
+Regular (non-PARAM) SELECTs
+(1) emp(all)
+Saxena     ,  22000, tech sup, NC , Shigio     ,  8-may-1950  ,   0
+Kreseski   ,  24000, tech sup, NC , Shigio     , 11-sep-1955  ,   0
+Gordon     ,  27000, tech sup, NC , Shigio     , 23-may-1963  ,   0
+Zimmerman  ,  25000, tech sup, NE , Shigio     , 28-aug-1962  ,   0
+Sullivan   ,  35000, tech sup, NW , Shigio     , 10-oct-1960  ,   1
+Ramos      ,  30000, tech sup, NW , Shigio     , 21-jan-1941  ,   0
+Curry      ,  32000, tech sup, NW , Shigio     , 30-nov-1955  ,   3
+Curan      ,  30000, tech sup, NW , Shigio     , 20-aug-1959  ,   0
+Sabel      ,  21000, tech sup, SE , Shigio     ,  8-jan-1958  ,   0
+Ming       ,  22000, tech sup, SE , Shigio     ,  4-may-1956  ,   1
+Cameron    ,  35000, tech sup, SE , Shigio     , 15-aug-1960  ,   0
+Clark      ,  40000, sales   , NC , Verducci   , 18-nov-1949  ,   1
+Stein      ,  40000, sales   , NE , Verducci   , 25-dec-1952  ,   1
+Robinson   ,  80000, sales   , NE , Verducci   , 20-nov-1952  ,   1
+Aitken     ,  50000, sales   , NE , Verducci   , 12-mar-1947  ,   2
+McTigue    ,  41000, sales   , NW , Verducci   ,  9-apr-1953  ,   1
+Gregori    ,  31000, sales   , NW , Verducci   , 21-oct-1949  ,   2
+Shigio     ,  28000, sales   , SE , Verducci   ,  9-jul-1948  ,   3
+Mandic     ,  43000, sales   , SE , Verducci   , 10-jul-1964  ,   0
+Stannich   ,  33000, market  , NW , McTigue    , 13-dec-1961  ,   0
+Green      ,  26000, market  , NW , McTigue    , 19-dec-1961  ,   0
+DiTallo    ,  65000, Contract, unk, Robinson   , 02-sep-1955  ,   0
+Herbert    ,  35000, banking ,    , Emprinham  , 17-mar-1945  ,   0
+Verducci   ,  55000, admin   , NW ,            , 25-dec-1958  ,   2
+
+(2) emp(name, mgr) where div=NC
+Clark      , Verducci   
+Gordon     , Shigio     
+Kreseski   , Shigio     
+Saxena     , Shigio     
+
+(3) emp(name, salary*point_5) where mgr=Clark and salary>32000.00
+
+(4) emp(name, salary/2) where mgr=Clark and 		salary>(32*100)
+
+(5) emp(name, birthdate) where dept=<tech sup> ORDER by ename d
+Zimmerman  , 28-aug-1962    
+Sullivan   , 10-oct-1960    
+Saxena     ,  8-may-1950    
+Sabel      ,  8-jan-1958    
+Ramos      , 21-jan-1941    
+Ming       ,  4-may-1956    
+Kreseski   , 11-sep-1955    
+Gordon     , 23-may-1963    
+Curry      , 30-nov-1955    
+Curan      , 20-aug-1959    
+Cameron    , 15-aug-1960    
+
+(6) SUM emp(salary) where dept=<market>
+   59000.00
+
+(7) ename=<TEST>, edept=<DEPT>, ebirthdate=<NOT A DATE> where emp.name=<Ai*>
+
+(8) All employees on floor 2
+emp(name) DEPT(name,div,bldg,floor) JOIN(dept,div) & floor=2
+Verducci   , admin    , NW , C ,  2
+Clark      , sales    , NC , A ,  2
+Gregori    , sales    , NW , A ,  2
+McTigue    , sales    , NW , A ,  2
+Gordon     , tech sup , NC , C ,  2
+Kreseski   , tech sup , NC , C ,  2
+Saxena     , tech sup , NC , C ,  2
+
+(9) UNIQUE of emp(dept) ORDER:d
+tech sup  
+sales     
+market    
+Contract  
+banking   
+admin     
+
+===END OF TEST RUN===
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop emp\g
+<<
+~
+>>
+* drop dept\g
+<<
+~
+>>
+* \q
+<<
+>>
+? delete eea01.c 
+<<
+~
+>>
+? delete eea01.obj 
+<<
+~
+>>
+? delete eea01.o 
+<<
+~
+>>
+? delete eea01.exe 
+<<
+~
+>>
+
+
+Ending at: Mon Sep 15 13:55:45 2008

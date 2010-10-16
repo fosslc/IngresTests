@@ -1,0 +1,395 @@
+/*
+	Test Name: dtu04.sep
+	Time: Fri Nov  9 22:39:14 2001
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : dtu04.sep
+	Module  : be/datatypes
+	Filename: dtu04.sep
+	Purpose	: To test the new unicode data types first available with
+                  II 2.6/0106 and later releases.
+	Input Files  : dtu04.sc
+	Output Files : dtu04.exe
+	Database     : unidb
+	Tables       : test_nchar, test_nchar2, test_nchar3, test_nvarchar,
+                       test_nvarchar2, test_lnvarchar, test_lnvarchar2
+	Synopsis     : This test is to select from tables with the
+                       "unicode_column = unicode_column" predicate.
+
+ History:  9-Nov-2001	(wu$ca01)	Created
+          16-Dec-2001	(devjo01)	Corrected bad canons.  Run dtu04.exe
+		twice.  Once with OP162 unset (test internal QEF hash join),
+		once with OP162 set (test old style equi-join).
+          28-May-2002   (sarjo01) Change %ls to %S, modularize canon.
+	19-Jan-2004	(rogch01)
+		Include string.h for strcmp.  Pass and check for lowercase
+		op162 to meet VMS requirements.
+*/
+? fill dtu04.sc 
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  wchar_t wc1[9], k1[9];
+  wchar_t wc2[9];
+  wchar_t wc3[65], wc4[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, k2;
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|===============================================================-
+==============|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   char *trace;
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   trace = argv[3];
+
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint; 
+
+   if ( 0 == strcmp(trace, "op162") )
+   {
+	printf("SET TRACE POINT OP162\n");
+	EXEC SQL SET TRACE POINT OP162;
+   }
+   else
+   {
+	printf("SET NOTRACE POINT OP162\n");
+	EXEC SQL SET NOTRACE POINT OP162;
+   }
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Nchar = nchar...");
+         EXEC SQL SELECT t1.col1, t1.col2, t2.col2
+         INTO :i1, :wc1, :wc2
+         FROM test_nchar t1, test_nchar2 t2 WHERE t1.col2 = t2.col2
+              order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 2:
+         print_header("Nvarchar = nvarchar...");
+         EXEC SQL SELECT t1.col1, t1.col2, t2.col2
+         INTO :i1, :wc1, :wc2
+         FROM test_nvarchar t1, test_nvarchar2 t2 WHERE t1.col2 = t2.col2
+              order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("Nchar = nvarchar...");
+         EXEC SQL SELECT t1.col1, t1.col2, t2.col2
+         INTO :i1, :wc1, :wc2
+         FROM test_nchar t1, test_nvarchar2 t2 WHERE t1.col2 = t2.col2
+              order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu04.sc 
+<<
+~
+>>
+? sepcc dtu04 
+<<
+~
+>>
+? seplnk dtu04 
+<<
+~
+>>
+? run dtu04.exe SEPPARAMDB3 1 NOTRACE
+<<
+SET NOTRACE POINT OP162
+Nchar = nchar...
+|=============================================================================|
+|  0|ABC     |ABC     |
+|  0|ABC     |ABC     |
+|  0|ABC     |ABC     |
+|  0|ABC     |ABC     |
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  2|DEF     |DEF     |
+|  2|DEF     |DEF     |
+|  2|DEF     |DEF     |
+|  2|DEF     |DEF     |
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  4|GHI     |GHI     |
+|  4|GHI     |GHI     |
+|  4|GHI     |GHI     |
+|  4|GHI     |GHI     |
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  7|Z       |Z       |
+|  7|Z       |Z       |
+|  7|Z       |Z       |
+|  7|Z       |Z       |
+|=============================================================================|
+>>
+? run dtu04.exe SEPPARAMDB3 2 NOTRACE 
+<<
+SET NOTRACE POINT OP162
+Nvarchar = nvarchar...
+|=============================================================================|
+|  0|ABC|ABC|
+|  0|ABC|ABC|
+|  0|ABC|ABC|
+|  0|ABC|ABC|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  2|DEF|DEF|
+|  2|DEF|DEF|
+|  2|DEF|DEF|
+|  2|DEF|DEF|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  4|GHI|GHI|
+|  4|GHI|GHI|
+|  4|GHI|GHI|
+|  4|GHI|GHI|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  6|ABCDE|ABCDE|
+|  6|ABCDE|ABCDE|
+|  6|ABCDE|ABCDE|
+|  6|ABCDE|ABCDE|
+|  7|Z|Z|
+|  7|Z|Z|
+|  7|Z|Z|
+|  7|Z|Z|
+|=============================================================================|
+>>
+? run dtu04.exe SEPPARAMDB3 3 NOTRACE 
+<<
+SET NOTRACE POINT OP162
+Nchar = nvarchar...
+|=============================================================================|
+|  0|ABC     |ABC|
+|  0|ABC     |ABC|
+|  0|ABC     |ABC|
+|  0|ABC     |ABC|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  2|DEF     |DEF|
+|  2|DEF     |DEF|
+|  2|DEF     |DEF|
+|  2|DEF     |DEF|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  4|GHI     |GHI|
+|  4|GHI     |GHI|
+|  4|GHI     |GHI|
+|  4|GHI     |GHI|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  6|ABCDE   |ABCDE|
+|  6|ABCDE   |ABCDE|
+|  6|ABCDE   |ABCDE|
+|  6|ABCDE   |ABCDE|
+|  7|Z       |Z|
+|  7|Z       |Z|
+|  7|Z       |Z|
+|  7|Z       |Z|
+|=============================================================================|
+>>
+? run dtu04.exe SEPPARAMDB3 1 op162 
+<<
+SET TRACE POINT OP162
+Nchar = nchar...
+|=============================================================================|
+|  0|ABC     |ABC     |
+|  0|ABC     |ABC     |
+|  0|ABC     |ABC     |
+|  0|ABC     |ABC     |
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  2|DEF     |DEF     |
+|  2|DEF     |DEF     |
+|  2|DEF     |DEF     |
+|  2|DEF     |DEF     |
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  4|GHI     |GHI     |
+|  4|GHI     |GHI     |
+|  4|GHI     |GHI     |
+|  4|GHI     |GHI     |
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  7|Z       |Z       |
+|  7|Z       |Z       |
+|  7|Z       |Z       |
+|  7|Z       |Z       |
+|=============================================================================|
+>>
+? run dtu04.exe SEPPARAMDB3 2 op162 
+<<
+SET TRACE POINT OP162
+Nvarchar = nvarchar...
+|=============================================================================|
+|  0|ABC|ABC|
+|  0|ABC|ABC|
+|  0|ABC|ABC|
+|  0|ABC|ABC|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  2|DEF|DEF|
+|  2|DEF|DEF|
+|  2|DEF|DEF|
+|  2|DEF|DEF|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  4|GHI|GHI|
+|  4|GHI|GHI|
+|  4|GHI|GHI|
+|  4|GHI|GHI|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  7|Z   |Z   |
+|  7|Z   |Z   |
+|  7|Z   |Z   |
+|  7|Z   |Z   |
+|=============================================================================|
+>>
+? run dtu04.exe SEPPARAMDB3 3 op162 
+<<
+SET TRACE POINT OP162
+Nchar = nvarchar...
+|=============================================================================|
+|  0|ABC     |ABC     |
+|  0|ABC     |ABC     |
+|  0|ABC     |ABC     |
+|  0|ABC     |ABC     |
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  1|STUVWXYZ|STUVWXYZ|
+|  2|DEF     |DEF     |
+|  2|DEF     |DEF     |
+|  2|DEF     |DEF     |
+|  2|DEF     |DEF     |
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  3|stuvwxyz|stuvwxyz|
+|  4|GHI     |GHI     |
+|  4|GHI     |GHI     |
+|  4|GHI     |GHI     |
+|  4|GHI     |GHI     |
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  5|LMNOPQRS|LMNOPQRS|
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  6|ABCDE   |ABCDE   |
+|  7|Z       |Z       |
+|  7|Z       |Z       |
+|  7|Z       |Z       |
+|  7|Z       |Z       |
+|=============================================================================|
+>>
+? delete dtu04.c 
+<<
+~
+>>
+? delete dtu04.o 
+<<
+~
+>>
+? delete dtu04.obj 
+<<
+~
+>>
+? delete dtu04.exe 
+<<
+~
+>>
+
+
+Ending at: Sun Dec 16 17:22:21 2001

@@ -1,0 +1,2757 @@
+/*
+
+  Copyright (c) 2007 Ingres Corporation
+
+  Test Name     : date002.sep
+  Suite         : be!datetime
+  Focus         : Ingres 2006 Release 2 New Feature:
+                : ANSI INTERVAL Datatype 
+
+  Databases     : SEPPARAMDB (datetimedb) 
+  Tables        : dt002_t1,dt002_t2
+  Filled Files  : dt002_t2.sql
+  Copied Files  : 
+  Output Files  :
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : Basic functionality test: 
+                :   * Data inserted and retrieved correctly
+                :   * Fractions of seconds
+                :   * Simple predicates
+                :   * ORDER BY
+
+  Exp. DIFFs    : None
+  History       : 01-Apr-2007 (sarjo01) Created.
+                : 11-Apr-2007 (sarjo01) Issue 117124 created. In the current
+                :   release, an interval literal having a precision specifier
+                :   causes a syntax error. Example:
+                :      interval'0 10:30:45.1'day to second (1)
+                :   This means there is no way to override the default precision
+                :   of 6. When this has been corrected, the test should be 
+                :   extended to include values of varying precisions. 
+                : 14-Aug-2007 (sarjo01) Recanonize for issue 117124 fix.
+                :   Added new test cases for extended literals, e.g.
+                :      interval'1'day
+*/
+
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop dt002_t1, dt002_t2\g
+<<
+~
+>>
+* select '+5-7'\g
+<<
+
++------+
+|col1  |
++------+
+|+5-7  |
++------+
+(1 row)
+>>
+* select '+5-7' + '+5-7'\g
+<<
+
++--------+
+|col1    |
++--------+
+|+5-7+5-7|
++--------+
+(1 row)
+>>
+* select interval'+5-7'\g
+<<
+E_US09C5 line 1, Syntax error on 'EOF'.  The correct syntax is:
+    SELECT [ALL|DISTINCT] target_list
+      FROM table(s)
+      [WHERE search_cond]
+      [GROUP BY col(s)]
+      [HAVING search_cond]
+ [UNION subselect]
+ [ORDER BY col(s)]
+    (Thu Feb 22 07:54:24 2007)
+
+>>
+* select '+5-7'year to month\g
+<<
+E_US09C5 line 1, Syntax error on 'to'.  The correct syntax is:
+    SELECT [ALL|DISTINCT] target_list
+      FROM table(s)
+      [WHERE search_cond]
+      [GROUP BY col(s)]
+      [HAVING search_cond]
+ [UNION subselect]
+ [ORDER BY col(s)]
+    (Thu Feb 22 08:27:01 2007)
+
+>>
+* select '+5+7'year to month\g
+<<
+E_US09C5 line 1, Syntax error on 'to'.  The correct syntax is:
+    SELECT [ALL|DISTINCT] target_list
+      FROM table(s)
+      [WHERE search_cond]
+      [GROUP BY col(s)]
+      [HAVING search_cond]
+ [UNION subselect]
+ [ORDER BY col(s)]
+    (Sun Feb 25 08:22:35 2007)
+
+>>
+* select interval'10000'year to month\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    10000.
+    (Sun Feb 25 08:48:22 2007)
+
+E_US10D6 10000 years is out of valid range for a date interval.
+    (Sun Feb 25 08:48:22 2007)
+
+>>
+* select interval'9999-12'year to month\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    9999-12.
+    (Fri Mar  2 11:54:27 2007)
+
+E_US10D6 10000 years is out of valid range for a date interval.
+    (Fri Mar  2 11:54:27 2007)
+
+>>
+* select interval'9999'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|9999-00        |
++---------------+
+(1 row)
+>>
+* select interval'+0005-0007'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|5-07           |
++---------------+
+(1 row)
+>>
+* select interval'5'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|5-00           |
++---------------+
+(1 row)
+>>
+* select interval'0-5'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|0-05           |
++---------------+
+(1 row)
+>>
+* select interval'+5'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|5-00           |
++---------------+
+(1 row)
+>>
+* select interval'+5-0'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|5-00           |
++---------------+
+(1 row)
+>>
+* select interval'+5-12'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|6-00           |
++---------------+
+(1 row)
+>>
+* select interval'+5-13'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|6-01           |
++---------------+
+(1 row)
+>>
+* select interval'+5-121'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|15-01          |
++---------------+
+(1 row)
+>>
+* select interval'-5'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|-5-00          |
++---------------+
+(1 row)
+>>
+* select interval'-5-1'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|-5-01          |
++---------------+
+(1 row)
+>>
+* select interval'0-0'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|0-00           |
++---------------+
+(1 row)
+>>
+* select interval'0000'day to second\g 
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 0000.
+    (Wed Feb 28 09:34:33 2007)
+
+E_US10EB '0000' is invalid format or value for interval day to second.
+    Please enter a valid interval value in [+/-]days hh:mm:ss[fff...] format.
+    (Wed Feb 28 09:34:33 2007)
+
+>>
+* select interval'00:00:00'day to second\g
+<<
+
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    00:00:00.
+    (Wed Feb 28 09:50:14 2007)
+
+E_US10EB '00:00:00' is invalid format or value for interval day to second.
+    Please enter a valid interval value in [+/-]days hh:mm:ss[fff...] format.
+    (Wed Feb 28 09:50:14 2007)
+
+>>
+* select interval'24:00:00'day to second\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    24:00:00.
+    (Mon Mar  5 09:49:24 2007)
+
+E_US10EB '24:00:00' is invalid format or value for interval day to second.
+    Please enter a valid interval value in [+/-]days hh:mm:ss[fff...] format.
+    (Mon Mar  5 09:49:24 2007)
+
+>>
+* select interval'00:60:00'day to second\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    00:60:00.
+    (Mon Mar  5 09:51:30 2007)
+
+E_US10EB '00:60:00' is invalid format or value for interval day to second.
+    Please enter a valid interval value in [+/-]days hh:mm:ss[fff...] format.
+    (Mon Mar  5 09:51:30 2007)
+
+>>
+* select interval'00:00:60'day to second\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    00:00:60.
+    (Mon Mar  5 09:53:23 2007)
+
+E_US10EB '00:00:60' is invalid format or value for interval day to second.
+    Please enter a valid interval value in [+/-]days hh:mm:ss[fff...] format.
+    (Mon Mar  5 09:53:23 2007)
+
+>>
+* select interval'0 0'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 00:00:00.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'-0 1'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|-0 01:00:00.000000                           |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'0 1'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 01:00:00.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1 1'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|1 01:00:00.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1 1:2'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|1 01:02:00.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1 1:2:3'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|1 01:02:03.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1 1:2:3.4'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|1 01:02:03.400000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1 1:2:3.45'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|1 01:02:03.450000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1 1:2:3.456789999'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|1 01:02:03.456789                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'10000 0'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|10000 00:00:00.000000                        |
++---------------------------------------------+
+(1 row)
+>>
+/*
+** Check "magic number" max days in interval (3652047)
+*/
+* select interval'3652047 0'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|3652047 00:00:00.000000                      |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'3652048 0'day to second\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    3652048 0.
+    (Thu Mar  1 14:40:28 2007)
+
+E_US10DE 3652048 days is out of valid range for a date/time interval.
+    (Thu Mar  1 14:40:28 2007)
+
+>>
+* select interval'0 10:30:45.999999999'day to second (9)\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 10:30:45.999999999                         |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1'year(1)\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|1-00           |
++---------------+
+(1 row)
+>>
+* select interval'1'month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|0-01           |
++---------------+
+(1 row)
+>>
+* select interval'1'day\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|1 00:00:00                                   |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1'hour\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 01:00:00                                   |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1'minute\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 00:01:00                                   |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1'minute(1)\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 00:01:00                                   |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1'second(1)\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 00:00:01.0                                 |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1.2'second(1)\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 00:00:01.2                                 |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1:2'year\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    1:2-0.
+    (Tue Aug 14 07:09:18 2007)
+
+E_US10EA '1:2-0' is invalid format or value for interval year to month.
+    Please enter a valid interval value in [+/-]years-months format.
+    (Tue Aug 14 07:09:18 2007)
+
+>>
+* select interval'-2'year\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|-2-00          |
++---------------+
+(1 row)
+>>
+* select interval'2-'year\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 2--0.
+    (Tue Aug 14 07:11:15 2007)
+
+E_US10EA '2--0' is invalid format or value for interval year to month.
+    Please enter a valid interval value in [+/-]years-months format.
+    (Tue Aug 14 07:11:15 2007)
+
+>>
+* select interval'2-3'year\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    2-3-0.
+    (Tue Aug 14 07:11:15 2007)
+
+E_US10EA '2-3-0' is invalid format or value for interval year to month.
+    Please enter a valid interval value in [+/-]years-months format.
+    (Tue Aug 14 07:11:15 2007)
+
+>>
+* select interval'2-3'month\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    0-2-3.
+    (Tue Aug 14 07:11:15 2007)
+
+E_US10EA '0-2-3' is invalid format or value for interval year to month.
+    Please enter a valid interval value in [+/-]years-months format.
+    (Tue Aug 14 07:11:15 2007)
+
+>>
+* select interval'2'year to day\g
+<<
+E_US09C5 line 1, Syntax error on 'EOF'.  The correct syntax is:
+    SELECT [ALL|DISTINCT] target_list
+      FROM table(s)
+      [WHERE search_cond]
+      [GROUP BY col(s)]
+      [HAVING search_cond]
+ [UNION subselect]
+ [ORDER BY col(s)]
+    (Tue Aug 14 07:46:07 2007)
+
+>>
+* select interval'0:0:0'month\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value
+    0-0:0:0.
+    (Tue Aug 14 07:46:07 2007)
+
+E_US10EA '0-0:0:0' is invalid format or value for interval year to month.
+    Please enter a valid interval value in [+/-]years-months format.
+    (Tue Aug 14 07:46:07 2007)
+
+>>
+* select interval'0:0:0'minute\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 0
+    0:0:0:0:0.
+    (Tue Aug 14 07:46:07 2007)
+
+E_US10EB '0 0:0:0:0:0' is invalid format or value for interval day to
+    second. Please enter a valid interval value in [+/-]days hh:mm:ss[fff...]
+    format.
+    (Tue Aug 14 07:46:07 2007)
+
+>>
+* select interval'0 0:1'day to hour\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 0
+    0:1:0:0.
+    (Tue Aug 14 07:53:23 2007)
+
+E_US10EB '0 0:1:0:0' is invalid format or value for interval day to
+    second. Please enter a valid interval value in [+/-]days hh:mm:ss[fff...]
+    format.
+    (Tue Aug 14 07:53:23 2007)
+
+>>
+* select interval'0 0:1'day to minute\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 00:01:00                                   |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'0 1'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 01:00:00.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'0 1'day to hour\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 01:00:00                                   |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'0 1'day to minute\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 01:00:00                                   |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'0 0:1'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 00:01:00.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'0 0:1'day to minute\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 00:01:00                                   |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'0 0:1'day to hour\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 0
+    0:1:0:0.
+    (Tue Aug 14 08:32:31 2007)
+
+E_US10EB '0 0:1:0:0' is invalid format or value for interval day to
+    second. Please enter a valid interval value in [+/-]days hh:mm:ss[fff...]
+    format.
+    (Tue Aug 14 08:32:31 2007)
+
+>>
+* select interval'0 0:0:1'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 00:00:01.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'0 0:0:1'day to minute\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 0
+    0:0:1:0.
+    (Tue Aug 14 08:36:55 2007)
+
+E_US10EB '0 0:0:1:0' is invalid format or value for interval day to
+    second. Please enter a valid interval value in [+/-]days hh:mm:ss[fff...]
+    format.
+    (Tue Aug 14 08:36:55 2007)
+
+>>
+* select interval'0 0:0:1'day to hour\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 0
+    0:0:1:0:0.
+    (Tue Aug 14 08:41:28 2007)
+
+E_US10EB '0 0:0:1:0:0' is invalid format or value for interval day to
+    second. Please enter a valid interval value in [+/-]days hh:mm:ss[fff...]
+    format.
+    (Tue Aug 14 08:41:28 2007)
+
+>>
+* select interval'0 1'hour to minute\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 0 0
+    1:0.
+    (Tue Aug 14 10:16:16 2007)
+
+E_US10EB '0 0 1:0' is invalid format or value for interval day to second.
+    Please enter a valid interval value in [+/-]days hh:mm:ss[fff...] format.
+    (Tue Aug 14 10:16:16 2007)
+
+>>
+* select interval'0 1:0'hour to minute\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 0 0
+    1:0:0.
+    (Tue Aug 14 10:18:39 2007)
+
+E_US10EB '0 0 1:0:0' is invalid format or value for interval day to
+    second. Please enter a valid interval value in [+/-]days hh:mm:ss[fff...]
+    format.
+    (Tue Aug 14 10:18:39 2007)
+
+>>
+* select interval'0 1:0:0'hour to minute\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 0 0
+    1:0:0:0.
+    (Tue Aug 14 10:19:59 2007)
+
+E_US10EB '0 0 1:0:0:0' is invalid format or value for interval day to
+    second. Please enter a valid interval value in [+/-]days hh:mm:ss[fff...]
+    format.
+    (Tue Aug 14 10:19:59 2007)
+
+>>
+* select interval'1:0:0'hour to minute\g
+<<
+E_US0B79 line 1, Syntax error. Invalid date/time specification value 0
+    1:0:0:0.
+    (Tue Aug 14 10:21:20 2007)
+
+E_US10EB '0 1:0:0:0' is invalid format or value for interval day to
+    second. Please enter a valid interval value in [+/-]days hh:mm:ss[fff...]
+    format.
+    (Tue Aug 14 10:21:20 2007)
+
+>>
+* select interval'1:0'hour to minute\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 01:00:00                                   |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1:0'hour to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 01:00:00.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1:0:1'hour to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 01:00:01.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1:0:121'hour to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 01:02:01.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1:121:1'hour to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 03:01:01.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'1:121:121'hour to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|0 03:03:01.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'0 24:121:121'day to second\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|1 02:03:01.000000                            |
++---------------------------------------------+
+(1 row)
+>>
+* select interval'2-25'year to month\g
+<<
+
++---------------+
+|col1           |
++---------------+
+|4-01           |
++---------------+
+(1 row)
+>>
+* create table dt002_t1 (y_to_m interval year to month, idx int)\g
+<<
+
+>>
+* insert into dt002_t1 values (interval'+9999-0000'year to month, 1)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'-9999-0000'year to month, 2)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'+0000-0000'year to month, 3)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'+0000-0001'year to month, 4)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'-0000-0001'year to month, 5)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'+0001-0000'year to month, 6)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'-0001-0000'year to month, 7)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'+0001-0001'year to month, 8)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'-0001-0001'year to month, 9)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'+0000-0010'year to month, 10)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'-0000-0010'year to month, 11)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'+9999-0011'year to month, 12)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'-9999-0011'year to month, 13)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'+22-0000'year to month, 14)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'-22-0000'year to month, 15)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'+333-0000'year to month, 16)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'-333-0000'year to month, 17)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'+4444-0000'year to month, 18)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'-4444-0000'year to month, 19)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'+333-0002'year to month, 20)\g
+<<
+(1 row)
+>>
+* insert into dt002_t1 values (interval'-333-0002'year to month, 21)\g
+<<
+(1 row)
+>>
+* select * from dt002_t1 order by 2\g
+<<
+
++---------------+-------------+
+|y_to_m         |idx          |
++---------------+-------------+
+|9999-00        |            1|
+|-9999-00       |            2|
+|0-00           |            3|
+|0-01           |            4|
+|-0-01          |            5|
+|1-00           |            6|
+|-1-00          |            7|
+|1-01           |            8|
+|-1-01          |            9|
+|0-10           |           10|
+|-0-10          |           11|
+|9999-11        |           12|
+|-9999-11       |           13|
+|22-00          |           14|
+|-22-00         |           15|
+|333-00         |           16|
+|-333-00        |           17|
+|4444-00        |           18|
+|-4444-00       |           19|
+|333-02         |           20|
+|-333-02        |           21|
++---------------+-------------+
+(21 rows)
+>>
+* select y_to_m from dt002_t1 order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-01           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(21 rows)
+>>
+* select y_to_m from dt002_t1 order by 1 desc\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|9999-11        |
+|9999-00        |
+|4444-00        |
+|333-02         |
+|333-00         |
+|22-00          |
+|1-01           |
+|1-00           |
+|0-10           |
+|0-01           |
+|0-00           |
+|-0-01          |
+|-0-10          |
+|-1-00          |
+|-1-01          |
+|-22-00         |
+|-333-00        |
+|-333-02        |
+|-4444-00       |
+|-9999-00       |
+|-9999-11       |
++---------------+
+(21 rows)
+>>
+* create table dt002_t2 (-
+  d_to_s   interval day to second,-
+  d_to_sd1 interval day to second(1),-
+  d_to_sd9 interval day to second(9),-
+  idx int)\g
+<<
+
+>>
+* \q
+<<
+~
+>>
+? fill dt002_t2.sql
+!!
+insert into dt002_t2 values (
+  interval'0 0'day to second,
+  interval'0 0'day to second,
+  interval'0 0'day to second,
+  1)\g
+insert into dt002_t2 values (
+  interval'1 0'day to second,
+  interval'1 0'day to second,
+  interval'1 0'day to second,
+  2)\g
+insert into dt002_t2 values (
+  interval'-1 0'day to second,
+  interval'-1 0'day to second,
+  interval'-1 0'day to second,
+  3)\g
+insert into dt002_t2 values (
+  interval'1 1'day to second,
+  interval'1 1'day to second,
+  interval'1 1'day to second,
+  4)\g
+insert into dt002_t2 values (
+  interval'-1 1'day to second,
+  interval'-1 1'day to second,
+  interval'-1 1'day to second,
+  5)\g
+insert into dt002_t2 values (
+  interval'1 1:2'day to second,
+  interval'1 1:2'day to second,
+  interval'1 1:2'day to second,
+  6)\g
+insert into dt002_t2 values (
+  interval'-1 1:2'day to second,
+  interval'-1 1:2'day to second,
+  interval'-1 1:2'day to second,
+  7)\g
+insert into dt002_t2 values (
+  interval'1 1:2:3'day to second,
+  interval'1 1:2:3'day to second,
+  interval'1 1:2:3'day to second,
+  8)\g
+insert into dt002_t2 values (
+  interval'-1 1:2:3'day to second,
+  interval'-1 1:2:3'day to second,
+  interval'-1 1:2:3'day to second,
+  9)\g
+insert into dt002_t2 values (
+  interval'1 1:2:3.4'day to second,
+  interval'1 1:2:3.4'day to second,
+  interval'1 1:2:3.4'day to second,
+  10)\g
+insert into dt002_t2 values (
+  interval'-1 1:2:3.4'day to second,
+  interval'-1 1:2:3.4'day to second,
+  interval'-1 1:2:3.4'day to second,
+  11)\g
+insert into dt002_t2 values (
+  interval'1 1:2:3.456789999'day to second,
+  interval'1 1:2:3.456789999'day to second,
+  interval'1 1:2:3.456789999'day to second,
+  12)\g
+insert into dt002_t2 values (
+  interval'-1 1:2:3.456789999'day to second,
+  interval'-1 1:2:3.456789999'day to second,
+  interval'-1 1:2:3.456789999'day to second,
+  13)\g
+insert into dt002_t2 values (
+  interval'1 1:2:3.000000001'day to second,
+  interval'1 1:2:3.000000001'day to second,
+  interval'1 1:2:3.000000001'day to second,
+  14)\g
+insert into dt002_t2 values (
+  interval'-1 1:2:3.000000001'day to second,
+  interval'-1 1:2:3.000000001'day to second,
+  interval'-1 1:2:3.000000001'day to second,
+  15)\g
+insert into dt002_t2 values (
+  interval'1 1:2:4.000000001'day to second,
+  interval'1 1:2:4.000000001'day to second,
+  interval'1 1:2:4.000000001'day to second,
+  16)\g
+insert into dt002_t2 values (
+  interval'-1 1:2:4.000000001'day to second,
+  interval'-1 1:2:4.000000001'day to second,
+  interval'-1 1:2:4.000000001'day to second,
+  17)\g
+insert into dt002_t2 values (
+  interval'1 1:2:3.111111111'day to second,
+  interval'1 1:2:3.111111111'day to second,
+  interval'1 1:2:3.111111111'day to second,
+  18)\g
+insert into dt002_t2 values (
+  interval'-1 1:2:3.111111111'day to second,
+  interval'-1 1:2:3.111111111'day to second,
+  interval'-1 1:2:3.111111111'day to second,
+  19)\g
+insert into dt002_t2 values (
+  interval'2 1:2:3.111111111'day to second,
+  interval'2 1:2:3.111111111'day to second,
+  interval'2 1:2:3.111111111'day to second,
+  20)\g
+insert into dt002_t2 values (
+  interval'-2 1:2:3.111111111'day to second,
+  interval'-2 1:2:3.111111111'day to second,
+  interval'-2 1:2:3.111111111'day to second,
+  21)\g
+insert into dt002_t2 values (
+  interval'2 1:2:3.9999'day to second,
+  interval'2 1:2:3.9999'day to second,
+  interval'2 1:2:3.9999'day to second,
+  22)\g
+insert into dt002_t2 values (
+  interval'-2 1:2:3.9999'day to second,
+  interval'-2 1:2:3.9999'day to second,
+  interval'-2 1:2:3.9999'day to second,
+  23)\g
+insert into dt002_t2 values (
+  interval'0 1'day to second,
+  interval'0 1'day to second,
+  interval'0 1'day to second,
+  24)\g
+insert into dt002_t2 values (
+  interval'-0 1'day to second,
+  interval'-0 1'day to second,
+  interval'-0 1'day to second,
+  25)\g
+insert into dt002_t2 values (
+  interval'0 0:1'day to second,
+  interval'0 0:1'day to second,
+  interval'0 0:1'day to second,
+  26)\g
+insert into dt002_t2 values (
+  interval'-0 0:1'day to second,
+  interval'-0 0:1'day to second,
+  interval'-0 0:1'day to second,
+  27)\g
+insert into dt002_t2 values (
+  interval'0 0:0:1'day to second,
+  interval'0 0:0:1'day to second,
+  interval'0 0:0:1'day to second,
+  28)\g
+insert into dt002_t2 values (
+  interval'-0 0:0:1'day to second,
+  interval'-0 0:0:1'day to second,
+  interval'-0 0:0:1'day to second,
+  29)\g
+insert into dt002_t2 values (
+  interval'3652047 0:0:1'day to second,
+  interval'3652047 0:0:1'day to second,
+  interval'3652047 0:0:1'day to second,
+  30)\g
+insert into dt002_t2 values (
+  interval'-3652047 0:0:1'day to second,
+  interval'-3652047 0:0:1'day to second,
+  interval'-3652047 0:0:1'day to second,
+  31)\g
+insert into dt002_t2 values (
+  interval'3652047 23:59:59.999999999'day to second,
+  interval'3652047 23:59:59.999999999'day to second,
+  interval'3652047 23:59:59.999999999'day to second,
+  32)\g
+insert into dt002_t2 values (
+  interval'-3652047 23:59:59.999999999'day to second,
+  interval'-3652047 23:59:59.999999999'day to second,
+  interval'-3652047 23:59:59.999999999'day to second,
+  33)\g
+insert into dt002_t2 values (
+  interval'100 23:59:59.999999999'day to second,
+  interval'100 23:59:59.999999999'day to second,
+  interval'100 23:59:59.999999999'day to second,
+  34)\g
+insert into dt002_t2 values (
+  interval'-100 23:59:59.999999999'day to second,
+  interval'-100 23:59:59.999999999'day to second,
+  interval'-100 23:59:59.999999999'day to second,
+  35)\g
+insert into dt002_t2 values (
+  interval'100 23:58:59.999999999'day to second,
+  interval'100 23:58:59.999999999'day to second,
+  interval'100 23:58:59.999999999'day to second,
+  36)\g
+insert into dt002_t2 values (
+  interval'-100 23:58:59.999999999'day to second,
+  interval'-100 23:58:59.999999999'day to second,
+  interval'-100 23:58:59.999999999'day to second,
+  37)\g
+!!
+? sql -s SEPPARAMDB
+<<
+
+>>
+* \i dt002_t2.sql
+<<
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+>>
+* select d_to_s,idx from dt002_t2 order by 1,2\g
+<<
+
++---------------------------------------------+-------------+
+|d_to_s                                       |idx          |
++---------------------------------------------+-------------+
+|-3652047 23:59:59                            |           33|
+|-3652047 00:00:01                            |           31|
+|-100 23:59:59                                |           35|
+|-100 23:58:59                                |           37|
+|-2 01:02:03                                  |           21|
+|-2 01:02:03                                  |           23|
+|-1 01:02:04                                  |           17|
+|-1 01:02:03                                  |            9|
+|-1 01:02:03                                  |           11|
+|-1 01:02:03                                  |           13|
+|-1 01:02:03                                  |           15|
+|-1 01:02:03                                  |           19|
+|-1 01:02:00                                  |            7|
+|-1 01:00:00                                  |            5|
+|-1 00:00:00                                  |            3|
+|-0 01:00:00                                  |           25|
+|-0 00:01:00                                  |           27|
+|-0 00:00:01                                  |           29|
+|0 00:00:00                                   |            1|
+|0 00:00:01                                   |           28|
+|0 00:01:00                                   |           26|
+|0 01:00:00                                   |           24|
+|1 00:00:00                                   |            2|
+|1 01:00:00                                   |            4|
+|1 01:02:00                                   |            6|
+|1 01:02:03                                   |            8|
+|1 01:02:03                                   |           10|
+|1 01:02:03                                   |           12|
+|1 01:02:03                                   |           14|
+|1 01:02:03                                   |           18|
+|1 01:02:04                                   |           16|
+|2 01:02:03                                   |           20|
+|2 01:02:03                                   |           22|
+|100 23:58:59                                 |           36|
+|100 23:59:59                                 |           34|
+|3652047 00:00:01                             |           30|
+|3652047 23:59:59                             |           32|
++---------------------------------------------+-------------+
+(37 rows)
+>>
+* select d_to_sd1,idx from dt002_t2 order by 1,2\g
+<<
+
++---------------------------------------------+-------------+
+|d_to_sd1                                     |idx          |
++---------------------------------------------+-------------+
+|-3652047 23:59:59.9                          |           33|
+|-3652047 00:00:01.0                          |           31|
+|-100 23:59:59.9                              |           35|
+|-100 23:58:59.9                              |           37|
+|-2 01:02:03.9                                |           23|
+|-2 01:02:03.1                                |           21|
+|-1 01:02:04.0                                |           17|
+|-1 01:02:03.4                                |           11|
+|-1 01:02:03.4                                |           13|
+|-1 01:02:03.1                                |           19|
+|-1 01:02:03.0                                |            9|
+|-1 01:02:03.0                                |           15|
+|-1 01:02:00.0                                |            7|
+|-1 01:00:00.0                                |            5|
+|-1 00:00:00.0                                |            3|
+|-0 01:00:00.0                                |           25|
+|-0 00:01:00.0                                |           27|
+|-0 00:00:01.0                                |           29|
+|0 00:00:00.0                                 |            1|
+|0 00:00:01.0                                 |           28|
+|0 00:01:00.0                                 |           26|
+|0 01:00:00.0                                 |           24|
+|1 00:00:00.0                                 |            2|
+|1 01:00:00.0                                 |            4|
+|1 01:02:00.0                                 |            6|
+|1 01:02:03.0                                 |            8|
+|1 01:02:03.0                                 |           14|
+|1 01:02:03.1                                 |           18|
+|1 01:02:03.4                                 |           10|
+|1 01:02:03.4                                 |           12|
+|1 01:02:04.0                                 |           16|
+|2 01:02:03.1                                 |           20|
+|2 01:02:03.9                                 |           22|
+|100 23:58:59.9                               |           36|
+|100 23:59:59.9                               |           34|
+|3652047 00:00:01.0                           |           30|
+|3652047 23:59:59.9                           |           32|
++---------------------------------------------+-------------+
+(37 rows)
+>>
+* select d_to_sd9,idx from dt002_t2 order by 1,2\g
+<<
+
++---------------------------------------------+-------------+
+|d_to_sd9                                     |idx          |
++---------------------------------------------+-------------+
+|-3652047 23:59:59.999999000                  |           33|
+|-3652047 00:00:01.000000000                  |           31|
+|-100 23:59:59.999999000                      |           35|
+|-100 23:58:59.999999000                      |           37|
+|-2 01:02:03.999900000                        |           23|
+|-2 01:02:03.111111000                        |           21|
+|-1 01:02:04.000000000                        |           17|
+|-1 01:02:03.456789000                        |           13|
+|-1 01:02:03.400000000                        |           11|
+|-1 01:02:03.111111000                        |           19|
+|-1 01:02:03.000000000                        |            9|
+|-1 01:02:03.000000000                        |           15|
+|-1 01:02:00.000000000                        |            7|
+|-1 01:00:00.000000000                        |            5|
+|-1 00:00:00.000000000                        |            3|
+|-0 01:00:00.000000000                        |           25|
+|-0 00:01:00.000000000                        |           27|
+|-0 00:00:01.000000000                        |           29|
+|0 00:00:00.000000000                         |            1|
+|0 00:00:01.000000000                         |           28|
+|0 00:01:00.000000000                         |           26|
+|0 01:00:00.000000000                         |           24|
+|1 00:00:00.000000000                         |            2|
+|1 01:00:00.000000000                         |            4|
+|1 01:02:00.000000000                         |            6|
+|1 01:02:03.000000000                         |            8|
+|1 01:02:03.000000000                         |           14|
+|1 01:02:03.111111000                         |           18|
+|1 01:02:03.400000000                         |           10|
+|1 01:02:03.456789000                         |           12|
+|1 01:02:04.000000000                         |           16|
+|2 01:02:03.111111000                         |           20|
+|2 01:02:03.999900000                         |           22|
+|100 23:58:59.999999000                       |           36|
+|100 23:59:59.999999000                       |           34|
+|3652047 00:00:01.000000000                   |           30|
+|3652047 23:59:59.999999000                   |           32|
++---------------------------------------------+-------------+
+(37 rows)
+>>
+* select d_to_s,idx from dt002_t2 order by 1 desc,2\g
+<<
+
++---------------------------------------------+-------------+
+|d_to_s                                       |idx          |
++---------------------------------------------+-------------+
+|3652047 23:59:59                             |           32|
+|3652047 00:00:01                             |           30|
+|100 23:59:59                                 |           34|
+|100 23:58:59                                 |           36|
+|2 01:02:03                                   |           20|
+|2 01:02:03                                   |           22|
+|1 01:02:04                                   |           16|
+|1 01:02:03                                   |            8|
+|1 01:02:03                                   |           10|
+|1 01:02:03                                   |           12|
+|1 01:02:03                                   |           14|
+|1 01:02:03                                   |           18|
+|1 01:02:00                                   |            6|
+|1 01:00:00                                   |            4|
+|1 00:00:00                                   |            2|
+|0 01:00:00                                   |           24|
+|0 00:01:00                                   |           26|
+|0 00:00:01                                   |           28|
+|0 00:00:00                                   |            1|
+|-0 00:00:01                                  |           29|
+|-0 00:01:00                                  |           27|
+|-0 01:00:00                                  |           25|
+|-1 00:00:00                                  |            3|
+|-1 01:00:00                                  |            5|
+|-1 01:02:00                                  |            7|
+|-1 01:02:03                                  |            9|
+|-1 01:02:03                                  |           11|
+|-1 01:02:03                                  |           13|
+|-1 01:02:03                                  |           15|
+|-1 01:02:03                                  |           19|
+|-1 01:02:04                                  |           17|
+|-2 01:02:03                                  |           21|
+|-2 01:02:03                                  |           23|
+|-100 23:58:59                                |           37|
+|-100 23:59:59                                |           35|
+|-3652047 00:00:01                            |           31|
+|-3652047 23:59:59                            |           33|
++---------------------------------------------+-------------+
+(37 rows)
+>>
+* select d_to_sd1,idx from dt002_t2 order by 1 desc,2\g
+<<
+
++---------------------------------------------+-------------+
+|d_to_sd1                                     |idx          |
++---------------------------------------------+-------------+
+|3652047 23:59:59.9                           |           32|
+|3652047 00:00:01.0                           |           30|
+|100 23:59:59.9                               |           34|
+|100 23:58:59.9                               |           36|
+|2 01:02:03.9                                 |           22|
+|2 01:02:03.1                                 |           20|
+|1 01:02:04.0                                 |           16|
+|1 01:02:03.4                                 |           10|
+|1 01:02:03.4                                 |           12|
+|1 01:02:03.1                                 |           18|
+|1 01:02:03.0                                 |            8|
+|1 01:02:03.0                                 |           14|
+|1 01:02:00.0                                 |            6|
+|1 01:00:00.0                                 |            4|
+|1 00:00:00.0                                 |            2|
+|0 01:00:00.0                                 |           24|
+|0 00:01:00.0                                 |           26|
+|0 00:00:01.0                                 |           28|
+|0 00:00:00.0                                 |            1|
+|-0 00:00:01.0                                |           29|
+|-0 00:01:00.0                                |           27|
+|-0 01:00:00.0                                |           25|
+|-1 00:00:00.0                                |            3|
+|-1 01:00:00.0                                |            5|
+|-1 01:02:00.0                                |            7|
+|-1 01:02:03.0                                |            9|
+|-1 01:02:03.0                                |           15|
+|-1 01:02:03.1                                |           19|
+|-1 01:02:03.4                                |           11|
+|-1 01:02:03.4                                |           13|
+|-1 01:02:04.0                                |           17|
+|-2 01:02:03.1                                |           21|
+|-2 01:02:03.9                                |           23|
+|-100 23:58:59.9                              |           37|
+|-100 23:59:59.9                              |           35|
+|-3652047 00:00:01.0                          |           31|
+|-3652047 23:59:59.9                          |           33|
++---------------------------------------------+-------------+
+(37 rows)
+>>
+* select d_to_sd9,idx from dt002_t2 order by 1 desc,2\g
+<<
+
++---------------------------------------------+-------------+
+|d_to_sd9                                     |idx          |
++---------------------------------------------+-------------+
+|3652047 23:59:59.999999000                   |           32|
+|3652047 00:00:01.000000000                   |           30|
+|100 23:59:59.999999000                       |           34|
+|100 23:58:59.999999000                       |           36|
+|2 01:02:03.999900000                         |           22|
+|2 01:02:03.111111000                         |           20|
+|1 01:02:04.000000000                         |           16|
+|1 01:02:03.456789000                         |           12|
+|1 01:02:03.400000000                         |           10|
+|1 01:02:03.111111000                         |           18|
+|1 01:02:03.000000000                         |            8|
+|1 01:02:03.000000000                         |           14|
+|1 01:02:00.000000000                         |            6|
+|1 01:00:00.000000000                         |            4|
+|1 00:00:00.000000000                         |            2|
+|0 01:00:00.000000000                         |           24|
+|0 00:01:00.000000000                         |           26|
+|0 00:00:01.000000000                         |           28|
+|0 00:00:00.000000000                         |            1|
+|-0 00:00:01.000000000                        |           29|
+|-0 00:01:00.000000000                        |           27|
+|-0 01:00:00.000000000                        |           25|
+|-1 00:00:00.000000000                        |            3|
+|-1 01:00:00.000000000                        |            5|
+|-1 01:02:00.000000000                        |            7|
+|-1 01:02:03.000000000                        |            9|
+|-1 01:02:03.000000000                        |           15|
+|-1 01:02:03.111111000                        |           19|
+|-1 01:02:03.400000000                        |           11|
+|-1 01:02:03.456789000                        |           13|
+|-1 01:02:04.000000000                        |           17|
+|-2 01:02:03.111111000                        |           21|
+|-2 01:02:03.999900000                        |           23|
+|-100 23:58:59.999999000                      |           37|
+|-100 23:59:59.999999000                      |           35|
+|-3652047 00:00:01.000000000                  |           31|
+|-3652047 23:59:59.999999000                  |           33|
++---------------------------------------------+-------------+
+(37 rows)
+>>
+* select min(y_to_m), max(y_to_m) from dt002_t1\g
+<<
+
++---------------+---------------+
+|col1           |col2           |
++---------------+---------------+
+|-9999-11       |9999-11        |
++---------------+---------------+
+(1 row)
+>>
+* select y_to_m from dt002_t1 where y_to_m = '9999-11' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|9999-11        |
++---------------+
+(1 row)
+>>
+* select y_to_m from dt002_t1 where y_to_m = '-9999-11' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
++---------------+
+(1 row)
+>>
+* select y_to_m from dt002_t1 where y_to_m = interval'-9999-11'year to month-
+  order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
++---------------+
+(1 row)
+>>
+* select y_to_m from dt002_t1 where y_to_m = '0' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|0-00           |
++---------------+
+(1 row)
+>>
+* select y_to_m from dt002_t1 where y_to_m = '0-0' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|0-00           |
++---------------+
+(1 row)
+>>
+* select y_to_m from dt002_t1 where y_to_m = '0-1' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|0-01           |
++---------------+
+(1 row)
+>>
+* select y_to_m from dt002_t1 where y_to_m = '1' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|1-00           |
++---------------+
+(1 row)
+>>
+* select y_to_m from dt002_t1 where y_to_m = '-1' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-1-00          |
++---------------+
+(1 row)
+>>
+* select y_to_m from dt002_t1 where y_to_m <> '9999-11' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-01           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
++---------------+
+(20 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m <> '-9999-11' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-01           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(20 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m <> interval'-9999-11'year to month-
+  order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-01           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(20 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m <> '0' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-01           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(20 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m <> '0-1' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(20 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m <> '1' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-01           |
+|0-10           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(20 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m <> '-1' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-01           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(20 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m <> '333-02' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-01           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(20 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m > '-9999-11' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-01           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(20 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m > '-0-01' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|0-00           |
+|0-01           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(11 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m > '333-00' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|333-02         |
+|4444-00        |
+|9999-00        |
+|9999-11        |
++---------------+
+(4 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m > '9999-11' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
++---------------+
+(0 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m < '9999-11' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-01           |
+|0-10           |
+|1-00           |
+|1-01           |
+|22-00          |
+|333-00         |
+|333-02         |
+|4444-00        |
+|9999-00        |
++---------------+
+(20 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m < '0-5' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
+|0-00           |
+|0-01           |
++---------------+
+(12 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m < '0' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
+|-333-02        |
+|-333-00        |
+|-22-00         |
+|-1-01          |
+|-1-00          |
+|-0-10          |
+|-0-01          |
++---------------+
+(10 rows)
+>>
+* select y_to_m from dt002_t1 where y_to_m < '-333-02' order by 1\g
+<<
+
++---------------+
+|y_to_m         |
++---------------+
+|-9999-11       |
+|-9999-00       |
+|-4444-00       |
++---------------+
+(3 rows)
+>>
+* select min(d_to_s) from dt002_t2\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|-3652047 23:59:59                            |
++---------------------------------------------+
+(1 row)
+>>
+* select max(d_to_s) from dt002_t2\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|3652047 23:59:59                             |
++---------------------------------------------+
+(1 row)
+>>
+* select min(d_to_sd1) from dt002_t2\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|-3652047 23:59:59.9                          |
++---------------------------------------------+
+(1 row)
+>>
+* select max(d_to_sd1) from dt002_t2\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|3652047 23:59:59.9                           |
++---------------------------------------------+
+(1 row)
+>>
+* select min(d_to_sd9) from dt002_t2\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|-3652047 23:59:59.999999000                  |
++---------------------------------------------+
+(1 row)
+>>
+* select max(d_to_sd9) from dt002_t2\g
+<<
+
++---------------------------------------------+
+|col1                                         |
++---------------------------------------------+
+|3652047 23:59:59.999999000                   |
++---------------------------------------------+
+(1 row)
+>>
+* select d_to_s from dt002_t2 where d_to_s = '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_s                                       |
++---------------------------------------------+
+|0 00:00:00                                   |
++---------------------------------------------+
+(1 row)
+>>
+* select d_to_s from dt002_t2 where d_to_s <> '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_s                                       |
++---------------------------------------------+
+|-3652047 23:59:59                            |
+|-3652047 00:00:01                            |
+|-100 23:59:59                                |
+|-100 23:58:59                                |
+|-2 01:02:03                                  |
+|-2 01:02:03                                  |
+|-1 01:02:04                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:00                                  |
+|-1 01:00:00                                  |
+|-1 00:00:00                                  |
+|-0 01:00:00                                  |
+|-0 00:01:00                                  |
+|-0 00:00:01                                  |
+|0 00:00:01                                   |
+|0 00:01:00                                   |
+|0 01:00:00                                   |
+|1 00:00:00                                   |
+|1 01:00:00                                   |
+|1 01:02:00                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:04                                   |
+|2 01:02:03                                   |
+|2 01:02:03                                   |
+|100 23:58:59                                 |
+|100 23:59:59                                 |
+|3652047 00:00:01                             |
+|3652047 23:59:59                             |
++---------------------------------------------+
+(36 rows)
+>>
+* select d_to_s from dt002_t2 where d_to_s < '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_s                                       |
++---------------------------------------------+
+|-3652047 23:59:59                            |
+|-3652047 00:00:01                            |
+|-100 23:59:59                                |
+|-100 23:58:59                                |
+|-2 01:02:03                                  |
+|-2 01:02:03                                  |
+|-1 01:02:04                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:00                                  |
+|-1 01:00:00                                  |
+|-1 00:00:00                                  |
+|-0 01:00:00                                  |
+|-0 00:01:00                                  |
+|-0 00:00:01                                  |
++---------------------------------------------+
+(18 rows)
+>>
+* select d_to_s from dt002_t2 where d_to_s > '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_s                                       |
++---------------------------------------------+
+|0 00:00:01                                   |
+|0 00:01:00                                   |
+|0 01:00:00                                   |
+|1 00:00:00                                   |
+|1 01:00:00                                   |
+|1 01:02:00                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:04                                   |
+|2 01:02:03                                   |
+|2 01:02:03                                   |
+|100 23:58:59                                 |
+|100 23:59:59                                 |
+|3652047 00:00:01                             |
+|3652047 23:59:59                             |
++---------------------------------------------+
+(18 rows)
+>>
+* select d_to_sd1 from dt002_t2 where d_to_sd1 = '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd1                                     |
++---------------------------------------------+
+|0 00:00:00.0                                 |
++---------------------------------------------+
+(1 row)
+>>
+* select d_to_sd1 from dt002_t2 where d_to_sd1 <> '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd1                                     |
++---------------------------------------------+
+|-3652047 23:59:59.9                          |
+|-3652047 00:00:01.0                          |
+|-100 23:59:59.9                              |
+|-100 23:58:59.9                              |
+|-2 01:02:03.9                                |
+|-2 01:02:03.1                                |
+|-1 01:02:04.0                                |
+|-1 01:02:03.4                                |
+|-1 01:02:03.4                                |
+|-1 01:02:03.1                                |
+|-1 01:02:03.0                                |
+|-1 01:02:03.0                                |
+|-1 01:02:00.0                                |
+|-1 01:00:00.0                                |
+|-1 00:00:00.0                                |
+|-0 01:00:00.0                                |
+|-0 00:01:00.0                                |
+|-0 00:00:01.0                                |
+|0 00:00:01.0                                 |
+|0 00:01:00.0                                 |
+|0 01:00:00.0                                 |
+|1 00:00:00.0                                 |
+|1 01:00:00.0                                 |
+|1 01:02:00.0                                 |
+|1 01:02:03.0                                 |
+|1 01:02:03.0                                 |
+|1 01:02:03.1                                 |
+|1 01:02:03.4                                 |
+|1 01:02:03.4                                 |
+|1 01:02:04.0                                 |
+|2 01:02:03.1                                 |
+|2 01:02:03.9                                 |
+|100 23:58:59.9                               |
+|100 23:59:59.9                               |
+|3652047 00:00:01.0                           |
+|3652047 23:59:59.9                           |
++---------------------------------------------+
+(36 rows)
+>>
+* select d_to_sd1 from dt002_t2 where d_to_sd1 > '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd1                                     |
++---------------------------------------------+
+|0 00:00:01.0                                 |
+|0 00:01:00.0                                 |
+|0 01:00:00.0                                 |
+|1 00:00:00.0                                 |
+|1 01:00:00.0                                 |
+|1 01:02:00.0                                 |
+|1 01:02:03.0                                 |
+|1 01:02:03.0                                 |
+|1 01:02:03.1                                 |
+|1 01:02:03.4                                 |
+|1 01:02:03.4                                 |
+|1 01:02:04.0                                 |
+|2 01:02:03.1                                 |
+|2 01:02:03.9                                 |
+|100 23:58:59.9                               |
+|100 23:59:59.9                               |
+|3652047 00:00:01.0                           |
+|3652047 23:59:59.9                           |
++---------------------------------------------+
+(18 rows)
+>>
+* select d_to_sd1 from dt002_t2 where d_to_sd1 < '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd1                                     |
++---------------------------------------------+
+|-3652047 23:59:59.9                          |
+|-3652047 00:00:01.0                          |
+|-100 23:59:59.9                              |
+|-100 23:58:59.9                              |
+|-2 01:02:03.9                                |
+|-2 01:02:03.1                                |
+|-1 01:02:04.0                                |
+|-1 01:02:03.4                                |
+|-1 01:02:03.4                                |
+|-1 01:02:03.1                                |
+|-1 01:02:03.0                                |
+|-1 01:02:03.0                                |
+|-1 01:02:00.0                                |
+|-1 01:00:00.0                                |
+|-1 00:00:00.0                                |
+|-0 01:00:00.0                                |
+|-0 00:01:00.0                                |
+|-0 00:00:01.0                                |
++---------------------------------------------+
+(18 rows)
+>>
+* select d_to_sd9 from dt002_t2 where d_to_sd9 = '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd9                                     |
++---------------------------------------------+
+|0 00:00:00.000000000                         |
++---------------------------------------------+
+(1 row)
+>>
+* select d_to_sd9 from dt002_t2 where d_to_sd9 <> '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd9                                     |
++---------------------------------------------+
+|-3652047 23:59:59.999999000                  |
+|-3652047 00:00:01.000000000                  |
+|-100 23:59:59.999999000                      |
+|-100 23:58:59.999999000                      |
+|-2 01:02:03.999900000                        |
+|-2 01:02:03.111111000                        |
+|-1 01:02:04.000000000                        |
+|-1 01:02:03.456789000                        |
+|-1 01:02:03.400000000                        |
+|-1 01:02:03.111111000                        |
+|-1 01:02:03.000000000                        |
+|-1 01:02:03.000000000                        |
+|-1 01:02:00.000000000                        |
+|-1 01:00:00.000000000                        |
+|-1 00:00:00.000000000                        |
+|-0 01:00:00.000000000                        |
+|-0 00:01:00.000000000                        |
+|-0 00:00:01.000000000                        |
+|0 00:00:01.000000000                         |
+|0 00:01:00.000000000                         |
+|0 01:00:00.000000000                         |
+|1 00:00:00.000000000                         |
+|1 01:00:00.000000000                         |
+|1 01:02:00.000000000                         |
+|1 01:02:03.000000000                         |
+|1 01:02:03.000000000                         |
+|1 01:02:03.111111000                         |
+|1 01:02:03.400000000                         |
+|1 01:02:03.456789000                         |
+|1 01:02:04.000000000                         |
+|2 01:02:03.111111000                         |
+|2 01:02:03.999900000                         |
+|100 23:58:59.999999000                       |
+|100 23:59:59.999999000                       |
+|3652047 00:00:01.000000000                   |
+|3652047 23:59:59.999999000                   |
++---------------------------------------------+
+(36 rows)
+>>
+* select d_to_sd9 from dt002_t2 where d_to_sd9 < '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd9                                     |
++---------------------------------------------+
+|-3652047 23:59:59.999999000                  |
+|-3652047 00:00:01.000000000                  |
+|-100 23:59:59.999999000                      |
+|-100 23:58:59.999999000                      |
+|-2 01:02:03.999900000                        |
+|-2 01:02:03.111111000                        |
+|-1 01:02:04.000000000                        |
+|-1 01:02:03.456789000                        |
+|-1 01:02:03.400000000                        |
+|-1 01:02:03.111111000                        |
+|-1 01:02:03.000000000                        |
+|-1 01:02:03.000000000                        |
+|-1 01:02:00.000000000                        |
+|-1 01:00:00.000000000                        |
+|-1 00:00:00.000000000                        |
+|-0 01:00:00.000000000                        |
+|-0 00:01:00.000000000                        |
+|-0 00:00:01.000000000                        |
++---------------------------------------------+
+(18 rows)
+>>
+* select d_to_sd9 from dt002_t2 where d_to_sd9 > '0 0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd9                                     |
++---------------------------------------------+
+|0 00:00:01.000000000                         |
+|0 00:01:00.000000000                         |
+|0 01:00:00.000000000                         |
+|1 00:00:00.000000000                         |
+|1 01:00:00.000000000                         |
+|1 01:02:00.000000000                         |
+|1 01:02:03.000000000                         |
+|1 01:02:03.000000000                         |
+|1 01:02:03.111111000                         |
+|1 01:02:03.400000000                         |
+|1 01:02:03.456789000                         |
+|1 01:02:04.000000000                         |
+|2 01:02:03.111111000                         |
+|2 01:02:03.999900000                         |
+|100 23:58:59.999999000                       |
+|100 23:59:59.999999000                       |
+|3652047 00:00:01.000000000                   |
+|3652047 23:59:59.999999000                   |
++---------------------------------------------+
+(18 rows)
+>>
+* select d_to_s from dt002_t2 where d_to_s = '1 01:02:03.0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_s                                       |
++---------------------------------------------+
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
+|1 01:02:03                                   |
++---------------------------------------------+
+(5 rows)
+>>
+* select d_to_s from dt002_t2 where d_to_s <> '1 01:02:03.0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_s                                       |
++---------------------------------------------+
+|-3652047 23:59:59                            |
+|-3652047 00:00:01                            |
+|-100 23:59:59                                |
+|-100 23:58:59                                |
+|-2 01:02:03                                  |
+|-2 01:02:03                                  |
+|-1 01:02:04                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:00                                  |
+|-1 01:00:00                                  |
+|-1 00:00:00                                  |
+|-0 01:00:00                                  |
+|-0 00:01:00                                  |
+|-0 00:00:01                                  |
+|0 00:00:00                                   |
+|0 00:00:01                                   |
+|0 00:01:00                                   |
+|0 01:00:00                                   |
+|1 00:00:00                                   |
+|1 01:00:00                                   |
+|1 01:02:00                                   |
+|1 01:02:04                                   |
+|2 01:02:03                                   |
+|2 01:02:03                                   |
+|100 23:58:59                                 |
+|100 23:59:59                                 |
+|3652047 00:00:01                             |
+|3652047 23:59:59                             |
++---------------------------------------------+
+(32 rows)
+>>
+* select d_to_s from dt002_t2 where d_to_s > '1 01:02:03.0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_s                                       |
++---------------------------------------------+
+|1 01:02:04                                   |
+|2 01:02:03                                   |
+|2 01:02:03                                   |
+|100 23:58:59                                 |
+|100 23:59:59                                 |
+|3652047 00:00:01                             |
+|3652047 23:59:59                             |
++---------------------------------------------+
+(7 rows)
+>>
+* select d_to_s from dt002_t2 where d_to_s < '1 01:02:03.0'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_s                                       |
++---------------------------------------------+
+|-3652047 23:59:59                            |
+|-3652047 00:00:01                            |
+|-100 23:59:59                                |
+|-100 23:58:59                                |
+|-2 01:02:03                                  |
+|-2 01:02:03                                  |
+|-1 01:02:04                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:03                                  |
+|-1 01:02:00                                  |
+|-1 01:00:00                                  |
+|-1 00:00:00                                  |
+|-0 01:00:00                                  |
+|-0 00:01:00                                  |
+|-0 00:00:01                                  |
+|0 00:00:00                                   |
+|0 00:00:01                                   |
+|0 00:01:00                                   |
+|0 01:00:00                                   |
+|1 00:00:00                                   |
+|1 01:00:00                                   |
+|1 01:02:00                                   |
++---------------------------------------------+
+(25 rows)
+>>
+* select d_to_sd1 from dt002_t2 where d_to_sd1 = '1 01:02:03.1'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd1                                     |
++---------------------------------------------+
+|1 01:02:03.1                                 |
++---------------------------------------------+
+(1 row)
+>>
+* select d_to_sd1 from dt002_t2 where d_to_sd1 <> '1 01:02:03.1'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd1                                     |
++---------------------------------------------+
+|-3652047 23:59:59.9                          |
+|-3652047 00:00:01.0                          |
+|-100 23:59:59.9                              |
+|-100 23:58:59.9                              |
+|-2 01:02:03.9                                |
+|-2 01:02:03.1                                |
+|-1 01:02:04.0                                |
+|-1 01:02:03.4                                |
+|-1 01:02:03.4                                |
+|-1 01:02:03.1                                |
+|-1 01:02:03.0                                |
+|-1 01:02:03.0                                |
+|-1 01:02:00.0                                |
+|-1 01:00:00.0                                |
+|-1 00:00:00.0                                |
+|-0 01:00:00.0                                |
+|-0 00:01:00.0                                |
+|-0 00:00:01.0                                |
+|0 00:00:00.0                                 |
+|0 00:00:01.0                                 |
+|0 00:01:00.0                                 |
+|0 01:00:00.0                                 |
+|1 00:00:00.0                                 |
+|1 01:00:00.0                                 |
+|1 01:02:00.0                                 |
+|1 01:02:03.0                                 |
+|1 01:02:03.0                                 |
+|1 01:02:03.4                                 |
+|1 01:02:03.4                                 |
+|1 01:02:04.0                                 |
+|2 01:02:03.1                                 |
+|2 01:02:03.9                                 |
+|100 23:58:59.9                               |
+|100 23:59:59.9                               |
+|3652047 00:00:01.0                           |
+|3652047 23:59:59.9                           |
++---------------------------------------------+
+(36 rows)
+>>
+* select d_to_sd1 from dt002_t2 where d_to_sd1 > '1 01:02:03.1'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd1                                     |
++---------------------------------------------+
+|1 01:02:03.4                                 |
+|1 01:02:03.4                                 |
+|1 01:02:04.0                                 |
+|2 01:02:03.1                                 |
+|2 01:02:03.9                                 |
+|100 23:58:59.9                               |
+|100 23:59:59.9                               |
+|3652047 00:00:01.0                           |
+|3652047 23:59:59.9                           |
++---------------------------------------------+
+(9 rows)
+>>
+* select d_to_sd1 from dt002_t2 where d_to_sd1 < '1 01:02:03.1'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd1                                     |
++---------------------------------------------+
+|-3652047 23:59:59.9                          |
+|-3652047 00:00:01.0                          |
+|-100 23:59:59.9                              |
+|-100 23:58:59.9                              |
+|-2 01:02:03.9                                |
+|-2 01:02:03.1                                |
+|-1 01:02:04.0                                |
+|-1 01:02:03.4                                |
+|-1 01:02:03.4                                |
+|-1 01:02:03.1                                |
+|-1 01:02:03.0                                |
+|-1 01:02:03.0                                |
+|-1 01:02:00.0                                |
+|-1 01:00:00.0                                |
+|-1 00:00:00.0                                |
+|-0 01:00:00.0                                |
+|-0 00:01:00.0                                |
+|-0 00:00:01.0                                |
+|0 00:00:00.0                                 |
+|0 00:00:01.0                                 |
+|0 00:01:00.0                                 |
+|0 01:00:00.0                                 |
+|1 00:00:00.0                                 |
+|1 01:00:00.0                                 |
+|1 01:02:00.0                                 |
+|1 01:02:03.0                                 |
+|1 01:02:03.0                                 |
++---------------------------------------------+
+(27 rows)
+>>
+* select d_to_sd9 from dt002_t2 where d_to_sd9 = '1 01:02:03.111111'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd9                                     |
++---------------------------------------------+
+|1 01:02:03.111111000                         |
++---------------------------------------------+
+(1 row)
+>>
+* select d_to_sd9 from dt002_t2 where d_to_sd9 <> '1 01:02:03.111111'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd9                                     |
++---------------------------------------------+
+|-3652047 23:59:59.999999000                  |
+|-3652047 00:00:01.000000000                  |
+|-100 23:59:59.999999000                      |
+|-100 23:58:59.999999000                      |
+|-2 01:02:03.999900000                        |
+|-2 01:02:03.111111000                        |
+|-1 01:02:04.000000000                        |
+|-1 01:02:03.456789000                        |
+|-1 01:02:03.400000000                        |
+|-1 01:02:03.111111000                        |
+|-1 01:02:03.000000000                        |
+|-1 01:02:03.000000000                        |
+|-1 01:02:00.000000000                        |
+|-1 01:00:00.000000000                        |
+|-1 00:00:00.000000000                        |
+|-0 01:00:00.000000000                        |
+|-0 00:01:00.000000000                        |
+|-0 00:00:01.000000000                        |
+|0 00:00:00.000000000                         |
+|0 00:00:01.000000000                         |
+|0 00:01:00.000000000                         |
+|0 01:00:00.000000000                         |
+|1 00:00:00.000000000                         |
+|1 01:00:00.000000000                         |
+|1 01:02:00.000000000                         |
+|1 01:02:03.000000000                         |
+|1 01:02:03.000000000                         |
+|1 01:02:03.400000000                         |
+|1 01:02:03.456789000                         |
+|1 01:02:04.000000000                         |
+|2 01:02:03.111111000                         |
+|2 01:02:03.999900000                         |
+|100 23:58:59.999999000                       |
+|100 23:59:59.999999000                       |
+|3652047 00:00:01.000000000                   |
+|3652047 23:59:59.999999000                   |
++---------------------------------------------+
+(36 rows)
+>>
+* select d_to_sd9 from dt002_t2 where d_to_sd9 > '1 01:02:03.111111'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd9                                     |
++---------------------------------------------+
+|1 01:02:03.400000000                         |
+|1 01:02:03.456789000                         |
+|1 01:02:04.000000000                         |
+|2 01:02:03.111111000                         |
+|2 01:02:03.999900000                         |
+|100 23:58:59.999999000                       |
+|100 23:59:59.999999000                       |
+|3652047 00:00:01.000000000                   |
+|3652047 23:59:59.999999000                   |
++---------------------------------------------+
+(9 rows)
+>>
+* select d_to_sd9 from dt002_t2 where d_to_sd9 < '1 01:02:03.111111'-
+  order by 1\g
+<<
+
++---------------------------------------------+
+|d_to_sd9                                     |
++---------------------------------------------+
+|-3652047 23:59:59.999999000                  |
+|-3652047 00:00:01.000000000                  |
+|-100 23:59:59.999999000                      |
+|-100 23:58:59.999999000                      |
+|-2 01:02:03.999900000                        |
+|-2 01:02:03.111111000                        |
+|-1 01:02:04.000000000                        |
+|-1 01:02:03.456789000                        |
+|-1 01:02:03.400000000                        |
+|-1 01:02:03.111111000                        |
+|-1 01:02:03.000000000                        |
+|-1 01:02:03.000000000                        |
+|-1 01:02:00.000000000                        |
+|-1 01:00:00.000000000                        |
+|-1 00:00:00.000000000                        |
+|-0 01:00:00.000000000                        |
+|-0 00:01:00.000000000                        |
+|-0 00:00:01.000000000                        |
+|0 00:00:00.000000000                         |
+|0 00:00:01.000000000                         |
+|0 00:01:00.000000000                         |
+|0 01:00:00.000000000                         |
+|1 00:00:00.000000000                         |
+|1 01:00:00.000000000                         |
+|1 01:02:00.000000000                         |
+|1 01:02:03.000000000                         |
+|1 01:02:03.000000000                         |
++---------------------------------------------+
+(27 rows)
+>>
+* \q
+<<
+~
+>>

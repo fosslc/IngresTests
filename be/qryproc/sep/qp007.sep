@@ -1,0 +1,403 @@
+/*
+	Test Name    : eba02.sep
+	Time         : 31-JUL-1989 08:23:53
+	User Name    : testenv      
+ 
+	Test ID      : eba02 (formerly ag004)
+	Module       : be/qryproc/subselect
+	Filename     : eba02.sep
+	Purpose	     :
+	Input Files  : s.dat, p.dat, sp.dat
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : s, p, sp
+	Synopsis     : select using discinct, subselect, and joins
+
+	History	     : claire l. created.
+		       mar 28/89 sgp modified to add to test suite.
+		       jul 31/89 lah converted to sep format
+		       Nov 6,91 converted to using setup file. CAMACHO
+ 	Setup Test   : eaa00.sep
+
+	23-Mar-1999   (vande02) Changed 'sql -s SEPPARAMDB' canon to be empty,
+                                in order to catch the msg. "TM could not connect
+                                ..." if the test database did not exist.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from p\g
+<<
+
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p1    |nut       |red   |    12|london    |
+|p2    |bolt      |green |    17|paris     |
+|p3    |screw     |blue  |    17|rome      |
+|p4    |screw     |red   |    14|london    |
+|p5    |cam       |blue  |    12|paris     |
+|p6    |cog       |red   |    19|london    |
++------+----------+------+------+----------+
+(6 rows)
+>>
+* select * from s\g
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s5    |adams |    30|athens    |
+|s3    |blake |    30|paris     |
+|s4    |clark |    20|london    |
+|s2    |jones |    10|paris     |
+|s1    |smith |    20|london    |
++------+------+------+----------+
+(5 rows)
+>>
+* select * from sp\g
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select pno, weight from p where weight = 12 or weight = 16 or weight = 17\g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p1    |    12|
+|p2    |    17|
+|p3    |    17|
+|p5    |    12|
++------+------+
+(4 rows)
+>>
+* select pno, weight from p where weight in (12, 16, 17)\g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p1    |    12|
+|p2    |    17|
+|p3    |    17|
+|p5    |    12|
++------+------+
+(4 rows)
+>>
+* select pno, weight from p where weight in (12, 17, 0)\g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p1    |    12|
+|p2    |    17|
+|p3    |    17|
+|p5    |    12|
++------+------+
+(4 rows)
+>>
+* select pno, weight from p where weight not in (12, 17, 0)\g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p4    |    14|
+|p6    |    19|
++------+------+
+(2 rows)
+>>
+* select * from s where city in (select city from p where color= 'red')\g
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s1    |smith |    20|london    |
+|s4    |clark |    20|london    |
++------+------+------+----------+
+(2 rows)
+>>
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s4    |clark |    20|london    |
+|s1    |smith |    20|london    |
++------+------+------+----------+
+(2 rows)
+>>
+* select * from sp spx where spx.qty in	( select avg(qty) from sp spy )\g
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
++------+------+------+
+(0 rows)
+>>
+* select sname from s where 'p2' in ( select pno from sp where sno = s.sno )\g
+<<
+
++------+
+|sname |
++------+
+|blake |
+|clark |
+|jones |
+|smith |
++------+
+(4 rows)
+>>
+<<
+
++------+
+|sname |
++------+
+|smith |
+|jones |
+|blake |
+|clark |
++------+
+(4 rows)
+>>
+* select sname from s where sno in ( select sno from sp where pno = 'p2' )\g
+<<
+
++------+
+|sname |
++------+
+|blake |
+|clark |
+|jones |
+|smith |
++------+
+(4 rows)
+>>
+<<
+
++------+
+|sname |
++------+
+|smith |
+|jones |
+|blake |
+|clark |
++------+
+(4 rows)
+>>
+* select sno from s where city = (select city from s where sno = 's1')\g
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s4    |
++------+
+(2 rows)
+>>
+<<
+
++------+
+|sno   |
++------+
+|s4    |
+|s1    |
++------+
+(2 rows)
+>>
+* select sno from s where city in (select city from s where sno = 's1')\g
+<<
+
++------+
+|sno   |
++------+
+|s4    |
+|s1    |
++------+
+(2 rows)
+>>
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s4    |
++------+
+(2 rows)
+>>
+* select distinct sno from sp where pno in 
+<<
+>>
+*	(select pno from sp where sno = 's2')\g
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s2    |
+|s3    |
+|s4    |
++------+
+(4 rows)
+>>
+* select distinct pno from sp spx where pno in 	
+<<
+>>
+* (select pno from sp where sno != spx.sno)\g
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct spx.pno from sp spx where spx.pno in 
+<<
+>>
+* ( select spy.pno from sp spy where spy.sno != spx.sno )\g
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct sname from s where city in 
+<<
+>>
+* (select city from s where sno = 's1') \g
+<<
+
++------+
+|sname |
++------+
+|clark |
+|smith |
++------+
+(2 rows)
+>>
+* select sname from s where sno in  
+<<
+>>
+* (select sno from sp where pno in (select pno from sp where sno='s1'))\g
+<<
+
++------+
+|sname |
++------+
+|blake |
+|clark |
+|jones |
+|smith |
++------+
+(4 rows)
+>>
+<<
+
++------+
+|sname |
++------+
+|smith |
+|jones |
+|blake |
+|clark |
++------+
+(4 rows)
+>>
+* select sname from s where sno in (select sno from sp 
+<<
+>>
+* where pno in 	(select pno from p where color='red'))\g
+<<
+
++------+
+|sname |
++------+
+|clark |
+|jones |
+|smith |
++------+
+(3 rows)
+>>
+<<
+
++------+
+|sname |
++------+
+|smith |
+|jones |
+|clark |
++------+
+(3 rows)
+>>
+* select distinct sname from s where sno in (select sno from sp 
+<<
+>>
+* where pno in (select pno from p where color = 'red'))\g
+<<
+
++------+
+|sname |
++------+
+|clark |
+|jones |
+|smith |
++------+
+(3 rows)
+>>
+* select * from sp where sno in ( select sno from s where city='lon*') 
+<<
+>>
+* and pno in (select pno from p where color='re*')\g
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
++------+------+------+
+(0 rows)
+>>
+* \q
+<<
+>>
+
+
+Ending at: 18-APR-1991 18:07:12
+
+
+

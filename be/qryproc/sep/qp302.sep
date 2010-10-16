@@ -1,0 +1,441 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: qp302.sep
+	Time: Wed Dec 04 12:53:08 2002
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : qp302.sep
+	Module  : be/qryproc
+	Filename: qp302.sep
+	Purpose	: Test hash join feature, first available with Ingres
+                  2.6/0106 and later releases.
+	Input Files  : 
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : qp302_tbl1, qp302_tbl2
+	Synopsis     : This test is designed to the assumption that hash join
+                       is OFF by default(as of 2.6/0207 SP1 hash join is OFF by
+                       default in the installation). This test will create
+                       two tables with the data types of long varchar, long
+                       byte, object_key, table_key, int1, char, varchar. Turn
+                       hash join ON. Execute various queries. Also, this test
+                       includes few destructive test cases such as comparing
+                       the long varchar and long byte columns.
+
+                       As of 2.6/0303 SP2 hash join is ON by default in the
+                       installation with a default configuration.
+
+
+ History: 04-Dec-2002	(wu$ca01) Created
+          11-Mar-2003	(vande02) Removed command 'set trace point op162' which
+                                  now (as of SP2) turns hash join OFF in a
+                                  single session and we want the default which
+                                  is ON.
+          15-Sep-2008	(vande02) Added conditional canon to allow for UTF8
+                                  collation sequence order. Header cleanup.
+                                  Removed the 'p' print syntax and the commands
+                                  from the canons to avoid this clutter.
+*/
+? fill insert.sql 
+!!
+insert into qp302_tbl1 values(1, 'ABCDEFGHIJ', 'QRSTUVWXYZ', 'hashjoin', 'HaShJoInHa-
+ShJoIn', 'hashjoin', 'HaShJoInHaShJoIn')\g
+insert into qp302_tbl1 values(2, 'AZBYCXDWEV', 'QARBTCUDVE', 'hashjoin', 'HaShJoInHa-
+ShJoIn', 'hashjoin', 'HaShJoInHaShJoIn')\g
+insert into qp302_tbl1 values(3, 'AQFUGTHSIR', 'QFWGXHYIZJ', 'hashjoin', 'HaShJoInHa-
+ShJoIn', 'hashjoin', 'HaShJoInHaShJoIn')\g
+insert into qp302_tbl1 values(4, '1234567890', '1029384756', 'hashjoin', 'HaShJoInHa-
+ShJoIn', 'hashjoin', 'HaShJoInHaShJoIn')\g
+insert into qp302_tbl1 values(5, '1357913579', '2468024680', 'hashjoin', 'HaShJoInHa-
+ShJoIn', 'hashjoin', 'HaShJoInHaShJoIn')\g
+insert into qp302_tbl1 values(6, 'ABCDEFGH', null, 'hashjoin', 'HaShJoInHaShJoIn', '-
+hashjoin', 'HaShJoInHaShJoIn')\g
+
+insert into qp302_tbl2 values(11, 'ABCDEFGHIJ', 'QRSTUVWXYZ', '12344321', '123456788-
+7654321', '12344321', '1234567887654321')\g
+insert into qp302_tbl2 values(12, 'abcdefghij', 'qrstuvwxyz', '12344321', '123456788-
+7654321', 'ABCDEFGH', 'ABCDEFGHIJKLMNOP')\g
+insert into qp302_tbl2 values(13, 'aqfugthsir', 'qfwgxhyizj', '12344321', '123456788-
+7654321', 'abcdefgh', 'abcdefghijklmnop')\g
+insert into qp302_tbl2 values(14, '1029384756', '1234567890', '12344321', '123456788-
+7654321', 'AaBbCcDd', 'AaBbCcDdEeFfGgHh')\g
+insert into qp302_tbl2 values(15, null, 'ABCDEFGHIJKLMNOP', '12344321', '12345678876-
+54321', 'aAbBcCdD', 'aAbBcCdDeEfFgGhH')\g
+insert into qp302_tbl2 values(16, '0123456789', '0918273645', '12344321', '123456788-
+7654321', '1a2b3c4d', '1A2B3C4D5E6F7G8H')\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table qp302_tbl1\g
+<<
+~
+>>
+* drop table qp302_tbl2\g
+<<
+~
+>>
+* create table qp302_tbl1(int1 int1, lvar long varchar, lbyte long byte, tkey table_-
+key, okey object_key, tkey2 table_key, okey2 object_key)\g
+<<
+>>
+* create table qp302_tbl2(int1 int1, lvar long varchar, lbyte long byte, tkey table_-
+key, okey object_key, char char(8), vchar varchar(16))\g
+<<
+>>
+* \i insert.sql
+<<
+~
+>>
+* select * from qp302_tbl1 order by int1\g
+<<
+
++------+--------------------------------+--------------------------------+--------+--
+---------------+--------+----------------+
+|int1  |lvar                            |lbyte                           |tkey    |o-
+key            |tkey2   |okey2           |
++------+--------------------------------+--------------------------------+--------+--
+---------------+--------+----------------+
+|     1|ABCDEFGHIJ                      |QRSTUVWXYZ                      |hashjoin|H-
+aShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|     2|AZBYCXDWEV                      |QARBTCUDVE                      |hashjoin|H-
+aShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|     3|AQFUGTHSIR                      |QFWGXHYIZJ                      |hashjoin|H-
+aShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|     4|1234567890                      |1029384756                      |hashjoin|H-
+aShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|     5|1357913579                      |2468024680                      |hashjoin|H-
+aShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|     6|ABCDEFGH                        |                                |hashjoin|H-
+aShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
++------+--------------------------------+--------------------------------+--------+--
+---------------+--------+----------------+
+(6 rows)
+>>
+* select * from qp302_tbl2 order by int1\g
+<<
+
++------+--------------------------------+--------------------------------+--------+--
+---------------+--------+----------------+
+|int1  |lvar                            |lbyte                           |tkey    |o-
+key            |char    |vchar           |
++------+--------------------------------+--------------------------------+--------+--
+---------------+--------+----------------+
+|    11|ABCDEFGHIJ                      |QRSTUVWXYZ                      |12344321|1-
+234567887654321|12344321|1234567887654321|
+|    12|abcdefghij                      |qrstuvwxyz                      |12344321|1-
+234567887654321|ABCDEFGH|ABCDEFGHIJKLMNOP|
+|    13|aqfugthsir                      |qfwgxhyizj                      |12344321|1-
+234567887654321|abcdefgh|abcdefghijklmnop|
+|    14|1029384756                      |1234567890                      |12344321|1-
+234567887654321|AaBbCcDd|AaBbCcDdEeFfGgHh|
+|    15|                                |ABCDEFGHIJKLMNOP                |12344321|1-
+234567887654321|aAbBcCdD|aAbBcCdDeEfFgGhH|
+|    16|0123456789                      |0918273645                      |12344321|1-
+234567887654321|1a2b3c4d|1A2B3C4D5E6F7G8H|
++------+--------------------------------+--------------------------------+--------+--
+---------------+--------+----------------+
+(6 rows)
+>>
+* select t1.int1, t1.lvar, t2.int1, t2.lvar from qp302_tbl1 t1, qp302_tbl2 t2 where -
+t1.lvar=t2.lvar order by t1.int1\g
+<<
+
+E_US0B5C line 1, Function '=' is not defined for arguments of type 'long
+    varchar' and 'long varchar'. Explicitly convert its arguments to the
+    desired type(s).
+    (Thu Dec 05 13:00:19 2002)
+
+>>
+* select t1.int1, t1.lbyte, t2.int1, t2.lbyte from (qp302_tbl1 t1 inner join qp302_t-
+bl2 t2 on t1.lbyte=t2.lbyte) order by t1.int1\g
+<<
+
+E_US0B5C line 1, Function '=' is not defined for arguments of type 'long
+    byte' and 'long byte'. Explicitly convert its arguments to the desired
+    type(s).
+    (Thu Dec 05 13:00:19 2002)
+
+>>
+* select t1.int1, t1.lvar, t1.lbyte, t2.lvar, t2.lbyte from qp302_tbl1 t1, qp302_tbl-
+2 t2 where t1.lvar=t2.lbyte or t1.lbyte=t2.lvar or t1.lbyte is null order by t1.int1-
+\g
+<<
+
+E_US0B5C line 1, Function '=' is not defined for arguments of type 'long
+    varchar' and 'long byte'. Explicitly convert its arguments to the desired
+    type(s).
+    (Thu Dec 05 13:37:22 2002)
+
+>>
+* select t2.char, t2.vchar, t1.lvar, t2.lbyte from qp302_tbl1 t1, qp302_tbl2 t2 wher-
+e t2.char=t1.lvar or t2.vchar=t2.lbyte order by t2.char\g
+<<
+
+E_US0B5C line 1, Function '=' is not defined for arguments of type 'char'
+    and 'long varchar'. Explicitly convert its arguments to the desired
+    type(s).
+    (Thu Dec 05 13:57:26 2002)
+
+>>
+* select t1.tkey, t1.okey, t2.tkey, t2.okey from qp302_tbl1 t1, qp302_tbl2 t2 where -
+t1.tkey=t2.tkey and t1.okey=t2.okey order by t1.tkey\g
+<<
+
++--------+----------------+--------+----------------+
+|tkey    |okey            |tkey    |okey            |
++--------+----------------+--------+----------------+
++--------+----------------+--------+----------------+
+(0 rows)
+>>
+*  select t1.tkey, t1.okey, t1a.tkey2, t1a.okey2 from (qp302_tbl1 t1 inner join qp30-
+2_tbl1 t1a on t1.tkey=t1a.tkey2 and t1.okey=t1a.okey2) order by t1.tkey\g
+<<
+
++--------+----------------+--------+----------------+
+|tkey    |okey            |tkey2   |okey2           |
++--------+----------------+--------+----------------+
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
++--------+----------------+--------+----------------+
+(36 rows)
+>>
+* select t2a.char, t2a.vchar, t2.tkey, t2.okey from qp302_tbl2 t2a, qp302_tbl2 t2 wh-
+ere t2a.char=t2.tkey and t2a.vchar=t2.okey order by t2a.char\g
+<<
+
++--------+----------------+--------+----------------+
+|char    |vchar           |tkey    |okey            |
++--------+----------------+--------+----------------+
+|12344321|1234567887654321|12344321|1234567887654321|
+|12344321|1234567887654321|12344321|1234567887654321|
+|12344321|1234567887654321|12344321|1234567887654321|
+|12344321|1234567887654321|12344321|1234567887654321|
+|12344321|1234567887654321|12344321|1234567887654321|
+|12344321|1234567887654321|12344321|1234567887654321|
++--------+----------------+--------+----------------+
+(6 rows)
+>>
+* select t1.tkey, t1.okey from (qp302_tbl1 t1 left join qp302_tbl2 t2 on
+<<
+>>
+* t1.tkey=t2.tkey and t1.okey=t2.okey) union (select t1a.tkey2, t1a.okey2
+<<
+>>
+* from qp302_tbl1 t1a, qp302_tbl1 t1b where t1a.tkey2=t1b.tkey and
+<<
+>>
+* t1a.okey2=t1b.okey) union (select t2a.char, t2a.vchar from qp302_tbl2 t2a,
+<<
+>>
+* qp302_tbl2 t2b where t2a.char=t2b.tkey and t2a.vchar=t2b.okey) order by t1.tkey\-
+g
+<<
+
++--------+----------------+
+|tkey    |okey            |
++--------+----------------+
+|12344321|1234567887654321|
+|hashjoin|HaShJoInHaShJoIn|
++--------+----------------+
+(2 rows)
+>>
+* select t2.tkey, t2.okey from (qp302_tbl1 t1 right join qp302_tbl2 t2 on
+<<
+>>
+* t1.tkey=t2.tkey and t1.okey=t2.okey) union (select t1a.tkey2, t1a.okey2
+<<
+>>
+* from qp302_tbl1 t1a, qp302_tbl1 t1b where t1a.tkey2=t1b.tkey and
+<<
+>>
+* t1a.okey2=t1b.okey) union (select t2a.char, t2a.vchar from qp302_tbl2 t2a,
+<<
+>>
+* qp302_tbl2 t2b where t2a.char=t2b.tkey and t2a.vchar=t2b.okey) order by t2.tkey\-
+g
+<<
+
++--------+----------------+
+|tkey    |okey            |
++--------+----------------+
+|12344321|1234567887654321|
+|hashjoin|HaShJoInHaShJoIn|
++--------+----------------+
+(2 rows)
+>>
+* select t1.tkey, t1.okey, t2.tkey, t2.okey from (qp302_tbl1 t1 full join
+<<
+>>
+* qp302_tbl2 t2 on t1.tkey=t2.tkey and t1.okey=t2.okey) union (select
+<<
+>>
+* t1a.tkey2, t1a.okey2, t1b.tkey, t1b.okey from qp302_tbl1 t1a, qp302_tbl1 t1b
+<<
+>>
+* where t1a.tkey2=t1b.tkey and t1a.okey2=t1b.okey) union (select t2a.char,
+<<
+>>
+* t2a.vchar, t2b.tkey, t2b.okey from qp302_tbl2 t2a, qp302_tbl2 t2b where
+<<
+>>
+* t2a.char=t2b.tkey and t2a.vchar=t2b.okey) order by t1.tkey\g
+<<
+
++--------+----------------+--------+----------------+
+|tkey    |okey            |tkey    |okey            |
++--------+----------------+--------+----------------+
+|12344321|1234567887654321|12344321|1234567887654321|
+|hashjoin|HaShJoInHaShJoIn|hashjoin|HaShJoInHaShJoIn|
+|hashjoin|HaShJoInHaShJoIn|        |                |
+|        |                |12344321|1234567887654321|
++--------+----------------+--------+----------------+
+(4 rows)
+>>
+* select distinct t1.int1, t1.tkey, t1a.tkey2, t2.int1, t2.tkey, t2a.char
+<<
+>>
+* from qp302_tbl1 t1, qp302_tbl2 t2, qp302_tbl1 t1a, qp302_tbl2 t2a where
+<<
+>>
+* t1.lbyte is null and t2.lvar is null and t1.okey=t1a.okey2 and
+<<
+>>
+* t2.tkey=t2a.char order by t1.int1\g
+<<
+
++------+--------+--------+------+--------+--------+
+|int1  |tkey    |tkey2   |int1  |tkey    |char    |
++------+--------+--------+------+--------+--------+
+|     6|hashjoin|hashjoin|    15|12344321|12344321|
++------+--------+--------+------+--------+--------+
+(1 row)
+>>
+* select int1 from qp302_tbl1 t1 where lbyte is not null union select int1 from qp30-
+2_tbl2 where lvar is not null order by int1\g
+<<
+
++------+
+|int1  |
++------+
+|     1|
+|     2|
+|     3|
+|     4|
+|     5|
+|    11|
+|    12|
+|    13|
+|    14|
+|    16|
++------+
+(10 rows)
+>>
+* select char from qp302_tbl2 t2 where char not in(select tkey from qp302_tbl2) unio-
+n select vchar from qp302_tbl2 where vchar not in (select okey from qp302_tbl2) orde-
+r by char\g
+<< IF (ING_CHARSET == "UTF8")
+
++----------------+
+|char            |
++----------------+
+|1a2b3c4d        |
+|1A2B3C4D5E6F7G8H|
+|aAbBcCdD        |
+|AaBbCcDd        |
+|aAbBcCdDeEfFgGhH|
+|AaBbCcDdEeFfGgHh|
+|abcdefgh        |
+|ABCDEFGH        |
+|abcdefghijklmnop|
+|ABCDEFGHIJKLMNOP|
++----------------+
+(10 rows)
+>>
+<<
+
++----------------+
+|char            |
++----------------+
+|1A2B3C4D5E6F7G8H|
+|1a2b3c4d        |
+|ABCDEFGH        |
+|ABCDEFGHIJKLMNOP|
+|AaBbCcDd        |
+|AaBbCcDdEeFfGgHh|
+|aAbBcCdD        |
+|aAbBcCdDeEfFgGhH|
+|abcdefgh        |
+|abcdefghijklmnop|
++----------------+
+(10 rows)
+>>
+* select lbyte from qp302_tbl1 where lbyte not in (select lvar from qp302_tbl2) orde-
+r by lbyte\g
+<<
+
+E_US0B5C line 1, Function '<>' is not defined for arguments of type 'long
+    byte' and 'long varchar'. Explicitly convert its arguments to the
+    desired type(s).
+    (Fri Dec 06 12:06:58 2002)
+
+>>
+* select lvar from qp302_tbl1 where lvar like 'A%' union select lbyte from qp302_tbl-
+2 where lbyte like '%Z' order by lvar\g
+<<
+
+E_US0B5C line 1, Function 'like' is not defined for arguments of type
+    'long varchar' and 'varchar'. Explicitly convert its arguments to the
+    desired type(s).
+    (Fri Dec 06 12:03:09 2002)
+
+>>
+* drop table qp302_tbl1\g
+<<
+>>
+* drop table qp302_tbl2\g
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: Mon Sep 15 18:57:45 2008

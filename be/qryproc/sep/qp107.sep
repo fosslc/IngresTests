@@ -1,0 +1,459 @@
+/*
+Copyright (c) 2006 Ingres Corporation.
+
+	Test Name: qp107.sep
+	Time: Thu Apr  8 15:30:05 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename: qp107.sep
+	Purpose	: Test commit, rollback and raise errors in byref dbprocs.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     : Test commit and rollback inside byref dbprocs and
+		       nested dbprocs.  Test raise error with byref dbproc.
+
+        History:
+	  11-Nov-1993	(malee)   Created
+          07-MAR-1997	(vissu01) Modified for NT
+          07-Oct-1998	(ahaal01) Added "#include <stdio.h>" to enable printf to
+				  display floating point data for SGI platform.
+	  23-Mar-1999	(vande02) Hard-coded VPG_SZ to 2K/changed 'sql -s
+                                  SEPPARAMDB' canon to be empty, in order to
+				  catch the msg. "TM could not connect ..." if
+				  the test database did not exist.
+           2-Nov-2005	(vande02) Replacing canon due to fix for bug 112376
+			 	  Change 476069	changes the behavior for test
+				  case 2 with dbproc 'efa41_1_2' below.  The
+				  change flushes the QSF cache and prevents
+				  stale values from being seen as test case 2 is
+				  performing a rollback inside a nested dbproc.
+                                  Thise behavior is in patches for 2.6 but not
+				  in r3.  See issue 14397999.
+
+				  Minor header corrections, aligned history.
+          23-Oct-2006	(vande02) Fixed up efa41.sc fill file by adding a commit
+				  after dbproc efa41_1_2 is created and removed
+				  object drop syntax from efa41.sc.  Pre-drops
+				  are being done anyway via SQL. Replaced canon
+				  with proper results per Development so bug
+				  112376 is not canonized (related fixed bugs
+				  102123, 116395).  Fixed copyright.
+
+				  **NOTE** If "Error 99999: testing raise error"
+				  appears in another place in results for
+				  "run efa41.exe SEPPARAMDB 2" ignore it.
+          2-Nov-2006	(vande02) Removed drop procedure message from canon when
+				  efa41_2 is executed, no longer in program.
+*/
+? fill efa41.sc 
+!!
+#include <stdio.h>
+exec sql include sqlca;
+
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever not found call sqlprint;
+exec sql whenever sqlwarning call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+main(argc, argv)
+exec sql begin declare section;
+  int  argc;
+  char **argv;
+exec sql end declare section;
+{
+int testno;
+	exec sql connect :argv[1];
+	testno = atoi(argv[2]);
+	switch (testno)
+	{ case 1: efa41_1();
+	  break;
+	  case 2: efa41_2();
+	  break;
+	  case 3: efa41_3();
+	  break;
+	  default:
+	  break;
+	}
+	exec sql disconnect;
+}  /* main */
+
+efa41_1()
+{
+exec sql begin declare section;
+  short i1;
+  int   do_it;
+  char  var1[31];
+exec sql end declare section;
+
+        /**********/
+	/* test 1 */
+        /**********/
+
+	printf ("\ntest 1:  test commit and rollback\n\n");
+	exec sql create table xyz (i1 i1, var1 varchar(30)) with page_size=2048;
+
+	exec sql create procedure efa41_1_0 (
+		i1		i1		not null with default,
+		var1            c30             not null with default) as
+	begin
+		insert into xyz (i1, var1) values (:i1, :var1);
+	end;
+
+	exec sql create procedure efa41_1_1 (
+		i1		i1		not null with default,
+		var1            c30             not null with default,
+		do_it		i1              not null with default) as
+	begin
+		if (do_it = 1)
+		then
+			message 'committing transaction';
+			i1     =  2;
+			var1   = 'do commit';
+			execute procedure efa41_1_0 (i1 = :i1, var1 = :var1);
+		else
+			message 'not committing transaction';
+			i1     =  3;
+			var1   = 'before rollback';
+			execute procedure efa41_1_0 (i1 = :i1, var1 = :var1);
+			rollback;
+			i1     =  4;
+			var1   = 'after rollback';
+		endif;
+
+	end;
+        exec sql commit;
+        i1 =  1;
+        strcpy (var1, "test 1");
+	exec sql execute procedure efa41_1_0 (i1 = :i1, var1 = :var1);
+
+	printf ("       passing i1        = %d\n", i1);
+	printf ("       passing var1      = %s\n", var1);
+	exec sql execute procedure efa41_1_1 (i1        = byref(:i1),
+					     var1      = byref(:var1),
+					     do_it     = 1);
+	printf ("       returned i1        = %d\n", i1);
+	printf ("       returned var1      = %s\n", var1);
+	exec sql commit;
+
+	exec sql execute procedure efa41_1_1 (i1        = byref(:i1),
+					     var1      = byref(:var1),
+					     do_it     = 0);
+	printf ("       returned i1        = %d\n", i1);
+	printf ("       returned var1      = %s\n", var1);
+	exec sql commit;
+	 
+
+        /**********/
+	/* test 2 */
+        /**********/
+
+	printf ("\ntest 2:  test commit and rollback inside nested dbproc\n\n");
+	exec sql create procedure efa41_1_2 (
+		i1		i1		not null with default,
+		var1		c30		not null with default,
+		do_it		i1		not null with default) as
+	begin
+		if (do_it = 1)
+		then
+	        	execute procedure efa41_1_1 (var1  = byref(:var1),
+					    i1    = byref(:i1),
+					    do_it = byref(:do_it));
+		else
+			i1 = i1 + 1;
+			var1 = 'before calling nested dbproc';
+			execute procedure efa41_1_0 (i1 = :i1, var1 = :var1);
+
+	        	execute procedure efa41_1_1 (var1  = byref(:var1),
+					    i1    = byref(:i1),
+					    do_it = byref(:do_it));
+			i1 = i1 + 10;
+			var1 = 'after calling nested dbproc';
+			execute procedure efa41_1_0 (i1 = :i1, var1 = :var1);
+			rollback;
+		endif;
+	end;
+        exec sql commit;
+        i1 =  2;
+        strcpy (var1, "test 2");
+	exec sql execute procedure efa41_1_0 (i1 = :i1, var1 = :var1);
+
+	exec sql execute procedure efa41_1_2 (i1        = byref(:i1),
+					     var1      = byref(:var1),
+					     do_it     = 0);
+	printf ("       returned i1        = %d\n", i1);
+	printf ("       returned var1      = %s\n", var1);
+	exec sql commit;
+
+	exec sql execute procedure efa41_1_2 (i1        = byref(:i1),
+					     var1      = byref(:var1),
+					     do_it     = 1);
+	printf ("       returned i1        = %d\n", i1);
+	printf ("       returned var1      = %s\n", var1);
+	exec sql commit;
+
+} /* efa41_1() */
+
+efa41_2()
+{
+exec sql begin declare section;
+  float f4, m;
+  char  d[26];
+exec sql end declare section;
+
+        /**********/
+	/* test 1 */
+        /**********/
+
+	printf ("\ntest 1:  test raise error with byref dbproc\n\n");
+	exec sql create procedure efa41_2 (f4	f4	not null with default,
+					    d	date 	not null with default,
+					    m 	money	not null with default) as
+	declare mesg_buf  varchar(81) not null with default;
+	begin
+		f4 = .222;
+		mesg_buf = varchar(f4);
+		message mesg_buf;
+		d  = '02-jan-1992';
+		mesg_buf = varchar(d);
+		message mesg_buf;
+		m  = 2.22;
+		mesg_buf = varchar(m);
+		message mesg_buf;
+		mesg_buf = 'Error 99999: testing raise error';
+		raise error 99999 mesg_buf;
+		f4 = .3330;
+		mesg_buf = varchar(f4);
+		message mesg_buf;
+		d  = '03-jan-1993';
+		mesg_buf = varchar(d);
+		message mesg_buf;
+		m  = 3.33;
+		mesg_buf = varchar(m);
+		message mesg_buf;
+	end;
+        exec sql commit;
+	f4 = .111;
+	strcpy (d, "01-jan-1991");
+	m  = 01.11;
+	printf ("       passing f4        = %3.3f\n", f4);
+	printf ("       passing d         = %s\n", d);
+	printf ("       passing m         = %3.2f\n", m);
+	exec sql execute procedure efa41_2 (f4	= byref(:f4),
+					     d  = byref (:d),
+					     m  = byref (:m));
+	printf ("       returned f4        = %3.3f\n", f4);
+	printf ("       returned d         = %s\n", d);
+	printf ("       returned m         = %3.2f\n", m);
+	exec sql commit;
+
+} /* efa41_2() */
+
+efa41_3()
+{
+exec sql begin declare section;
+  char  emp[31], mname[31];
+exec sql end declare section;
+
+        /**********/
+	/* test 1 */
+        /**********/
+
+	printf ("\ntest 1:  test rule that raise error in nested dbproc\n\n");
+
+	exec sql create table employee (emp varchar(30), mname varchar(30)) with page_size=-
+2048;
+
+	exec sql create table manager (emp varchar(30), mname varchar(30)) with page_size=2-
+048;
+	exec sql insert into manager (emp, mname) values ('bob', 'john'); 
+	exec sql insert into manager (emp, mname) values ('harry', 'jim'); 
+
+	exec sql create procedure efa41_3_1 (emp varchar(30)) as
+	begin
+		select emp into :emp from employee 
+			where emp = :emp;
+	end;
+        exec sql commit;
+	exec sql create procedure efa41_3_2 (emp varchar(30), mname varchar(30) not null wi-
+th default) as
+	declare mesg_buf  varchar(81) not null;
+		check_val integer;
+	begin
+		select count (*) into :check_val from manager 
+			where mname = :mname;
+		if check_val = 0 then
+			mesg_buf = 'Error 99999: Manager "' + :mname + '" not found';
+			raise error 99999 mesg_buf;
+		endif;
+		execute procedure efa41_3_1 (emp = byref(:emp));
+		mesg_buf = 'Employee "' + :emp + '" has been added';
+		message mesg_buf;
+	end;
+        exec sql commit;
+
+	exec sql create rule check_emp after insert into employee 
+		execute procedure efa41_3_2 (emp = employee.emp, 
+					     mname = employee.mname);
+
+	exec sql insert into employee (emp, mname) values ('a', 'jack'); 
+	exec sql insert into employee (emp, mname) values ('b', 'jim'); 
+	exec sql insert into employee (emp, mname) values ('c', 'bob'); 
+	exec sql insert into employee (emp, mname) values ('d', 'john'); 
+	exec sql commit;
+
+} /* efa41_3() */
+!!
+? sepesqlc efa41.sc 
+<<
+ESQL efa41.sc:
+>>
+? sepcc efa41.c 
+<<
+>>
+<<
+efa41.c
+>>
+? seplnk efa41 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop procedure efa41_1_0\g
+<<
+~
+>>
+* drop procedure efa41_1_1\g
+<<
+~
+>>
+* drop table xyz\g
+<<
+~
+>>
+* drop procedure efa41_1_2\g
+<<
+~
+>>
+* drop procedure efa41_2\g
+<<
+~
+>>
+* drop procedure efa41_3_1\g
+<<
+~
+>>
+* drop procedure efa41_3_2\g
+<<
+~
+>>
+* drop table employee\g
+<<
+~
+>>
+* drop rule check_emp\g
+<<
+~
+>>
+* drop table manager\g
+<<
+~
+>>
+* \q
+<<
+>>
+? run efa41.exe SEPPARAMDB 1 
+<<
+
+test 1:  test commit and rollback
+
+       passing i1        = 1
+       passing var1      = test 1
+MESSAGE 0: committing transaction
+       returned i1        = 2
+       returned var1      = do commit                     
+MESSAGE 0: not committing transaction
+       returned i1        = 4
+       returned var1      = after rollback                
+
+test 2:  test commit and rollback inside nested dbproc
+
+MESSAGE 0: not committing transaction
+       returned i1        = 14
+       returned var1      = after calling nested dbproc   
+MESSAGE 0: committing transaction
+       returned i1        = 2
+       returned var1      = do commit                     
+>>
+? run efa41.exe SEPPARAMDB 2 
+<<
+
+tesr 1:  test raise error with byref dbproc
+
+       passing f4        = 0.111
+       passing d         = 01-jan-1991
+       passing m         = 1.11
+MESSAGE 0: 0.222
+MESSAGE 0: 02-jan-1992
+MESSAGE 0:               $ 2.22
+Error 99999: testing raise error
+MESSAGE 0: 0.333
+MESSAGE 0: 03-jan-1993
+MESSAGE 0:               $ 3.33
+       returned f4        = 0.111
+       returned d         = 01-jan-1991
+       returned m         = 1.11
+>>
+<<
+
+test 1:  test raise error with byref dbproc
+
+       passing f4        = 0.111
+       passing d         = 01-jan-1991
+       passing m         = 1.11
+MESSAGE 0: 0.222
+MESSAGE 0: 02-jan-1992
+MESSAGE 0:               $ 2.22
+MESSAGE 0: 0.333
+MESSAGE 0: 03-jan-1993
+MESSAGE 0:               $ 3.33
+Error 99999: testing raise error
+       returned f4        = 0.111
+       returned d         = 01-jan-1991
+       returned m         = 1.11
+>>
+? run efa41.exe SEPPARAMDB 3 
+<<
+
+test 1:  test rule that raise error in nested dbproc
+
+Error 99999: Manager "jack" not found
+MESSAGE 0: Employee "b" has been added
+Error 99999: Manager "bob" not found
+MESSAGE 0: Employee "d" has been added
+>>
+? delete efa41.c 
+<<
+~
+>>
+? delete efa41.o 
+<<
+~
+>>
+? delete efa41.obj 
+<<
+~
+>>
+? delete efa41.exe 
+<<
+~
+>>
+
+
+Ending at: Mon Oct 23 10:13:03 2006

@@ -1,0 +1,808 @@
+/*
+	Test Name: dtu14.sep
+	Time: Mon Feb 24 20:58:09 2003
+	User Name: ingres
+	Terminal type: septerm
+
+	Test ID : dtu14.sep
+	Module  : be/datatypes
+	Filename: dtu14.sep
+	Purpose	: To test the unicode coercion support, first available with
+                  Ingres 2.6/0303 and later releases.
+	Input Files  : dtu14_tbl.sc, dtu14_joins.sc
+	Output Files : dtu14_tbl.exe, dtu14_joins.exe
+	Database     : unidb
+	Tables       : dtu14_uni, dtu14_char
+	Synopsis     : The Ingres variable II_CHARSETxx (where xx is the
+                       installation code) will set to UTF8 in the beginning
+                       of this test, and restore to its default value at the
+                       end.
+                       This test includes two embedded C programs, the first
+                       program is to create and populate two tables: one
+                       Unicode table with the Unicode data types (nchar and
+                       nvarchar), another table with character data types
+                       (char and varchar). The second program is to create
+                       and execute database queries against the tables using
+                       SQL joins: equijoin and outer joins(left, right, and
+                       full join).
+
+*** TEST CASES:
+    nchar_col = char_col
+    nchar_col = vchar_col
+    nvchar_col = char_col
+    nvchar_col = vchar_col
+    nchar_col LEFT JOIN char_col
+    nchar_col RIGHT JOIN char_col
+    nchar_col FULL JOIN char_col
+    nchar_col LEFT JOIN vchar_col
+    nchar_col RIGHT JOIN vchar_col
+    nchar_col FULL JOIN vchar_col
+    nvchar_col LEFT JOIN char_col
+    nvchar_col RIGHT JOIN char_col
+    nvchar_col FULL JOIN char_col
+    nvchar_col LEFT JOIN vchar_col
+    nvchar_col RIGHT JOIN vchar_col
+    nvchar_col FULL JOIN vchar_col
+
+
+ History: 24-Feb-2003	(wu$ca01)	Created
+          19-May-2003   (wu$ca01) Updated CANON for test cases 14, 15, 17, 18
+                        due to order DIFF. Removed 'Known Problem' section due
+                        to issue 12541512 is resolved.
+	  10-oct-2003	(somsa01) Updated test to work on Windows.
+	  19-Jan-2004	(rogch01) Updated test to work on VMS.
+	  11-May-2004	(shafa01) Removed all steps used for setting the
+			II_CHARSETxx to UTF8 for all platforms. Due to Unicode
+			Coercion changes put in Ingres r3, this change should
+			only be in main and going forward.
+*/
+? fill dtu14_tbl.sc
+!!
+/* This program is to create and populate 2 tables:
+** one Unicode table with the data types of nchar and nvarchar,
+** another table with the character data types of char and varchar.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+typedef struct
+{
+    short len;
+    wchar_t text[1];
+} NVCH_STRUCT;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *col2[] =
+    {
+    L"XYZ",
+    L"xyz",
+    L"ABC",
+    L"abc",
+    L"123",
+    L"UNICODE",
+    L"CW@CA",
+    L"test",
+    };
+static wchar_t *col3[] =
+    {
+    L"UNICODE WILDCARD SEARCHING",
+    L"ABC",
+    L"aBc",
+    L"1234567890",
+    L"cw@ca",
+    L"TEST",
+    L"UNICODE COERCION SUPPORT",
+    L"0123",
+    };
+#define NUMROWS 8
+
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int   i;
+      char  *dbname;
+      wchar_t wc1[9];
+      wchar_t wc2[65];
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[9];
+      } nv1;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[65];
+      } nv2;
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+   EXEC SQL DROP TABLE dtu14_uni;
+   EXEC SQL DROP TABLE dtu14_char;
+
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   printf("Creating tables...\n");
+
+   EXEC SQL CREATE TABLE dtu14_uni (
+	int INTEGER,
+	nchar_col NCHAR(8),
+	nvchar_col NVARCHAR(64));
+
+   EXEC SQL CREATE TABLE dtu14_char (
+	int INTEGER,
+	char_col CHAR(8),
+ 	vchar_col VARCHAR(64));
+
+   printf("Inserting rows into unicode table...\n");
+
+   for (i = 0; i < NUMROWS; i++)
+   {
+      wcscpy(wc1, col2[i]);
+      wcscpy(wc2, col3[i]);
+      UC_ASSIGN(nv1, col2[i]);
+      UC_ASSIGN(nv2, col3[i]);
+
+      EXEC SQL INSERT INTO dtu14_uni VALUES (:i, :wc1, :wc2);
+
+   }
+
+  printf("Inserting rows into non-unicode table...\n");
+
+  EXEC SQL INSERT INTO dtu14_char values (0, 'XYZ', 'UNICODE WILDCARD SEARCHING');
+  EXEC SQL INSERT INTO dtu14_char values (1, 'xyz', 'ABC');
+  EXEC SQL INSERT INTO dtu14_char values (2, 'ABC', 'aBc');
+  EXEC SQL INSERT INTO dtu14_char values (3, 'abc', '1234567890');
+  EXEC SQL INSERT INTO dtu14_char values (4, '123', 'CW@CA');
+  EXEC SQL INSERT INTO dtu14_char values (5, 'UNICODE', 'TEST');
+  EXEC SQL INSERT INTO dtu14_char values (6, 'cw@ca', 'UNICODE COERCION SUPPORT');
+  EXEC SQL INSERT INTO dtu14_char values (7, '0123', 'test');
+
+  printf("Operation complete\n");
+
+  EXEC SQL DISCONNECT;
+}
+!!
+? fill dtu14_joins.sc
+!!
+/* This program is to create and execute database queries against
+** the tables using SQL joins: equijoin and outer joins (left, right
+** and full join).
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  char      st1[9];
+  char      st2[65];
+  short     ind1, ind2;
+  wchar_t wc1[9], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, k2;
+
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|=================================================================|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Select UNICODE table...");
+         EXEC SQL SELECT int, nchar_col, nvchar_col
+         INTO :i1, :wc1, :wc2
+         FROM dtu14_uni
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|%S|\n", i1, wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 2:
+         print_header("Select NON-UNICODE table...");
+         EXEC SQL SELECT int, char_col, vchar_col
+         INTO :i1, :st1, :st2
+         FROM dtu14_char
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%s|%s|\n", i1, st1, st2);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("nchar_col = char_col...");
+         EXEC SQL SELECT dtu14_uni.nchar_col, dtu14_char.char_col
+         INTO :wc1, :st1
+         FROM dtu14_uni, dtu14_char
+         WHERE dtu14_uni.nchar_col = dtu14_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         print_header("nchar_col = vchar_col...");
+         EXEC SQL SELECT dtu14_uni.nchar_col, dtu14_char.vchar_col
+         INTO :wc1, :st2
+         FROM dtu14_uni, dtu14_char
+         WHERE dtu14_uni.nchar_col = dtu14_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st2);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("nvchar_col = char_col...");
+         EXEC SQL SELECT dtu14_uni.nvchar_col, dtu14_char.char_col
+         INTO :wc2, :st1
+         FROM dtu14_uni, dtu14_char
+         WHERE dtu14_uni.nvchar_col = dtu14_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header("nvchar_col = vchar_col...");
+         EXEC SQL SELECT dtu14_uni.nvchar_col, dtu14_char.vchar_col
+         INTO :wc2, :st2
+         FROM dtu14_uni, dtu14_char
+         WHERE dtu14_uni.nvchar_col = dtu14_char.vchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st2);
+         EXEC SQL END;
+         break;
+
+      case 7:
+         print_header("nchar_col left join char_col...");
+         EXEC SQL SELECT dtu14_uni.nchar_col, dtu14_char.char_col
+         INTO :wc1:ind1, :st1:ind2
+         FROM (dtu14_uni LEFT JOIN dtu14_char
+         ON dtu14_uni.nchar_col = dtu14_char.char_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc1, ind2 ? "" : st1);
+         EXEC SQL END;
+         break;
+
+      case 8:
+         print_header("nchar_col right join char_col...");
+         EXEC SQL SELECT dtu14_uni.nchar_col, dtu14_char.char_col
+         INTO :wc1:ind1, :st1:ind2
+         FROM (dtu14_uni RIGHT JOIN dtu14_char
+         ON dtu14_uni.nchar_col = dtu14_char.char_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc1, ind2 ? "" : st1);
+         EXEC SQL END;
+         break;
+
+      case 9:
+         print_header("nchar_col full join char_col...");
+         EXEC SQL SELECT dtu14_uni.nchar_col, dtu14_char.char_col
+         INTO :wc1:ind1, :st1:ind2
+         FROM (dtu14_uni FULL JOIN dtu14_char
+         ON dtu14_uni.nchar_col = dtu14_char.char_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc1, ind2 ? "" : st1);
+         EXEC SQL END;
+         break;
+
+      case 10:
+         print_header("nchar_col left join vchar_col...");
+         EXEC SQL SELECT dtu14_uni.nchar_col, dtu14_char.vchar_col
+         INTO :wc1:ind1, :st2:ind2
+         FROM (dtu14_uni LEFT JOIN dtu14_char
+         ON dtu14_uni.nchar_col = dtu14_char.vchar_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc1, ind2 ? "" : st2);
+         EXEC SQL END;
+         break;
+
+      case 11:
+         print_header("nchar_col right join vchar_col...");
+         EXEC SQL SELECT dtu14_uni.nchar_col, dtu14_char.vchar_col
+         INTO :wc1:ind1, :st2:ind2
+         FROM (dtu14_uni RIGHT JOIN dtu14_char
+         ON dtu14_uni.nchar_col = dtu14_char.vchar_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc1, ind2 ? "" : st2);
+         EXEC SQL END;
+         break;
+
+      case 12:
+         print_header("nchar_col full join vchar_col...");
+         EXEC SQL SELECT dtu14_uni.nchar_col, dtu14_char.vchar_col
+         INTO :wc1:ind1, :st2:ind2
+         FROM (dtu14_uni FULL JOIN dtu14_char
+         ON dtu14_uni.nchar_col = dtu14_char.vchar_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc1, ind2 ? "" : st2);
+         EXEC SQL END;
+         break;
+
+      case 13:
+         print_header("nvchar_col left join vchar_col...");
+         EXEC SQL SELECT dtu14_uni.nvchar_col, dtu14_char.vchar_col
+         INTO :wc2:ind1, :st2:ind2
+         FROM (dtu14_uni LEFT JOIN dtu14_char
+         ON dtu14_uni.nvchar_col = dtu14_char.vchar_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc2, ind2 ? "" : st2);
+         EXEC SQL END;
+         break;
+
+      case 14:
+         print_header("nvchar_col right join vchar_col...");
+         EXEC SQL SELECT dtu14_uni.nvchar_col, dtu14_char.vchar_col
+         INTO :wc2:ind1, :st2:ind2
+         FROM (dtu14_uni RIGHT JOIN dtu14_char
+         ON dtu14_uni.nvchar_col = dtu14_char.vchar_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc2, ind2 ? "" : st2);
+         EXEC SQL END;
+         break;
+
+      case 15:
+         print_header("nvchar_col full join vchar_col...");
+         EXEC SQL SELECT dtu14_uni.nvchar_col, dtu14_char.vchar_col
+         INTO :wc2:ind1, :st2:ind2
+         FROM (dtu14_uni FULL JOIN dtu14_char
+         ON dtu14_uni.nvchar_col = dtu14_char.vchar_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc2, ind2 ? "" : st2);
+         EXEC SQL END;
+         break;
+
+      case 16:
+         print_header("nvchar_col left join char_col...");
+         EXEC SQL SELECT dtu14_uni.nvchar_col, dtu14_char.char_col
+         INTO :wc2:ind1, :st1:ind2
+         FROM (dtu14_uni LEFT JOIN dtu14_char
+         ON dtu14_uni.nvchar_col = dtu14_char.char_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc2, ind2 ? "" : st1);
+         EXEC SQL END;
+         break;
+
+      case 17:
+         print_header("nvchar_col right join char_col...");
+         EXEC SQL SELECT dtu14_uni.nvchar_col, dtu14_char.char_col
+         INTO :wc2:ind1, :st1:ind2
+         FROM (dtu14_uni RIGHT JOIN dtu14_char
+         ON dtu14_uni.nvchar_col = dtu14_char.char_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc2, ind2 ? "" : st1);
+         EXEC SQL END;
+         break;
+
+      case 18:
+         print_header("nvchar_col full join char_col...");
+         EXEC SQL SELECT dtu14_uni.nvchar_col, dtu14_char.char_col
+         INTO :wc2:ind1, :st1:ind2
+         FROM (dtu14_uni FULL JOIN dtu14_char
+         ON dtu14_uni.nvchar_col = dtu14_char.char_col)
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", ind1 ? L"" : wc2, ind2 ? "" : st1);
+         EXEC SQL END;
+         break;
+
+   }
+   print_trailer();
+
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu14_tbl.sc
+<<
+ESQL dtu14_tbl.sc:
+>>
+<<
+>>
+? sepcc dtu14_tbl
+<<
+dtu14_tbl.c
+>>
+<<
+
+>>
+? seplnk dtu14_tbl
+<<
+
+>>
+? esqlc dtu14_joins.sc
+<<
+ESQL dtu14_joins.sc:
+>>
+<<
+>>
+? sepcc dtu14_joins
+<<
+dtu14_joins.c
+>>
+<<
+
+>>
+? seplnk dtu14_joins
+<<
+
+>>
+? run dtu14_tbl.exe SEPPARAMDB3
+<<
+Creating tables...
+Inserting rows into unicode table...
+Inserting rows into non-unicode table...
+Operation complete
+>>
+? run dtu14_joins.exe SEPPARAMDB3 1
+<<
+Select UNICODE table...
+|=================================================================|
+|  0|XYZ     |UNICODE WILDCARD SEARCHING|
+|  1|xyz     |ABC|
+|  2|ABC     |aBc|
+|  3|abc     |1234567890|
+|  4|123     |cw@ca|
+|  5|UNICODE |TEST|
+|  6|CW@CA   |UNICODE COERCION SUPPORT|
+|  7|test    |0123|
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 2
+<<
+Select NON-UNICODE table...
+|=================================================================|
+|  0|XYZ     |UNICODE WILDCARD SEARCHING|
+|  1|xyz     |ABC|
+|  2|ABC     |aBc|
+|  3|abc     |1234567890|
+|  4|123     |CW@CA|
+|  5|UNICODE |TEST|
+|  6|cw@ca   |UNICODE COERCION SUPPORT|
+|  7|0123    |test|
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 3
+<<
+nchar_col = char_col...
+|=================================================================|
+|123     |123     |
+|abc     |abc     |
+|ABC     |ABC     |
+|UNICODE |UNICODE |
+|xyz     |xyz     |
+|XYZ     |XYZ     |
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 4
+<<
+nchar_col = vchar_col...
+|=================================================================|
+|ABC     |ABC|
+|CW@CA   |CW@CA|
+|test    |test|
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 5
+<<
+nvchar_col = char_col...
+|=================================================================|
+|0123    |0123    |
+|ABC     |ABC     |
+|cw@ca   |cw@ca   |
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 6
+<<
+nvchar_col = vchar_col...
+|=================================================================|
+|1234567890|1234567890|
+|aBc|aBc|
+|ABC|ABC|
+|TEST|TEST|
+|UNICODE COERCION SUPPORT|UNICODE COERCION SUPPORT|
+|UNICODE WILDCARD SEARCHING|UNICODE WILDCARD SEARCHING|
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 7
+<<
+nchar_col left join char_col...
+|=================================================================|
+|123     |123     |
+|abc     |abc     |
+|ABC     |ABC     |
+|CW@CA   |        |
+|test    |        |
+|UNICODE |UNICODE |
+|xyz     |xyz     |
+|XYZ     |XYZ     |
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 8
+<<
+nchar_col right join char_col...
+|=================================================================|
+|123|123     |
+|abc|abc     |
+|ABC|ABC     |
+|UNICODE|UNICODE |
+|xyz|xyz     |
+|XYZ|XYZ     |
+||0123    |
+||cw@ca   |
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 9
+<<
+nchar_col full join char_col...
+|=================================================================|
+|123     |123|
+|abc     |abc|
+|ABC     |ABC|
+|CW@CA   ||
+|test    ||
+|UNICODE |UNICODE|
+|xyz     |xyz|
+|XYZ     |XYZ|
+||0123    |
+||cw@ca   |
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 10
+<<
+nchar_col left join vchar_col...
+|=================================================================|
+|123     ||
+|abc     ||
+|ABC     |ABC|
+|CW@CA   |CW@CA|
+|test    |test|
+|UNICODE ||
+|xyz     ||
+|XYZ     ||
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 11
+<<
+nchar_col right join vchar_col...
+|=================================================================|
+|ABC|ABC|
+|CW@CA|CW@CA|
+|test|test|
+||UNICODE WILDCARD SEARCHING|
+||1234567890|
+||UNICODE COERCION SUPPORT|
+||aBc|
+||TEST|
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 12
+<<
+nchar_col full join vchar_col...
+|=================================================================|
+|123     ||
+|abc     ||
+|ABC     |ABC|
+|CW@CA   |CW@CA|
+|test    |test|
+|UNICODE ||
+|xyz     ||
+|XYZ     ||
+||1234567890|
+||TEST|
+||UNICODE WILDCARD SEARCHING|
+||aBc|
+||UNICODE COERCION SUPPORT|
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 13
+<<
+nvchar_col left join vchar_col...
+|=================================================================|
+|0123||
+|1234567890|1234567890|
+|aBc|aBc|
+|ABC|ABC|
+|cw@ca||
+|TEST|TEST|
+|UNICODE COERCION SUPPORT|UNICODE COERCION SUPPORT|
+|UNICODE WILDCARD SEARCHING|UNICODE WILDCARD SEARCHING|
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 14
+<<
+nvchar_col right join vchar_col...
+|=================================================================|
+|1234567890|1234567890|
+|aBc|aBc|
+|ABC|ABC|
+|TEST|TEST|
+|UNICODE COERCION SUPPORT|UNICODE COERCION SUPPORT|
+|UNICODE WILDCARD SEARCHING|UNICODE WILDCARD SEARCHING|
+||CW@CA|
+||test|
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 15
+<<
+nvchar_col full join vchar_col...
+|=================================================================|
+|0123||
+|1234567890|1234567890|
+|aBc|aBc|
+|ABC|ABC|
+|cw@ca||
+|TEST|TEST|
+|UNICODE COERCION SUPPORT|UNICODE COERCION SUPPORT|
+|UNICODE WILDCARD SEARCHING|UNICODE WILDCARD SEARCHING|
+||CW@CA|
+||test|
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 16
+<<
+nvchar_col left join char_col...
+|=================================================================|
+|0123|0123    |
+|1234567890||
+|aBc||
+|ABC|ABC     |
+|cw@ca|cw@ca   |
+|TEST||
+|UNICODE COERCION SUPPORT||
+|UNICODE WILDCARD SEARCHING||
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 17
+<<
+nvchar_col right join char_col...
+|=================================================================|
+|0123|0123    |
+|ABC|ABC     |
+|cw@ca|cw@ca   |
+||XYZ     |
+||123     |
+||xyz     |
+||abc     |
+||UNICODE |
+|=================================================================|
+>>
+? run dtu14_joins.exe SEPPARAMDB3 18
+<<
+nvchar_col full join char_col...
+|=================================================================|
+|0123|0123    |
+|1234567890||
+|aBc||
+|ABC|ABC     |
+|cw@ca|cw@ca   |
+|TEST||
+|UNICODE COERCION SUPPORT||
+|UNICODE WILDCARD SEARCHING||
+||123     |
+||UNICODE |
+||abc     |
+||xyz     |
+||XYZ     |
+|=================================================================|
+>>
+? sql -s SEPPARAMDB3
+<<
+
+>>
+* drop table dtu14_uni\g
+<<
+>>
+* drop table dtu14_char\g
+<<
+>>
+* \q
+<<
+
+>>
+? delete dtu14_tbl.c
+<<
+file was deleted
+>>
+? delete dtu14_tbl.o
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu14_tbl.obj
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu14_tbl.exe
+<<
+file was deleted
+>>
+? delete dtu14_joins.c
+<<
+file was deleted
+>>
+? delete dtu14_joins.o
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu14_joins.obj
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu14_joins.exe
+<<
+file was deleted
+>>
+Ending at: Mon Feb 24 21:02:00 2003

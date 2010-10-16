@@ -1,0 +1,341 @@
+/*
+Copyright (c) 2006 Ingres Corporation.
+
+	Test Name: qp105.sep
+	Time: Thu Nov 11 15:35:23 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename: qp105.sep
+	Purpose	: Test nested dbproc binding and grant execution privileges.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       :
+	Synopsis     : Drop and recreate a calling dbproc to test binding of
+		       the most current dbproc.  Must have grant option on
+		       all nested dbprocs to grant execution privileges on
+		       parent dbproc and drop a nested dbproc and check that
+		       all execution privileges on the parent dbproc are 
+		       dropped.
+
+ History: 11-Nov-1993	(malee)	  Created
+          13-Dec-1993	(malee)	  add set autocommit on instead of intermittenly
+				  using the commit statements.
+          17-Dec-1993	(malee)	  update the canon to reflect the bug b58075.
+	  14-mar-1994	(sandhya) Help procedure bar message changed. We
+				  now have the user testenv's name in the
+				  procedure definition.  Previously, it
+				  was "create procedure .....; execute 
+				  procedure foo;end."  Now we have "create
+				  procedure ....; execute procedure "testenv"
+				  . foo; end."
+	  31-mar-1994	(malee)	  Update the canon as a result of b58075 fix.
+				  Per Andre, when you drop foo(), QPs of both 
+				  foo() and bar() get dropped.  Subsequently,
+				  when execute bar(), DBMS tries to recreate
+				  bar() and discovers that foo() no longer
+				  exists.
+          18-Dec-1995	(raora02) Accepted alternate canons because output
+				  message for 'help procedure' has changed.
+           4-Oct-2001   (devjo01) Change canons to reflect new procedure
+				  permission behavior.
+           2-Nov-2006	(vande02) Updated to new help procedure format, header
+				  corrections, and Copyright.
+*/
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* set autocommit on\g
+<<
+>>
+/* 
+** Create a dbproc "foo" owned by the dba and give execute privilege to 
+** user1. Then as user1, create a dbproc "bar" that calls "foo".  Now as
+** user1, create a dbproc called "foo" that is different from the dba.foo
+** Execute "bar" and check that it calls dba.foo.
+*/
+* drop procedure foo\g 
+<<
+E_US0965 Procedure 'foo' not found.
+    (Thu Nov 11 15:35:40 1993)
+
+>>
+<<
+>>
+* create procedure foo as begin message 'dba.foo'; end\g 
+<<
+>>
+* execute procedure foo\g 
+<<
+MESSAGE 0: dba.foo
+>>
+* grant execute on procedure foo to pvusr1\g 
+<<
+>>
+* help procedure foo\g 
+<<
+Procedure:            foo
+Owner:                testenv
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 09:35:37     
+
+Procedure Definition:
+/*    1 */ create procedure  foo as begin message 'dba.foo';          
+/*    2 */ end                                                        
+
+Permissions on procedure foo are:
+
+
+Permission 2:
+grant execute on procedure "testenv".foo to pvusr1                    
+
+
+
+>>
+* set session authorization pvusr1\g 
+<<
+>>
+* drop procedure bar\g 
+<<
+E_US0965 Procedure 'bar' not found.
+    (Thu Nov 11 15:37:26 1993)
+
+>>
+<<
+>>
+* create procedure bar as begin message 'pvusr1.bar'; execute procedure foo; end\g 
+<<
+>>
+* create procedure foo as begin message 'pvusr1.foo'; end\g 
+<<
+>>
+* execute procedure bar\g 
+<<
+MESSAGE 0: pvusr1.bar
+MESSAGE 0: dba.foo
+>>
+/* 
+** As user1, drop and recreate "bar" and it should bind to pvusr1.foo.
+*/
+* drop procedure bar\g 
+<<
+>>
+* create procedure bar as begin message 'pvusr1.bar'; execute procedure foo; end\g 
+<<
+>>
+* execute procedure bar\g 
+<<
+MESSAGE 0: pvusr1.bar
+MESSAGE 0: pvusr1.foo
+>>
+* drop procedure foo\g 
+<<
+>>
+* execute procedure bar\g 
+<<
+E_US0890 EXECUTE PROCEDURE: Schema 'pvusr1' does not contain
+    database procedure 'foo' or you lack privileges
+    on that database procedure which are required in order to
+    execute this statement.
+    (Thu Mar 31 20:01:31 1994)
+
+>>
+/* 
+** As user1, drop and recreate "bar" and it should bind to dba.foo.
+*/
+* drop procedure bar\g 
+<<
+>>
+* create procedure bar as begin message 'pvusr1.bar'; execute procedure foo; end\g 
+<<
+>>
+* execute procedure bar\g 
+<<
+MESSAGE 0: pvusr1.bar
+MESSAGE 0: dba.foo
+>>
+/* 
+** Must have grant option on all nested dbprocs to grant execution privilege
+** on parent dbproc.
+*/
+* grant execute on procedure bar to pvusr2\g 
+<<
+E_PS042C GRANT: You may not grant permit on database procedure 'bar'. 
+    Some object used in definition of 'bar' does not exist or 
+    you are not allowed to grant required privilege(s) on some object 
+    used in 'bar'.
+    (Thu Nov 11 15:42:43 1993)
+
+>>
+* set session authorization $dba\g 
+<<
+>>
+* grant execute on procedure foo to pvusr1 with grant option\g 
+<<
+>>
+* help procedure foo\g 
+<<
+Procedure:            foo
+Owner:                testenv
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 09:35:37     
+
+Procedure Definition:
+/*    1 */ create procedure  foo as begin message 'dba.foo';          
+/*    2 */ end                                                        
+
+Permissions on procedure foo are:
+
+
+Permission 3:
+grant execute on procedure "testenv".foo to pvusr1 with grant option  
+
+
+
+>>
+* set session authorization pvusr1\g 
+<<
+>>
+* help procedure bar\g 
+<<
+Procedure:            bar
+Owner:                pvusr1
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 09:35:53     
+
+Procedure Definition:
+/*    1 */ create procedure  bar as begin message 'pvusr1.bar';       
+/*    2 */ execute procedure "testenv". foo;                          
+/*    3 */ end                                                        
+
+
+
+>>
+* grant execute on procedure bar to pvusr2\g 
+<<
+>>
+* help procedure bar\g 
+<<
+Procedure:            bar
+Owner:                pvusr1
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 09:35:53     
+
+Procedure Definition:
+/*    1 */ create procedure  bar as begin message 'pvusr1.bar';       
+/*    2 */ execute procedure "testenv". foo;                          
+/*    3 */ end                                                        
+
+Permissions on procedure bar are:
+
+
+Permission 2:
+grant execute on procedure "pvusr1".bar to pvusr2                     
+
+
+
+>>
+* set session authorization pvusr2\g 
+<<
+>>
+* execute procedure bar\g 
+<<
+E_US0965 Procedure 'bar' not found.
+    (Thu Nov 11 15:46:52 1993)
+
+>>
+* execute procedure pvusr1.bar\g 
+<<
+MESSAGE 0: pvusr1.bar
+MESSAGE 0: dba.foo
+>>
+* set session authorization $dba\g 
+<<
+>>
+/*
+** Drop a nested dbproc and check that all execution privileges on the parent
+** dbproc are dropped.
+*/
+* drop procedure foo\g 
+<<
+>>
+* create procedure foo as begin message 'dba.foo recreated'; end\g 
+<<
+>>
+* execute procedure foo\g 
+<<
+MESSAGE 0: dba.foo recreated
+>>
+* help procedure foo\g
+<<
+Procedure:            foo
+Owner:                testenv
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 09:36:13     
+
+Procedure Definition:
+/*    1 */ create procedure  foo as begin message 'dba.foo recreated';
+/*    2 */ end                                                        
+
+
+
+>>
+* set session authorization pvusr1\g 
+<<
+>>
+* execute procedure bar\g 
+<<
+E_US0D36 User has no permission to execute database procedure 'foo'.
+    (Thu Nov 11 17:22:28 1993)
+
+>>
+* help procedure bar\g 
+/*
+/* Execute permission is now retained after a referenced object is dropped.
+*/
+<<
+Procedure:            bar
+Owner:                pvusr1
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 09:35:53     
+
+Procedure Definition:
+/*    1 */ create procedure  bar as begin message 'pvusr1.bar';       
+/*    2 */ execute procedure "testenv". foo;                          
+/*    3 */ end                                                        
+
+Permissions on procedure bar are:
+
+
+Permission 2:
+grant execute on procedure "pvusr1".bar to pvusr2                     
+
+
+
+>>
+* set session authorization pvusr2\g
+<<
+>>
+* execute procedure pvusr1.bar\g
+<<
+E_US0D36 User has no permission to execute database procedure 'foo'.
+    (Fri Oct  5 16:49:16 2001)
+
+>>
+* \q 
+<<
+~
+>>
+
+
+Ending at: Thu Nov  2 09:28:37 2006

@@ -1,0 +1,560 @@
+/*
+Copyright (c) 2006 Ingres Corporation
+
+        Test Name: fia02
+        Time:
+        User Name: testenv
+
+        Test ID : 
+        Module  : be/datatypes
+        Filename: 
+        Purpose : Coercion test cases
+        Input Files  : none
+        Output Files : none
+        Database     : 
+        Tables       : 
+        Synopsis     : 
+                      
+
+        History :  	Created  Author: John Black
+	  07-aug-1992	Modified to sep format by John B. Park
+          10-Jan-1994	(jpark)   updated canons.
+          21-Oct-1997	(Author)
+	  30-mar-1999   (yu$pe02) Hard code page size to 4K.
+           1-Nov-2006	(vande02) Updated expected E_US0B5B or E_US0B5C messages
+                                  from invalid syntax with the date data type.
+                                  Added Copyright, aligned history.
+*/
+? sql -s SEPPARAMDB 
+/*
+** Coercion test cases 
+*/
+<<
+>>
+* set autocommit on; \g
+<<
+>>
+* drop table dt3;  \g
+<<
+~
+>>
+* select ii_dv_desc(money('$123.00')+321.0); \g
+/*
+** 1. Cause coercion from all numeric types (MONEY, F8, F4, DECIMAL, I4, 
+**    I2, and I1) to DECIMAL.  Check result type. 
+*/
+<<
++------------------------------+
+|col1                          |
++------------------------------+
+|money                         |
++------------------------------+
+(1 row)
+>>
+* select ii_dv_desc(float4(123.00)+321.0);  \g
+<<
++------------------------------+
+|col1                          |
++------------------------------+
+|float4                        |
++------------------------------+
+(1 row)
+>>
+* select ii_dv_desc(float8(123.00)+321.0);  \g
+<<
++------------------------------+
+|col1                          |
++------------------------------+
+|float8                        |
++------------------------------+
+(1 row)
+>>
+* select ii_dv_desc(123.00+321.0);  \g
+<<
+
++------------------------------+
+|col1                          |
++------------------------------+
+|decimal(6, 2)                 |
++------------------------------+
+(1 row)
+>>
+* select ii_dv_desc(int4(123)+321.0);  \g
+<<
+
++------------------------------+
+|col1                          |
++------------------------------+
+|decimal(13, 1)                |
++------------------------------+
+(1 row)
+>>
+* select ii_dv_desc(int2(123)+321.0);  \g
+<<
+
++------------------------------+
+|col1                          |
++------------------------------+
+|decimal(7, 1)                 |
++------------------------------+
+(1 row)
+>>
+* select ii_dv_desc(int1(123)+321.0);  \g
+<<
+
++------------------------------+
+|col1                          |
++------------------------------+
+|decimal(7, 1)                 |
++------------------------------+
+(1 row)
+>>
+* select ii_dv_desc('abcdef' + 321.0); \g
+/*
+** 2. Try coercions from non-numeric types (charater types and DATE)
+**    to DECIMAL.  Should get error. 
+** 
+** NOTE:  no coercion with decimal on these types (the first one will  
+**        get an error about: "bad character in money field" because it  
+**        will try using the varchar-to-money coercion on the first part  
+**        and a decimal-to-money coercion on the second part so that the  
+**        money-plus-money function instance can be used). 
+*/
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Tue Oct 21 12:19:25 1997)
+
+>>
+* select ii_dv_desc(date('now') + 321.0);  \g
+<<
+E_US0B5C line 1, Function '+' is not defined for arguments of type
+    'ingresdate' and 'decimal'. Explicitly convert its arguments to the desired
+    type(s).
+    (Wed Nov  1 15:35:25 2006)
+
+>>
+* create table dt3 (m money, fs f4, fd f8, d decimal(12,3), l i4, w i2, b i1) with p-
+age_size=4096;\g
+/*
+** 3. Test proper coercions on comparisons between DECIMAL and all numeric 
+**    types.  This is done by choosing numbers that will compare equal or 
+**    nonequal depending on the coercion chosen by INGRES.  All six  
+**    comparision operators are tested with all 7 numeric types. 
+*/
+<<
+>>
+* insert into dt3 values (1, 1, 1, 1, 1, 1, 1); \g
+<<
+(1 row)
+>>
+* insert into dt3 values (123.12, 123.1231, 123.1231, 123.123, 123, 123, 123);\g
+<<
+(1 row)
+>>
+* select * from dt3; \g
+<<
++--------------------+-----------+-----------+--------------+-------------+------+---
+----+
+|m                   |fs         |fd         |d             |l            |w     |b -
+    |
++--------------------+-----------+-----------+--------------+-------------+------+---
+----+
+|               $1.00|      1.000|      1.000|         1.000|            1|     1|  -
+   1|
+|             $123.12|    123.123|    123.123|       123.123|          123|   123|  -
+ 123|
++--------------------+-----------+-----------+--------------+-------------+------+---
+----+
+(2 rows)
+>>
+* select d from dt3 where m = d; \g
+/*
+** Show that all types do compare and that decimal is coercing properly for 
+** comparisons. 
+*/
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where fs = d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
++--------------+
+(1 row)
+>>
+* select d from dt3 where fd = d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
++--------------+
+(1 row)
+>>
+* select d from dt3 where d = d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where l = d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
++--------------+
+(1 row)
+>>
+* select d from dt3 where w = d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
++--------------+
+(1 row)
+>>
+* select d from dt3 where b = d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
++--------------+
+(1 row)
+>>
+* select d from dt3 where m != d; \g
+/*
+** Now check remaining boolean operators. 
+*/
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* select d from dt3 where fs != d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|       123.123|
++--------------+
+(1 row)
+>>
+* select d from dt3 where fd != d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|       123.123|
++--------------+
+(1 row)
+>>
+* select d from dt3 where d != d;  \g
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* select d from dt3 where l != d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|       123.123|
++--------------+
+(1 row)
+>>
+* select d from dt3 where w != d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|       123.123|
++--------------+
+(1 row)
+>>
+* select d from dt3 where b != d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|       123.123|
++--------------+
+(1 row)
+>>
+* select d from dt3 where m <= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where fs <= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
++--------------+
+(1 row)
+>>
+* select d from dt3 where fd <= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
++--------------+
+(1 row)
+>>
+* select d from dt3 where d <= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where l <= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where w <= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where b <= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where m >= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where fs >= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where fd >= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where d >= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
+|       123.123|
++--------------+
+(2 rows)
+>>
+* select d from dt3 where l >= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
++--------------+
+(1 row)
+>>
+* select d from dt3 where w >= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
++--------------+
+(1 row)
+>>
+* select d from dt3 where b >= d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|         1.000|
++--------------+
+(1 row)
+>>
+* select d from dt3 where m < d;  \g
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* select d from dt3 where fs < d;  \g
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* select d from dt3 where fd < d;  \g
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* select d from dt3 where d < d;  \g
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* select d from dt3 where l < d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|       123.123|
++--------------+
+(1 row)
+>>
+* select d from dt3 where w < d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|       123.123|
++--------------+
+(1 row)
+>>
+* select d from dt3 where b < d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|       123.123|
++--------------+
+(1 row)
+>>
+* select d from dt3 where m > d;  \g
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* select d from dt3 where fs > d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|       123.123|
++--------------+
+(1 row)
+>>
+* select d from dt3 where fd > d;  \g
+<<
++--------------+
+|d             |
++--------------+
+|       123.123|
++--------------+
+(1 row)
+>>
+* select d from dt3 where d > d;  \g
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* select d from dt3 where l > d;  \g
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* select d from dt3 where w > d;  \g
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* select d from dt3 where b > d;  \g
+<<
++--------------+
+|d             |
++--------------+
++--------------+
+(0 rows)
+>>
+* \q
+<<
+>>
+
+
+Ending at: Wed Nov  1 15:35:41 2006

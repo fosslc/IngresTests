@@ -1,0 +1,378 @@
+/*
+        Test Name: utl36.sep 
+        Time: Wed Oct 24 14:18:31 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : utl36.sep
+        Module  : optimizedb
+        Filename: utl36.sep
+        Purpose : Test optimizedb with flags for creating composite histos
+        Input Files  : utl36_drop.sql, gethistos.sql
+        Output Files :
+        Database     : SEPPARAMDB 
+        Tables       : utl36_table1 - 6
+        Synopsis     : This test tries various combinations (legal
+                     : and illegal) of the -zcpk, -xr (new) and
+                     : the -rindex_name flags with optimizedb. Additionally,
+                     : when optimizedb has completed creating composite
+                     : histograms, the system catalogs are queried to make
+                     : sure that the correct information has been
+                     : appended to them. The -xr flag is used to explicitly
+                     : exclude tables from the statistics creation process.
+
+        History: 24-Oct-2001 (sarjo01) Created. Issue 11420061 opened
+                 for inappropriate err msg on this command:
+                       optimizedb -zcpk SEPPARAMDB -rutl36_table3
+                 Bad message has been canonized pending fix.
+
+          17-Dec-2001	(wu$ca01) Issue 11420061 resolved. Recanonize test. Add
+                        a fill file to drop tables from previous tests so that
+                        this test will run clean within the be/util suite. 
+*/
+? fill utl36_drop.sql
+!!
+drop table t1\g
+drop table t1_blob\g
+drop table utl23\g
+drop table utl23audit\g
+!!
+? fill gethistos.sql 
+!!
+select distinct table_name, column_name from iihistograms where table_name like 'utl-
+36%' order by 1,2\g
+!!
+? statdump -zdl SEPPARAMDB 
+<<
+~
+>>
+? optimizedb 
+<<
+usage:     optimizedb [-zf filename]
+       OR
+           optimizedb [-i filename] [-o filename]
+           [-zv] [-zfq] [-zh] [-zk] [-zlr] [-zx]
+           [-zdn] [-zcpk] [-zu#] [-zr#] [-zn#] [-zs#]
+           [-znt] [-zc] [-zp] [-zw]
+           [ingres flags] dbname
+	         {-rtablename {-acolumnname}} |
+	         {-xrtablename}
+>>
+? sql SEPPARAMDB -s 
+<<
+
+>>
+* \i utl36_drop.sql
+<<
+~
+>>
+* drop table utl36_table1, utl36_table2, utl36_table3\g
+<<
+~
+>>
+* drop table utl36_table4, utl36_table5, utl36_table6\g
+<<
+~
+>>
+* create table utl36_table1 as select relid,relowner,reltid from iirelation\g 
+<<
+~
+>>
+* create table utl36_table2 as select * from utl36_table1\g 
+<<
+~
+>>
+* create table utl36_table3 as select * from utl36_table1\g 
+<<
+~
+>>
+* create table utl36_table4 as select * from utl36_table1\g 
+<<
+~
+>>
+* create table utl36_table5 as select * from utl36_table1\g
+<<
+~
+>>
+* create table utl36_table6 as select * from utl36_table1\g
+<<
+~
+>>
+* modify utl36_table1 to btree on relowner, relid\g
+<<
+~
+>>
+* modify utl36_table2 to btree on relowner\g
+<<
+~
+>>
+* create index utl36_idx1 on utl36_table1 (reltid)\g
+<<
+~
+>>
+* create index utl36_idx2 on utl36_table1 (relid, relowner)\g
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? optimizedb SEPPARAMDB -rbad_table_name 
+<<
+E_OP0911	optimizedb: database 'utildb', table 'bad_table_name' cannot be found or is-
+ not owned by you.
+>>
+? optimizedb -zcpk SEPPARAMDB -rutl36_table3 
+<<
+W_OP096A	Optimizedb: database utildb, composite histogram requested on utl36_table3,-
+ but it is 
+either a heap table or has only 1 key column.
+>>
+? optimizedb -zcpk SEPPARAMDB -rutl36_table2 
+<<
+W_OP096A	Optimizedb: database utildb, composite histogram requested on utl36_table2,-
+ but it is 
+either a heap table or has only 1 key column.
+>>
+? optimizedb SEPPARAMDB -rutl36_idx1 
+<<
+W_OP096A	Optimizedb: database utildb, composite histogram requested on utl36_idx1, b-
+ut it is 
+either a heap table or has only 1 key column.
+>>
+? optimizedb -zcpk SEPPARAMDB -rutl36_table1 
+<<
+>>
+? optimizedb SEPPARAMDB -rutl36_idx2 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+
+>>
+* \i gethistos.sql 
+<<
+
++--------------------------------+--------------------------------+
+|table_name                      |column_name                     |
++--------------------------------+--------------------------------+
+|utl36_idx2                      |IICOMPOSITE                     |
+|utl36_table1                    |IICOMPOSITE                     |
++--------------------------------+--------------------------------+
+(2 rows)
+>>
+* \q
+<<
+~
+>>
+? statdump -zdl SEPPARAMDB 
+<<
+~
+>>
+? optimizedb SEPPARAMDB -xrinvalid_table_name 
+<<
+E_OP0911	optimizedb: database 'utildb', table 'invalid_table_name' cannot be found o-
+r is not owned by you.
+>>
+? sql SEPPARAMDB -s 
+<<
+
+>>
+* \i gethistos.sql 
+<<
+
++--------------------------------+--------------------------------+
+|table_name                      |column_name                     |
++--------------------------------+--------------------------------+
+|utl36_table1                    |relid                           |
+|utl36_table1                    |relowner                        |
+|utl36_table1                    |reltid                          |
+|utl36_table2                    |relid                           |
+|utl36_table2                    |relowner                        |
+|utl36_table2                    |reltid                          |
+|utl36_table3                    |relid                           |
+|utl36_table3                    |relowner                        |
+|utl36_table3                    |reltid                          |
+|utl36_table4                    |relid                           |
+|utl36_table4                    |relowner                        |
+|utl36_table4                    |reltid                          |
+|utl36_table5                    |relid                           |
+|utl36_table5                    |relowner                        |
+|utl36_table5                    |reltid                          |
+|utl36_table6                    |relid                           |
+|utl36_table6                    |relowner                        |
+|utl36_table6                    |reltid                          |
++--------------------------------+--------------------------------+
+(18 rows)
+>>
+* \q
+<<
+~
+>>
+? statdump -zdl SEPPARAMDB 
+<<
+~
+>>
+? optimizedb SEPPARAMDB -rutl36_table6 -xrinvalid_table_name 
+<<
+E_OP0993	optimizedb: Invalid mixture of -r and -xr command line parameters.
+>>
+? sql SEPPARAMDB -s 
+<<
+
+>>
+* \i gethistos.sql
+<<
+
++--------------------------------+--------------------------------+
+|table_name                      |column_name                     |
++--------------------------------+--------------------------------+
++--------------------------------+--------------------------------+
+(0 rows)
+>>
+* \q
+<<
+~
+>>
+? statdump -zdl SEPPARAMDB 
+<<
+~
+>>
+? optimizedb SEPPARAMDB -rutl36_table1 -xrutl36_table2 
+<<
+E_OP0993        optimizedb: Invalid mixture of -r and -xr command line parameters.
+>>
+? sql SEPPARAMDB -s 
+<<
+
+>>
+* \i gethistos.sql
+<<
+
++--------------------------------+--------------------------------+
+|table_name                      |column_name                     |
++--------------------------------+--------------------------------+
++--------------------------------+--------------------------------+
+(0 rows)
+>>
+* \q
+<<
+~
+>>
+? statdump -zdl SEPPARAMDB 
+<<
+~
+>>
+? optimizedb SEPPARAMDB -xrutl36_table6 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+
+>>
+* \i gethistos.sql
+<<
+
++--------------------------------+--------------------------------+
+|table_name                      |column_name                     |
++--------------------------------+--------------------------------+
+|utl36_table1                    |relid                           |
+|utl36_table1                    |relowner                        |
+|utl36_table1                    |reltid                          |
+|utl36_table2                    |relid                           |
+|utl36_table2                    |relowner                        |
+|utl36_table2                    |reltid                          |
+|utl36_table3                    |relid                           |
+|utl36_table3                    |relowner                        |
+|utl36_table3                    |reltid                          |
+|utl36_table4                    |relid                           |
+|utl36_table4                    |relowner                        |
+|utl36_table4                    |reltid                          |
+|utl36_table5                    |relid                           |
+|utl36_table5                    |relowner                        |
+|utl36_table5                    |reltid                          |
++--------------------------------+--------------------------------+
+(15 rows)
+>>
+* \q
+<<
+~
+>>
+? statdump -zdl SEPPARAMDB 
+<<
+~
+>>
+? optimizedb SEPPARAMDB -xrutl36_table6 -xrutl36_table1 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+
+>>
+* \i gethistos.sql
+<<
+
++--------------------------------+--------------------------------+
+|table_name                      |column_name                     |
++--------------------------------+--------------------------------+
+|utl36_table2                    |relid                           |
+|utl36_table2                    |relowner                        |
+|utl36_table2                    |reltid                          |
+|utl36_table3                    |relid                           |
+|utl36_table3                    |relowner                        |
+|utl36_table3                    |reltid                          |
+|utl36_table4                    |relid                           |
+|utl36_table4                    |relowner                        |
+|utl36_table4                    |reltid                          |
+|utl36_table5                    |relid                           |
+|utl36_table5                    |relowner                        |
+|utl36_table5                    |reltid                          |
++--------------------------------+--------------------------------+
+(12 rows)
+>>
+* \q
+<<
+~
+>>
+? optimizedb SEPPARAMDB -xrutl36_table4 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+
+>>
+* \i gethistos.sql
+<<
+
++--------------------------------+--------------------------------+
+|table_name                      |column_name                     |
++--------------------------------+--------------------------------+
+|utl36_table1                    |relid                           |
+|utl36_table1                    |relowner                        |
+|utl36_table1                    |reltid                          |
+|utl36_table2                    |relid                           |
+|utl36_table2                    |relowner                        |
+|utl36_table2                    |reltid                          |
+|utl36_table3                    |relid                           |
+|utl36_table3                    |relowner                        |
+|utl36_table3                    |reltid                          |
+|utl36_table4                    |relid                           |
+|utl36_table4                    |relowner                        |
+|utl36_table4                    |reltid                          |
+|utl36_table5                    |relid                           |
+|utl36_table5                    |relowner                        |
+|utl36_table5                    |reltid                          |
+|utl36_table6                    |relid                           |
+|utl36_table6                    |relowner                        |
+|utl36_table6                    |reltid                          |
++--------------------------------+--------------------------------+
+(18 rows)
+>>
+* \q
+<<
+~
+>>
+
+
+Ending at: Mon Dec 17 13:37:15 2001

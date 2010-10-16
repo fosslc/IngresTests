@@ -1,0 +1,428 @@
+/*
+Copyright (c) 2006 Ingres Corporation.
+
+	Test Name: qp280.sep
+	Time: Mon Mar 24 10:50:30 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :	r1.sc, r2.sc, setup.sc
+	Output Files :	*.c, *.o, *.exe
+	Database     :	SEPPARAMDB
+	Tables       :	tt1, tt2
+	Synopsis     :	When a procedure is created with the "set of"
+			clause for statement level rule, firing a same
+			row level rule should return consistent error
+			message.
+			(Bug 80808, used to give either E_US0965 or
+			E_QE0123.)
+			ESQL version of qp271.sep.
+
+ History: 24-Mar-1997	(cheis01) Created
+          15-Sep-1998   (kinte01) Add delete for files left around after test
+				  completes
+	  23-Mar-1999	(vande02) Hard-coded VPG_SZ to 8K and changed
+                                  'sql -s SEPPARAMDB' canon to be empty,
+                                  in order to catch the msg. "TM could not
+				  connect.." if the test database did not exist.
+	  19-may-1999	(somsa01) Added alternate canons for sepcc on NT.
+          2-Nov-2006	(vande02) Updated to new help procedure format, aligned
+                                  history, added Copyright and final cleanup.
+          12-Nov-2007   (drivi01) Rename setup.exe to qpinit.exe to avoid Vista's
+                                  installer detection.
+*/
+? fill r1.sc 
+!!
+exec sql include sqlca;
+
+#include <stdio.h>
+
+main(argc, argv)
+int argc;
+char **argv;
+{
+	exec sql begin declare section;
+	char	dbname[20];
+	exec sql end declare section;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	strcpy(dbname, argv[1]);
+	exec sql connect :dbname;
+
+	printf("/* ROW level rule */\n");
+	printf("create rule r1 after insert into tt1\n");
+	printf("execute procedure p1 ");
+	printf("(enum=new.enum, dept=new.dept,salary=new.salary);\n\n");
+	exec sql create rule r1 after insert into tt1
+	execute procedure p1 (enum=new.enum, dept=new.dept,salary=new.salary);
+
+	exec sql commit;
+	exec sql disconnect;
+}
+!!
+? fill r2.sc 
+!!
+exec sql include sqlca;
+
+#include <stdio.h>
+
+main(argc, argv)
+int argc; char **argv;
+{
+        exec sql begin declare section;
+        char    dbname[20];
+        exec sql end declare section;
+ 
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+        strcpy(dbname, argv[1]);
+        exec sql connect :dbname;
+
+	printf("/* STATEMENT level rule */ \n");
+	printf("create rule r1 after insert into tt1 for each statement\n");
+	printf("execute procedure p1 ");
+	printf("(enum=new.enum, dept=new.dept, salary=new.salary);\n\n");
+	exec sql create rule r1 after insert into tt1 for each statement
+	execute procedure p1 (enum=new.enum, dept=new.dept, salary=new.salary);
+
+        exec sql commit;
+        exec sql disconnect;
+}
+!!
+? fill qpinit.sc 
+!!
+exec sql include sqlca;
+
+#include <stdio.h>
+
+main(argc, argv)
+int argc;
+char **argv;
+{
+	exec sql begin declare section;
+	char	dbname[20];
+	exec sql end declare section;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	strcpy(dbname, argv[1]);
+	exec sql connect :dbname;
+
+	printf("create table tt1(enum int, dept varchar(15), salary money) ");
+	printf("with page_size=8192;\n");
+	printf("create table tt2 as select * from tt1;\n\n");
+	exec sql create table tt1(enum int, dept varchar(15), salary money)
+		with page_size=8192;
+	exec sql create table tt2 as select * from tt1;
+
+	printf("create procedure p1 ");
+	printf("(p_tt1 set of (enum int, dept varchar(10), salary money)) as\n");
+	printf("begin insert into tt2 select * from p_tt1; end;\n\n");
+	exec sql create procedure p1
+		(p_tt1 set of (enum int, dept varchar(10), salary money)) as
+	begin insert into tt2 select * from p_tt1; end;
+
+	exec sql commit;
+	exec sql disconnect;
+}
+!!
+? fill drop.sql 
+!!
+drop rule r1\p\g 
+drop procedure p1\p\g 
+drop table tt1, tt2\p\g\q
+!!
+? sepesqlc qpinit 
+<<
+ESQL qpinit.sc:
+>>
+? sepcc qpinit 
+<<
+>>
+<<
+qpinit.c
+>>
+? seplnk qpinit 
+<<
+>>
+? sepesqlc r1 
+<<
+ESQL r1.sc:
+>>
+? sepcc r1 
+<<
+>>
+<<
+r1.c
+>>
+? seplnk r1 
+<<
+>>
+? sepesqlc r2 
+<<
+ESQL r2.sc:
+>>
+? sepcc r2 
+<<
+>>
+<<
+r2.c
+>>
+? seplnk r2 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i drop.sql
+<<
+~
+>>
+? run qpinit.exe SEPPARAMDB 
+<<
+create table tt1(enum int, dept varchar(15), salary money) with page_size=8192;
+create table tt2 as select * from tt1;
+
+create procedure p1 (p_tt1 set of (enum int, dept varchar(10), salary money)) as
+begin insert into tt2 select * from p_tt1; end;
+
+>>
+? run r1.exe SEPPARAMDB 
+<<
+/* ROW level rule */
+create rule r1 after insert into tt1
+execute procedure p1 (enum=new.enum, dept=new.dept,salary=new.salary);
+
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* help procedure p1\g
+<<
+Procedure:            p1
+Owner:                testenv
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 12:24:16     
+
+Procedure Definition:
+/*    1 */ create procedure  p1                                       
+                (p_tt1 set of (enum int, dept varchar(10), salary     
+money)) as                                                            
+        begin insert into "testenv". tt2 select * from p_tt1;         
+/*    2 */ end                                                        
+
+
+
+>>
+* help rule r1\g
+<<
+Rule:                 r1
+Procedure Type:       user object
+Owner:                testenv
+Table:                tt1
+
+Rule Definition:
+create rule  r1 after insert into tt1 execute procedure "testenv".    
+p1(enum=new.enum, dept=new.dept, salary=new.salary)                   
+
+
+
+>>
+* insert into tt1 values (1, 'development', 36000)\g
+<<
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Thu May  8 15:39:12 1997)
+
+>>
+* select * from tt1\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
++-------------+---------------+--------------------+
+(0 rows)
+>>
+* select * from tt2\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
++-------------+---------------+--------------------+
+(0 rows)
+>>
+* drop rule r1\g\q
+<<
+>>
+? run r2.exe SEPPARAMDB 
+<<
+/* STATEMENT level rule */ 
+create rule r1 after insert into tt1 for each statement
+execute procedure p1 (enum=new.enum, dept=new.dept, salary=new.salary);
+
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* help procedure p1\g
+<<
+Procedure:            p1
+Owner:                testenv
+Procedure Type:       native
+Object type:          user object
+Created:              02-nov-2006 12:24:16     
+
+Procedure Definition:
+/*    1 */ create procedure  p1                                       
+                (p_tt1 set of (enum int, dept varchar(10), salary     
+money)) as                                                            
+        begin insert into "testenv". tt2 select * from p_tt1;         
+/*    2 */ end                                                        
+
+
+
+>>
+* help rule r1\g
+<<
+Rule:                 r1
+Procedure Type:       user object
+Owner:                testenv
+Table:                tt1
+
+Rule Definition:
+create rule  r1 after insert into tt1 for each statement execute      
+procedure "testenv". p1(enum=new.enum, dept=new.dept,                 
+salary=new.salary)                                                    
+
+
+
+>>
+* insert into tt1 values (1, 'development', 36000)\g
+<<
+(1 row)
+>>
+* select * from tt1\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|development    |           $36000.00|
++-------------+---------------+--------------------+
+(1 row)
+>>
+* select * from tt2\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|developmen     |           $36000.00|
++-------------+---------------+--------------------+
+(1 row)
+>>
+* drop rule r1\g\q
+<<
+
+>>
+? run r1.exe SEPPARAMDB 
+<<
+/* ROW level rule */
+create rule r1 after insert into tt1
+execute procedure p1 (enum=new.enum, dept=new.dept,salary=new.salary);
+
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* insert into tt1 values (1, 'accouting', 30000)\g
+<<
+E_US098A Row level rule is calling SET OF procedure 'p1'. Must be
+    statement level rule.
+    (Thu May  8 15:49:22 1997)
+
+>>
+* select * from tt1\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|development    |           $36000.00|
++-------------+---------------+--------------------+
+(1 row)
+>>
+* select * from tt2\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|developmen     |           $36000.00|
++-------------+---------------+--------------------+
+(1 row)
+>>
+* \i drop.sql
+<<
+drop rule r1
+ 
+drop procedure p1
+ 
+drop table tt1, tt2
+
+>>
+? delete r1.c
+<<
+~
+>>
+? delete r2.c
+<<
+~
+>>
+? delete r1.o
+<<
+~
+>>
+? delete r2.o
+<<
+~
+>>
+? delete r1.exe
+<<
+~
+>>
+? delete r2.exe
+<<
+~
+>>
+? delete qpinit.c
+<<
+~
+>>
+? delete qpinit.o
+<<
+~
+>>
+? delete qpinit.exe
+<<
+~
+>>
+
+
+
+Ending at: Thu Nov  2 12:16:22 2006

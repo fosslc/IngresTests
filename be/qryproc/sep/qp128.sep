@@ -1,0 +1,318 @@
+/*
+	Copyright (c) 2007 Ingres Corporation
+
+	Test Name: qp128.sep (formerly eha12.sep)
+	Time: 	
+	User Name: testenv
+ 	Test ID : qp128
+	Module  : 
+	Filename: qp128.sep
+	Purpose	: To test for bug 41529
+	Input Files  : none
+	Output Files : none 
+	Database     : SEPPARAMDB
+	Tables       : eha12_t1, eha12_t2
+	Synopsis     : Do a UPDATE with SET from AGGREGATE to see bug.
+
+	History	: Created by CAMACHO.
+          15-Oct-1992	(judi)    Updated this test to accept the canon returned
+				  by an illegal query using aggregate functions.
+                        	  The fix to bug 41529 is to return a message
+				  saying: aggregate function 'function name'
+				  not allowed in this context.  Removed the
+				  comments that where after the queries
+                        	  which stated: 
+	                          The update using `function name' works.
+                                  Accepted the new canons given after the
+				  queries which use aggregate functions and an
+				  update because the table will not be updated
+				  when the query fails.
+	  27-oct-1992	(gillnh2o)This test should not diff due to bug 41529.
+				  This bug was fixed on Aug 31, 1992 and
+				  integrated into 6.4/03. 
+          12-Aug-1993	(garys)   updated canon to accept correct number of
+				  rows, pages and overflow data pages for 65.
+          23-Nov-1993	(camacho) accepted new canons for the new default of
+				  with journaling.
+	  20-Mar-1995	(gauje01) changed canons to contain current Ingres
+				  version, "OPING1.1", replacing old "ING6.0"
+          18-Dec-1995	(raora02) Accepted alternate canons to show Ingres
+				  version OpING 1.2.
+           9-Oct-1996	(Author)
+	  26-Mar-1999	(kamra01) modified VPG_SZ to 4096
+          13-Dec-2007   (vande02) Changing 'help table' commands to a query of
+                                  iitables checking the storage_structure and
+                                  num_rows after copy table. See issue
+                                  122073.  This will avoid insignificant table
+                                  structure differences as seen in II 9.3.0.
+                                  Minor header cleanup.
+*/
+? fill eha12t1.dat 
+!!
+Joe,1,a
+Moe,2,b
+!!
+? fill eha12t2.dat 
+!!
+Larry,1,a
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop eha12_t1 ;\g
+<<
+~
+>>
+* drop eha12_t2 ;\g
+<<
+~
+>>
+* create table eha12_t1 (
+<<
+>>
+*	name varchar(25),emp_no i2,col3 varchar(10))  with page_size=4096 ;\g
+<<
+>>
+* create table eha12_t2 (
+<<
+>>
+*	name varchar(25),emp_no i2,col3 varchar(10))  with page_size=4096 ;\g
+<<
+>>
+* copy table eha12_t1 (name=c0, emp_no=c0, col3=c0nl) from 'eha12t1.dat' ;\g
+<<
+(2 rows)
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where table_name='eha12_t1';\g
+<<
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|eha12_t1                        |HEAP            |            2|N     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* copy table eha12_t2 (name=c0, emp_no=c0, col3=c0nl) from 'eha12t2.dat' ;\g
+<<
+(1 row)
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where table_name='eha12_t2';\g
+<<
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|eha12_t2                        |HEAP            |            1|N     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* select * from eha12_t1  ;\g
+<<
+
++-------------------------+------+----------+
+|name                     |emp_no|col3      |
++-------------------------+------+----------+
+|Joe                      |     1|a         |
+|Moe                      |     2|b         |
++-------------------------+------+----------+
+(2 rows)
+>>
+* select * from eha12_t2  ;\g
+<<
+
++-------------------------+------+----------+
+|name                     |emp_no|col3      |
++-------------------------+------+----------+
+|Larry                    |     1|a         |
++-------------------------+------+----------+
+(1 row)
+>>
+* update eha12_t1 from eha12_t2 
+<<
+>>
+*	set name = eha12_t2.name, emp_no = max(eha12_t2.emp_no)
+<<
+>>
+* 	where eha12_t1.col3 = eha12_t2.col3 ;\g	
+<<
+E_US0B70 line 1, aggregate function 'max' not allowed in this context.
+    (Thu Oct 15 10:03:36 1992)
+
+>>
+* select * from eha12_t1  ;\g
+<<
+
++-------------------------+------+----------+
+|name                     |emp_no|col3      |
++-------------------------+------+----------+
+|Joe                      |     1|a         |
+|Moe                      |     2|b         |
++-------------------------+------+----------+
+(2 rows)
+>>
+* select * from eha12_t2  ;\g
+<<
+
++-------------------------+------+----------+
+|name                     |emp_no|col3      |
++-------------------------+------+----------+
+|Larry                    |     1|a         |
++-------------------------+------+----------+
+(1 row)
+>>
+* update eha12_t1 
+<<
+>>
+*	set name = 'Joe', emp_no = 1, col3 = 'a'
+<<
+>>
+* 	where eha12_t1.name = 'Larry'  ;\g
+<<
+(0 rows)
+>>
+* select * from eha12_t1  ;\g
+<<
+
++-------------------------+------+----------+
+|name                     |emp_no|col3      |
++-------------------------+------+----------+
+|Joe                      |     1|a         |
+|Moe                      |     2|b         |
++-------------------------+------+----------+
+(2 rows)
+>>
+* select * from eha12_t2  ;\g
+<<
+
++-------------------------+------+----------+
+|name                     |emp_no|col3      |
++-------------------------+------+----------+
+|Larry                    |     1|a         |
++-------------------------+------+----------+
+(1 row)
+>>
+* update eha12_t1 from eha12_t2 
+<<
+>>
+*	set name = eha12_t2.name, emp_no = min(eha12_t2.emp_no)
+<<
+>>
+* 	where eha12_t1.col3 = eha12_t2.col3 ;\g
+<<
+E_US0B70 line 1, aggregate function 'min' not allowed in this context.
+    (Thu Oct 15 10:04:49 1992)
+
+>>
+* select * from eha12_t1  ;\g
+<<
+
++-------------------------+------+----------+
+|name                     |emp_no|col3      |
++-------------------------+------+----------+
+|Joe                      |     1|a         |
+|Moe                      |     2|b         |
++-------------------------+------+----------+
+(2 rows)
+>>
+* select * from eha12_t2  ;\g
+<<
+
++-------------------------+------+----------+
+|name                     |emp_no|col3      |
++-------------------------+------+----------+
+|Larry                    |     1|a         |
++-------------------------+------+----------+
+(1 row)
+>>
+* update eha12_t1 
+<<
+>>
+*	set name = 'Joe', emp_no = 1, col3 = 'a'
+<<
+>>
+* 	where eha12_t1.name = 'Larry'  ;\g
+<<
+(0 rows)
+>>
+* select * from eha12_t1  ;\g
+<<
+
++-------------------------+------+----------+
+|name                     |emp_no|col3      |
++-------------------------+------+----------+
+|Joe                      |     1|a         |
+|Moe                      |     2|b         |
++-------------------------+------+----------+
+(2 rows)
+>>
+* select * from eha12_t2 ;\g
+<<
+
++-------------------------+------+----------+
+|name                     |emp_no|col3      |
++-------------------------+------+----------+
+|Larry                    |     1|a         |
++-------------------------+------+----------+
+(1 row)
+>>
+* update eha12_t1 from eha12_t2 
+<<
+>>
+*	set name = eha12_t2.name, emp_no = count(eha12_t2.emp_no)
+<<
+>>
+*	 where eha12_t1.col3 = eha12_t2.col3 ;\g
+<<
+E_US0B70 line 1, aggregate function 'count' not allowed in this context.
+    (Thu Oct 15 10:05:01 1992)
+
+>>
+* update eha12_t1 
+<<
+>>
+*	set name = 'Joe', emp_no = 1, col3 = 'a'
+<<
+>>
+* 	where eha12_t1.name = 'Larry'  ;\g
+<<
+(0 rows)
+>>
+* update eha12_t1 from eha12_t2 
+<<
+>>
+*	set name = eha12_t2.name, emp_no = count(*)
+<<
+>>
+* 	where eha12_t1.col3 = eha12_t2.col3 ;\g
+<<
+E_US0B70 line 1, aggregate function 'count' not allowed in this context.
+    (Thu Oct 15 10:05:07 1992)
+
+>>
+* update eha12_t1 
+<<
+>>
+*	set name = 'Joe', emp_no = 1, col3 = 'a'
+<<
+>>
+* 	where eha12_t1.name = 'Larry'  ;\g
+<<
+(0 rows)
+>>
+* update eha12_t1 from eha12_t2 
+<<
+>>
+*	set name = eha12_t2.name, emp_no = sum(eha12_t2.emp_no)
+<<
+>>
+* 	where eha12_t1.col3 = eha12_t2.col3 ;\g
+<<
+E_US0B70 line 1, aggregate function 'sum' not allowed in this context.
+    (Thu Oct 15 10:05:13 1992)
+
+>>
+* \q
+<<
+>>
+
+
+Ending at: Wed Oct  9 07:43:31 1996

@@ -1,0 +1,323 @@
+/*
+	Test Name: blob06.sep
+	Time: Fri Feb 26 17:21:44 1999
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : be/blob
+	Filename: blob06.sep
+	Purpose	: To test inserts / deletes with autocommit on / off
+	Input Files  : none.
+	Output Files : none.
+	Database     : SEPPARAMDB
+	Tables       : session.tbl1, tbl2
+	Synopsis     :
+
+ History: 26-Feb-1999	(somsa01)	Created.
+	  23-mar-1999	(walro03)
+		seplnk errors on STlength; changed to IISTlength.
+	  07-apr-1999	(vande02)
+                Hard-coded VPG_SZ to 8K.
+	  19-may-1999	(somsa01)
+		Changed IISTlength to strlen for better compatibility.
+          26-Mar-2001   (hanch04) Update test for Ingres 2.6
+		add defines for CL calls.
+	  19-sep-2003	(abbjo03)
+		Change SIprintfs to printf, removed tempcnt from printf
+		statement in the ERROR message, changed usage of IISTbcompare
+		to use non-Ingres CL function strcmp to eliminate compiler
+		error/warning on VMS, and lined up history comments.
+*/
+? fill blob_autocommit.sc 
+!!
+#include    <stdio.h>
+#define MEfill(n,v,s) memset(s,v,n)
+#define STcopy(a,b)   strcpy(b,a)
+
+EXEC SQL include sqlca;
+
+#define OK 0
+#define FAIL 1
+
+/*
+**
+**  Name: blob_autocommit.sc
+**
+**  Description:
+**	This program tests inserts, deletes, and copy in / out with blobs
+**	based upon autocommit on / off.
+**	
+**  History:
+**	12-feb-1999 (somsa01)
+**	    Created (thanks to thaju02).
+*/
+
+void put_handler(void);
+
+static cnt = 1;
+
+main(argc, argv)
+int	argc;
+char	*argv[];
+{
+    EXEC SQL begin declare section;
+    char	dbname[32];
+    int		i = 0, tempcnt, acflag = 0;
+    EXEC SQL end declare section;
+    int		numloops;
+
+    if (argc == 4)
+    {
+	STcopy(argv[1], dbname);
+	if (strcmp(argv[2], "on") == 0)
+	{
+	    acflag = 1;
+	    printf("AUTOCOMMIT ON\n");
+	}
+	else if (strcmp(argv[2], "off") == 0)
+	{
+	    printf("AUTOCOMMIT OFF\n");
+	}
+	CVan(argv[3], &numloops);
+    }
+    else 
+    {
+	printf("usage : blob_autocommit <dbname> on|off <numloops>\n");
+	printf("	where on/off denotes autocommit ON/OFF\n");
+	PCexit(FAIL);
+    }
+	
+    printf("Testing temporary/permanent tables with blobs...\n");
+
+    EXEC SQL whenever sqlerror stop;
+    printf("Connecting to database\n");
+    EXEC SQL connect :dbname;
+
+    if (acflag)
+	EXEC SQL set autocommit on;
+
+    EXEC SQL whenever sqlerror continue;
+    EXEC SQL drop tbl2;
+    EXEC SQL whenever sqlerror stop;
+
+    printf("Creating session.tbl1 and tbl2\n");
+    EXEC SQL declare global temporary table session.tbl1(
+				c1 int not null, 
+				c2 int not null,
+				c3 char(1600) not null,
+				c4 long varchar not null )
+				on commit preserve rows with norecovery,
+				page_size=8192;
+
+    EXEC SQL create table tbl2( c1 int not null, 
+				c2 int not null,
+				c3 char(1600) not null,
+				c4 long varchar not null )
+				with page_size=8192;
+    if (!acflag)
+	EXEC SQL commit;
+
+    printf("Populating session.tbl1\n");
+    for (i=1; i <= numloops; i++)
+    {
+	EXEC SQL insert into session.tbl1 values( :i,
+						  (2 * :i),
+						  'abcdefghijklmnopqrstuvwxyz',
+						  DATAHANDLER(put_handler()) );
+	if (!acflag)
+	{ 
+	    if ((i % 500) == 0)
+		EXEC SQL commit;
+	}
+    }
+   
+    if (!acflag)
+	EXEC SQL commit;
+  
+    printf("Populating tbl2\n");
+    for (i=1; i <= numloops; i++)
+    {
+        EXEC SQL insert into tbl2 values( :i, (2 * :i),
+					  'abcdefghijklmnopqrstuvwxyz',
+					  DATAHANDLER(put_handler()) );
+        if (!acflag)
+        { 
+            if ((i % 500) == 0)
+                EXEC SQL commit;
+        }
+    }
+
+    if (!acflag)
+	EXEC SQL commit;
+    
+    EXEC SQL set nologging;
+    printf("Copying table session.tbl1 into file tbl1.out\n");
+    EXEC SQL copy table session.tbl1() into 'tbl1.out';
+   
+    printf("Copying file tbl1.out into table tbl2\n");
+    EXEC SQL copy table tbl2() from 'tbl1.out';
+   
+    printf("Copying table tbl2 into file tbl2.out\n");
+    EXEC SQL copy table tbl2() into 'tbl2.out';
+   
+    printf("Copying file tbl1.out into table session.tbl1\n");
+    EXEC SQL copy table session.tbl1() from 'tbl1.out';
+ 
+    if (!acflag)
+	EXEC SQL commit;
+
+    EXEC SQL select count(c1) into :tempcnt from session.tbl1;
+    if (tempcnt != (2*numloops))
+	printf("session.tbl1: ERROR!!!\n");
+
+    printf("	session.tbl1: count = %d, expected = %d\n", tempcnt,
+		2*numloops);
+
+    EXEC SQL select count(c1) into :tempcnt from tbl2;
+    if (tempcnt != (2*numloops))
+	printf("	tbl2: ERROR!!!\n");
+
+    printf("	tbl2: count = %d, expected = %d\n", tempcnt, 2*numloops);
+
+    if (!acflag)
+	EXEC SQL commit;
+
+    printf("Deleting from session.tbl1\n");
+    for (i=1; i <= numloops; i++)
+    {
+	EXEC SQL delete from session.tbl1 where c2 = :i; 
+	if (!acflag)
+	{ 
+	    if ((i % 500) == 0)
+		EXEC SQL commit;
+	}
+    }
+   
+    if (!acflag)
+	EXEC SQL commit;
+
+    printf("Deleting from tbl2\n");
+    for (i=1; i <= numloops; i++)
+    {
+        EXEC SQL delete from tbl2 where c1 = :i;
+        if (!acflag)
+        { 
+            if ((i % 500) == 0)
+                EXEC SQL commit;
+        }
+    }
+
+    if (!acflag)
+	EXEC SQL commit;
+
+    printf("Done.\n");
+    EXEC SQL disconnect;
+
+    PCexit(OK);
+}
+
+void
+put_handler()
+{
+    EXEC SQL begin declare section;
+    char	seg[2301];
+    EXEC SQL end declare section;
+    char	val;
+    int		i;
+
+    val = 'a';
+    MEfill(2000, 'z', seg);
+    for (i = 0; i < 1; i++)
+    {
+	MEfill(2000, val, seg);
+	val = (val == 'z') ? 'a' : val + 1;
+	EXEC SQL put data (segment = :seg, segmentlength = 2000);
+    }
+
+    EXEC SQL put data (dataend = 1);
+}
+!!
+? esqlc blob_autocommit.sc 
+<<
+ESQL blob_autocommit.sc:
+>>
+<<
+>>
+? sepcc blob_autocommit.c 
+<<
+>>
+<< IF (NT_GENERIC)
+blob_autocommit.c
+>>
+? seplnk blob_autocommit 
+<<
+>>
+? run blob_autocommit.exe SEPPARAMDB on 250 
+<<
+AUTOCOMMIT ON
+Testing temporary/permanent tables with blobs...
+Connecting to database
+Creating session.tbl1 and tbl2
+Populating session.tbl1
+Populating tbl2
+Copying table session.tbl1 into file tbl1.out
+Copying file tbl1.out into table tbl2
+Copying table tbl2 into file tbl2.out
+Copying file tbl1.out into table session.tbl1
+	session.tbl1: count = 500, expected = 500
+	tbl2: count = 500, expected = 500
+Deleting from session.tbl1
+Deleting from tbl2
+Done.
+>>
+? run blob_autocommit.exe SEPPARAMDB off 250 
+<<
+AUTOCOMMIT OFF
+Testing temporary/permanent tables with blobs...
+Connecting to database
+Creating session.tbl1 and tbl2
+Populating session.tbl1
+Populating tbl2
+Copying table session.tbl1 into file tbl1.out
+Copying file tbl1.out into table tbl2
+Copying table tbl2 into file tbl2.out
+Copying file tbl1.out into table session.tbl1
+	session.tbl1: count = 500, expected = 500
+	tbl2: count = 500, expected = 500
+Deleting from session.tbl1
+Deleting from tbl2
+Done.
+>>
+? delete tbl1.out 
+<<
+~
+>>
+? delete tbl2.out 
+<<
+~
+>>
+? delete blob_autocommit.c 
+<<
+~
+>>
+? delete blob_autocommit.exe 
+<<
+~
+>>
+.if (NT_GENERIC || VMS)
+? delete blob_autocommit.obj 
+<<
+~
+>>
+.else
+.if (UNIX)
+? delete blob_autocommit.o 
+<<
+~
+>>
+.endif
+.endif
+
+
+Ending at: Fri Feb 26 17:29:52 1999

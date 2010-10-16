@@ -1,0 +1,1853 @@
+/*
+	Test Name: api02.sep
+	Time: Wed Mar 26 16:50:31 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID :  api02.sep
+	Module  : be/api
+	Filename:  api02.sep
+	Purpose	: To test IIapi_convertData() in the asynchronous
+	Input Files  :
+	Output Files :
+	Database     :
+	Tables       :
+	Synopsis     :
+
+ History: 26-Mar-1997	zhaqi01		Created
+          23-Jul-1998	chegu01:	added the VMS version.
+          29-sep-1998   (kinte01)	For VMS use seplnk -a to pick up the
+          				API shared library otherwise the
+          				executable would be linked as an
+                                        ESQLC application
+          30-sep-1998	(kinte01)	Rename IIAPI_* wrapper procedures 
+					that exist around the actual IIapi_*
+					calls to API_* as VMS considers
+					IIAPI_* to be the same as IIapi_*
+					Case sensitivity can be forced
+					into the C code but it cannot be
+					forced into the Macro (assembly) 
+					code and as we need to C & Macro
+					code to interpret the external 
+					procedure definitions in the same
+					manner, we use the default of having
+					the external symbols be Uppercase
+2-Arp-1999      (yu$pe02)       Hard code to 4K.
+          17-Aug-1999   (hweho01)       Added stdlib.h header file in myfile.c
+                                        and myquery.c source files, it 
+                                        provides the function prototype of 
+                                        malloc(). Without the declaration, the  
+                                        default int (4 byte) return type will
+                                        result in 64-bit address being 
+                                        truncated on ris_u64 platform.
+          29-Dec-1999	(ngutr03)	Changed initP.in_version from IIAPI_VERSION_1 to 
+                                        IIAPI_VERSION_2 (see myaccess.c)
+					Added new member variable in_envHandle to initP 
+					structure (see myaccess.c)
+					Added new API function IIapi_releaseEnv() to
+					myaccess.c to release the environment handle.
+	  17-sep-2001   (devjo01)	Changed failure tests to make sure
+					program will not infinitely loop
+					if an error code other than
+					IIAPI_ST_NO_DATA is returned.
+	11-jun-2003 (abbjo03)
+		Corrections to eliminate warnings on VMS.
+*/
+
+
+
+? cp @file(ii_system,ingres,files,iiapidep.h) iiapidep.h 
+<<
+
+>>
+? cp @file(ii_system,ingres,files,iiapi.h) iiapi.tmp 
+<<
+
+>>
+.if (NT_GENERIC) 
+? fill makeiiapi.bat 
+!!
+sed  "s/<iiapidep.h>/\"iiapidep.h\"/g" iiapi.tmp > iiapi.h
+!!
+? run makeiiapi.bat 
+<<
+
+>>
+.endif 
+.if (UNIX) 
+? fill makeiiapi.sh 
+!!
+sed  "s/<iiapidep.h>/\"iiapidep.h\"/g" iiapi.tmp > iiapi.h
+!!
+? sh makeiiapi.sh 
+<<
+
+>>
+.endif 
+.if (VMS) 
+? fill iiapi_edit.com
+!!
+$ pipe sed "s/<iiapidep.h>/""iiapidep.h""/g" iiapi.tmp > iiapi.h
+!!
+? qasetuser testenv @iiapi_edit.com
+<<
+>>
+.endif 
+? fill myaccess.h 
+!!
+#ifndef II_ACCESS_H
+#define II_ACCESS_H
+
+extern II_PTR API_initialize(void);
+extern void API_terminate(void);
+extern void API_releaseEnv(II_PTR);
+
+#endif /* II_ACCESS_H */
+!!
+? fill myaccess.c 
+!!
+#include <stdio.h>
+#include <stdlib.h>
+#include "iiapi.h"
+#include "myaccess.h"
+
+/* initialize the API */
+
+extern II_PTR
+API_initialize(void)
+{
+    IIAPI_INITPARM initP;
+    
+    initP.in_timeout = -1;
+    initP.in_version = IIAPI_VERSION_2;
+    initP.in_envHandle = NULL;
+
+    printf("Initializing API ...\n");
+    IIapi_initialize(&initP);
+
+    if (initP.in_status != IIAPI_ST_SUCCESS) {
+	printf("\t=>Error in IIapi_initialize: %d\n", initP.in_status);
+	exit(0);
+    }
+
+    return (initP.in_envHandle);
+}
+
+/* release environment handle */
+extern void
+API_releaseEnv(II_PTR envHandle)
+{
+	IIAPI_RELENVPARM relEnvParm;
+
+	relEnvParm.re_envHandle = envHandle;
+	printf("Releasing API environment...\n");
+	IIapi_releaseEnv(&relEnvParm);
+	printf("%s\n", (relEnvParm.re_status == IIAPI_ST_SUCCESS) ? "Successfully, released-
+ API environment" : "Failed to release API environment");
+}
+
+/* terminate the API */
+
+extern void
+API_terminate(void)
+{
+    IIAPI_TERMPARM termP;
+
+    printf("Shutting down API ...\n");
+    IIapi_terminate(&termP);
+
+    if (termP.tm_status != IIAPI_ST_SUCCESS) {
+	printf("\t=>Error in IIapi_terminate: %d\n", termP.tm_status);
+	exit(0);
+    }
+
+    return;
+}
+!!
+? fill myfile.h 
+!!
+#ifndef II_FILE_H
+#define II_FILE_H
+
+extern  char*
+printData(IIAPI_DESCRIPTOR *descriptor,IIAPI_DATAVALUE *dataValue,char *buffer,int i-
+ndex);
+ 
+extern  void
+IIsyc_free( II_PTR buffer );
+
+extern  II_PTR
+IIsyc_malloc( int size );
+
+extern  char*
+IIsyc_stalloc( char *src );
+
+#endif /* II_QUERY_H */
+!!
+? fill myfile.c 
+!!
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "iiapi.h"
+#include "myfile.h"
+
+/* print out the value from a table */
+extern  char*
+printData( IIAPI_DESCRIPTOR       *descriptor,
+                 IIAPI_DATAVALUE        *dataValue,
+                 char                   *buffer,
+		 int 		index)
+{
+    IIAPI_CONVERTPARM   cv;
+    char                *buf = buffer;
+    int                 i;
+    II_INT2             length;
+    II_INT1             *integer1;
+    II_INT2             *integer2;
+    II_INT4             *integer4;
+ 
+    if ( dataValue->dv_null )
+    {
+        II_sprintf( buffer, "( NULL )" );
+        return ( buffer );
+    }
+ 
+/************************************************
+**  convert different datatype to character    **
+**  datatype so that it can be printed out     **
+*************************************************/
+
+    switch( abs( descriptor->ds_dataType ) )
+    {
+        case IIAPI_CHA_TYPE:
+
+	    strncpy(buffer,(char *)dataValue->dv_value,(int)dataValue->dv_length);
+            break;
+ 
+        case IIAPI_FLT_TYPE:
+
+	    if (index) 
+	       II_sprintf( buffer, "%f",*(II_FLOAT8 *)dataValue->dv_value);
+            else
+               II_sprintf( buffer, "%f",*(II_FLOAT4 *)dataValue->dv_value);
+
+            break;
+
+/* convert date, decimal , money datatypes to character */
+
+        case IIAPI_DTE_TYPE:
+        case IIAPI_DEC_TYPE:
+        case IIAPI_MNY_TYPE:
+            cv.cv_srcDesc.ds_dataType = descriptor->ds_dataType;
+            cv.cv_srcDesc.ds_nullable = descriptor->ds_nullable;
+            cv.cv_srcDesc.ds_length = descriptor->ds_length;
+            cv.cv_srcDesc.ds_precision = descriptor->ds_precision;
+            cv.cv_srcDesc.ds_scale = descriptor->ds_scale;
+            cv.cv_srcDesc.ds_columnType = descriptor->ds_columnType;
+            cv.cv_srcDesc.ds_columnName = descriptor->ds_columnName;
+
+            cv.cv_srcValue.dv_null = dataValue->dv_null;
+            cv.cv_srcValue.dv_length = dataValue->dv_length;
+            cv.cv_srcValue.dv_value = dataValue->dv_value;
+ 
+            cv.cv_dstDesc.ds_dataType = IIAPI_CHA_TYPE;
+            cv.cv_dstDesc.ds_nullable = FALSE;
+            cv.cv_dstDesc.ds_length = 32;
+            cv.cv_dstDesc.ds_precision = 0;
+            cv.cv_dstDesc.ds_scale = 0;
+            cv.cv_dstDesc.ds_columnType = IIAPI_COL_TUPLE;
+            cv.cv_dstDesc.ds_columnName = NULL;
+ 
+            cv.cv_dstValue.dv_null = FALSE;
+            cv.cv_dstValue.dv_length = cv.cv_dstDesc.ds_length;
+            cv.cv_dstValue.dv_value = buffer;
+
+
+            IIapi_convertData( &cv );
+
+ 
+            if ( cv.cv_status != IIAPI_ST_SUCCESS )
+            {
+                II_sprintf( buffer, "(invalid type)" );
+                break;
+            }
+ 
+            buffer[ cv.cv_dstValue.dv_length ] = '\0';
+            break;
+ 
+        default:
+            II_sprintf( buffer, "invalid type" );
+            break;
+    }
+ 
+    return( buffer );
+}
+
+static void
+syc_formatString( char          *string,
+                  int           length,
+                  char          *buffer )
+{
+    int i, jj;
+ 
+    if ( length > 72 )  *buffer++ = '\n';
+    *buffer++ = '"';
+ 
+    for ( jj = 72; length > 0; length--, string++, jj-- )
+    {
+        if ( ! jj )
+        {
+            *buffer++ = '"';
+            *buffer++ = '\n';
+            *buffer++ = '"';
+            jj = 72;
+        }
+ 
+        if ( isprint( *string ) )
+            *buffer++ = *string;
+        else
+        {
+            II_sprintf( buffer, "\\%03.03d", *string );
+            buffer += 4;
+        }
+    }
+ 
+    *buffer++ = '"';
+    *buffer = '\0';
+}
+
+extern  void
+IIsyc_free( II_PTR      buffer )
+{
+    free( buffer );
+ 
+    return;
+}
+
+extern  char*
+IIsyc_stalloc( char     *src )
+{
+    char            *dest;
+ 
+    dest = ( char * )IIsyc_malloc( strlen( src ) + 1 );
+    strcpy( dest, src );
+ 
+    return      ( dest );
+}
+
+extern  II_PTR
+IIsyc_malloc( int       size )
+{
+    II_PTR          retValue;
+ 
+    if ( ! ( retValue = ( II_PTR )malloc( size ) ) )
+    {
+        II_printf( "ERROR: cann't allocate size %d\n", size );
+ 
+        exit( 0 );
+    }
+ 
+    return      ( retValue );
+}
+!!
+? fill mymain.c 
+!!
+/***************************************************************
+**    This tests the converation between Ingres datatypes    ***
+****************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "iiapi.h"
+#include "myaccess.h"
+#include "mysession.h"
+#include "myquery.h"
+#include "mytran.h"
+#include "mymisc.h"
+#include "myfile.h"
+#include "mymain.h"
+ 
+int main (int argc, char **argv)
+{
+  IIAPI_CONNPARM ConnParm;
+  IIAPI_QUERYPARM QueryParm;
+  II_PTR envHandle;
+ 
+  envHandle = API_initialize();
+
+  ConnParm.co_target = argv[1];
+  ConnParm.co_connHandle = envHandle;
+
+  API_connect(&ConnParm);
+ 
+  dropTable(&ConnParm,&QueryParm);
+ 
+  createTable(&ConnParm, &QueryParm);
+
+  insertTable(&ConnParm, &QueryParm);
+
+  selectTable(&ConnParm, &QueryParm);
+
+  dropTable(&ConnParm,&QueryParm); 
+ 
+  API_disconnect(&ConnParm);
+
+  API_releaseEnv(envHandle);
+
+  API_terminate();
+  return (0);
+}
+
+/* drop two tables */
+extern void
+dropTable(IIAPI_CONNPARM *connParm,IIAPI_QUERYPARM *QueryParm)
+{
+    int i;
+ 
+    II_CHAR *sqlStmt[] = {"drop table a", "drop table b"};
+
+    for (i = 0; i <2; i++) {
+        QueryParm->qy_queryText = sqlStmt[i];
+        Middle(connParm,QueryParm);
+    }
+
+    return;
+}
+
+/* create two tables */
+extern void
+createTable(IIAPI_CONNPARM *connParm, IIAPI_QUERYPARM *queryParm)
+{
+   int i;
+   II_CHAR *sqlStmt[] = {"create table a (i decimal(10,2), a char(5), b money)with p-
+age_size=4096",
+                         "create table b (datecol char(10), b float, c date )with pa-
+ge_size=4096"};
+ 
+   for (i = 0; i < 2; i++) {
+      queryParm->qy_queryText = sqlStmt[i];
+      Middle(connParm,queryParm);
+   }
+  return;
+}
+
+/* insert values into two tables */
+extern void
+insertTable(IIAPI_CONNPARM *connParm, IIAPI_QUERYPARM *queryParm)
+{
+   II_CHAR *sqlStmt = "insert into b values ('12/07/1970',123.45,'12/07/70')";
+   II_CHAR *sqlstmt = "insert into a values (12345678.89,'123.4',1234567.89)";
+
+   queryParm->qy_queryText = IIsyc_stalloc(sqlStmt);
+   Middle(connParm,queryParm);
+   IIsyc_free( ( II_PTR )queryParm->qy_queryText);
+
+   queryParm->qy_queryText = IIsyc_stalloc(sqlstmt);
+   Middle(connParm,queryParm);
+   IIsyc_free( ( II_PTR )queryParm->qy_queryText);
+
+   return;
+}
+
+/* select values from tables */
+extern void
+selectTable(IIAPI_CONNPARM *connParm, IIAPI_QUERYPARM *queryParm)
+{
+    II_CHAR *sqlStmt = "select * from b";
+    II_CHAR *sqlstmt = "select * from a";
+    IIAPI_GETDESCRPARM getDescrP;
+    IIAPI_GETCOLPARM getColP;
+    int i;
+
+    queryParm->qy_queryText = sqlStmt;
+    printf("Now, database is doing %s\n",queryParm->qy_queryText);
+    queryParm->qy_genParm.gp_callback = NULL;
+    queryParm->qy_genParm.gp_closure = NULL;
+    queryParm->qy_parameters = FALSE;
+    queryParm->qy_stmtHandle = (II_PTR) NULL;
+    queryParm->qy_queryType = IIAPI_QT_QUERY;
+
+    API_query(connParm, queryParm);
+    i=API_getDescriptor(queryParm,&getDescrP);
+    API_getColumns(&getDescrP,&getColP,i);
+
+    API_getQueryInfo(queryParm);
+    API_close(queryParm);
+    API_commit(queryParm);
+
+    queryParm->qy_queryText = sqlstmt;
+    printf("Now, database is doing %s\n",queryParm->qy_queryText);
+    queryParm->qy_genParm.gp_callback = NULL;
+    queryParm->qy_genParm.gp_closure = NULL;
+    queryParm->qy_parameters = FALSE;
+    queryParm->qy_stmtHandle = (II_PTR) NULL;
+    queryParm->qy_queryType = IIAPI_QT_QUERY;
+ 
+    API_query(connParm, queryParm);
+    i=API_getDescriptor(queryParm,&getDescrP);
+    API_getColumns(&getDescrP,&getColP,i);
+ 
+    API_getQueryInfo(queryParm);
+    API_close(queryParm);
+    API_commit(queryParm);
+
+    return;
+}
+
+/* The funcation that to be called for creating,droping.inserting table */
+extern void
+Middle(IIAPI_CONNPARM *connParm,IIAPI_QUERYPARM *queryParm)
+{
+    printf("Now, database is doing %s\n",queryParm->qy_queryText);
+    queryParm->qy_genParm.gp_callback = NULL;
+    queryParm->qy_genParm.gp_closure = NULL;
+    queryParm->qy_parameters = FALSE;
+    queryParm->qy_stmtHandle = (II_PTR) NULL;
+    queryParm->qy_queryType = IIAPI_QT_QUERY;
+
+    API_query(connParm, queryParm);
+    API_getQueryInfo(queryParm);
+    API_close(queryParm);
+    API_commit(queryParm); 
+    return;
+}
+!!
+? fill mymain.h 
+!!
+#ifndef _MAIN_
+#define _MAIN_
+#define MODULE
+#define _ASC_
+
+extern void
+Middle(IIAPI_CONNPARM *connParm,IIAPI_QUERYPARM *QueryParm);
+
+extern void
+dropTable(IIAPI_CONNPARM *connParm,IIAPI_QUERYPARM *QueryParm);
+
+extern void
+createTable(IIAPI_CONNPARM *connParm, IIAPI_QUERYPARM *queryParm);
+
+extern void
+insertTable(IIAPI_CONNPARM *connParm, IIAPI_QUERYPARM *queryParm);
+
+extern void
+selectTable(IIAPI_CONNPARM *connParm, IIAPI_QUERYPARM *queryParm);
+
+#endif
+!!
+? fill mymisc.h 
+!!
+#ifndef II_MISC_H
+#define II_MISC_H
+
+extern II_BOOL API_wait(IIAPI_GENPARM *genP);
+
+#endif /* II_MISC_H */
+!!
+? fill mymisc.c 
+!!
+#include <stdio.h>
+#include <stdlib.h>
+#include "iiapi.h"
+#include "myquery.h"
+#include "mymisc.h"
+
+/* waitting if the task is not finished */
+extern II_BOOL
+API_wait(IIAPI_GENPARM *genP)
+{
+   IIAPI_WAITPARM waitP;
+
+   waitP.wt_timeout = -1;
+   
+    printf("Asynchronizing ...\n");
+    while (!genP->gp_completed)
+        IIapi_wait(&waitP);
+
+    switch (genP->gp_status) {
+        case IIAPI_ST_SUCCESS:
+            printf("\t=>gp_status: IIAPI_ST_SUCCESS\n");
+            break;
+        case IIAPI_ST_MESSAGE:
+            printf("\t=>gp_status: IIAPI_ST_MESSAGE\n");
+            break;
+        case IIAPI_ST_WARNING:
+            printf("\t=>gp_status: IIAPI_ST_WARNING\n");
+            break;
+        case IIAPI_ST_NO_DATA:
+            printf("\t=>gp_status: IIAPI_ST_NO_DATA\n");
+            break;
+        case IIAPI_ST_ERROR:
+            printf("\t=>gp_status: IIAPI_ST_ERROR\n");
+            break;
+        case IIAPI_ST_FAILURE:
+            printf("\t=>gp_status: IIAPI_ST_FAILURE\n");
+            break;
+        case IIAPI_ST_NOT_INITIALIZED:
+            printf("\t=>gp_status: IIAPI_ST_NOT_INITIALIZED\n");
+            break;
+        case IIAPI_ST_INVALID_HANDLE:
+            printf("\t=>gp_status: IIAPI_ST_INVALID_HANDLE\n");
+            break;
+        case IIAPI_ST_OUT_OF_MEMORY:
+            printf("\t=>gp_status: IIAPI_ST_OUT_OF_MEMORY\n");
+            break;
+        default:
+            printf("\t=>Unknown status\n");
+            if(genP->gp_errorHandle)
+            exit(0);
+    }
+ 
+/* print the error message if there is one */
+    if (genP->gp_errorHandle)
+        API_getErrorInfo(genP->gp_errorHandle);
+ 
+    if (genP->gp_status == IIAPI_ST_SUCCESS ||
+        genP->gp_status == IIAPI_ST_MESSAGE ||
+        genP->gp_status == IIAPI_ST_WARNING)
+        return(TRUE);
+    else if (genP->gp_status == IIAPI_ST_NO_DATA)
+        return(FALSE);
+}
+!!
+? fill myquery.h 
+!!
+#ifndef II_QUERY_H
+#define II_QUERY_H
+
+extern void
+API_getErrorInfo(II_PTR errorHandle);
+
+extern void
+API_query(IIAPI_CONNPARM *connP, IIAPI_QUERYPARM *queryP);
+
+extern void
+API_getQueryInfo(IIAPI_QUERYPARM *queryP);
+
+extern void
+API_close(IIAPI_QUERYPARM *queryP);
+
+extern int 
+API_getDescriptor(IIAPI_QUERYPARM *queryP,IIAPI_GETDESCRPARM *getDescrP);
+
+extern void
+API_getColumns(IIAPI_GETDESCRPARM *getDescrP,IIAPI_GETCOLPARM *getColP,int i);
+
+#endif /* II_QUERY_H */
+!!
+? fill myquery.c 
+!!
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "iiapi.h"
+#include "mymisc.h"
+#include "myfile.h"
+#include "myquery.h"
+
+/* find the error message and print it */
+extern void
+API_getErrorInfo(II_PTR errorHandle)
+{
+   IIAPI_GETEINFOPARM geP;
+   int i; /* loop index */
+
+   geP.ge_errorHandle = errorHandle;
+    
+	do {
+	   IIapi_getErrorInfo(&geP);
+		 
+	   if (geP.ge_status != IIAPI_ST_SUCCESS)
+	     break;
+	      
+        switch( geP.ge_type ) {
+        case IIAPI_GE_ERROR:
+            printf("ERRROR");
+            break;
+ 
+        case IIAPI_GE_WARNING:
+            printf("WARNING");
+            break;
+ 
+        case IIAPI_GE_MESSAGE:
+            printf("USER MESSAGE");
+            break;
+ 
+        default:
+            printf("unknown error type (%d)", geP.ge_type);
+        }
+ 
+        printf("    Info: '%s' %d: %s\n", geP.ge_SQLSTATE,
+               geP.ge_errorCode, geP.ge_message ?
+               geP.ge_message : "NULL");
+ 
+        if (geP.ge_serverInfoAvail) {
+            printf("\t=>svr_id_error = %d\n",
+                   geP.ge_serverInfo->svr_id_error);
+            printf("\t=>svr_local error = %d\n",
+                   geP.ge_serverInfo->svr_local_error);
+            printf("\t=>svr_id_server = %d\n",
+                   geP.ge_serverInfo->svr_id_server);
+            printf("\t=>svr_server_type = %d\n",
+                   geP.ge_serverInfo->svr_server_type);
+            printf("\t=>svr_severity = %s( 0x%x )\n",
+                   (geP.ge_serverInfo->svr_severity ==
+                   IIAPI_SVR_DEFAULT) ? "IIAPI_SVR_DEFAULT" :
+                   (geP.ge_serverInfo->svr_severity ==
+                   IIAPI_SVR_MESSAGE) ? "IIAPI_SVR_MESSAGE" :
+                   (geP.ge_serverInfo->svr_severity ==
+                   IIAPI_SVR_WARNING) ? "IIAPI_SVR_WARNING" :
+                   (geP.ge_serverInfo->svr_severity ==
+                   IIAPI_SVR_FORMATTED) ? "IIAPI_SVR_FORMATTED" :
+                   "(unknown)", geP.ge_serverInfo->svr_severity);
+
+            for (i = 0; i < geP.ge_serverInfo->svr_parmCount; i++) {
+                printf("\t: ");
+ 
+                if (geP.ge_serverInfo->svr_parmDescr[i].ds_columnName &&
+                    *geP.ge_serverInfo->svr_parmDescr[i].ds_columnName)
+                    printf("%s = ",
+                    geP.ge_serverInfo->svr_parmDescr[i].ds_columnName);
+ 
+                if (geP.ge_serverInfo->svr_parmDescr[i].ds_nullable  &&
+                    geP.ge_serverInfo->svr_parmValue[i].dv_null )
+                    printf("NULL");
+                else {
+                    switch(geP.ge_serverInfo->svr_parmDescr[i].ds_dataType) {
+                    case IIAPI_CHA_TYPE:
+                        printf("'%*.*s'",
+                        geP.ge_serverInfo->svr_parmValue[i].dv_length,
+                        geP.ge_serverInfo->svr_parmValue[i].dv_length,
+                        (char *)geP.ge_serverInfo->svr_parmValue[i].dv_value);
+                        break;
+ 
+                    default:
+                        printf("Datatype %d not displayed",
+                        geP.ge_serverInfo->svr_parmDescr[i].ds_dataType);
+                        break;
+                    }
+                }
+                printf( "\n" );
+            }
+        }
+    } while( 1 );
+ 
+    return;
+}
+
+/* state to execute the sql statement */
+extern void
+API_query(IIAPI_CONNPARM *connP, IIAPI_QUERYPARM *queryP)
+{
+   queryP->qy_connHandle = connP->co_connHandle;
+   queryP->qy_tranHandle = connP->co_tranHandle;
+
+   printf("Executing query ...\n");
+   IIapi_query(queryP);
+
+#ifndef _ASC_
+    /* sychronous version */
+    API_wait(&(queryP->qy_genParm));
+#endif
+ 
+     return;
+}
+
+/* get information of query */
+extern void
+API_getQueryInfo(IIAPI_QUERYPARM *queryP)
+{
+   IIAPI_GETQINFOPARM getQInfoP;
+
+   getQInfoP.gq_genParm.gp_callback = NULL;
+   getQInfoP.gq_genParm.gp_closure = NULL;
+   getQInfoP.gq_stmtHandle = queryP->qy_stmtHandle;
+   printf("Getting query information ...\n");
+   IIapi_getQueryInfo(&getQInfoP);
+
+#ifndef _ASC_
+    /* sychronous version */
+    API_wait(&getQInfoP.gq_genParm);
+#endif
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_FAIL)
+        printf("\t=>flag = IIAPI_GQF_FAIL\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_ALL_UPDATED)
+        printf("\t=>flag = IIAPI_GQF_ALL_UPDATED\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_NULLS_REMOVED)
+        printf("\t=>flag = IIAPI_GQF_NULLS_REMOVED\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_UNKNOWN_REPEAT_QUERY)
+        printf("\t=>flag = IIAPI_GQF_UNKNOWN_REPEAT_QUERY\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_END_OF_DATA)
+        printf("\t=>flag = IIAPI_GQF_END_OF_DATA\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_CONTINUE)
+        printf("\t=>flag = IIAPI_GQF_CONTINUE\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_INVALID_STATEMENT)
+        printf("\t=>flag = IIAPI_GQF_INVALID_STATEMENT\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_TRANSACTION_INACTIVE)
+        printf("\t=>flag = IIAPI_GQF_TRANSACTION_INACTIVE\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_OBJECT_KEY)
+        printf("\t=>flag = IIAPI_GQF_OBJECT_KEY\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_TABLE_KEY)
+        printf("\t=>flag = IIAPI_GQF_TABLE_KEY\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_NEW_EFFECTIVE_USER)
+        printf("\t=>flag = IIAPI_GQF_NEW_EFFECTIVE_USER\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_FLUSH_QUERY_ID)
+        printf("\t=>flag = IIAPI_GQF_FLUSH_QUERY_ID\n");
+ 
+    if (getQInfoP.gq_flags & IIAPI_GQF_ILLEGAL_XACT_STMT)
+        printf("\t=>flag = IIAPI_GQF_ILLEGAL_XACT_STMT\n");
+ 
+    if (getQInfoP.gq_mask & IIAPI_GQ_ROW_COUNT)
+        printf("\t=>row count = %d\n", getQInfoP.gq_rowCount);
+ 
+    if (getQInfoP.gq_mask & IIAPI_GQ_CURSOR)
+        printf("\t=>readonly = TRUE\n");
+    else
+        printf("\t=>readonly = FALSE\n");
+ 
+    if (getQInfoP.gq_mask & IIAPI_GQ_PROCEDURE_RET)
+        printf("\t=>procedure return = %d\n",
+                getQInfoP.gq_procedureReturn);
+ 
+    if (getQInfoP.gq_mask & IIAPI_GQ_PROCEDURE_ID)
+        printf("\t=>procedure handle = 0x%x\n",
+                getQInfoP.gq_procedureHandle);
+ 
+    if (getQInfoP.gq_mask & IIAPI_GQ_REPEAT_QUERY_ID)
+        printf("\t=>repeat query ID = 0x%x\n",
+                getQInfoP.gq_repeatQueryHandle);
+ 
+    if (getQInfoP.gq_mask & IIAPI_GQ_TABLE_KEY)
+        printf("\t=>table key        = %s\n", getQInfoP.gq_tableKey);
+ 
+    if (getQInfoP.gq_mask & IIAPI_GQ_OBJECT_KEY)
+        printf("\t=>object key       = %s\n", getQInfoP.gq_objectKey);
+ 
+    return;
+}
+
+extern void
+API_close(IIAPI_QUERYPARM *queryP)
+{
+    IIAPI_CLOSEPARM closeP;
+ 
+    closeP.cl_genParm.gp_callback = NULL;
+    closeP.cl_genParm.gp_closure = NULL;
+    closeP.cl_stmtHandle = queryP->qy_stmtHandle;
+ 
+    printf("Closing query proccessing ...\n");
+    IIapi_close(&closeP);
+#ifndef _ASC_
+    /* sychronous version */
+    API_wait(&closeP.cl_genParm);
+#endif
+ 
+    return;
+}
+
+extern void
+API_cancel(IIAPI_QUERYPARM *queryP)
+{
+    IIAPI_CANCELPARM cancelP;
+ 
+    cancelP.cn_stmtHandle = queryP->qy_stmtHandle;
+ 
+    printf("Cancelling query processing ...%s\n",queryP->qy_queryText);
+    IIapi_cancel(&cancelP);
+ 
+#ifndef _ASC_
+    /* sychronous version */
+    API_wait(&cancelP.cn_genParm);
+#endif
+ 
+    return;
+}
+
+extern int 
+API_getDescriptor(IIAPI_QUERYPARM *queryP,IIAPI_GETDESCRPARM *getDescrP)
+{
+    getDescrP->gd_genParm.gp_callback = NULL;
+    getDescrP->gd_genParm.gp_closure = NULL;
+    getDescrP->gd_stmtHandle = queryP->qy_stmtHandle;
+/*    getDescrP.gd_descriptorCount = 0; 
+    getDescrP.gd_descriptor = NULL;
+*/ 
+    printf("Getting descriptor ...\n");
+    IIapi_getDescriptor(getDescrP);
+#ifndef _ASC_
+    /* sychronous version */
+    API_wait(&getDescrP->gd_genParm);
+#endif
+ 
+    return(getDescrP->gd_descriptorCount);
+}
+
+extern void
+API_getColumns(IIAPI_GETDESCRPARM *getDescrP,IIAPI_GETCOLPARM *getColP,int k)
+{
+    static int i,j,idx,l,m;
+    char syc_buffer[80]={'\0'},buffer[80]={'\0'};
+    IIAPI_CONVERTPARM   cv;
+ 
+    getColP->gc_genParm.gp_callback = NULL;
+    getColP->gc_genParm.gp_closure = NULL; 
+
+    getColP->gc_rowCount = 1;
+    getColP->gc_columnCount = k;
+    l=getColP->gc_rowCount * getColP->gc_columnCount;
+    getColP->gc_columnData = ( IIAPI_DATAVALUE * ) malloc (
+			      sizeof( IIAPI_DATAVALUE ) * l);
+ 
+    for (j=0,  idx=0; j <getColP->gc_rowCount; j++)
+       for (i=0; i<getColP->gc_columnCount; i++,idx++)
+       {
+	  getColP->gc_columnData[idx].dv_value= ( II_PTR )
+				malloc (getDescrP->gd_descriptor[i].ds_length);
+       }
+    getColP->gc_stmtHandle = getDescrP->gd_stmtHandle;
+
+    printf("Getting columns data ...\n");
+
+    while (1) { 
+       IIapi_getColumns(getColP);
+
+   #ifndef _ASC_
+       /* synchronous version */
+       API_wait(&getColP->gc_genParm);
+   #endif
+      
+      if (getColP->gc_genParm.gp_status >= IIAPI_ST_NO_DATA) 
+	 break;
+
+      printf("=========================================\n");
+
+      for (i=0;i<getColP->gc_rowsReturned; i++)
+      {
+	 for (j=0;j<getDescrP->gd_descriptorCount;j++)
+	 {  
+            cv.cv_srcDesc.ds_dataType = getDescrP->gd_descriptor[j].ds_dataType;
+            cv.cv_srcDesc.ds_nullable = getDescrP->gd_descriptor[j].ds_nullable;
+            cv.cv_srcDesc.ds_length = getDescrP->gd_descriptor[j].ds_length;
+            cv.cv_srcDesc.ds_precision = getDescrP->gd_descriptor[j].ds_precision;
+            cv.cv_srcDesc.ds_scale = getDescrP->gd_descriptor[j].ds_scale;
+            cv.cv_srcDesc.ds_columnType = getDescrP->gd_descriptor[j].ds_columnType;
+            cv.cv_srcDesc.ds_columnName = getDescrP->gd_descriptor[j].ds_columnName;
+ 
+            cv.cv_srcValue.dv_null = getColP->gc_columnData[i*getDescrP->gd_descript-
+orCount+j].dv_null;
+            cv.cv_srcValue.dv_length = getColP->gc_columnData[i*getDescrP->gd_descri-
+ptorCount+j].dv_length;
+            cv.cv_srcValue.dv_value = getColP->gc_columnData[i*getDescrP->gd_descrip-
+torCount+j].dv_value;
+ 
+            cv.cv_dstDesc.ds_nullable = FALSE;
+            cv.cv_dstDesc.ds_length = 32;
+            cv.cv_dstDesc.ds_precision = 0;
+            cv.cv_dstDesc.ds_scale = 0;
+            cv.cv_dstDesc.ds_columnType = IIAPI_COL_TUPLE;
+            cv.cv_dstDesc.ds_columnName = NULL;
+ 
+            cv.cv_dstValue.dv_null = FALSE;
+            cv.cv_dstValue.dv_length = cv.cv_dstDesc.ds_length;
+            cv.cv_dstValue.dv_value = buffer;
+
+            switch(abs(getDescrP->gd_descriptor[j].ds_dataType)) {
+
+	    case IIAPI_DEC_TYPE:
+
+/*****************************************
+*        convert decimal to character    *
+******************************************/
+
+               cv.cv_dstDesc.ds_dataType = IIAPI_CHA_TYPE;
+               
+	       IIapi_convertData( &cv );
+ 
+               if ( cv.cv_status != IIAPI_ST_SUCCESS )
+                   printf("Fail convert Decimal to character.\n");
+               else printf("Success convert decimal to character.\n");
+
+               printf("%s =",getDescrP->gd_descriptor[j].ds_columnName?
+                        getDescrP->gd_descriptor[j].ds_columnName: "(unknown)");
+
+               printData(&cv.cv_dstDesc, &cv.cv_dstValue, syc_buffer,0);
+	       printf("%s\n\n",syc_buffer);
+
+/****************************************
+*        convert decimal to float       *
+*****************************************/
+
+	       cv.cv_dstDesc.ds_dataType = IIAPI_FLT_TYPE;
+
+               IIapi_convertData( &cv );
+
+               if ( cv.cv_status != IIAPI_ST_SUCCESS )
+                   printf("Fail convert Decimal to float.\n");
+               else printf("Success convert decimal to float.\n");
+ 
+               printf("%s =",getDescrP->gd_descriptor[j].ds_columnName?
+                        getDescrP->gd_descriptor[j].ds_columnName: "(unknown)");
+ 
+               printData(&cv.cv_dstDesc, &cv.cv_dstValue, syc_buffer,1); 
+	       printf("%s\n\n",syc_buffer);
+
+	       break;
+
+            case IIAPI_CHA_TYPE: 
+
+/************************************
+**    convert character to date    **
+*************************************/
+             if (!strcmp("datecol",getDescrP->gd_descriptor[j].ds_columnName)) {
+ 
+               cv.cv_dstDesc.ds_dataType = IIAPI_DTE_TYPE;
+               
+               IIapi_convertData( &cv );
+ 
+               if ( cv.cv_status != IIAPI_ST_SUCCESS )
+                   printf("Fail convert character to date.\n");
+               else printf("Success convert character to date.\n");
+ 
+               printf("%s =",getDescrP->gd_descriptor[j].ds_columnName?
+                        getDescrP->gd_descriptor[j].ds_columnName: "(unknown)");
+ 
+               printData(&cv.cv_dstDesc, &cv.cv_dstValue, syc_buffer,0);
+               printf("%s\n\n",syc_buffer);
+             }
+/************************************
+**    convert character to money   **
+*************************************/
+            else {
+               cv.cv_dstDesc.ds_dataType = IIAPI_MNY_TYPE;
+
+               IIapi_convertData( &cv );
+
+               if ( cv.cv_status != IIAPI_ST_SUCCESS )
+                   printf("Fail convert character to money.\n");
+               else printf("Success convert character to money.\n");
+ 
+               printf("%s =",getDescrP->gd_descriptor[j].ds_columnName?
+                        getDescrP->gd_descriptor[j].ds_columnName: "(unknown)");
+ 
+               printData(&cv.cv_dstDesc, &cv.cv_dstValue, syc_buffer,0);
+               printf("%s\n\n",syc_buffer);
+
+/************************************
+**    convert character to decimal **
+*************************************/
+
+               cv.cv_dstDesc.ds_dataType = IIAPI_DEC_TYPE;
+               cv.cv_dstDesc.ds_precision = 6;
+               cv.cv_dstDesc.ds_scale = 2;
+ 
+               IIapi_convertData( &cv );
+ 
+               if ( cv.cv_status != IIAPI_ST_SUCCESS )
+                   printf("Fail convert character to decimal.\n");
+               else printf("Success convert character to decimal.\n");
+ 
+               printf("%s =",getDescrP->gd_descriptor[j].ds_columnName?
+                        getDescrP->gd_descriptor[j].ds_columnName: "(unknown)");
+ 
+               printData(&cv.cv_dstDesc, &cv.cv_dstValue, syc_buffer,0);
+               printf("%s\n\n",syc_buffer);
+               }
+ 
+               break;
+               
+           case IIAPI_MNY_TYPE:
+
+/*****************************************
+*        convert money to character      *
+******************************************/
+ 
+               cv.cv_dstDesc.ds_dataType = IIAPI_CHA_TYPE;
+ 
+               IIapi_convertData( &cv );
+ 
+               if ( cv.cv_status != IIAPI_ST_SUCCESS )
+                   printf("Fail convert money to character.\n");
+               else printf("Success convert money to character.\n");
+ 
+               printf("%s =",getDescrP->gd_descriptor[j].ds_columnName?
+                        getDescrP->gd_descriptor[j].ds_columnName: "(unknown)");
+ 
+               printData(&cv.cv_dstDesc, &cv.cv_dstValue, syc_buffer,0);
+               printf("%s\n\n",syc_buffer);
+
+/**************************************
+*        convert money to float       *
+***************************************/
+ 
+               cv.cv_dstDesc.ds_dataType = IIAPI_FLT_TYPE;
+ 
+               IIapi_convertData( &cv );
+ 
+               if ( cv.cv_status != IIAPI_ST_SUCCESS )
+                   printf("Fail convert money to float.\n");
+               else printf("Success convert money to float.\n");
+ 
+               printf("%s =",getDescrP->gd_descriptor[j].ds_columnName?
+                        getDescrP->gd_descriptor[j].ds_columnName: "(unknown)");
+
+              printData(&cv.cv_dstDesc, &cv.cv_dstValue, syc_buffer,0);
+               printf("%s\n\n",syc_buffer);
+
+               break;
+
+	   case IIAPI_FLT_TYPE:
+        
+/************************************
+**    convert float to money       **
+*************************************/
+           
+               cv.cv_dstDesc.ds_dataType = IIAPI_MNY_TYPE;
+ 
+               IIapi_convertData( &cv );
+ 
+               if ( cv.cv_status != IIAPI_ST_SUCCESS )
+                   printf("Fail convert float to money.\n");
+               else printf("Success convert float to money.\n");
+ 
+               printf("%s =",getDescrP->gd_descriptor[j].ds_columnName?
+                        getDescrP->gd_descriptor[j].ds_columnName: "(unknown)");
+ 
+               printData(&cv.cv_dstDesc, &cv.cv_dstValue, syc_buffer,0);
+               printf("%s\n\n",syc_buffer);
+
+/**********************************
+**      convert float to decimal **
+***********************************/
+
+               cv.cv_dstDesc.ds_dataType = IIAPI_DEC_TYPE;
+               cv.cv_dstDesc.ds_precision = 6;
+               cv.cv_dstDesc.ds_scale = 2;
+ 
+               IIapi_convertData( &cv );
+ 
+               if ( cv.cv_status != IIAPI_ST_SUCCESS )
+                   printf("Fail convert float to decimal.\n");
+               else printf("Success convert float to decimal.\n");
+ 
+               printf("%s =",getDescrP->gd_descriptor[j].ds_columnName?
+                        getDescrP->gd_descriptor[j].ds_columnName: "(unknown)");
+ 
+               printData(&cv.cv_dstDesc, &cv.cv_dstValue, syc_buffer,0);
+               printf("%s\n\n",syc_buffer);
+	     
+               break; 
+
+	   case IIAPI_DTE_TYPE:
+
+/***********************************
+**   convert date to character    **
+************************************/
+
+               cv.cv_dstDesc.ds_dataType = IIAPI_CHA_TYPE;
+ 
+               IIapi_convertData( &cv );
+ 
+               if ( cv.cv_status != IIAPI_ST_SUCCESS )
+                   printf("Fail convert date to character.\n");
+               else printf("Success convert date to character.\n");
+ 
+               printf("%s =",getDescrP->gd_descriptor[j].ds_columnName?
+                        getDescrP->gd_descriptor[j].ds_columnName: "(unknown)");
+ 
+               printData(&cv.cv_dstDesc, &cv.cv_dstValue, syc_buffer,0);
+               printf("%s\n\n",syc_buffer);
+ 
+               break;
+
+           default:
+	      printf("Invalid data type.\n");
+	   }  /* end of switch */
+
+        }
+     printf("========================================\n");
+     }
+   }
+   return;
+}
+!!
+? fill mysession.h 
+!!
+#ifndef II_SESSION_H
+#define II_SESSION_H
+
+extern void
+API_connect(IIAPI_CONNPARM *connP);
+
+extern void
+API_disconnect(IIAPI_CONNPARM *connP);
+
+#endif /* II_SESSION_H */
+
+!!
+? fill mysession.c 
+!!
+#include <stdio.h>
+#include <string.h>
+#include "iiapi.h"
+#include "mymisc.h"
+#include "mysession.h"
+
+extern void
+API_connect(IIAPI_CONNPARM *connP)
+{
+   connP->co_genParm.gp_callback = NULL;
+   connP->co_genParm.gp_closure = NULL;
+   connP->co_username = NULL;
+   connP->co_password = NULL;
+   connP->co_timeout = -1;
+   connP->co_tranHandle = ( II_PTR ) NULL;
+   connP->co_type = IIAPI_CT_SQL;
+
+   printf("Establishing connection ... \n");
+   IIapi_connect(connP);
+
+   #ifndef _ASC_
+    /* sychronous version */
+    API_wait(&connP->co_genParm);
+   #endif
+ 
+    return;
+}
+
+extern void
+API_disconnect(IIAPI_CONNPARM *connP)
+{
+    IIAPI_DISCONNPARM disconnP;
+ 
+    disconnP.dc_genParm.gp_callback = NULL;
+    disconnP.dc_genParm.gp_closure = NULL;
+ 
+    /* disconnect the connected */
+    disconnP.dc_connHandle = connP->co_connHandle;
+ 
+    printf("Disconnecting ...\n");
+    IIapi_disconnect(&disconnP);
+ 
+#ifndef _ASC_
+    /* sychronous version */
+    API_wait(&disconnP.dc_genParm);
+#endif
+ 
+    return;
+}
+
+!!
+? fill mytran.h 
+!!
+#ifndef II_TRAN_H
+#define II_TRAN_H
+
+extern void
+API_commit(IIAPI_QUERYPARM *queryP);
+
+#endif /* II_TRAN_H */
+!!
+? fill mytran.c 
+!!
+#include <stdio.h>
+#include <string.h>
+#include "iiapi.h"
+#include "mymisc.h"
+#include "mytran.h"
+
+extern void
+API_commit(IIAPI_QUERYPARM *queryP)
+{
+    IIAPI_COMMITPARM commitP;
+ 
+    commitP.cm_genParm.gp_callback = NULL;
+    commitP.cm_genParm.gp_closure = NULL;
+ 
+    commitP.cm_tranHandle = queryP->qy_tranHandle;
+ 
+    printf("Commiting a transaction ...\n");
+    IIapi_commit(&commitP);
+ 
+#ifndef _ASC_
+    /* synchronous version */
+    API_wait(&commitP.cm_genParm);
+#endif
+ 
+    queryP->qy_tranHandle = NULL;
+ 
+    return;
+}
+!!
+? sepcc myaccess myfile mymain mymisc myquery mysession mytran 
+<<
+>>
+<< IF (NT_GENERIC)
+myaccess.c
+myfile.c
+mymain.c
+mymisc.c
+myquery.c
+mysession.c
+mytran.c
+>>
+.if (VMS) 
+? seplnk -a mymain myaccess myfile mymisc myquery mysession mytran 
+<<
+>>
+.else 
+? seplnk mymain myaccess myfile mymisc myquery mysession mytran 
+<<
+>>
+.endif 
+? run mymain.exe apidb1 
+<<
+Initializing API ...
+Establishing connection ... 
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing drop table a
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_ERROR
+ERRROR    Info: '42500' 2753: DROP: 'a' does not exist or is not owned by you.
+	=>svr_id_error = 67653632
+	=>svr_local error = 2753
+	=>svr_id_server = 6900
+	=>svr_server_type = 0
+	=>svr_severity = IIAPI_SVR_DEFAULT( 0x0 )
+	: 'Wed Dec 29 21:28:28 1999 E_US0AC1_2753	DROP: 'a' does not exist or is not owned -
+by you.'
+	=>flag = IIAPI_GQF_FAIL
+	=>flag = IIAPI_GQF_TRANSACTION_INACTIVE
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing drop table b
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_ERROR
+ERRROR    Info: '42500' 2753: DROP: 'b' does not exist or is not owned by you.
+	=>svr_id_error = 67653632
+	=>svr_local error = 2753
+	=>svr_id_server = 6900
+	=>svr_server_type = 0
+	=>svr_severity = IIAPI_SVR_DEFAULT( 0x0 )
+	: 'Wed Dec 29 21:28:28 1999 E_US0AC1_2753	DROP: 'b' does not exist or is not owned -
+by you.'
+	=>flag = IIAPI_GQF_FAIL
+	=>flag = IIAPI_GQF_TRANSACTION_INACTIVE
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing create table a (i decimal(10,2), a char(5), b money)with page-
+_size=4096
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing create table b (datecol char(10), b float, c date )with page_-
+size=4096
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing insert into b values ('12/07/1970',123.45,'12/07/70')
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>row count = 1
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing insert into a values (12345678.89,'123.4',1234567.89)
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>row count = 1
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing select * from b
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting descriptor ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting columns data ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+=========================================
+Success convert character to date.
+datecol =07-dec-1970                     
+
+Success convert float to money.
+b =             $123.45            
+
+Success convert float to decimal.
+b =123.45                          
+
+Success convert date to character.
+c =07-dec-1970                     
+
+========================================
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_NO_DATA
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>row count = 1
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing select * from a
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting descriptor ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting columns data ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+=========================================
+Success convert decimal to character.
+i =12345678.89                     
+
+Success convert decimal to float.
+i =12345678.890000
+
+Success convert character to money.
+a =             $123.40            
+
+Success convert character to decimal.
+a =123.40                          
+
+Success convert money to character.
+b =         $1234567.89            
+
+Success convert money to float.
+b =1234567.875000
+
+========================================
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_NO_DATA
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>row count = 1
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing drop table a
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing drop table b
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Disconnecting ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Releasing API environment...
+Successfully, released API environment
+Shutting down API ...
+>>
+<< IF (NT_GENERIC) 
+Initializing API ...
+Establishing connection ... 
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing drop table a
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_ERROR
+ERRROR    Info: '42500' 2753: DROP: 'a' does not exist or is not owned by you.
+	=>svr_id_error = 67653632
+	=>svr_local error = 2753
+	=>svr_id_server = 277
+	=>svr_server_type = 0
+	=>svr_severity = IIAPI_SVR_DEFAULT( 0x0 )
+	: 'Fri Dec 17 10:30:08 1999 E_US0AC1_2753	DROP: 'a' does not exist or is not owned -
+by you.'
+	=>flag = IIAPI_GQF_FAIL
+	=>flag = IIAPI_GQF_TRANSACTION_INACTIVE
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing drop table b
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_ERROR
+ERRROR    Info: '42500' 2753: DROP: 'b' does not exist or is not owned by you.
+	=>svr_id_error = 67653632
+	=>svr_local error = 2753
+	=>svr_id_server = 277
+	=>svr_server_type = 0
+	=>svr_severity = IIAPI_SVR_DEFAULT( 0x0 )
+	: 'Fri Dec 17 10:30:08 1999 E_US0AC1_2753	DROP: 'b' does not exist or is not owned -
+by you.'
+	=>flag = IIAPI_GQF_FAIL
+	=>flag = IIAPI_GQF_TRANSACTION_INACTIVE
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing create table a (i decimal(10,2), a char(5), b money)with page-
+_size=4096
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing create table b (datecol char(10), b float, c date )with page_-
+size=4096
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing insert into b values ('12/07/1970',123.45,'12/07/70')
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>row count = 1
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing insert into a values (12345678.89,'123.4',1234567.89)
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>row count = 1
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing select * from b
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting descriptor ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting columns data ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+=========================================
+Success convert character to date.
+datecol =07-dec-1970                     
+
+Success convert float to money.
+b =             $123.45            
+
+Success convert float to decimal.
+b =123.45                          
+
+Success convert date to character.
+c =07-dec-1970                     
+
+========================================
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_NO_DATA
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>row count = 1
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing select * from a
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting descriptor ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting columns data ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+=========================================
+Success convert decimal to character.
+i =12345678.89                     
+
+Success convert decimal to float.
+i =12345678.890000
+
+Success convert character to money.
+a =             $123.40            
+
+Success convert character to decimal.
+a =123.40                          
+
+Success convert money to character.
+b =         $1234567.89            
+
+Success convert money to float.
+b =1234567.875000
+
+========================================
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_NO_DATA
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>row count = 1
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing drop table a
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Now, database is doing drop table b
+Executing query ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Getting query information ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+	=>readonly = FALSE
+Closing query proccessing ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Commiting a transaction ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Disconnecting ...
+Asynchronizing ...
+	=>gp_status: IIAPI_ST_SUCCESS
+Releasing API environment...
+Successfully, released API environment
+Shutting down API ...
+>>
+? delete iiapi_edit.com 
+<<
+~
+>>
+? delete myaccess.obj 
+<<
+~
+>>
+? delete myfile.obj 
+<<
+~
+>>
+? delete mymain.obj 
+<<
+~
+>>
+? delete mymisc.obj 
+<<
+~
+>>
+? delete myquery.obj 
+<<
+~
+>>
+? delete mysession.obj 
+<<
+~
+>>
+? delete mytran.obj 
+<<
+~
+>>
+? delete myaccess. 
+<<
+~
+>>
+? delete myfile.o 
+<<
+~
+>>
+? delete mymain.o 
+<<
+~
+>>
+? delete mymisc.o 
+<<
+~
+>>
+? delete myquery.o 
+<<
+~
+>>
+? delete mysession.o 
+<<
+~
+>>
+? delete mytran.o 
+<<
+~
+>>
+? delete mymain.exe 
+<<
+~
+>>
+? delete iiapi.h 
+<<
+~
+>>
+? delete iiapi.tmp 
+<<
+~
+>>
+? delete iiapidep.h 
+<<
+~
+>>
+
+
+Ending at: Wed Dec 29 21:29:03 1999

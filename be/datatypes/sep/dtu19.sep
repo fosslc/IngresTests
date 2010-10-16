@@ -1,0 +1,768 @@
+/*
+Copyright (c) 2006 Ingres Corporation
+
+	Test Name: dtu19.sep
+	Time: Fri Mar 07 09:08:09 2003
+	User Name: ingres
+	Terminal type: septerm
+
+	Test ID : dtu19.sep
+	Module  : be/datatypes
+	Filename: dtu19.sep
+	Purpose	: To test the unicode coercion support, first available with
+                  Ingres 2.6/0303 and later releases.
+	Input Files  : dtu19_tbl.sc
+	Output Files : dtu19_tbl.exe
+	Database     : unidb
+	Tables       : dtu19_uni, dtu19_int, dtu19_f48, dtu19_dec
+                       dtu19_money, dtu19_date, dtu19_bit, dtu19_sdx
+	Synopsis     : The Ingres variable II_CHARSETxx (where xx is the
+                       installation code) will set to UTF8 in the beginning
+                       of this test, and restore to its default value at the
+                       end.
+                       This test includes an embedded C program to create
+                       and populate one Unicode and six non-Unicode tables.
+                       In SQL Terminal Monitor, convert the Unicode 'nchar'
+                       columns into non-Unicode data types and input the data
+                       into the specified non-Unicode tables using these
+                       conversion functions: int1, int2, int4, float4, float8,
+                       decimal(p,s), money, date, bit, and soundex.
+
+*** TEST CASES:
+    int1(nchar)
+    int2(nchar)
+    int4(nchar)
+    float4(nchar)
+    float8(nchar)
+    decimal(nchar,p,s)
+    money(nchar)
+    date(nchar)
+    bit(nchar)
+    soundex(nchar)
+    varchar(nchar)
+    text(nchar)
+    ascii(nchar)
+    byte(nchar)
+    varbyte(nchar)
+
+
+ History: 07-Mar-2003	(wu$ca01) Created
+          19-May-2003	(wu$ca01) Updated test CANON for test cases:
+                        	  varchar(nchar), text(nchar), ascii(nchar),
+				  byte(nchar),and varbyte(nchar).These functions
+				  are supported now.
+                        	  Removed the 'Known Problem' section due to
+				  issue 12560683 is resolved.
+	  10-oct-2003	(somsa01) Updated to work on Windows.
+	  20-Jan-2004	(rogch01) Updated test to work on VMS. 
+	  11-May-2004	(shafa01) Removed all steps used for setting the
+				  II_CHARSETxx to UTF8 for all platforms. Due to
+				  Unicode Coercion changes put in Ingres r3,
+				  this change should only be in main and going
+				  forward.
+           1-Nov-2006	(vande02) Updated expected E_US0B61 message from invalid
+				  syntax with the date data type.
+                                  Added Copyright and aligned history.
+	   1-oct-2007   (kibro01) b119191 - Updated message for US0B61
+          29-Oct-2007	(kiria01) b117790
+		Updating canons reflecting string-number coercion changes.
+*/
+? fill dtu19_tbl.sc 
+!!
+/* This program is to create and populate a Unicode table and
+** create seven non-Unicode tables.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+typedef struct
+{
+    short len;
+    wchar_t text[1];
+} NVCH_STRUCT;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *col1[] =
+    {
+    L"100",
+    L"-26",
+    L"49",
+    L"75",
+    L"31",
+    L"92",
+    L"69",
+    L"127",
+    L"59",
+    L"0.11",
+    };
+static wchar_t *col2[] =
+    {
+    L"-100.100",
+    L"660.135",
+    L"345.678",
+    L"8686.024",
+    L"22.197",
+    L"4004.444",
+    L"58.009",
+    L"777",
+    L"90.123",
+    L"-0.969",
+    };
+static wchar_t *col3[] =
+    {
+    L"09-28-1969",
+    L"10-26-1975",
+    L"06-06-1966",
+    L"03-13-1933",
+    L"11-21-1911",
+    L"09-09-1979",
+    L"04-01-1941",
+    L"12-01-1980",
+    L"08-15-1958",
+    L"07-01-1971",
+    };
+static wchar_t *col4[] =
+    {
+    L"010101",
+    L"101010",
+    L"0110110",
+    L"1101100",
+    L"10110110",
+    L"00011100",
+    L"11100011",
+    L"10101010",
+    L"01111101",
+    L"00001111",
+    };
+static wchar_t *col5[] =
+    {
+    L"apple",
+    L"banana",
+    L"grapes",
+    L"honeydew",
+    L"kiwi",
+    L"lemon",
+    L"mango",
+    L"orange",
+    L"papaya",
+    L"strawberry",
+    };
+
+
+#define NUMROWS 10
+
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int   i;
+      char  *dbname;
+      wchar_t wc1[6];
+      wchar_t wc2[11];
+      wchar_t wc3[21];
+      wchar_t wc4[11];
+      wchar_t wc5[11];
+
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[6];
+      } nv1;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[11];
+      } nv2;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[21];
+      } nv3;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[11];
+      } nv4;
+      nvarchar struct
+      {
+         short len;
+         wchar_t text[11];
+      } nv5;
+
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+   EXEC SQL DROP TABLE dtu19_uni;
+   EXEC SQL DROP TABLE dtu19_int;
+   EXEC SQL DROP TABLE dtu19_f48;
+   EXEC SQL DROP TABLE dtu19_dec;
+   EXEC SQL DROP TABLE dtu19_money;
+   EXEC SQL DROP TABLE dtu19_date;
+   EXEC SQL DROP TABLE dtu19_bit;
+   EXEC SQL DROP TABLE dtu19_sdx;
+
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   printf("Creating tables...\n");
+
+   EXEC SQL CREATE TABLE dtu19_uni (
+	int_col NCHAR(5) not null,
+        f48_col NCHAR(10),
+        date_col NCHAR(20) not null,
+        bit_col NCHAR(10),
+        sdx_col NCHAR(10));
+
+   EXEC SQL CREATE TABLE dtu19_int (
+        i1_col int1 not null,
+        i2_col int2 not null,
+        i4_col int4 not null);
+
+   EXEC SQL CREATE TABLE dtu19_f48 (
+        f4_col float4,
+        f8_col float8);
+
+   EXEC SQL CREATE TABLE dtu19_dec (
+        dec_col decimal(9,4));
+
+   EXEC SQL CREATE TABLE dtu19_money (
+        money_col money not null);
+
+   EXEC SQL CREATE TABLE dtu19_date (
+        date_col date not null);
+
+   EXEC SQL CREATE TABLE dtu19_bit (
+        bit_col varchar(35));
+
+   EXEC SQL CREATE TABLE dtu19_sdx (
+        sdx_col varchar(10));
+
+
+   printf("Inserting rows into unicode table...\n");
+
+   for (i = 0; i < NUMROWS; i++)
+   {
+      wcscpy(wc1, col1[i]);
+      wcscpy(wc2, col2[i]);
+      wcscpy(wc3, col3[i]);
+      wcscpy(wc4, col4[i]);
+      wcscpy(wc5, col5[i]);
+      UC_ASSIGN(nv1, col1[i]);
+      UC_ASSIGN(nv2, col2[i]);
+      UC_ASSIGN(nv3, col3[i]);
+      UC_ASSIGN(nv4, col4[i]);
+      UC_ASSIGN(nv5, col5[i]);
+
+
+      EXEC SQL INSERT INTO dtu19_uni VALUES (:wc1, :wc2, :wc3, :wc4, :wc5);
+
+   }
+  
+      printf("Select UNICODE table...\n");
+      printf("|=============================================|\n");
+      EXEC SQL SELECT trim(int_col), trim(f48_col), trim(date_col),
+      trim(bit_col), trim(sdx_col)
+      INTO :wc1, :wc2, :wc3, :wc4, :wc5
+      FROM dtu19_uni order by 1;
+      EXEC SQL BEGIN;
+           printf("|%S|%S|%S|%S|%S|\n", wc1, wc2, wc3, wc4, wc5);
+      EXEC SQL END;
+      printf("|=============================================|\n");
+  printf("Operation complete\n");
+
+  EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu19_tbl.sc 
+<<
+ESQL dtu19_tbl.sc:
+>>
+<<
+>>
+? sepcc dtu19_tbl 
+<<
+dtu19_tbl.c
+>>
+<<
+
+>>
+? seplnk dtu19_tbl 
+<<
+
+>>
+? run dtu19_tbl.exe SEPPARAMDB3 
+<<
+Creating tables...
+Inserting rows into unicode table...
+Select UNICODE table...
+|=============================================|
+|0.11|-0.969|07-01-1971|00001111|strawberry|
+|100|-100.100|09-28-1969|010101|apple|
+|127|777|12-01-1980|10101010|orange|
+|-26|660.135|10-26-1975|101010|banana|
+|31|22.197|11-21-1911|10110110|kiwi|
+|49|345.678|06-06-1966|0110110|grapes|
+|59|90.123|08-15-1958|01111101|papaya|
+|69|58.009|04-01-1941|11100011|mango|
+|75|8686.024|03-13-1933|1101100|honeydew|
+|92|4004.444|09-09-1979|00011100|lemon|
+|=============================================|
+Operation complete
+>>
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* insert into dtu19_int(i1_col, i2_col, i4_col) select int1(int_col), int2(int_col),-
+ int4(int_col) from dtu19_uni\g
+<<
+(10 rows)
+>>
+* insert into dtu19_int(i1_col, i2_col, i4_col) select int1(int_col), int2(f48_col),-
+ int4(f48_col) from dtu19_uni\g 
+<<
+(10 rows)
+>>
+* select * from dtu19_int order by 1\g
+<<
+
++------+------+-------------+
+|i1_col|i2_col|i4_col       |
++------+------+-------------+
+|   -26|   660|          660|
+|   -26|   -26|          -26|
+|     0|     0|            0|
+|     0|     0|            0|
+|    31|    31|           31|
+|    31|    22|           22|
+|    49|   345|          345|
+|    49|    49|           49|
+|    59|    90|           90|
+|    59|    59|           59|
+|    69|    58|           58|
+|    69|    69|           69|
+|    75|    75|           75|
+|    75|  8686|         8686|
+|    92|  4004|         4004|
+|    92|    92|           92|
+|   100|   100|          100|
+|   100|  -100|         -100|
+|   127|   127|          127|
+|   127|   777|          777|
++------+------+-------------+
+(20 rows)
+>>
+* insert into dtu19_f48(f4_col, f8_col) select float4(int_col), float8(int_col) from-
+ dtu19_uni\g
+<<
+(10 rows)
+>>
+* insert into dtu19_f48(f4_col, f8_col) select float4(f48_col), float8(f48_col) from-
+ dtu19_uni\g
+<<
+(10 rows)
+>>
+* select * from dtu19_f48 order by 1\g
+<<
+
++-----------+-----------+
+|f4_col     |f8_col     |
++-----------+-----------+
+|   -100.100|   -100.100|
+|    -26.000|    -26.000|
+|     -0.969|     -0.969|
+|      0.110|      0.110|
+|     22.197|     22.197|
+|     31.000|     31.000|
+|     49.000|     49.000|
+|     58.009|     58.009|
+|     59.000|     59.000|
+|     69.000|     69.000|
+|     75.000|     75.000|
+|     90.123|     90.123|
+|     92.000|     92.000|
+|    100.000|    100.000|
+|    127.000|    127.000|
+|    345.678|    345.678|
+|    660.135|    660.135|
+|    777.000|    777.000|
+|   4004.444|   4004.444|
+|   8686.024|   8686.024|
++-----------+-----------+
+(20 rows)
+>>
+* insert into dtu19_dec select decimal(int_col) from dtu19_uni\g
+<<
+E_PS0C80 No default values are provided for the decimal() conversion
+    function when a value with datatype `nchar' is given as the first parameter.
+
+    Explicitly specify precision and scale.
+    (Fri Mar 07 14:42:01 2003)
+
+>>
+* insert into dtu19_dec select decimal(int_col,9,4) from dtu19_uni\g
+<<
+(10 rows)
+>>
+* insert into dtu19_dec select decimal(f48_col,9,4) from dtu19_uni\g
+<<
+(10 rows)
+>>
+* select * from dtu19_dec order by 1\g
+<<
+
++-----------+
+|dec_col    |
++-----------+
+|  -100.1000|
+|   -26.0000|
+|    -0.9690|
+|     0.1100|
+|    22.1970|
+|    31.0000|
+|    49.0000|
+|    58.0090|
+|    59.0000|
+|    69.0000|
+|    75.0000|
+|    90.1230|
+|    92.0000|
+|   100.0000|
+|   127.0000|
+|   345.6780|
+|   660.1350|
+|   777.0000|
+|  4004.4440|
+|  8686.0240|
++-----------+
+(20 rows)
+>>
+* insert into dtu19_money select money(int_col) from dtu19_uni\g
+<<
+(10 rows)
+>>
+* insert into dtu19_money select money(f48_col) from dtu19_uni\g
+<<
+(10 rows)
+>>
+* select * from dtu19_money order by 1\g
+<<
+
++--------------------+
+|money_col           |
++--------------------+
+|            $-100.10|
+|             $-26.00|
+|              $-0.97|
+|               $0.11|
+|              $22.20|
+|              $31.00|
+|              $49.00|
+|              $58.01|
+|              $59.00|
+|              $69.00|
+|              $75.00|
+|              $90.12|
+|              $92.00|
+|             $100.00|
+|             $127.00|
+|             $345.68|
+|             $660.14|
+|             $777.00|
+|            $4004.44|
+|            $8686.02|
++--------------------+
+(20 rows)
+>>
+* insert into dtu19_date select date(date_col) from dtu19_uni\g
+<<
+(10 rows)
+>>
+* select * from dtu19_date order by 1\g
+<<
+
++-------------------------+
+|date_col                 |
++-------------------------+
+|21-nov-1911              |
+|13-mar-1933              |
+|01-apr-1941              |
+|15-aug-1958              |
+|06-jun-1966              |
+|28-sep-1969              |
+|01-jul-1971              |
+|26-oct-1975              |
+|09-sep-1979              |
+|01-dec-1980              |
++-------------------------+
+(10 rows)
+>>
+* insert into dtu19_bit select bit(bit_col) from dtu19_uni\g
+<<
+(10 rows)
+>>
+* select * from dtu19_bit order by 1\g
+<<
+
++-----------------------------------+
+|bit_col                            |
++-----------------------------------+
+|000011110000000000000000000000     |
+|000111000000000000000000000000     |
+|010101000000000000000000000000     |
+|011011000000000000000000000000     |
+|011111010000000000000000000000     |
+|101010000000000000000000000000     |
+|101010100000000000000000000000     |
+|101101100000000000000000000000     |
+|110110000000000000000000000000     |
+|111000110000000000000000000000     |
++-----------------------------------+
+(10 rows)
+>>
+* insert into dtu19_sdx select soundex(sdx_col) from dtu19_uni\g
+<<
+(10 rows)
+>>
+* select * from dtu19_sdx order by 1\g
+<<
+
++----------+
+|sdx_col   |
++----------+
+|A140      |
+|B550      |
+|G612      |
+|H530      |
+|K000      |
+|L550      |
+|M520      |
+|O652      |
+|P100      |
+|S361      |
++----------+
+(10 rows)
+>>
+* insert into dtu19_date(date_col) select int1(int_col) from dtu19_uni\g
+<<
+E_US0B61 line 1, You cannot assign this 'integer' value to a column of
+type 'ingresdate'. Explicitly convert the value to the required type or check
+it is in the valid range for the target datatype.
+    (Wed Nov  1 15:43:40 2006)
+
+>>
+* insert into dtu19_date(date_col) select int2(int_col) from dtu19_uni\g
+<<
+E_US0B61 line 1, You cannot assign this 'integer' value to a column of
+type 'ingresdate'. Explicitly convert the value to the required type or check
+it is in the valid range for the target datatype.
+    (Wed Nov  1 15:43:46 2006)
+
+>>
+* insert into dtu19_date(date_col) select int4(int_col) from dtu19_uni\g
+<<
+E_US0B61 line 1, You cannot assign this 'integer' value to a column of
+type 'ingresdate'. Explicitly convert the value to the required type or check
+it is in the valid range for the target datatype.
+    (Wed Nov  1 15:43:48 2006)
+
+>>
+* insert into dtu19_sdx(sdx_col) select float4(f48_col) from dtu19_uni\g
+<<
+(10 rows)
+>>
+* insert into dtu19_bit(bit_col) select float8(f48_col) from dtu19_uni\g
+<<
+(10 rows)
+>>
+* insert into dtu19_date(date_col) select money(f48_col) from dtu19_uni\g
+<<
+E_US0B61 line 1, You cannot assign this 'money' value to a column of
+type 'ingresdate'. Explicitly convert the value to the required type or check
+it is in the valid range for the target datatype.
+    (Wed Nov  1 15:44:00 2006)
+
+>>
+* insert into dtu19_int(i4_col) select date(date_col) from dtu19_uni\g
+<<
+E_US0B61 line 1, You cannot assign this 'ingresdate' value to a column of
+type 'integer'. Explicitly convert the value to the required type or check
+it is in the valid range for the target datatype.
+    (Wed Nov  1 15:44:02 2006)
+
+>>
+* insert into dtu19_f48(f4_col) select bit(bit_col) from dtu19_uni\g
+<<
+E_US0B61 line 1, You cannot assign this 'bit' value to a column of
+type 'float'. Explicitly convert the value to the required type or check
+it is in the valid range for the target datatype.
+    (Fri Mar 07 12:53:26 2003)
+
+>>
+* insert into dtu19_f48(f8_col) select soundex(sdx_col) from dtu19_uni\g
+<<
+E_US100F String cannot be converted to numeric due to incorrect syntax.
+    (Mon Oct 29 15:21:27 2007)
+
+>>
+* select varchar(sdx_col) from dtu19_uni order by 1\g
+<<
+
++------------------------------+
+|col1                          |
++------------------------------+
+|apple                         |
+|banana                        |
+|grapes                        |
+|honeydew                      |
+|kiwi                          |
+|lemon                         |
+|mango                         |
+|orange                        |
+|papaya                        |
+|strawberry                    |
++------------------------------+
+(10 rows)
+>>
+* select text(date_col) from dtu19_uni order by 1\g
+<<
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|03-13-1933                                                  |
+|04-01-1941                                                  |
+|06-06-1966                                                  |
+|07-01-1971                                                  |
+|08-15-1958                                                  |
+|09-09-1979                                                  |
+|09-28-1969                                                  |
+|10-26-1975                                                  |
+|11-21-1911                                                  |
+|12-01-1980                                                  |
++------------------------------------------------------------+
+(10 rows)
+>>
+* select ascii(date_col) from dtu19_uni order by 1\g
+<<
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|03-13-1933                                                  |
+|04-01-1941                                                  |
+|06-06-1966                                                  |
+|07-01-1971                                                  |
+|08-15-1958                                                  |
+|09-09-1979                                                  |
+|09-28-1969                                                  |
+|10-26-1975                                                  |
+|11-21-1911                                                  |
+|12-01-1980                                                  |
++------------------------------------------------------------+
+(10 rows)
+>>
+* select byte(bit_col) from dtu19_uni order by 1\g
+<<
+
++------------------------------+
+|col1                          |
++------------------------------+
+|00001111                      |
+|00011100                      |
+|010101                        |
+|0110110                       |
+|01111101                      |
+|101010                        |
+|10101010                      |
+|10110110                      |
+|1101100                       |
+|11100011                      |
++------------------------------+
+(10 rows)
+>>
+* select varbyte(bit_col) from dtu19_uni order by 1\g 
+<<
+
++------------------------------+
+|col1                          |
++------------------------------+
+|00001111                      |
+|00011100                      |
+|010101                        |
+|0110110                       |
+|01111101                      |
+|101010                        |
+|10101010                      |
+|10110110                      |
+|1101100                       |
+|11100011                      |
++------------------------------+
+(10 rows)
+>>
+* drop table dtu19_uni\g
+<<
+>>
+* drop table dtu19_int\g
+<<
+>>
+* drop table dtu19_f48\g
+<<
+>>
+* drop table dtu19_dec\g
+<<
+>>
+* drop table dtu19_money\g
+<<
+>>
+* drop table dtu19_date\g
+<<
+>>
+* drop table dtu19_bit\g
+<<
+>>
+* drop table dtu19_sdx\g
+<<
+>>
+* \q
+<<
+
+>>
+? delete dtu19_tbl.c 
+<<
+file was deleted
+>>
+? delete dtu19_tbl.o 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu19_tbl.obj 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu19_tbl.exe 
+<<
+file was deleted
+>>
+
+
+Ending at: Mon Oct 29 15:21:28 2007

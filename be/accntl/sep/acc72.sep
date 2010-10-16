@@ -1,0 +1,6078 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+Test Name:acc72 
+Time:4th April 11:20 1990 
+User Name: rch
+
+Test ID :acc70
+Module  :qrymod
+Filename:acc70.sep
+Purpose :tests syntax and semantics of 'create/alter/drop group' statements
+	 Also tests the effect of these statements when not connected to
+	 the iidbdb, the iiusergroup catalog is missing and tests that permits
+	 granted to groups are effective.
+Input Files :none
+Output Files:none
+Database    :iidbdb, SEPPARAMDB3 = grantdb
+Tables      :iirole,dea01_select,dea01_insert,dea01_update,dea01_all,dea01_none
+procedures  :dea01_p1
+Synopsis    :
+		(1) Clean-up SEPPARAMDB3 database.
+		(2) Clean-up various system catalogs in IIDBDB database.
+		    Add users and default groups by updating system catalogs.
+		    Test CREATE, ALTER and DROP GROUP by omitting keywords, 
+		    specifying invalid group names etc...  Also creates, alters
+		    and drops groups having zero, one or many users.
+		    Tries to CREATE|ALTER|DROP GROUP when the IIUSERGROUP table
+		    does not exist.
+		(3) Shows that CREATE|ALTER|DROP GROUP only works in the IIDBDB.
+		    Tests GRANT <priv> TO GROUP.
+		(4), (5) and (6) Show that group privileges are applied 
+		    correctly.
+		(7) CLean-up SEPPARAMDB3 database.
+		(8) Clean-up catalogs in IIDBDB database.
+
+History :Converted to sep by rchCreated: 4.4.90		Author :Ralph Harnden
+         Modified by Steve Rees on 11/1/90
+          28-May-1992	(donj) Transfer backend tests from ingres63p to ingres65
+          16-Nov-1993	(garys) Updated test to test for column/group names
+				> 32 chars; column/group name size increased 
+				from 24 to 32 chars on 65.  Also updated 
+				canon to accept 1) 65 error/syntax error 
+				messages for HELP IIUSERGROUP, 
+				CREATE/ALTER/DROP GROUP, GRANT, and 
+				UPDATE/DELETE/SELECT GRANT, 2) additional 
+				column info on select * from iiuser and 
+				iidbpriv; system catalog changed for 65.
+          16-Nov-1993	(garys) Updated canon to accept 1) expanded help
+				permit info on tables, 2) double quote
+				delimiters for dba name, 3) fewer grant
+				message lines from help permit info - 64
+				un-necessarily creates duplicate grants, 
+				but 65 doesn't.
+          26-Jan-1995	(Oertel)  Took alternate canons for copy_into priv and
+				  new table columns in iiuser and iidbpriv.
+          22-mar-1999	(yu$pe02) Hard code page size to 8K.
+           4-Oct-2001   (devjo01) Change canons to reflect lifting of keyword
+				  restrictions.
+          30-Jan-2003	(hanch04) Updated canons to match Ingres 2.6/0303 SP2
+          16-Apr-2003	(rogch01) Remove pre-2.6 SP2 canons.  Don't ignore
+                                  result of sql -s.
+          22-Jul-2004	(vande02) Replacing existing canons for selects from
+                                  system catalog iiuser with new expected
+                                  behavior as of open source r3 when B1
+                                  security was pulled out. Aligned history.
+          16-Sep-2008	(vande02) Added conditional canons to allow for UTF8
+                                  collation sequence order/or results. Header
+                                  cleanup.
+*/
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop table  dea01_select,  dea01_insert,  dea01_delete,  dea01_update,
+<<
+~
+>>
+* 	    dea01_all,     dea01_none;
+<<
+~
+>>
+* \g
+<<
+~
+>>
+* drop procedure  dea01_p1;
+<<
+~
+>>
+* \g
+<<
+~
+>>
+* commit
+<<
+~
+>>
+* \p\g
+<<
+~
+>>
+* \q
+<<
+>>
+? qasetusertm ingres sql -s "+U" iidbdb 
+<<
+>>
+* delete from iiuser where name like 'dea01%';\p\g
+<<
+~
+>>
+* delete from iiusergroup where groupid like 'dea01%';\p\g
+<<
+~
+>>
+* delete from iidbpriv where grantee like 'dea01%';\p\g
+<<
+~
+>>
+* insert into iiuser (name, status) values ('dea01_notauth', 0)\p\g
+<<
+ insert into iiuser (name, status) values ('dea01_notauth', 0)
+  
+(1 row)
+>>
+* insert into iiuser (name, status) values ('dea01_super', 32785)
+<<
+~
+>>
+* \p\g
+<<
+ insert into iiuser (name, status) values ('dea01_super', 32785)
+ 
+(1 row)
+>>
+* select * from iidbpriv where grantee = 'public'  and dbname = 'iidbdb'
+/*
+If any rows are returned here then STOP the test because subsequent results
+will be invalid.
+*/
+<<
+>>
+* \p\g
+<<
+~
+>>
+* update iiuser set default_group = ' ' where name = 'dea01_notauth'
+<<
+~
+>>
+* \p\g
+<<
+~
+>>
+* commit
+<<
+~
+>>
+* \p\g
+<<
+~
+>>
+* help iiusergroup
+<<
+>>
+* \p\g
+<<
+ help iiusergroup
+ 
+Name:                 iiusergroup
+Owner:                $ingres
+Created:              16-sep-1993 14:44:04     
+Type:                 system catalog
+Version:              OPING1.2  
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+groupid                          char           32   no     yes     1 
+groupmem                         char           32   no     yes     2 
+reserve                          char           32   no     yes       
+
+
+
+>>
+<<
+ help iiusergroup
+ 
+Name:                 iiusergroup
+Owner:                $ingres
+Created:              17-sep-1996 07:16:11     
+Type:                 system catalog
+Version:              OI2.0
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+groupid                          char           32   no     yes     1 
+groupmem                         char           32   no     yes     2 
+reserve                          char           32   no     yes       
+
+
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
++------------------------+------------------------+--------------------------------+
+(0 rows)
+>>
+* insert into iiuser(name) values('dea01_user_a');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_b');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_c');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_d');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_e');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_f')
+<<
+>>
+* \p\g
+<<
+ insert into iiuser(name) values('dea01_user_a');
+ insert into iiuser(name) values('dea01_user_b');
+ insert into iiuser(name) values('dea01_user_c');
+ insert into iiuser(name) values('dea01_user_d');
+ insert into iiuser(name) values('dea01_user_e');
+ insert into iiuser(name) values('dea01_user_f')
+ 
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+>>
+* create group 0_bad_group_name
+<<
+>>
+* \p\g
+<<
+ create group 0_bad_group_name
+ 
+E_US0EE5 line 1, Syntax error on '0'.  The correct syntax is: 
+    CREATE GROUP groupname {,groupname} 
+   [WITH USERS = (user {,user})]
+    ( 2-MAY-1990 15:57:46)
+
+>>
+* create group a23456789012345678901234567890123
+<<
+>>
+* \p\g
+<<
+ create group a23456789012345678901234567890123
+ 
+E_US0A8F line 1, Name too long: 'a23456789012345678901234567890123'.
+    ( 2-MAY-1990 15:57:49)
+
+>>
+* create group dea01_good_group, 0_bad_group_name
+<<
+>>
+* \p\g
+<<
+ create group dea01_good_group, 0_bad_group_name
+ 
+E_US0EE5 line 1, Syntax error on '0'.  The correct syntax is: 
+    CREATE GROUP groupname {,groupname} 
+   [WITH USERS = (user {,user})]
+    ( 2-MAY-1990 15:57:52)
+
+>>
+* create group dea01_good_group, a23456789012345678901234567890123
+<<
+>>
+* \p\g
+<<
+ create group dea01_good_group, a23456789012345678901234567890123
+ 
+E_US0A8F line 1, Name too long: 'a23456789012345678901234567890123'.
+    ( 2-MAY-1990 15:57:55)
+
+>>
+* create group badwith1 with users = (a, b, c)
+<<
+>>
+* \p\g
+<<
+ create group badwith1 with users = (a, b, c)
+ 
+E_US1872 Group 'badwith1' already exists.
+    You cannot create a group that already exists.
+     Ensure you entered the correct group identifier.
+    (Mon Aug 26 09:30:03 1991)
+
+>>
+<<
+ create group badwith1 with users = (a, b, c)
+ 
+E_US187D Unable to add 'c' to group 'badwith1'.
+    You cannot add a member to a group
+     if the member does not exist as a user in the installation.
+     Ensure you entered the correct user identifier.
+    (23-SEP-1991 13:31:34)
+
+E_US187D Unable to add 'b' to group 'badwith1'.
+    You cannot add a member to a group
+     if the member does not exist as a user in the installation.
+     Ensure you entered the correct user identifier.
+    (23-SEP-1991 13:31:34)
+
+E_US187D Unable to add 'a' to group 'badwith1'.
+    You cannot add a member to a group
+     if the member does not exist as a user in the installation.
+     Ensure you entered the correct user identifier.
+    (23-SEP-1991 13:31:34)
+
+>>
+* create group badwith2 with users =
+<<
+>>
+* \p\g
+<<
+ create group badwith2 with users =
+ 
+E_US0EE5 line 1, Syntax error on 'EOF'.  The correct syntax is: 
+    CREATE GROUP groupname {,groupname} 
+   [WITH USERS = (user {,user})]
+    ( 2-MAY-1990 15:58:02)
+
+>>
+* create group badwith2 with users
+<<
+>>
+* \p\g
+<<
+ create group badwith2 with users
+ 
+E_US0EE5 line 1, Syntax error on 'EOF'.  The correct syntax is: 
+    CREATE GROUP groupname {,groupname} 
+   [WITH USERS = (user {,user})]
+    ( 2-MAY-1990 15:58:04)
+
+>>
+* create group badwith2 with
+<<
+>>
+* \p\g
+<<
+ create group badwith2 with
+ 
+E_US0EE5 line 1, Syntax error on 'EOF'.  The correct syntax is: 
+    CREATE GROUP groupname {,groupname} 
+   [WITH USERS = (user {,user})]
+    ( 2-MAY-1990 15:58:07)
+
+>>
+* create group baduser with users = (a23456789012345678901234567890123)
+<<
+>>
+* \p\g
+<<
+ create group baduser with users = (a23456789012345678901234567890123)
+ 
+E_US0A8F line 1, Name too long: 'a23456789012345678901234567890123'.
+    ( 2-MAY-1990 15:58:10)
+
+>>
+* create group baduser with users = (0_bad_user_name)
+<<
+>>
+* \p\g
+<<
+ create group baduser with users = (0_bad_user_name)
+ 
+E_US0EE5 line 1, Syntax error on '0'.  The correct syntax is: 
+    CREATE GROUP groupname {,groupname} 
+   [WITH USERS = (user {,user})]
+    ( 2-MAY-1990 15:58:13)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
++------------------------+------------------------+--------------------------------+
+(0 rows)
+>>
+* create group dea01_nousers
+<<
+>>
+* \p\g
+<<
+ create group dea01_nousers
+ 
+>>
+* create group dea01_oneuser with users = (dea01_user_a)
+<<
+>>
+* \p\g
+<<
+ create group dea01_oneuser with users = (dea01_user_a)
+ 
+>>
+* create group dea01_multiusers 
+<<
+>>
+*	with users = (dea01_user_b,dea01_user_c,dea01_user_d)
+<<
+>>
+* \p\g
+<<
+ create group dea01_multiusers 
+	with users = (dea01_user_b,dea01_user_c,dea01_user_d)
+ 
+>>
+* create group dea01_dup_users 
+<<
+>>
+*	with users = (dea01_user_a,dea01_user_b,dea01_user_c,
+<<
+>>
+*			dea01_user_a,dea01_user_b,dea01_user_c,
+<<
+>>
+*			dea01_user_a,dea01_user_b,dea01_user_c)
+<<
+>>
+* \p\g
+<<
+ create group dea01_dup_users 
+	with users = (dea01_user_a,dea01_user_b,dea01_user_c,
+			dea01_user_a,dea01_user_b,dea01_user_c,
+			dea01_user_a,dea01_user_b,dea01_user_c)
+ 
+>>
+* create group dea01_duplicate
+<<
+>>
+* \p\g
+<<
+ create group dea01_duplicate
+ 
+>>
+* create group dea01_duplicate
+<<
+>>
+* \p\g
+<<
+ create group dea01_duplicate
+ 
+E_US1872 Group 'dea01_duplicate' already exists.
+    You cannot create a group that already exists.
+     Ensure you entered the correct group identifier.
+    ( 2-MAY-1990 15:58:30)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'\g
+<< IF (ING_CHARSET == "UTF8") 
+
++--------------------------------+--------------------------------+------------------
+---------------+
+|groupid                         |groupmem                        |reserve          -
+               |
++--------------------------------+--------------------------------+------------------
+---------------+
+|dea01_duplicate                 |                                |                 -
+               |
+|dea01_dup_users                 |                                |                 -
+               |
+|dea01_dup_users                 |dea01_user_a                    |                 -
+               |
+|dea01_dup_users                 |dea01_user_b                    |                 -
+               |
+|dea01_dup_users                 |dea01_user_c                    |                 -
+               |
+|dea01_multiusers                |                                |                 -
+               |
+|dea01_multiusers                |dea01_user_b                    |                 -
+               |
+|dea01_multiusers                |dea01_user_c                    |                 -
+               |
+|dea01_multiusers                |dea01_user_d                    |                 -
+               |
+|dea01_nousers                   |                                |                 -
+               |
+|dea01_oneuser                   |                                |                 -
+               |
+|dea01_oneuser                   |dea01_user_a                    |                 -
+               |
++--------------------------------+--------------------------------+------------------
+---------------+
+(12 rows)
+>>
+<<
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_dup_users         |                        |                                |
+|dea01_dup_users         |dea01_user_a            |                                |
+|dea01_dup_users         |dea01_user_b            |                                |
+|dea01_dup_users         |dea01_user_c            |                                |
+|dea01_duplicate         |                        |                                |
+|dea01_multiusers        |                        |                                |
+|dea01_multiusers        |dea01_user_b            |                                |
+|dea01_multiusers        |dea01_user_c            |                                |
+|dea01_multiusers        |dea01_user_d            |                                |
+|dea01_nousers           |                        |                                |
+|dea01_oneuser           |                        |                                |
+|dea01_oneuser           |dea01_user_a            |                                |
++------------------------+------------------------+--------------------------------+
+(12 rows)
+>>
+* create group dea01_good_group1, dea01_super
+<<
+>>
+* \p\g
+<<
+ create group dea01_good_group1, dea01_super
+ 
+E_US1879 Unable to create group 'dea01_super'.
+    A user with this name already exists in this installation.
+     Group names must be unique within groups, roles, and users.
+     Please specify a different group name.
+    ( 2-MAY-1990 15:58:35)
+
+>>
+* create role dea01_role_group_test with nopassword
+<<
+>>
+* \p\g
+<<
+ create role dea01_role_group_test with nopassword
+ 
+>>
+* create group dea01_good_group2, dea01_role_group_test
+<<
+>>
+* \p\g
+<<
+ create group dea01_good_group2, dea01_role_group_test
+ 
+E_US187A Unable to create group 'dea01_role_group_test'.
+    A role with this name already exists in this installation.
+     Group names must be unique within groups, roles, and users.
+     Please specify a different group name.
+    ( 2-MAY-1990 15:58:40)
+
+>>
+* create group dea01_good_group3, dea01_good_group2
+<<
+>>
+* \p\g
+<<
+ create group dea01_good_group3, dea01_good_group2
+ 
+E_US1872 Group 'dea01_good_group2' already exists.
+    You cannot create a group that already exists.
+     Ensure you entered the correct group identifier.
+    ( 2-MAY-1990 15:58:42)
+
+>>
+* create group dea01_good_group4 
+<<
+>>
+*	with users = (dea01_user_a, dea01_user_b, dea01_user_c)
+<<
+>>
+* \p\g
+<<
+ create group dea01_good_group4 
+	with users = (dea01_user_a, dea01_user_b, dea01_user_c)
+ 
+>>
+* create group dea01_good_group5, dea01_good_group4, dea01_super, 
+<<
+>>
+*	dea01_role_group_test
+<<
+>>
+* 	with users = (dea01_user_a, dea01_user_z)
+<<
+>>
+* \p\g
+<<
+ create group dea01_good_group5, dea01_good_group4, dea01_super, 
+	dea01_role_group_test
+ 	with users = (dea01_user_a, dea01_user_z)
+ 
+E_US187A Unable to create group 'dea01_role_group_test'.
+    A role with this name already exists in this installation.
+     Group names must be unique within groups, roles, and users.
+     Please specify a different group name.
+    (23-OCT-1990 13:43:59)
+
+E_US1879 Unable to create group 'dea01_super'.
+    A user with this name already exists in this installation.
+     Group names must be unique within groups, roles, and users.
+     Please specify a different group name.
+    (23-OCT-1990 13:43:59)
+
+E_US1872 Group 'dea01_good_group4' already exists.
+    You cannot create a group that already exists.
+     Ensure you entered the correct group identifier.
+    (23-OCT-1990 13:43:59)
+
+E_US187D Unable to add 'dea01_user_z' to group 'dea01_good_group5'.
+    You cannot add a member to a group
+     if the member does not exist as a user in the installation.
+     Ensure you entered the correct user identifier.
+    (23-OCT-1990 13:43:59)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'\g
+<< IF (ING_CHARSET == "UTF8") 
+
++--------------------------------+--------------------------------+------------------
+---------------+
+|groupid                         |groupmem                        |reserve          -
+               |
++--------------------------------+--------------------------------+------------------
+---------------+
+|dea01_duplicate                 |                                |                 -
+               |
+|dea01_dup_users                 |                                |                 -
+               |
+|dea01_dup_users                 |dea01_user_a                    |                 -
+               |
+|dea01_dup_users                 |dea01_user_b                    |                 -
+               |
+|dea01_dup_users                 |dea01_user_c                    |                 -
+               |
+|dea01_good_group1               |                                |                 -
+               |
+|dea01_good_group2               |                                |                 -
+               |
+|dea01_good_group3               |                                |                 -
+               |
+|dea01_good_group4               |                                |                 -
+               |
+|dea01_good_group4               |dea01_user_a                    |                 -
+               |
+|dea01_good_group4               |dea01_user_b                    |                 -
+               |
+|dea01_good_group4               |dea01_user_c                    |                 -
+               |
+|dea01_good_group5               |                                |                 -
+               |
+|dea01_good_group5               |dea01_user_a                    |                 -
+               |
+|dea01_multiusers                |                                |                 -
+               |
+|dea01_multiusers                |dea01_user_b                    |                 -
+               |
+|dea01_multiusers                |dea01_user_c                    |                 -
+               |
+|dea01_multiusers                |dea01_user_d                    |                 -
+               |
+|dea01_nousers                   |                                |                 -
+               |
+|dea01_oneuser                   |                                |                 -
+               |
+|dea01_oneuser                   |dea01_user_a                    |                 -
+               |
++--------------------------------+--------------------------------+------------------
+---------------+
+(21 rows)
+>>
+<<
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_dup_users         |                        |                                |
+|dea01_dup_users         |dea01_user_a            |                                |
+|dea01_dup_users         |dea01_user_b            |                                |
+|dea01_dup_users         |dea01_user_c            |                                |
+|dea01_duplicate         |                        |                                |
+|dea01_good_group1       |                        |                                |
+|dea01_good_group2       |                        |                                |
+|dea01_good_group3       |                        |                                |
+|dea01_good_group4       |                        |                                |
+|dea01_good_group4       |dea01_user_a            |                                |
+|dea01_good_group4       |dea01_user_b            |                                |
+|dea01_good_group4       |dea01_user_c            |                                |
+|dea01_good_group5       |                        |                                |
+|dea01_good_group5       |dea01_user_a            |                                |
+|dea01_multiusers        |                        |                                |
+|dea01_multiusers        |dea01_user_b            |                                |
+|dea01_multiusers        |dea01_user_c            |                                |
+|dea01_multiusers        |dea01_user_d            |                                |
+|dea01_nousers           |                        |                                |
+|dea01_oneuser           |                        |                                |
+|dea01_oneuser           |dea01_user_a            |                                |
++------------------------+------------------------+--------------------------------+
+(21 rows)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
++------------------------+------------------------+--------------------------------+
+(0 rows)
+>>
+* \p\g
+<<
+>>
+* help iiusergroup
+<<
+>>
+* \p\g
+<<
+ help iiusergroup
+ 
+Name:                 iiusergroup
+Owner:                $ingres
+Created:              16-sep-1993 14:44:04     
+Type:                 system catalog
+Version:              OPING1.2  
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+groupid                          char           32   no     yes     1 
+groupmem                         char           32   no     yes     2 
+reserve                          char           32   no     yes       
+
+
+
+>>
+<<
+ help iiusergroup
+ 
+Name:                 iiusergroup
+Owner:                $ingres
+Created:              17-sep-1996 07:16:11     
+Type:                 system catalog
+Version:              OI2.0
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+groupid                          char           32   no     yes     1 
+groupmem                         char           32   no     yes     2 
+reserve                          char           32   no     yes       
+
+
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
++------------------------+------------------------+--------------------------------+
+(0 rows)
+>>
+* alter group 0_bad_group_name drop all
+<<
+>>
+* \p\g
+<<
+ alter group 0_bad_group_name drop all
+ 
+E_US0EE6 line 1, Syntax error on '0'.  The correct syntax is: 
+    ALTER GROUP groupname {,groupname} 
+         ADD  USERS (user {,user}) 
+   | DROP USERS (user {,user})
+    ( 2-MAY-1990 15:59:06)
+
+>>
+* alter group a23456789012345678901234567890123 drop all
+<<
+>>
+* \p\g
+<<
+ alter group a23456789012345678901234567890123 drop all
+ 
+E_US0A8F line 1, Name too long: 'a23456789012345678901234567890123'.
+    ( 2-MAY-1990 15:59:09)
+
+>>
+* alter group good_group, 0_bad_group_name drop all
+<<
+>>
+* \p\g
+<<
+ alter group good_group, 0_bad_group_name drop all
+ 
+E_US0EE6 line 1, Syntax error on '0'.  The correct syntax is: 
+    ALTER GROUP groupname {,groupname} 
+         ADD  USERS (user {,user}) 
+   | DROP USERS (user {,user})
+    ( 2-MAY-1990 15:59:12)
+
+>>
+* alter group good_group, a23456789012345678901234567890123 drop all
+<<
+>>
+* \p\g
+<<
+ alter group good_group, a23456789012345678901234567890123 drop all
+ 
+E_US0A8F line 1, Name too long: 'a23456789012345678901234567890123'.
+    ( 2-MAY-1990 15:59:14)
+
+>>
+* alter group drop all
+<<
+>>
+* \p\g
+<<
+ alter group drop all
+ 
+E_US0EE6 line 1, Syntax error on 'all'.  The correct syntax is: 
+    ALTER GROUP groupname {,groupname} 
+         ADD  USERS (user {,user}) 
+   | DROP USERS (user {,user})
+    (Thu Oct  4 12:58:30 2001)
+
+>>
+* alter group dea01_group0
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0
+ 
+E_US0EE6 line 1, Syntax error on 'EOF'.  The correct syntax is: 
+    ALTER GROUP groupname {,groupname} 
+         ADD  USERS (user {,user}) 
+   | DROP USERS (user {,user})
+    ( 2-MAY-1990 15:59:20)
+
+>>
+* alter group non_exist add users (dea01_super)
+<<
+>>
+* \p\g
+<<
+ alter group non_exist add users (dea01_super)
+ 
+E_US1874 Group 'non_exist' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    ( 2-MAY-1990 15:59:22)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
++------------------------+------------------------+--------------------------------+
+(0 rows)
+>>
+* create group dea01_group0;
+<<
+>>
+* commit
+<<
+>>
+* \p\g
+<<
+ create group dea01_group0;
+ commit
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(1 row)
+>>
+* alter group dea01_group0 add users (dea01_super)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 add users (dea01_super)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_super             |                                |
++------------------------+------------------------+--------------------------------+
+(2 rows)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* create group dea01_group1;
+<<
+>>
+* commit
+<<
+>>
+* \p\g
+<<
+ create group dea01_group1;
+ commit
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(2 rows)
+>>
+* alter group dea01_group1 add users (dea01_notauth);
+<<
+>>
+* commit
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group1 add users (dea01_notauth);
+ commit
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* insert into iiuser(name) values('dea01_user_a');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_b');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_c');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_d');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_e');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_f');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_g');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_h');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_i');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_j');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_k')
+<<
+>>
+* \p\g
+<<
+ insert into iiuser(name) values('dea01_user_a');
+ insert into iiuser(name) values('dea01_user_b');
+ insert into iiuser(name) values('dea01_user_c');
+ insert into iiuser(name) values('dea01_user_d');
+ insert into iiuser(name) values('dea01_user_e');
+ insert into iiuser(name) values('dea01_user_f');
+ insert into iiuser(name) values('dea01_user_g');
+ insert into iiuser(name) values('dea01_user_h');
+ insert into iiuser(name) values('dea01_user_i');
+ insert into iiuser(name) values('dea01_user_j');
+ insert into iiuser(name) values('dea01_user_k')
+ 
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+>>
+* alter group dea01_group1 add users (dea01_user_a,dea01_user_b,dea01_user_c)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group1 add users (dea01_user_a,dea01_user_b,dea01_user_c)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_b            |                                |
+|dea01_group1            |dea01_user_c            |                                |
++------------------------+------------------------+--------------------------------+
+(6 rows)
+>>
+* alter group dea01_group1 drop users (dea01_user_a,dea01_user_b,dea01_user_c)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group1 drop users (dea01_user_a,dea01_user_b,dea01_user_c)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* \p\g
+<<
+>>
+* alter group dea01_group0 add userz (dea01_user_x)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 add userz (dea01_user_x)
+ 
+E_US187F ALTER GROUP: 'userz' is either an invalid option or the syntax of
+    the ADD/DROP clause is invalid. 
+    Specify one of: 
+    	ADD  USERS (user {,user}) 
+	DROP USERS (user {,user}) 
+	DROP ALL
+    (23-OCT-1990 13:54:50)
+
+>>
+* alter group dea01_group0 add users = (dea01_user_x)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 add users = (dea01_user_x)
+ 
+E_US0EE6 line 1, Syntax error on '='.  The correct syntax is: 
+    ALTER GROUP groupname {,groupname} 
+         ADD  USERS (user {,user}) 
+   | DROP USERS (user {,user})
+    (23-OCT-1990 13:55:22)
+
+>>
+* alter group dea01_group0 uzers (dea01_user_x)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 uzers (dea01_user_x)
+ 
+E_US0EE6 line 1, Syntax error on 'uzers'.  The correct syntax is: 
+    ALTER GROUP groupname {,groupname} 
+         ADD  USERS (user {,user}) 
+   | DROP USERS (user {,user})
+    (23-OCT-1990 13:55:58)
+
+>>
+* alter group dea01_group0 add users
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 add users
+ 
+E_US0EE6 line 1, Syntax error on 'EOF'.  The correct syntax is: 
+    ALTER GROUP groupname {,groupname} 
+         ADD  USERS (user {,user}) 
+   | DROP USERS (user {,user})
+    ( 2-MAY-1990 16:00:19)
+
+>>
+* alter group dea01_group0 add users (dea01_user_x)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 add users (dea01_user_x)
+ 
+E_US187D Unable to add 'dea01_user_x' to group 'dea01_group0'.
+    You cannot add a member to a group
+     if the member does not exist as a user in the installation.
+     Ensure you entered the correct user identifier.
+    (23-OCT-1990 13:56:21)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* alter group dea01_group0 add users (dea01_user_a)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 add users (dea01_user_a)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(4 rows)
+>>
+* alter group dea01_group0 
+<<
+>>
+*	add users (dea01_user_b,dea01_user_c,dea01_user_d,dea01_user_e)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 
+	add users (dea01_user_b,dea01_user_c,dea01_user_d,dea01_user_e)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(8 rows)
+>>
+* alter group dea01_group0 
+<<
+>>
+*	add users (dea01_user_f,dea01_user_g,dea01_user_f,dea01_user_g,
+<<
+>>
+*	dea01_user_f,dea01_user_g)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 
+	add users (dea01_user_f,dea01_user_g,dea01_user_f,dea01_user_g,
+	dea01_user_f,dea01_user_g)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(10 rows)
+>>
+* alter group dea01_group0 add users (dea01_user_a)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 add users (dea01_user_a)
+ 
+E_US1876 Group 'dea01_group0' already contains user 'dea01_user_a'.
+    You cannot add a member to a group
+     if the member already exists in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 13:59:53)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(10 rows)
+>>
+* alter group dea01_group0 
+<<
+>>
+*	add users (dea01_user_a,dea01_user_h,dea01_user_b,
+<<
+>>
+*	dea01_user_i,dea01_user_c)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 
+	add users (dea01_user_a,dea01_user_h,dea01_user_b,
+	dea01_user_i,dea01_user_c)
+ 
+E_US1876 Group 'dea01_group0' already contains user 'dea01_user_c'.
+    You cannot add a member to a group
+     if the member already exists in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:00:39)
+
+E_US1876 Group 'dea01_group0' already contains user 'dea01_user_b'.
+    You cannot add a member to a group
+     if the member already exists in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:00:39)
+
+E_US1876 Group 'dea01_group0' already contains user 'dea01_user_a'.
+    You cannot add a member to a group
+     if the member already exists in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:00:39)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group0            |dea01_user_h            |                                |
+|dea01_group0            |dea01_user_i            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(12 rows)
+>>
+* alter group dea01_group0 add users (dea01_user_j,dea01_user_i,dea01_user_z)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 add users (dea01_user_j,dea01_user_i,dea01_user_z)
+ 
+E_US187D Unable to add 'dea01_user_z' to group 'dea01_group0'.
+    You cannot add a member to a group
+     if the member does not exist as a user in the installation.
+     Ensure you entered the correct user identifier.
+    (23-OCT-1990 14:01:32)
+
+E_US1876 Group 'dea01_group0' already contains user 'dea01_user_i'.
+    You cannot add a member to a group
+     if the member already exists in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:01:32)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group0            |dea01_user_h            |                                |
+|dea01_group0            |dea01_user_i            |                                |
+|dea01_group0            |dea01_user_j            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(13 rows)
+>>
+* alter group dea01_group0, dea01_group1, dea01_groupz
+<<
+>>
+*   add users (dea01_user_k, dea01_user_a, dea01_user_z)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0, dea01_group1, dea01_groupz
+   add users (dea01_user_k, dea01_user_a, dea01_user_z)
+ 
+E_US1874 Group 'dea01_groupz' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    (23-OCT-1990 14:02:28)
+
+E_US187D Unable to add 'dea01_user_z' to group 'dea01_group1'.
+    You cannot add a member to a group
+     if the member does not exist as a user in the installation.
+     Ensure you entered the correct user identifier.
+    (23-OCT-1990 14:02:28)
+
+E_US187D Unable to add 'dea01_user_z' to group 'dea01_group0'.
+    You cannot add a member to a group
+     if the member does not exist as a user in the installation.
+     Ensure you entered the correct user identifier.
+    (23-OCT-1990 14:02:28)
+
+E_US1876 Group 'dea01_group0' already contains user 'dea01_user_a'.
+    You cannot add a member to a group
+     if the member already exists in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:02:28)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group0            |dea01_user_h            |                                |
+|dea01_group0            |dea01_user_i            |                                |
+|dea01_group0            |dea01_user_j            |                                |
+|dea01_group0            |dea01_user_k            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
++------------------------+------------------------+--------------------------------+
+(16 rows)
+>>
+* \p\g
+<<
+>>
+* alter group dea01_group0 drop userz (dea01_user_x)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 drop userz (dea01_user_x)
+ 
+E_US187F ALTER GROUP: 'userz' is either an invalid option or the syntax of
+    the ADD/DROP clause is invalid. 
+    Specify one of: 
+    	ADD  USERS (user {,user}) 
+	DROP USERS (user {,user}) 
+	DROP ALL
+    (23-OCT-1990 14:04:48)
+
+>>
+* alter group dea01_group0 drop users = (dea01_user_x)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 drop users = (dea01_user_x)
+ 
+E_US0EE6 line 1, Syntax error on '='.  The correct syntax is: 
+    ALTER GROUP groupname {,groupname} 
+         ADD  USERS (user {,user}) 
+   | DROP USERS (user {,user})
+    (23-OCT-1990 14:05:02)
+
+>>
+* alter group dea01_group0 drop users
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 drop users
+ 
+E_US0EE6 line 1, Syntax error on 'EOF'.  The correct syntax is: 
+    ALTER GROUP groupname {,groupname} 
+         ADD  USERS (user {,user}) 
+   | DROP USERS (user {,user})
+    ( 2-MAY-1990 16:01:13)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group0            |dea01_user_h            |                                |
+|dea01_group0            |dea01_user_i            |                                |
+|dea01_group0            |dea01_user_j            |                                |
+|dea01_group0            |dea01_user_k            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
++------------------------+------------------------+--------------------------------+
+(16 rows)
+>>
+* update iiuser set default_group = 'dea01_group1'
+<<
+>>
+*  where name = 'dea01_user_a'
+<<
+>>
+* \p\g
+<<
+ update iiuser set default_group = 'dea01_group1'
+  where name = 'dea01_user_a'
+ 
+(1 row)
+>>
+* alter group dea01_group1 drop users (dea01_user_a)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group1 drop users (dea01_user_a)
+ 
+E_US1869 Group 'dea01_group1' is the default group for user
+    'dea01_user_a'.
+     You cannot drop a user from a group
+     if the group is the user's default group.
+     Use ACCESSDB to change the user's default group and try again.
+    (23-OCT-1990 14:05:51)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group0            |dea01_user_h            |                                |
+|dea01_group0            |dea01_user_i            |                                |
+|dea01_group0            |dea01_user_j            |                                |
+|dea01_group0            |dea01_user_k            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
++------------------------+------------------------+--------------------------------+
+(16 rows)
+>>
+* alter group dea01_group0 drop users (dea01_user_k)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 drop users (dea01_user_k)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group0            |dea01_user_h            |                                |
+|dea01_group0            |dea01_user_i            |                                |
+|dea01_group0            |dea01_user_j            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
++------------------------+------------------------+--------------------------------+
+(15 rows)
+>>
+* alter group dea01_group0 
+<<
+>>
+*	drop users (dea01_user_j, dea01_user_i, dea01_user_b, dea01_user_h)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 
+	drop users (dea01_user_j, dea01_user_i, dea01_user_b, dea01_user_h)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
++------------------------+------------------------+--------------------------------+
+(11 rows)
+>>
+* alter group dea01_group0 
+<<
+>>
+*	drop users (dea01_user_c,dea01_user_d,dea01_user_c,dea01_user_d,
+<<
+>>
+*			dea01_user_c,dea01_user_d)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 
+	drop users (dea01_user_c,dea01_user_d,dea01_user_c,dea01_user_d,
+			dea01_user_c,dea01_user_d)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
++------------------------+------------------------+--------------------------------+
+(9 rows)
+>>
+* alter group dea01_group0 drop users (dea01_user_z)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 drop users (dea01_user_z)
+ 
+E_US1877 Group 'dea01_group0' does not contain user 'dea01_user_z'.
+    You cannot drop a member from a group
+     if the member does not exist in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:08:19)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
++------------------------+------------------------+--------------------------------+
+(9 rows)
+>>
+* alter group dea01_group0 
+<<
+>>
+*	drop users (dea01_user_e,dea01_user_x,dea01_user_f,dea01_user_k)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 
+	drop users (dea01_user_e,dea01_user_x,dea01_user_f,dea01_user_k)
+ 
+E_US1877 Group 'dea01_group0' does not contain user 'dea01_user_k'.
+    You cannot drop a member from a group
+     if the member does not exist in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:08:42)
+
+E_US1877 Group 'dea01_group0' does not contain user 'dea01_user_x'.
+    You cannot drop a member from a group
+     if the member does not exist in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:08:42)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_g            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
++------------------------+------------------------+--------------------------------+
+(7 rows)
+>>
+* alter group dea01_group0, dea01_group1, dea01_groupz 
+<<
+>>
+*  drop users (dea01_user_g, dea01_user_h, dea01_user_a, dea01_user_z)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0, dea01_group1, dea01_groupz 
+  drop users (dea01_user_g, dea01_user_h, dea01_user_a, dea01_user_z)
+ 
+E_US1874 Group 'dea01_groupz' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    (23-OCT-1990 14:09:12)
+
+E_US1877 Group 'dea01_group1' does not contain user 'dea01_user_z'.
+    You cannot drop a member from a group
+     if the member does not exist in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:09:12)
+
+E_US1869 Group 'dea01_group1' is the default group for user
+    'dea01_user_a'.
+     You cannot drop a user from a group
+     if the group is the user's default group.
+     Use ACCESSDB to change the user's default group and try again.
+    (23-OCT-1990 14:09:12)
+
+E_US1877 Group 'dea01_group1' does not contain user 'dea01_user_h'.
+    You cannot drop a member from a group
+     if the member does not exist in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:09:13)
+
+E_US1877 Group 'dea01_group1' does not contain user 'dea01_user_g'.
+    You cannot drop a member from a group
+     if the member does not exist in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:09:13)
+
+E_US1877 Group 'dea01_group0' does not contain user 'dea01_user_z'.
+    You cannot drop a member from a group
+     if the member does not exist in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:09:13)
+
+E_US1877 Group 'dea01_group0' does not contain user 'dea01_user_h'.
+    You cannot drop a member from a group
+     if the member does not exist in the group.
+     Ensure you entered the correct group and user identifiers.
+    (23-OCT-1990 14:09:13)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
++------------------------+------------------------+--------------------------------+
+(5 rows)
+>>
+* \p\g
+<<
+>>
+* create group dea01_group2
+<<
+>>
+* \p\g
+<<
+ create group dea01_group2
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(6 rows)
+>>
+* alter group dea01_group2 drop all
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group2 drop all
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(6 rows)
+>>
+* alter group dea01_group0 
+<<
+>>
+*	add users (dea01_user_a,dea01_user_b,dea01_user_c,
+<<
+>>
+*	dea01_user_d,dea01_user_e,dea01_user_f)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 
+	add users (dea01_user_a,dea01_user_b,dea01_user_c,
+	dea01_user_d,dea01_user_e,dea01_user_f)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(12 rows)
+>>
+* alter group dea01_group0 drop all
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 drop all
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(6 rows)
+>>
+* create group dea01_group11 
+<<
+>>
+*	with users = (dea01_user_a, dea01_user_b, dea01_user_c)
+<<
+>>
+* \p\g
+<<
+ create group dea01_group11 
+	with users = (dea01_user_a, dea01_user_b, dea01_user_c)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group11           |                        |                                |
+|dea01_group11           |dea01_user_a            |                                |
+|dea01_group11           |dea01_user_b            |                                |
+|dea01_group11           |dea01_user_c            |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(10 rows)
+>>
+* alter group dea01_group11 drop all
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group11 drop all
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group11           |                        |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(7 rows)
+>>
+* alter group dea01_group2 add users (dea01_user_a, dea01_user_b, dea01_user_c)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group2 add users (dea01_user_a, dea01_user_b, dea01_user_c)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group11           |                        |                                |
+|dea01_group2            |                        |                                |
+|dea01_group2            |dea01_user_a            |                                |
+|dea01_group2            |dea01_user_b            |                                |
+|dea01_group2            |dea01_user_c            |                                |
++------------------------+------------------------+--------------------------------+
+(10 rows)
+>>
+* alter group dea01_group2 drop all
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group2 drop all
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group11           |                        |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(7 rows)
+>>
+* alter group dea01_group1 drop all
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group1 drop all
+ 
+E_US1868 One or more users have group 'dea01_group1' as a default group.
+    You cannot drop a group (or all users from a group)
+     if the group is the default for any user.
+     Use ACCESSDB to remove this group as default and try again.
+    ( 2-MAY-1990 16:03:07)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group11           |                        |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(7 rows)
+>>
+* alter group dea01_group0 
+<<
+>>
+*	add users (dea01_user_a, dea01_user_b, dea01_user_c, 
+<<
+>>
+*			dea01_user_d, dea01_user_e, dea01_user_f)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 
+	add users (dea01_user_a, dea01_user_b, dea01_user_c, 
+			dea01_user_d, dea01_user_e, dea01_user_f)
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group0            |dea01_user_a            |                                |
+|dea01_group0            |dea01_user_b            |                                |
+|dea01_group0            |dea01_user_c            |                                |
+|dea01_group0            |dea01_user_d            |                                |
+|dea01_group0            |dea01_user_e            |                                |
+|dea01_group0            |dea01_user_f            |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group11           |                        |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(13 rows)
+>>
+* alter group dea01_group0, dea01_group1, dea01_groupz drop all
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0, dea01_group1, dea01_groupz drop all
+ 
+E_US1874 Group 'dea01_groupz' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    ( 2-MAY-1990 16:03:24)
+
+E_US1868 One or more users have group 'dea01_group1' as a default group.
+    You cannot drop a group (or all users from a group)
+     if the group is the default for any user.
+     Use ACCESSDB to remove this group as default and try again.
+    ( 2-MAY-1990 16:03:24)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group1            |dea01_user_a            |                                |
+|dea01_group1            |dea01_user_k            |                                |
+|dea01_group11           |                        |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(7 rows)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* \p\g
+<<
+>>
+* help iiusergroup
+<<
+>>
+* \p\g
+<<
+ help iiusergroup
+ 
+Name:                 iiusergroup
+Owner:                $ingres
+Created:              16-sep-1993 14:44:04     
+Type:                 system catalog
+Version:              OPING1.2  
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+groupid                          char           32   no     yes     1 
+groupmem                         char           32   no     yes     2 
+reserve                          char           32   no     yes       
+
+
+
+>>
+<<
+ help iiusergroup
+ 
+Name:                 iiusergroup
+Owner:                $ingres
+Created:              17-sep-1996 07:16:11     
+Type:                 system catalog
+Version:              OI2.0
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+groupid                          char           32   no     yes     1 
+groupmem                         char           32   no     yes     2 
+reserve                          char           32   no     yes       
+
+
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* drop group 0_bad_group_name
+<<
+>>
+* \p\g 
+<<
+ drop group 0_bad_group_name
+ 
+E_US0EE8 line 1, Syntax error on '0'.  The correct syntax is: 
+    DROP GROUP groupname {,groupname}
+    ( 2-MAY-1990 16:03:50)
+
+>>
+* drop group a23456789012345678901234567890123
+<<
+>>
+* \p\g
+<<
+ 
+ drop group a23456789012345678901234567890123
+ 
+E_US0A8F line 1, Name too long: 'a23456789012345678901234567890123'.
+    ( 2-MAY-1990 16:03:52)
+
+>>
+* drop group good_group, 0_bad_group_name
+<<
+>>
+* \p\g 
+<<
+ drop group good_group, 0_bad_group_name
+ 
+E_US0EE8 line 1, Syntax error on '0'.  The correct syntax is: 
+    DROP GROUP groupname {,groupname}
+    ( 2-MAY-1990 16:03:55)
+
+>>
+* drop group good_group, a23456789012345678901234567890123
+<<
+>>
+* \p\g
+<<
+ 
+ drop group good_group, a23456789012345678901234567890123
+ 
+E_US0A8F line 1, Name too long: 'a23456789012345678901234567890123'.
+    ( 2-MAY-1990 16:03:58)
+
+>>
+* drop group dea01_missing_group
+<<
+>>
+* \p\g
+<<
+ drop group dea01_missing_group
+ 
+E_US1874 Group 'dea01_missing_group' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    ( 2-MAY-1990 16:04:00)
+
+>>
+* drop group dea01_missing_group1, dea01_missing_group2, dea01_missing_group3
+<<
+>>
+* \p\g
+<<
+ drop group dea01_missing_group1, dea01_missing_group2, dea01_missing_group3
+ 
+E_US1874 Group 'dea01_missing_group3' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    ( 2-MAY-1990 16:04:02)
+
+E_US1874 Group 'dea01_missing_group2' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    ( 2-MAY-1990 16:04:02)
+
+E_US1874 Group 'dea01_missing_group1' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    ( 2-MAY-1990 16:04:02)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* insert into iiuser(name) values('dea01_user_a');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_x');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_y');
+<<
+>>
+* insert into iiuser(name) values('dea01_user_z')
+<<
+>>
+* \p\g
+<<
+ insert into iiuser(name) values('dea01_user_a');
+ insert into iiuser(name) values('dea01_user_x');
+ insert into iiuser(name) values('dea01_user_y');
+ insert into iiuser(name) values('dea01_user_z')
+ 
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+>>
+* create group dea01_drop1;
+<<
+>>
+* create group dea01_drop2;
+<<
+>>
+* create group dea01_drop3;
+<<
+>>
+* create group dea01_drop4;
+<<
+>>
+* create group dea01_drop5;
+<<
+>>
+* create group dea01_drop6;
+<<
+>>
+* create group dea01_drop7;
+<<
+>>
+* create group dea01_drop8;
+<<
+>>
+* create group dea01_drop9;
+<<
+>>
+* create group dea01_drop10;
+<<
+>>
+* create group dea01_drop11 
+<<
+>>
+*	with users = (dea01_user_x,dea01_user_y,dea01_user_z);
+<<
+>>
+* create group dea01_drop12;
+<<
+>>
+* create group dea01_drop13 
+<<
+>>
+*	with users = (dea01_user_x,dea01_user_y,dea01_user_z);
+<<
+>>
+* create group dea01_drop14;
+<<
+>>
+* create group dea01_drop15
+<<
+>>
+*	with users = (dea01_user_x,dea01_user_y,dea01_user_z);
+<<
+>>
+* select * from iiusergroup where groupid like 'dea01%';
+<<
+>>
+* \p\g
+<<
+ create group dea01_drop1;
+ create group dea01_drop2;
+ create group dea01_drop3;
+ create group dea01_drop4;
+ create group dea01_drop5;
+ create group dea01_drop6;
+ create group dea01_drop7;
+ create group dea01_drop8;
+ create group dea01_drop9;
+ create group dea01_drop10;
+ create group dea01_drop11 
+	with users = (dea01_user_x,dea01_user_y,dea01_user_z);
+ create group dea01_drop12;
+ create group dea01_drop13 
+	with users = (dea01_user_x,dea01_user_y,dea01_user_z);
+ create group dea01_drop14;
+ create group dea01_drop15
+	with users = (dea01_user_x,dea01_user_y,dea01_user_z);
+ select * from iiusergroup where groupid like 'dea01%';
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_drop1             |                        |                                |
+|dea01_drop10            |                        |                                |
+|dea01_drop11            |                        |                                |
+|dea01_drop11            |dea01_user_x            |                                |
+|dea01_drop11            |dea01_user_y            |                                |
+|dea01_drop11            |dea01_user_z            |                                |
+|dea01_drop12            |                        |                                |
+|dea01_drop13            |                        |                                |
+|dea01_drop13            |dea01_user_x            |                                |
+|dea01_drop13            |dea01_user_y            |                                |
+|dea01_drop13            |dea01_user_z            |                                |
+|dea01_drop14            |                        |                                |
+|dea01_drop15            |                        |                                |
+|dea01_drop15            |dea01_user_x            |                                |
+|dea01_drop15            |dea01_user_y            |                                |
+|dea01_drop15            |dea01_user_z            |                                |
+|dea01_drop2             |                        |                                |
+|dea01_drop3             |                        |                                |
+|dea01_drop4             |                        |                                |
+|dea01_drop5             |                        |                                |
+|dea01_drop6             |                        |                                |
+|dea01_drop7             |                        |                                |
+|dea01_drop8             |                        |                                |
+|dea01_drop9             |                        |                                |
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(27 rows)
+>>
+* drop group dea01_drop9;
+<<
+>>
+* \p\g
+<<
+ drop group dea01_drop9;
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_drop1             |                        |                                |
+|dea01_drop10            |                        |                                |
+|dea01_drop11            |                        |                                |
+|dea01_drop11            |dea01_user_x            |                                |
+|dea01_drop11            |dea01_user_y            |                                |
+|dea01_drop11            |dea01_user_z            |                                |
+|dea01_drop12            |                        |                                |
+|dea01_drop13            |                        |                                |
+|dea01_drop13            |dea01_user_x            |                                |
+|dea01_drop13            |dea01_user_y            |                                |
+|dea01_drop13            |dea01_user_z            |                                |
+|dea01_drop14            |                        |                                |
+|dea01_drop15            |                        |                                |
+|dea01_drop15            |dea01_user_x            |                                |
+|dea01_drop15            |dea01_user_y            |                                |
+|dea01_drop15            |dea01_user_z            |                                |
+|dea01_drop2             |                        |                                |
+|dea01_drop3             |                        |                                |
+|dea01_drop4             |                        |                                |
+|dea01_drop5             |                        |                                |
+|dea01_drop6             |                        |                                |
+|dea01_drop7             |                        |                                |
+|dea01_drop8             |                        |                                |
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(26 rows)
+>>
+* drop group dea01_drop8, dea01_drop7, dea01_drop6
+<<
+>>
+* \p\g
+<<
+ drop group dea01_drop8, dea01_drop7, dea01_drop6
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_drop1             |                        |                                |
+|dea01_drop10            |                        |                                |
+|dea01_drop11            |                        |                                |
+|dea01_drop11            |dea01_user_x            |                                |
+|dea01_drop11            |dea01_user_y            |                                |
+|dea01_drop11            |dea01_user_z            |                                |
+|dea01_drop12            |                        |                                |
+|dea01_drop13            |                        |                                |
+|dea01_drop13            |dea01_user_x            |                                |
+|dea01_drop13            |dea01_user_y            |                                |
+|dea01_drop13            |dea01_user_z            |                                |
+|dea01_drop14            |                        |                                |
+|dea01_drop15            |                        |                                |
+|dea01_drop15            |dea01_user_x            |                                |
+|dea01_drop15            |dea01_user_y            |                                |
+|dea01_drop15            |dea01_user_z            |                                |
+|dea01_drop2             |                        |                                |
+|dea01_drop3             |                        |                                |
+|dea01_drop4             |                        |                                |
+|dea01_drop5             |                        |                                |
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(23 rows)
+>>
+* drop group dea01_drop5, dea01_drop4, dea01_drop5, dea01_drop4, 
+<<
+>>
+*	dea01_drop5, dea01_drop4
+<<
+>>
+* \p\g
+<<
+ drop group dea01_drop5, dea01_drop4, dea01_drop5, dea01_drop4, dea01_drop5, dea01_d-
+rop4
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_drop1             |                        |                                |
+|dea01_drop10            |                        |                                |
+|dea01_drop11            |                        |                                |
+|dea01_drop11            |dea01_user_x            |                                |
+|dea01_drop11            |dea01_user_y            |                                |
+|dea01_drop11            |dea01_user_z            |                                |
+|dea01_drop12            |                        |                                |
+|dea01_drop13            |                        |                                |
+|dea01_drop13            |dea01_user_x            |                                |
+|dea01_drop13            |dea01_user_y            |                                |
+|dea01_drop13            |dea01_user_z            |                                |
+|dea01_drop14            |                        |                                |
+|dea01_drop15            |                        |                                |
+|dea01_drop15            |dea01_user_x            |                                |
+|dea01_drop15            |dea01_user_y            |                                |
+|dea01_drop15            |dea01_user_z            |                                |
+|dea01_drop2             |                        |                                |
+|dea01_drop3             |                        |                                |
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(21 rows)
+>>
+* drop group dea01_missing_group1, dea01_drop3, dea01_missing_group2, 
+<<
+>>
+*	dea01_drop2;
+<<
+>>
+* \p\g
+<<
+ drop group dea01_missing_group1, dea01_drop3, dea01_missing_group2, dea01_drop2;
+ 
+E_US1874 Group 'dea01_missing_group2' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    ( 2-MAY-1990 16:04:42)
+
+E_US1874 Group 'dea01_missing_group1' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    ( 2-MAY-1990 16:04:42)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_drop1             |                        |                                |
+|dea01_drop10            |                        |                                |
+|dea01_drop11            |                        |                                |
+|dea01_drop11            |dea01_user_x            |                                |
+|dea01_drop11            |dea01_user_y            |                                |
+|dea01_drop11            |dea01_user_z            |                                |
+|dea01_drop12            |                        |                                |
+|dea01_drop13            |                        |                                |
+|dea01_drop13            |dea01_user_x            |                                |
+|dea01_drop13            |dea01_user_y            |                                |
+|dea01_drop13            |dea01_user_z            |                                |
+|dea01_drop14            |                        |                                |
+|dea01_drop15            |                        |                                |
+|dea01_drop15            |dea01_user_x            |                                |
+|dea01_drop15            |dea01_user_y            |                                |
+|dea01_drop15            |dea01_user_z            |                                |
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(19 rows)
+>>
+* drop group dea01_drop15
+<<
+>>
+* \p\g
+<<
+ drop group dea01_drop15
+ 
+E_US1878 Group 'dea01_drop15' is not empty.
+    You cannot drop a group when members exist in the group.
+     Use 'ALTER GROUP dea01_drop15 DROP ALL'
+     to drop all members of the group before you drop the group.
+    ( 2-MAY-1990 16:04:49)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_drop1             |                        |                                |
+|dea01_drop10            |                        |                                |
+|dea01_drop11            |                        |                                |
+|dea01_drop11            |dea01_user_x            |                                |
+|dea01_drop11            |dea01_user_y            |                                |
+|dea01_drop11            |dea01_user_z            |                                |
+|dea01_drop12            |                        |                                |
+|dea01_drop13            |                        |                                |
+|dea01_drop13            |dea01_user_x            |                                |
+|dea01_drop13            |dea01_user_y            |                                |
+|dea01_drop13            |dea01_user_z            |                                |
+|dea01_drop14            |                        |                                |
+|dea01_drop15            |                        |                                |
+|dea01_drop15            |dea01_user_x            |                                |
+|dea01_drop15            |dea01_user_y            |                                |
+|dea01_drop15            |dea01_user_z            |                                |
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(19 rows)
+>>
+* drop group dea01_drop15,  dea01_drop14,  dea01_drop13,  
+<<
+>>
+*	dea01_drop12,  dea01_drop11,  dea01_drop10
+<<
+>>
+* \p\g
+<<
+ drop group dea01_drop15,  dea01_drop14,  dea01_drop13,  dea01_drop12,  dea01_drop11-
+,  dea01_drop10
+ 
+E_US1878 Group 'dea01_drop11' is not empty.
+    You cannot drop a group when members exist in the group.
+     Use 'ALTER GROUP dea01_drop11 DROP ALL'
+     to drop all members of the group before you drop the group.
+    ( 2-MAY-1990 16:04:55)
+
+E_US1878 Group 'dea01_drop13' is not empty.
+    You cannot drop a group when members exist in the group.
+     Use 'ALTER GROUP dea01_drop13 DROP ALL'
+     to drop all members of the group before you drop the group.
+    ( 2-MAY-1990 16:04:55)
+
+E_US1878 Group 'dea01_drop15' is not empty.
+    You cannot drop a group when members exist in the group.
+     Use 'ALTER GROUP dea01_drop15 DROP ALL'
+     to drop all members of the group before you drop the group.
+    ( 2-MAY-1990 16:04:56)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_drop1             |                        |                                |
+|dea01_drop11            |                        |                                |
+|dea01_drop11            |dea01_user_x            |                                |
+|dea01_drop11            |dea01_user_y            |                                |
+|dea01_drop11            |dea01_user_z            |                                |
+|dea01_drop13            |                        |                                |
+|dea01_drop13            |dea01_user_x            |                                |
+|dea01_drop13            |dea01_user_y            |                                |
+|dea01_drop13            |dea01_user_z            |                                |
+|dea01_drop15            |                        |                                |
+|dea01_drop15            |dea01_user_x            |                                |
+|dea01_drop15            |dea01_user_y            |                                |
+|dea01_drop15            |dea01_user_z            |                                |
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(16 rows)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* create group dea01_group2
+<<
+>>
+* \p\g
+<<
+ create group dea01_group2
+ 
+>>
+* commit
+<<
+>>
+* \p\g
+<<
+ commit
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(4 rows)
+>>
+* drop group dea01_group2;
+<<
+>>
+* \p\g
+<<
+ drop group dea01_group2;
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* rollback;
+<<
+>>
+* \p\g
+<<
+ rollback;
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(4 rows)
+>>
+* drop group dea01_group2;
+<<
+>>
+* \p\g
+<<
+ drop group dea01_group2;
+ 
+>>
+* commit;
+<<
+>>
+* \p\g
+<<
+ commit;
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* insert into iiuser(name, default_group) 
+<<
+>>
+*	values ('dea01_user_a', 'dea01_group0')
+<<
+>>
+* \p\g
+<<
+ insert into iiuser(name, default_group) 
+	values ('dea01_user_a', 'dea01_group0')
+ 
+(1 row)
+>>
+* drop group dea01_group0
+<<
+>>
+* \p\g
+<<
+ drop group dea01_group0
+ 
+E_US1868 One or more users have group 'dea01_group0' as a default group.
+    You cannot drop a group (or all users from a group)
+     if the group is the default for any user.
+     Use ACCESSDB to remove this group as default and try again.
+    ( 2-MAY-1990 16:05:33)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* create group dea01_group2
+<<
+>>
+* \p\g
+<<
+ create group dea01_group2
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
+|dea01_group2            |                        |                                |
++------------------------+------------------------+--------------------------------+
+(4 rows)
+>>
+* insert into iiuser(name, default_group) 
+<<
+>>
+*	values ('dea01_user_a', 'dea01_group0')
+<<
+>>
+* \p\g
+<<
+ insert into iiuser(name, default_group) 
+	values ('dea01_user_a', 'dea01_group0')
+ 
+(1 row)
+>>
+* drop group dea01_group0, dea01_group1, dea01_group2, dea01_groupx
+<<
+>>
+* \p\g
+<<
+ drop group dea01_group0, dea01_group1, dea01_group2, dea01_groupx
+ 
+E_US1874 Group 'dea01_groupx' does not exist.
+    You cannot alter or drop a non-existing group.
+     Ensure you entered the correct group identifier.
+    (23-OCT-1990 14:25:24)
+
+E_US1878 Group 'dea01_group1' is not empty.
+    You cannot drop a group when members exist in the group.
+     Use 'ALTER GROUP dea01_group1 DROP ALL'
+     to drop all members of the group before you drop the group.
+    (23-OCT-1990 14:25:24)
+
+E_US1868 One or more users have group 'dea01_group0' as a default group.
+    You cannot drop a group (or all users from a group)
+     if the group is the default for any user.
+     Use ACCESSDB to remove this group as default and try again.
+    (23-OCT-1990 14:25:24)
+
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from iiusergroup where groupid like 'dea01%'
+<<
+>>
+* \p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%'
+ 
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0                  |                        |                           -
+     |
+|dea01_group1                  |                        |                           -
+     |
+|dea01_group1                  |dea01_notauth                 |                     -
+           |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* drop table iiusergroup
+<<
+>>
+* \p\g
+<<
+ drop table iiusergroup
+ 
+>>
+* help iiusergroup
+<<
+>>
+* \p\g
+<<
+ help iiusergroup
+ 
+No tables were found that matched 'iiusergroup'
+
+
+>>
+* create group dea01_agroup_nocat
+<<
+>>
+* \p\g
+<<
+ create group dea01_agroup_nocat
+ 
+E_US16D5 Table specified no longer exists.
+    ( 2-MAY-1990 16:06:23)
+
+E_US186A An error occurred while processing the iiusergroup catalog.
+    Please contact your system manager.
+    ( 2-MAY-1990 16:06:23)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* \p\g
+<<
+>>
+* drop table iiusergroup
+<<
+>>
+* \p\g
+<<
+ drop table iiusergroup
+ 
+>>
+* help iiusergroup
+<<
+>>
+* \p\g
+<<
+ help iiusergroup
+ 
+No tables were found that matched 'iiusergroup'
+
+
+>>
+* alter group dea01_group0 add users (dea01_user_x)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 add users (dea01_user_x)
+ 
+E_US16D5 Table specified no longer exists.
+    ( 2-MAY-1990 16:06:32)
+
+E_US186A An error occurred while processing the iiusergroup catalog.
+    Please contact your system manager.
+    ( 2-MAY-1990 16:06:32)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* \p\g
+<<
+>>
+* drop table iiusergroup
+<<
+>>
+* \p\g
+<<
+ drop table iiusergroup
+ 
+>>
+* help iiusergroup
+<<
+>>
+* \p\g
+<<
+ help iiusergroup
+ 
+No tables were found that matched 'iiusergroup'
+
+
+>>
+* drop group dea01_group0
+<<
+>>
+* \p\g
+<<
+ drop group dea01_group0
+ 
+E_US16D5 Table specified no longer exists.
+    ( 2-MAY-1990 16:06:41)
+
+E_US186A An error occurred while processing the iiusergroup catalog.
+    Please contact your system manager.
+    ( 2-MAY-1990 16:06:42)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* \p\g
+<<
+/* SQL Startup File */
+ 
+>>
+* select dbmsinfo('database')
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('database')
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|grantdb                         |
++--------------------------------+
+(1 row)
+>>
+* create group dea01_group_nodbdb
+<<
+>>
+* \p\g
+<<
+ create group dea01_group_nodbdb
+ 
+E_US18D4 You must be connected to the 'iidbdb' database
+    to issue 'CREATE/ALTER/DROP GROUP' statements.
+     Ensure your session is connected to the iidbdb database.
+    (Tue Nov 16 11:24:47 1993)
+
+>>
+* \p\g
+<<
+>>
+* select dbmsinfo('database');
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('database');
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|grantdb                         |
++--------------------------------+
+(1 row)
+>>
+* alter group dea01_group0 add users (dea01_user_x)
+<<
+>>
+* \p\g
+<<
+ alter group dea01_group0 add users (dea01_user_x)
+ 
+E_US18D4 You must be connected to the 'iidbdb' database
+    to issue 'CREATE/ALTER/DROP GROUP' statements.
+     Ensure your session is connected to the iidbdb database.
+    (Tue Nov 16 11:24:53 1993)
+
+>>
+* \p\g
+<<
+>>
+* select dbmsinfo('database')
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('database')
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|grantdb                         |
++--------------------------------+
+(1 row)
+>>
+* drop group dea01_group0
+<<
+>>
+* \p\g
+<<
+ drop group dea01_group0
+ 
+E_US18D4 You must be connected to the 'iidbdb' database
+    to issue 'CREATE/ALTER/DROP GROUP' statements.
+     Ensure your session is connected to the iidbdb database.
+    (Tue Nov 16 11:24:56 1993)
+
+>>
+* create table  dea01_select (c1 i2, c2 i2) with page_size=8192;
+<<
+>>
+* create table  dea01_insert (c1 i2, c2 i2) with page_size=8192;
+<<
+>>
+* create table  dea01_delete (c1 i2, c2 i2) with page_size=8192;
+<<
+>>
+* create table  dea01_update (c1 i2, c2 i2) with page_size=8192;
+<<
+>>
+* create table  dea01_all    (c1 i2, c2 i2) with page_size=8192;
+<<
+>>
+* create table  dea01_none   (c1 i2, c2 i2) with page_size=8192;
+<<
+>>
+* \p\g
+<<
+ create table  dea01_select (c1 i2, c2 i2) with page_size=8192;
+ create table  dea01_insert (c1 i2, c2 i2) with page_size=8192;
+ create table  dea01_delete (c1 i2, c2 i2) with page_size=8192;
+ create table  dea01_update (c1 i2, c2 i2) with page_size=8192;
+ create table  dea01_all    (c1 i2, c2 i2) with page_size=8192;
+ create table  dea01_none   (c1 i2, c2 i2) with page_size=8192;
+ 
+>>
+* insert into  dea01_select (c1, c2) values (1, 2);
+<<
+>>
+* insert into  dea01_insert (c1, c2) values (1, 2);
+<<
+>>
+* insert into  dea01_delete (c1, c2) values (1, 2);
+<<
+>>
+* insert into  dea01_update (c1, c2) values (1, 2);
+<<
+>>
+* insert into  dea01_all    (c1, c2) values (1, 2);
+<<
+>>
+* insert into  dea01_none   (c1, c2) values (1, 2);
+<<
+>>
+* \p\g
+<<
+ insert into  dea01_select (c1, c2) values (1, 2);
+ insert into  dea01_insert (c1, c2) values (1, 2);
+ insert into  dea01_delete (c1, c2) values (1, 2);
+ insert into  dea01_update (c1, c2) values (1, 2);
+ insert into  dea01_all    (c1, c2) values (1, 2);
+ insert into  dea01_none   (c1, c2) values (1, 2);
+ 
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+>>
+* create procedure  dea01_p1 as
+<<
+>>
+* begin
+<<
+>>
+* 	message 'dea01_p1 was entered'
+<<
+>>
+* end;
+<<
+>>
+* \p\g
+<<
+ create procedure  dea01_p1 as
+ begin
+ 	message 'dea01_p1 was entered'
+ end;
+ 
+>>
+* grant select on  dea01_select to group
+<<
+>>
+* \p\g
+<<
+ grant select on  dea01_select to group
+
+E_US100D line 1, Syntax error on 'EOF'. The correct syntax is:
+    GRANT ALL [PRIVILEGES] | <tbl_priv>(s) ON [TABLE] <obj_spec>(s)
+    		TO [<grantee type>] <grantee>(s) [WITH GRANT OPTION] or
+    	GRANT ALL [PRIVILEGES] | EXECUTE ON PROCEDURE <obj_spec>(s)
+    		TO [<grantee type>] <grantee>(s) [WITH GRANT OPTION] or
+    	GRANT ALL [PRIVILEGES] | <ev_priv>(s) ON DBEVENT <obj_spec>(s)
+    		TO [<grantee type>] <grantee>(s) [WITH GRANT OPTION] or
+    	GRANT ALL [PRIVILEGES] | NEXT ON SEQUENCE <obj_spec>(s)
+    		TO [<grantee type>] <grantee>(s) [WITH GRANT OPTION] or
+    	GRANT ALL [PRIVILEGES] | <db_priv>(s)
+    		ON CURRENT INSTALLATION | DATABASE <database name>(s)
+    		TO [<grantee type>] <grantee>(s)
+     where
+    	 <tbl_priv> ::= SELECT | INSERT | DELETE | UPDATE[<column list>] |
+    			REFERENCES[<column list>]
+    	 <ev_priv>  ::= REGISTER | RAISE
+    	 <grantee type> ::= [USER] | GROUP | ROLE
+    	 <grantee> ::= <auth_id> | PUBLIC
+    (Fri Jan 17 17:14:35 2003)
+>>
+* grant select on  dea01_select to group 0bad_group
+<<
+>>
+* \p\g
+<<
+ grant select on  dea01_select to group 0bad_group
+
+E_US100D line 1, Syntax error on '0'. The correct syntax is:
+    GRANT ALL [PRIVILEGES] | <tbl_priv>(s) ON [TABLE] <obj_spec>(s)
+    		TO [<grantee type>] <grantee>(s) [WITH GRANT OPTION] or
+    	GRANT ALL [PRIVILEGES] | EXECUTE ON PROCEDURE <obj_spec>(s)
+    		TO [<grantee type>] <grantee>(s) [WITH GRANT OPTION] or
+    	GRANT ALL [PRIVILEGES] | <ev_priv>(s) ON DBEVENT <obj_spec>(s)
+    		TO [<grantee type>] <grantee>(s) [WITH GRANT OPTION] or
+    	GRANT ALL [PRIVILEGES] | NEXT ON SEQUENCE <obj_spec>(s)
+    		TO [<grantee type>] <grantee>(s) [WITH GRANT OPTION] or
+    	GRANT ALL [PRIVILEGES] | <db_priv>(s)
+    		ON CURRENT INSTALLATION | DATABASE <database name>(s)
+    		TO [<grantee type>] <grantee>(s)
+     where
+    	 <tbl_priv> ::= SELECT | INSERT | DELETE | UPDATE[<column list>] |
+    			REFERENCES[<column list>]
+    	 <ev_priv>  ::= REGISTER | RAISE
+    	 <grantee type> ::= [USER] | GROUP | ROLE
+    	 <grantee> ::= <auth_id> | PUBLIC
+    (Fri Jan 17 17:14:35 2003)
+
+>>
+* grant select on  dea01_select to group a23456789012345678901234567890123
+<<
+>>
+* \p\g
+<<
+ grant select on  dea01_select to group a23456789012345678901234567890123
+ 
+E_US0A8F line 1, Name too long: 'a23456789012345678901234567890123'.
+    ( 2-MAY-1990 16:07:57)
+
+>>
+* grant select          on  dea01_select to group dea01_group0, pvusr2_group;
+<<
+>>
+* grant select          on  dea01_select to group dea01_group1, pvusr2_group;
+<<
+>>
+* grant select          on  dea01_select to group dea01_group2, pvusr2_group;
+<<
+>>
+* grant select, insert  on  dea01_insert 
+<<
+>>
+*	to group dea01_group0, dea01_group1, dea01_group2, pvusr2_group;
+<<
+>>
+* grant select, delete  on  dea01_delete 
+<<
+>>
+*	to group dea01_group0, dea01_group1, dea01_group2, pvusr2_group;
+<<
+>>
+* grant select, update  on  dea01_update 
+<<
+>>
+*	to group dea01_group0, dea01_group1, dea01_group2, pvusr2_group;
+<<
+>>
+* grant all privileges  on  dea01_all    
+<<
+>>
+*	to group dea01_group0, dea01_group1, dea01_group2, pvusr2_group;
+<<
+>>
+* \p\g
+<<
+ grant select          on  dea01_select to group dea01_group0, pvusr2_group;
+ grant select          on  dea01_select to group dea01_group1, pvusr2_group;
+ grant select          on  dea01_select to group dea01_group2, pvusr2_group;
+ grant select, insert  on  dea01_insert 
+	to group dea01_group0, dea01_group1, dea01_group2, pvusr2_group;
+ grant select, delete  on  dea01_delete 
+	to group dea01_group0, dea01_group1, dea01_group2, pvusr2_group;
+ grant select, update  on  dea01_update 
+	to group dea01_group0, dea01_group1, dea01_group2, pvusr2_group;
+ grant all privileges  on  dea01_all    
+	to group dea01_group0, dea01_group1, dea01_group2, pvusr2_group;
+ 
+>>
+* grant execute on procedure  dea01_p1 
+<<
+>>
+*	to group dea01_group0, dea01_group1, dea01_group2, pvusr2_group;
+<<
+>>
+* \p\g
+<<
+ grant execute on procedure  dea01_p1 
+	to group dea01_group0, dea01_group1, dea01_group2, pvusr2_group;
+ 
+>>
+* help permit  dea01_select, dea01_insert, dea01_delete, dea01_update,
+<<
+>>
+* 	     dea01_all,    dea01_none;
+<<
+>>
+* \p\g
+<<
+ help permit  dea01_select, dea01_insert, dea01_delete, dea01_update,
+ 	     dea01_all,    dea01_none;
+ 
+Permissions on dea01_select are:
+
+
+Permission 2:
+grant select on "pvusr1".dea01_select to group pvusr2_group           
+
+Permission 3:
+grant select on "pvusr1".dea01_select to group dea01_group0           
+
+Permission 4:
+grant select on "pvusr1".dea01_select to group dea01_group1           
+
+Permission 5:
+grant select on "pvusr1".dea01_select to group dea01_group2           
+
+
+Permissions on dea01_insert are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dea01_insert to group pvusr2_group       
+
+Permission 3:
+grant   insert   on "pvusr1".dea01_insert to group pvusr2_group       
+
+Permission 4:
+grant   select   on "pvusr1".dea01_insert to group dea01_group2       
+
+Permission 5:
+grant   insert   on "pvusr1".dea01_insert to group dea01_group2       
+
+Permission 6:
+grant   select   on "pvusr1".dea01_insert to group dea01_group1       
+
+Permission 7:
+grant   insert   on "pvusr1".dea01_insert to group dea01_group1       
+
+Permission 8:
+grant   select   on "pvusr1".dea01_insert to group dea01_group0       
+
+Permission 9:
+grant   insert   on "pvusr1".dea01_insert to group dea01_group0       
+
+
+Permissions on dea01_delete are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dea01_delete to group pvusr2_group       
+
+Permission 3:
+grant   delete   on "pvusr1".dea01_delete to group pvusr2_group       
+
+Permission 4:
+grant   select   on "pvusr1".dea01_delete to group dea01_group2       
+
+Permission 5:
+grant   delete   on "pvusr1".dea01_delete to group dea01_group2       
+
+Permission 6:
+grant   select   on "pvusr1".dea01_delete to group dea01_group1       
+
+Permission 7:
+grant   delete   on "pvusr1".dea01_delete to group dea01_group1       
+
+Permission 8:
+grant   select   on "pvusr1".dea01_delete to group dea01_group0       
+
+Permission 9:
+grant   delete   on "pvusr1".dea01_delete to group dea01_group0       
+
+
+Permissions on dea01_update are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dea01_update to group pvusr2_group       
+
+Permission 3:
+grant   update   on "pvusr1".dea01_update to group pvusr2_group       
+
+Permission 4:
+grant   select   on "pvusr1".dea01_update to group dea01_group2       
+
+Permission 5:
+grant   update   on "pvusr1".dea01_update to group dea01_group2       
+
+Permission 6:
+grant   select   on "pvusr1".dea01_update to group dea01_group1       
+
+Permission 7:
+grant   update   on "pvusr1".dea01_update to group dea01_group1       
+
+Permission 8:
+grant   select   on "pvusr1".dea01_update to group dea01_group0       
+
+Permission 9:
+grant   update   on "pvusr1".dea01_update to group dea01_group0       
+
+
+Permissions on dea01_all are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 3:
+grant   update   on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 4:
+grant   delete   on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 5:
+grant   insert   on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 6:
+grant references on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 7:
+grant   select   on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 8:
+grant   update   on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 9:
+grant   delete   on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 10:
+grant   insert   on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 11:
+grant references on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 12:
+grant   select   on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 13:
+grant   update   on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 14:
+grant   delete   on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 15:
+grant   insert   on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 16:
+grant references on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 17:
+grant   select   on "pvusr1".dea01_all to group dea01_group0          
+
+Permission 18:
+grant   update   on "pvusr1".dea01_all to group dea01_group0          
+
+Permission 19:
+grant   delete   on "pvusr1".dea01_all to group dea01_group0          
+
+Permission 20:
+grant   insert   on "pvusr1".dea01_all to group dea01_group0          
+
+Permission 21:
+grant references on "pvusr1".dea01_all to group dea01_group0          
+
+
+Table dea01_none has no permissions granted on it
+
+
+>>
+<<
+ help permit  dea01_select, dea01_insert, dea01_delete, dea01_update,
+ 	     dea01_all,    dea01_none;
+ 
+Permissions on dea01_select are:
+
+
+Permission 2:
+grant select on "pvusr1".dea01_select to group pvusr2_group           
+
+Permission 3:
+grant select on "pvusr1".dea01_select to group dea01_group0           
+
+Permission 4:
+grant select on "pvusr1".dea01_select to group dea01_group1           
+
+Permission 5:
+grant select on "pvusr1".dea01_select to group dea01_group2           
+
+
+Permissions on dea01_insert are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dea01_insert to group pvusr2_group       
+
+Permission 3:
+grant   insert   on "pvusr1".dea01_insert to group pvusr2_group       
+
+Permission 4:
+grant   select   on "pvusr1".dea01_insert to group dea01_group2       
+
+Permission 5:
+grant   insert   on "pvusr1".dea01_insert to group dea01_group2       
+
+Permission 6:
+grant   select   on "pvusr1".dea01_insert to group dea01_group1       
+
+Permission 7:
+grant   insert   on "pvusr1".dea01_insert to group dea01_group1       
+
+Permission 8:
+grant   select   on "pvusr1".dea01_insert to group dea01_group0       
+
+Permission 9:
+grant   insert   on "pvusr1".dea01_insert to group dea01_group0       
+
+
+Permissions on dea01_delete are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dea01_delete to group pvusr2_group       
+
+Permission 3:
+grant   delete   on "pvusr1".dea01_delete to group pvusr2_group       
+
+Permission 4:
+grant   select   on "pvusr1".dea01_delete to group dea01_group2       
+
+Permission 5:
+grant   delete   on "pvusr1".dea01_delete to group dea01_group2       
+
+Permission 6:
+grant   select   on "pvusr1".dea01_delete to group dea01_group1       
+
+Permission 7:
+grant   delete   on "pvusr1".dea01_delete to group dea01_group1       
+
+Permission 8:
+grant   select   on "pvusr1".dea01_delete to group dea01_group0       
+
+Permission 9:
+grant   delete   on "pvusr1".dea01_delete to group dea01_group0       
+
+
+Permissions on dea01_update are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dea01_update to group pvusr2_group       
+
+Permission 3:
+grant   update   on "pvusr1".dea01_update to group pvusr2_group       
+
+Permission 4:
+grant   select   on "pvusr1".dea01_update to group dea01_group2       
+
+Permission 5:
+grant   update   on "pvusr1".dea01_update to group dea01_group2       
+
+Permission 6:
+grant   select   on "pvusr1".dea01_update to group dea01_group1       
+
+Permission 7:
+grant   update   on "pvusr1".dea01_update to group dea01_group1       
+
+Permission 8:
+grant   select   on "pvusr1".dea01_update to group dea01_group0       
+
+Permission 9:
+grant   update   on "pvusr1".dea01_update to group dea01_group0       
+
+
+Permissions on dea01_all are:
+
+
+Permission 2:
+grant   select   on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 3:
+grant   update   on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 4:
+grant   delete   on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 5:
+grant   insert   on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 6:
+grant references on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 7:
+grant  copy_into on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 8:
+grant  copy_from on "pvusr1".dea01_all to group pvusr2_group          
+
+Permission 9:
+grant   select   on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 10:
+grant   update   on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 11:
+grant   delete   on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 12:
+grant   insert   on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 13:
+grant references on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 14:
+grant  copy_into on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 15:
+grant  copy_from on "pvusr1".dea01_all to group dea01_group2          
+
+Permission 16:
+grant   select   on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 17:
+grant   update   on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 18:
+grant   delete   on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 19:
+grant   insert   on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 20:
+grant references on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 21:
+grant  copy_into on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 22:
+grant  copy_from on "pvusr1".dea01_all to group dea01_group1          
+
+Permission 23:
+grant   select   on "pvusr1".dea01_all to group dea01_group0          
+
+Permission 24:
+grant   update   on "pvusr1".dea01_all to group dea01_group0          
+
+Permission 25:
+grant   delete   on "pvusr1".dea01_all to group dea01_group0          
+
+Permission 26:
+grant   insert   on "pvusr1".dea01_all to group dea01_group0          
+
+Permission 27:
+grant references on "pvusr1".dea01_all to group dea01_group0          
+
+Permission 28:
+grant  copy_into on "pvusr1".dea01_all to group dea01_group0          
+
+Permission 29:
+grant  copy_from on "pvusr1".dea01_all to group dea01_group0          
+
+
+Table dea01_none has no permissions granted on it
+
+
+>>
+* commit
+<<
+>>
+* \p\g
+<<
+ commit
+ 
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr2 sql -s "-Gpvusr2_group" SEPPARAMDB3 
+<<
+>>
+* \p\g
+<<
+/* SQL Startup File */
+ 
+>>
+* select dbmsinfo('database') as database, dbmsinfo('dba') as dba,
+<<
+>>
+*	dbmsinfo('username') as username, dbmsinfo('group') as groupname;\p\g
+<<
+ select dbmsinfo('database') as database, dbmsinfo('dba') as dba,
+	dbmsinfo('username') as username, dbmsinfo('group') as groupname;
+
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+
+|database                        |dba                             |username         -
+               |groupname                       |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+
+|grantdb                         |pvusr1                          |pvusr2           -
+               |pvusr2_group                    |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+
+(1 row)
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* insert into dea01_select(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_select(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:08:57)
+
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* update dea01_select set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_select set c2 = 3 where c2 < 100
+ 
+E_US0DAE UPDATE on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    (Mon Aug 26 10:09:14 1991)
+
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* delete from dea01_select where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_select where c2 < 100
+ 
+E_US0DAE DELETE on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    (Mon Aug 26 09:48:34 1991)
+
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* insert into dea01_insert(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_insert(c1, c2) values (99,100)
+ 
+(1 row)
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
+|    99|   100|
++------+------+
+(2 rows)
+>>
+* update dea01_insert set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_insert set c2 = 3 where c2 < 100
+ 
+E_US0DAE UPDATE on table dea01_insert: no GRANT or GRANT compatible permit
+    exists.
+    (Mon Aug 26 10:10:16 1991)
+
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
+|    99|   100|
++------+------+
+(2 rows)
+>>
+* delete from dea01_insert where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_insert where c2 < 100
+ 
+E_US0DAE DELETE on table dea01_insert: no GRANT or GRANT compatible permit
+    exists.
+    (Mon Aug 26 10:11:38 1991)
+
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
+|    99|   100|
++------+------+
+(2 rows)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* insert into dea01_update(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_update(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_update: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:09:33)
+
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* update dea01_update set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_update set c2 = 3 where c2 < 100
+ 
+(1 row)
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     3|
++------+------+
+(1 row)
+>>
+* delete from dea01_update where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_update where c2 < 100
+ 
+E_US0DAE DELETE on table dea01_update: no GRANT or GRANT compatible permit
+    exists.
+    (Mon Aug 26 10:11:52 1991)
+
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     3|
++------+------+
+(1 row)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_delete 
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete 
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* insert into dea01_delete(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_delete(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_delete: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:09:51)
+
+>>
+* select * from dea01_delete
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* update dea01_delete set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_delete set c2 = 3 where c2 < 100
+ 
+E_US0DAE UPDATE on table dea01_delete: no GRANT or GRANT compatible permit
+    exists.
+    (Mon Aug 26 10:12:03 1991)
+
+>>
+* select * from dea01_delete
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* delete from dea01_delete where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_delete where c2 < 100
+ 
+(1 row)
+>>
+* select * from dea01_delete
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
++------+------+
+(0 rows)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* insert into dea01_all(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_all(c1, c2) values (99,100)
+ 
+(1 row)
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
+|    99|   100|
++------+------+
+(2 rows)
+>>
+* update dea01_all set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_all set c2 = 3 where c2 < 100
+ 
+(1 row)
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     3|
+|    99|   100|
++------+------+
+(2 rows)
+>>
+* delete from dea01_all where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_all where c2 < 100
+ 
+(1 row)
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|    99|   100|
++------+------+
+(1 row)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:10:26)
+
+>>
+* insert into dea01_none(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_none(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:10:29)
+
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:10:31)
+
+>>
+* update dea01_none set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_none set c2 = 3 where c2 < 100
+ 
+E_US0DAE SELECT, UPDATE on table dea01_none: no GRANT or GRANT compatible
+    permit exists.
+    (Tue Nov 16 11:25:30 1993)
+
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:10:35)
+
+>>
+* delete from dea01_none where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_none where c2 < 100
+ 
+E_US0DAE SELECT, DELETE on table dea01_none: no GRANT or GRANT compatible
+    permit exists.
+    (Tue Nov 16 11:25:37 1993)
+
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:10:40)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr2 sql -s "-Gpvusr2_group" SEPPARAMDB3 
+<<
+>>
+* \p\g
+<<
+/* SQL Startup File */
+ 
+>>
+* select dbmsinfo('database') as database, dbmsinfo('dba') as dba,
+<<
+>>
+*	dbmsinfo('username') as username, dbmsinfo('group') as groupname;\p\g
+<<
+ select dbmsinfo('database') as database, dbmsinfo('dba') as dba,
+	dbmsinfo('username') as username, dbmsinfo('group') as groupname;
+
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+
+|database                        |dba                             |username         -
+               |groupname                       |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+
+|grantdb                         |pvusr1                          |pvusr2           -
+               |pvusr2_group                    |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+
+(1 row)
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* insert into dea01_select(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_select(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:15)
+
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* update dea01_select set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_select set c2 = 3 where c2 < 100
+ 
+E_US0DAE UPDATE on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    (23-OCT-1990 12:57:06)
+
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* delete from dea01_select where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_select where c2 < 100
+ 
+E_US0DAE DELETE on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    (23-OCT-1990 12:57:32)
+
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* insert into dea01_insert(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_insert(c1, c2) values (99,100)
+ 
+(1 row)
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
+|    99|   100|
++------+------+
+(2 rows)
+>>
+* update dea01_insert set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_insert set c2 = 3 where c2 < 100
+ 
+E_US0DAE UPDATE on table dea01_insert: no GRANT or GRANT compatible permit
+    exists.
+    (23-OCT-1990 12:58:23)
+
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
+|    99|   100|
++------+------+
+(2 rows)
+>>
+* delete from dea01_insert where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_insert where c2 < 100
+ 
+E_US0DAE DELETE on table dea01_insert: no GRANT or GRANT compatible permit
+    exists.
+    (23-OCT-1990 12:58:42)
+
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
+|    99|   100|
++------+------+
+(2 rows)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* insert into dea01_update(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_update(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_update: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:54)
+
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* update dea01_update set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_update set c2 = 3 where c2 < 100
+ 
+(1 row)
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     3|
++------+------+
+(1 row)
+>>
+* delete from dea01_update where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_update where c2 < 100
+ 
+E_US0DAE DELETE on table dea01_update: no GRANT or GRANT compatible permit
+    exists.
+    (23-OCT-1990 13:03:01)
+
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     3|
++------+------+
+(1 row)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_delete 
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete 
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* insert into dea01_delete(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_delete(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_delete: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:13)
+
+>>
+* select * from dea01_delete
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* update dea01_delete set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_delete set c2 = 3 where c2 < 100
+ 
+E_US0DAE UPDATE on table dea01_delete: no GRANT or GRANT compatible permit
+    exists.
+    (23-OCT-1990 13:05:50)
+
+>>
+* select * from dea01_delete
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* delete from dea01_delete where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_delete where c2 < 100
+ 
+(1 row)
+>>
+* select * from dea01_delete
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
++------+------+
+(0 rows)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
++------+------+
+(1 row)
+>>
+* insert into dea01_all(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_all(c1, c2) values (99,100)
+ 
+(1 row)
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     2|
+|    99|   100|
++------+------+
+(2 rows)
+>>
+* update dea01_all set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_all set c2 = 3 where c2 < 100
+ 
+(1 row)
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|     1|     3|
+|    99|   100|
++------+------+
+(2 rows)
+>>
+* delete from dea01_all where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_all where c2 < 100
+ 
+(1 row)
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+
++------+------+
+|c1    |c2    |
++------+------+
+|    99|   100|
++------+------+
+(1 row)
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:47)
+
+>>
+* insert into dea01_none(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_none(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:49)
+
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:51)
+
+>>
+* update dea01_none set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_none set c2 = 3 where c2 < 100
+ 
+E_US0DAE SELECT, UPDATE on table dea01_none: no GRANT or GRANT compatible
+    permit exists.
+    (Tue Nov 16 11:25:51 1993)
+
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:56)
+
+>>
+* delete from dea01_none where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_none where c2 < 100
+ 
+E_US0DAE SELECT, DELETE on table dea01_none: no GRANT or GRANT compatible
+    permit exists.
+    (Tue Nov 16 11:25:54 1993)
+
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:18:00)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr2 sql -s "-Gpvusr3_group" SEPPARAMDB3 
+<<
+>>
+* \p\g
+<<
+/* SQL Startup File */
+ 
+>>
+* select dbmsinfo('database') as database, dbmsinfo('dba') as dba,
+<<
+>>
+*	dbmsinfo('username') as username, dbmsinfo('group') as groupname;\p\g
+<<
+ select dbmsinfo('database') as database, dbmsinfo('dba') as dba,
+	dbmsinfo('username') as username, dbmsinfo('group') as groupname;
+
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+
+|database                        |dba                             |username         -
+               |groupname                       |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+
+|grantdb                         |pvusr1                          |pvusr2           -
+               |pvusr3_group                    |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+
+(1 row)
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+E_US0DAE SELECT on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:13)
+
+>>
+* insert into dea01_select(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_select(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:15)
+
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+E_US0DAE SELECT on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:18)
+
+>>
+* update dea01_select set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_select set c2 = 3 where c2 < 100
+ 
+E_US0DAE SELECT, UPDATE on table dea01_select: no GRANT or GRANT
+    compatible permit exists.
+    (Tue Nov 16 11:25:58 1993)
+
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+E_US0DAE SELECT on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:23)
+
+>>
+* delete from dea01_select where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_select where c2 < 100
+ 
+E_US0DAE SELECT, DELETE on table dea01_select: no GRANT or GRANT
+    compatible permit exists.
+    (Tue Nov 16 11:26:00 1993)
+
+>>
+* select * from dea01_select
+<<
+>>
+* \p\g
+<<
+ select * from dea01_select
+ 
+E_US0DAE SELECT on table dea01_select: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:29)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+E_US0DAE SELECT on table dea01_insert: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:34)
+
+>>
+* insert into dea01_insert(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_insert(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_insert: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:36)
+
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+E_US0DAE SELECT on table dea01_insert: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:38)
+
+>>
+* update dea01_insert set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_insert set c2 = 3 where c2 < 100
+ 
+E_US0DAE SELECT, UPDATE on table dea01_insert: no GRANT or GRANT
+    compatible permit exists.
+    (Tue Nov 16 11:26:02 1993)
+
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+E_US0DAE SELECT on table dea01_insert: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:43)
+
+>>
+* delete from dea01_insert where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_insert where c2 < 100
+ 
+E_US0DAE SELECT, DELETE on table dea01_insert: no GRANT or GRANT
+    compatible permit exists.
+    (Tue Nov 16 11:26:04 1993)
+
+>>
+* select * from dea01_insert
+<<
+>>
+* \p\g
+<<
+ select * from dea01_insert
+ 
+E_US0DAE SELECT on table dea01_insert: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:47)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+E_US0DAE SELECT on table dea01_update: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:52)
+
+>>
+* insert into dea01_update(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_update(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_update: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:54)
+
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+E_US0DAE SELECT on table dea01_update: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:16:56)
+
+>>
+* update dea01_update set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_update set c2 = 3 where c2 < 100
+ 
+E_US0DAE SELECT, UPDATE on table dea01_update: no GRANT or GRANT
+    compatible permit exists.
+    (Tue Nov 16 11:26:07 1993)
+
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+E_US0DAE SELECT on table dea01_update: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:01)
+
+>>
+* delete from dea01_update where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_update where c2 < 100
+ 
+E_US0DAE SELECT, DELETE on table dea01_update: no GRANT or GRANT
+    compatible permit exists.
+    (Tue Nov 16 11:26:08 1993)
+
+>>
+* select * from dea01_update
+<<
+>>
+* \p\g
+<<
+ select * from dea01_update
+ 
+E_US0DAE SELECT on table dea01_update: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:06)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_delete 
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete 
+ 
+E_US0DAE SELECT on table dea01_delete: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:11)
+
+>>
+* insert into dea01_delete(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_delete(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_delete: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:13)
+
+>>
+* select * from dea01_delete
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete
+ 
+E_US0DAE SELECT on table dea01_delete: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:15)
+
+>>
+* update dea01_delete set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_delete set c2 = 3 where c2 < 100
+ 
+E_US0DAE SELECT, UPDATE on table dea01_delete: no GRANT or GRANT
+    compatible permit exists.
+    (Tue Nov 16 11:26:11 1993)
+
+>>
+* select * from dea01_delete
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete
+ 
+E_US0DAE SELECT on table dea01_delete: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:22)
+
+>>
+* delete from dea01_delete where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_delete where c2 < 100
+ 
+E_US0DAE SELECT, DELETE on table dea01_delete: no GRANT or GRANT
+    compatible permit exists.
+    (Tue Nov 16 11:26:12 1993)
+
+>>
+* select * from dea01_delete
+<<
+>>
+* \p\g
+<<
+ select * from dea01_delete
+ 
+E_US0DAE SELECT on table dea01_delete: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:26)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+E_US0DAE SELECT on table dea01_all: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:30)
+
+>>
+* insert into dea01_all(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_all(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_all: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:32)
+
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+E_US0DAE SELECT on table dea01_all: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:34)
+
+>>
+* update dea01_all set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_all set c2 = 3 where c2 < 100
+ 
+E_US0DAE SELECT, UPDATE on table dea01_all: no GRANT or GRANT compatible
+    permit exists.
+    (Tue Nov 16 11:26:15 1993)
+
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+E_US0DAE SELECT on table dea01_all: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:39)
+
+>>
+* delete from dea01_all where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_all where c2 < 100
+ 
+E_US0DAE SELECT, DELETE on table dea01_all: no GRANT or GRANT compatible
+    permit exists.
+    (Tue Nov 16 11:26:16 1993)
+
+>>
+* select * from dea01_all
+<<
+>>
+* \p\g
+<<
+ select * from dea01_all
+ 
+E_US0DAE SELECT on table dea01_all: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:43)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:47)
+
+>>
+* insert into dea01_none(c1, c2) values (99,100)
+<<
+>>
+* \p\g
+<<
+ insert into dea01_none(c1, c2) values (99,100)
+ 
+E_US0DAE INSERT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:49)
+
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:51)
+
+>>
+* update dea01_none set c2 = 3 where c2 < 100
+<<
+>>
+* \p\g
+<<
+ update dea01_none set c2 = 3 where c2 < 100
+ 
+E_US0DAE SELECT, UPDATE on table dea01_none: no GRANT or GRANT compatible
+    permit exists.
+    (Tue Nov 16 11:26:19 1993)
+
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:17:56)
+
+>>
+* delete from dea01_none where c2 < 100
+<<
+>>
+* \p\g
+<<
+ delete from dea01_none where c2 < 100
+ 
+E_US0DAE SELECT, DELETE on table dea01_none: no GRANT or GRANT compatible
+    permit exists.
+    (Tue Nov 16 11:26:21 1993)
+
+>>
+* select * from dea01_none
+<<
+>>
+* \p\g
+<<
+ select * from dea01_none
+ 
+E_US0DAE SELECT on table dea01_none: no GRANT or GRANT compatible permit
+    exists.
+    ( 2-MAY-1990 16:18:00)
+
+>>
+* rollback
+<<
+>>
+* \p\g
+<<
+ rollback
+ 
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop table  dea01_select,  dea01_insert,  dea01_delete,  dea01_update,
+<<
+~
+>>
+* 	    dea01_all,     dea01_none;\p\g
+<<
+/* SQL Startup File */
+ drop table  dea01_select,  dea01_insert,  dea01_delete,  dea01_update,
+ 	    dea01_all,     dea01_none;
+>>
+* drop procedure dea01_p1;\p\g
+<<
+ drop procedure dea01_p1;
+>>
+* \q
+<<
+>>
+? qasetusertm ingres sql -s "+U" iidbdb 
+<<
+>>
+* select * from iiuser where name like 'dea01%' order by name;\p\g
+<<
+/* SQL Startup File */
+ select * from iiuser where name like 'dea01%' order by name;
+
++--------------------------------+------+------+-------------+-----------------------
+----------+------------------------+--------+--------------------------------+-------
+-------+-------------------------+-------------+-------------+
+|name                            |gid   |mid   |status       |default_group         -
+          |password                |reserve |profile_name                    |defaul-
+t_priv |expire_date              |flags_mask   |user_priv    |
++--------------------------------+------+------+-------------+-----------------------
+----------+------------------------+--------+--------------------------------+-------
+-------+-------------------------+-------------+-------------+
+|dea01_notauth                   |     0|     0|            0|                      -
+          |                        |        |                                |      -
+      0|                         |            0|            0|
+|dea01_super                     |     0|     0|        32785|                      -
+          |                        |        |                                |      -
+      0|                         |            0|            0|
++--------------------------------+------+------+-------------+-----------------------
+----------+------------------------+--------+--------------------------------+-------
+-------+-------------------------+-------------+-------------+
+(2 rows)
+>>
+* select * from iiusergroup where groupid like 'dea01%' order by groupid;\p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%' order by groupid;
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
+|dea01_group0            |                        |                                |
+|dea01_group1            |                        |                                |
+|dea01_group1            |dea01_notauth           |                                |
++------------------------+------------------------+--------------------------------+
+(3 rows)
+>>
+* select * from iidbpriv where grantee like 'dea01%' order by grantee;\p\g
+<<
+ select * from iidbpriv where grantee like 'dea01%' order by grantee;
+
++--------------------------------+--------------------------------+------+------+----
+----------+-------------+-------------+-------------+-------------+-------------+----
+----------+-------------+-------------+-------------+--------------------------------
+-+
+|dbname                          |grantee                         |gtype |dbflag|con-
+trol      |flags        |qrow_limit   |qdio_limit   |qcpu_limit   |qpage_limit  |qco-
+st_limit  |idle_time_lim|connect_time_|priority_limi|reserve                        -
+ |
++--------------------------------+--------------------------------+------+------+----
+----------+-------------+-------------+-------------+-------------+-------------+----
+----------+-------------+-------------+-------------+--------------------------------
+-+
++--------------------------------+--------------------------------+------+------+----
+----------+-------------+-------------+-------------+-------------+-------------+----
+----------+-------------+-------------+-------------+--------------------------------
+-+
+(0 rows)
+>>
+* delete from iiuser where name like 'dea01%';\p\g
+<<
+ delete from iiuser where name like 'dea01%';
+(2 rows)
+>>
+* delete from iiusergroup where groupid like 'dea01%';\p\g
+<<
+ delete from iiusergroup where groupid like 'dea01%';
+(3 rows)
+>>
+* delete from iidbpriv where grantee like 'dea01%';\p\g
+<<
+ delete from iidbpriv where grantee like 'dea01%';
+(0 rows)
+>>
+* select * from iiuser where name like 'dea01%' order by name;\p\g
+<<
+ select * from iiuser where name like 'dea01%' order by name;
+
++--------------------------------+------+------+-------------+-----------------------
+----------+------------------------+--------+--------------------------------+-------
+-------+-------------------------+-------------+-------------+
+|name                            |gid   |mid   |status       |default_group         -
+          |password                |reserve |profile_name                    |defaul-
+t_priv |expire_date              |flags_mask   |user_priv    |
++--------------------------------+------+------+-------------+-----------------------
+----------+------------------------+--------+--------------------------------+-------
+-------+-------------------------+-------------+-------------+
++--------------------------------+------+------+-------------+-----------------------
+----------+------------------------+--------+--------------------------------+-------
+-------+-------------------------+-------------+-------------+
+(0 rows)
+>>
+* select * from iiusergroup where groupid like 'dea01%' order by groupid;\p\g
+<<
+ select * from iiusergroup where groupid like 'dea01%' order by groupid;
+
++------------------------+------------------------+--------------------------------+
+|groupid                 |groupmem                |reserve                         |
++------------------------+------------------------+--------------------------------+
++------------------------+------------------------+--------------------------------+
+(0 rows)
+>>
+* select * from iidbpriv where grantee like 'dea01%' order by grantee;\p\g
+<<
+ select * from iidbpriv where grantee like 'dea01%' order by grantee;
+
++--------------------------------+--------------------------------+------+------+----
+----------+-------------+-------------+-------------+-------------+-------------+----
+----------+-------------+-------------+-------------+--------------------------------
+-+
+|dbname                          |grantee                         |gtype |dbflag|con-
+trol      |flags        |qrow_limit   |qdio_limit   |qcpu_limit   |qpage_limit  |qco-
+st_limit  |idle_time_lim|connect_time_|priority_limi|reserve                        -
+ |
++--------------------------------+--------------------------------+------+------+----
+----------+-------------+-------------+-------------+-------------+-------------+----
+----------+-------------+-------------+-------------+--------------------------------
+-+
++--------------------------------+--------------------------------+------+------+----
+----------+-------------+-------------+-------------+-------------+-------------+----
+----------+-------------+-------------+-------------+--------------------------------
+-+
+(0 rows)
+>>
+* \q
+<<
+>>
+
+
+Ending at: Tue Sep 16 18:37:51 2008

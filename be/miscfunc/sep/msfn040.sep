@@ -1,0 +1,341 @@
+/*
+	Copyright (c) 2007 Ingres Corporation
+
+	Test Name: msfn040.sep
+	Time: Thu Mar 16 09:53:43 2000
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : chk_global_stat.sep
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : t_global
+	Synopsis     : Test the new Ingres II 2.5 feature that
+		     : enables a global temporary to 'use' statistics. 
+		     : This is done by creating a regular user table
+		     : having the same name as the global temp. The user
+		     : can be populated and then have get statistics
+		     : using optimizedb. Now, when a global temp of
+		     : the same name is created and referenced in a 
+		     : query, the optimizer will use the stats of
+		     : the 'shadow' user table.
+                     : The strategy here is to create 2 global temps:
+		     : one with and one without an identically named
+		     : user table that has stats. We then issue the 
+		     : same query to each global temp and check that
+		     : the QEP of the one with the shadow shows that
+		     : the stats were taken into account.
+
+    History: 16-Mar-2000 (panyu01) Created.
+             11-Apr-2000 (sarjo01) Cleanup.
+             10-Jul-2000 (sarjo01) Cleanup.
+             28-Oct-2000 (vande02) Adding alternate canon for minor QEP diffs
+			           that appear consistently on all platforms. 
+             07-Jan-2002 (BOIJA02) Change in behaviour (cHeap not Heap) and a 
+				   general cleanup. 
+             16-Sep-2002 (hanch04) Update to run against 32/64-bit server
+	     13-Nov-2002 (BOIJA02) Select after stats generated should have the
+				   same QEP for the permanent and temporary 
+				   tables. Canon was wrong for temporary table,
+				   but no longer.
+	    10-Aug-2006	(rogch01)  Changes for Ingres 2006 Update 1.  Session
+				   tables do not need to be prefixed with the
+				   session schema but must be unambiguous.
+             8-Nov-2006 (vande02)  Changes for Ingres 2006 Update 2 reverse the
+				   above change 10-Aug-2006 (rogch01).  Included
+				   the schema with GTT name session.t_global_bad
+				   as it was declared.
+            22-Jan-2007 (vande02)  Updated canons where QEP shows the Dx (Disk
+				   I/O) estimates are now lower.  Confirmed by
+				   by Development this is expected, see SD
+				   114529.  Updated copyright.
+*/
+? fill t_insert.sql 
+!!
+create procedure p_t_global
+as 
+declare i integer;
+begin
+i = 1;
+while ( i < 10002 ) do
+  insert into t_global values (:i);
+  i = i + 1;
+endwhile;
+
+commit;
+
+i = 1;
+while ( i < 1000 ) do
+  insert into t_global values (500);
+  i = i + 1;
+endwhile;
+end;\g
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table t_global\g
+<<
+~
+>>
+* drop procedure p_t_global\g
+<<
+~
+>>
+* create table t_global (col1 int) with page_size=2048;\g 
+<<
+>>
+* \i t_insert.sql 
+<<
+>>
+* execute procedure p_t_global;\g 
+<<
+>>
+* select count(*) from t_global;\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|        11000|
++-------------+
+(1 row)
+>>
+* select count(*) from t_global where col1=500;\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|         1000|
++-------------+
+(1 row)
+>>
+* declare global temporary table session.t_global as select * from t_global -
+on commit preserve rows with norecovery;\g 
+<<
+(11000 rows)
+>>
+* declare global temporary table session.t_global_bad as select * from -
+testenv.t_global on commit preserve rows with norecovery;\g 
+<<
+(11000 rows)
+>>
+* commit;\g 
+<<
+>>
+* set qep;\g 
+<<
+
+>>
+* set optimizeonly;\g 
+<<
+
+>>
+* set trace point rd001;\g 
+<<
+
+>>
+* select count(*) from testenv.t_global where col1=500;\g 
+<<
+
+********************************************************************
+
+QUERY PLAN 1,2, no timeout, of simple aggregate 
+    aggregate expression -> count(*)
+
+
+            Proj-rest
+            Heap
+            Pages 1 Tups 110
+            D5 C110
+ /
+t_global
+Heap
+Pages 41 Tups 11000
+
+
+********************************************************************
+E_OP0008 query optimized 
+    - trace flag indicates no execution should take place 
+    (Mon Jan  7 14:47:27 2002)
+
+>>
+* select count(*) from session.t_global where col1=500;\g 
+<<
+
+********************************************************************
+
+QUERY PLAN 1,2, no timeout, of simple aggregate 
+    aggregate expression -> count(*)
+
+
+            Proj-rest
+            Heap
+            Pages 1 Tups 110
+            D5 C110
+ /
+t_global
+cHeap
+Pages 41 Tups 11000
+
+
+********************************************************************
+E_OP0008 query optimized 
+    - trace flag indicates no execution should take place 
+    (Mon Jan  7 14:47:27 2002)
+
+>>
+* select count(*) from session.t_global_bad where col1=500;\g 
+<<
+
+********************************************************************
+
+QUERY PLAN 1,2, no timeout, of simple aggregate 
+    aggregate expression -> count(*)
+
+
+            Proj-rest
+            Heap
+            Pages 1 Tups 110
+            D5 C110
+ /
+t_global_bad
+cHeap
+Pages 41 Tups 11000
+
+
+********************************************************************
+E_OP0008 query optimized 
+    - trace flag indicates no execution should take place 
+    (Mon Jan  7 14:47:27 2002)
+
+>>
+* \q 
+<<
+~
+>>
+? optimizedb SEPPARAMDB -rt_global 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* declare global temporary table session.t_global as select * from t_global -
+on commit preserve rows with norecovery;\g 
+<<
+(11000 rows)
+>>
+* declare global temporary table session.t_global_bad as select * from -
+testenv.t_global on commit preserve rows with norecovery;\g 
+<<
+(11000 rows)
+>>
+* commit;\g 
+<<
+~
+>>
+* set qep;\g 
+<<
+
+>>
+* set optimizeonly;\g 
+<<
+
+>>
+* set trace point rd001;\g 
+<<
+
+>>
+* select count(*) from testenv.t_global where col1=500;\g 
+<<
+
+********************************************************************
+
+QUERY PLAN 1,2, no timeout, of simple aggregate 
+    aggregate expression -> count(*)
+
+
+            Proj-rest
+            Heap
+            Pages 2 Tups 1000
+            D5 C110
+ /
+t_global
+Heap
+Pages 41 Tups 11000
+
+
+********************************************************************
+E_OP0008 query optimized 
+    - trace flag indicates no execution should take place 
+    (Mon Jan  7 14:47:34 2002)
+
+>>
+* select count(*) from session.t_global where col1=500;\g 
+<<
+
+********************************************************************
+
+QUERY PLAN 1,2, no timeout, of simple aggregate 
+    aggregate expression -> count(*)
+
+
+            Proj-rest
+            Heap
+            Pages 2 Tups 1000
+            D5 C110
+ /
+t_global
+cHeap
+Pages 41 Tups 11000
+
+
+********************************************************************
+E_OP0008 query optimized 
+    - trace flag indicates no execution should take place 
+    (Mon Jan  7 14:47:34 2002)
+
+>>
+* select count(*) from session.t_global_bad where col1=500;\g 
+<<
+
+********************************************************************
+
+QUERY PLAN 1,2, no timeout, of simple aggregate 
+    aggregate expression -> count(*)
+
+
+            Proj-rest
+            Heap
+            Pages 1 Tups 110
+            D5 C110
+ /
+t_global_bad
+cHeap
+Pages 41 Tups 11000
+
+
+********************************************************************
+E_OP0008 query optimized 
+    - trace flag indicates no execution should take place 
+    (Mon Jan  7 14:47:34 2002)
+
+>>
+* drop table t_global\g
+<<
+
+>>
+* drop procedure p_t_global\g
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Mon Jan  7 14:47:38 2002

@@ -1,0 +1,146 @@
+/* 	
+	Test Name: qp268.sep 
+	Time: Thu Jan  9 12:28:02 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :
+	Output Files :
+	Database     :
+	Tables       :
+	Synopsis     :	a statement level rule invoking a procedure that 
+			is not set up for the use, ie, is not created with
+			SET OF parameter, should cause error msg E_OP08AE
+			returned.
+
+ History:  9-Jan-1997	(cheis01)	Created
+           26-March-1999  (kamra01) modified VPG_SZ to 2048
+*/
+? fill tt.setup 
+!!
+create table tt1 (name varchar(10), dept varchar(15)) with page_size=2048\p\g
+insert into tt1 values ('Carl', 'marketing')\p\g
+insert into tt1 values ('John', 'travel')\p\g
+
+create table tt2 (dept varchar(15), total int) with page_size=2048\p\g
+insert into tt2 values ('travel', 1)\p\g
+insert into tt2 values ('marketing', 2)\p\g
+insert into tt2 values ('accounting', 3)\p\g
+
+create procedure p1 (dept varchar(15)) as
+begin 
+	update tt2 set total=total+1 where dept=:dept;
+end;\p\g
+
+create rule r1 after insert into tt1 for each statement
+execute procedure p1 (dept=new.dept)\p\g
+
+select * from tt1\p\g
+select * from tt2\p\g
+!!
+? fill tt.sql 
+!!
+insert into tt1 values ('Sally', 'accounting')\p\g
+select * from tt1\p\g
+select * from tt2\p\g
+!!
+? fill drop.sql 
+!!
+drop rule r1\p\g
+drop procedure p1\p\g
+drop table tt1, tt2\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i drop.sql
+<<
+~
+>>
+* \i tt.setup 
+<<
+create table tt1 (name varchar(10), dept varchar(15)) with page_size=2048
+insert into tt1 values ('Carl', 'marketing')
+(1 row)
+insert into tt1 values ('John', 'travel')
+(1 row)
+
+create table tt2 (dept varchar(15), total int) with page_size=2048
+insert into tt2 values ('travel', 1)
+(1 row)
+insert into tt2 values ('marketing', 2)
+(1 row)
+insert into tt2 values ('accounting', 3)
+(1 row)
+
+create procedure p1 (dept varchar(15)) as
+begin 
+	update tt2 set total=total+1 where dept=:dept;
+end;
+
+create rule r1 after insert into tt1 for each statement
+execute procedure p1 (dept=new.dept)
+
+select * from tt1
+
++----------+---------------+
+|name      |dept           |
++----------+---------------+
+|Carl      |marketing      |
+|John      |travel         |
++----------+---------------+
+(2 rows)
+select * from tt2
+
++---------------+-------------+
+|dept           |total        |
++---------------+-------------+
+|travel         |            1|
+|marketing      |            2|
+|accounting     |            3|
++---------------+-------------+
+(3 rows)
+>>
+* \i tt.sql
+<<
+ insert into tt1 values ('Sally', 'accounting')
+E_OP08AE Procedure: p1 has no SET OF parameter, but was called from
+    statement rule  or with global temporary table parameter.
+    (Fri Feb 21 16:54:47 1997)
+
+select * from tt1
+
++----------+---------------+
+|name      |dept           |
++----------+---------------+
+|Carl      |marketing      |
+|John      |travel         |
++----------+---------------+
+(2 rows)
+select * from tt2
+
++---------------+-------------+
+|dept           |total        |
++---------------+-------------+
+|travel         |            1|
+|marketing      |            2|
+|accounting     |            3|
++---------------+-------------+
+(3 rows)
+>>
+* \i drop.sql
+<<
+~
+>>
+* \q
+<<
+
+>>
+
+
+Ending at: Mon Feb 24 12:13:13 1997

@@ -1,0 +1,723 @@
+/*
+	Test Name: jla02.sep
+	Time: Wed Oct 20 12:04:00 1993
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : jla02.sep
+	Module  : frs
+	Filename: jla02.sep
+	Purpose	: To test Decimal data type within FRS.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : none
+	Synopsis     : Verify that the decimal data type is handled
+		       correctly and can be moved to/from host language
+		       variables.  Test that decimal is a valid data type
+		       for hidden table filed columns.  Also check that
+		       inquire_frs returns a datatype of DB_DEC_TYPE(10)
+		       and a type of float(2).
+
+ History: 20-Oct-1993	(jbryson)	Created
+          18-Jan-1996	(parmi04) Added an alternate canon for NT_GENERIC.
+          11-Apr-1996	(clate01)
+		Modified canons to work with Windows NT
+           3-Sep-1996	(Author)
+          11-Mar-1997	(Author)
+          06-Oct-1998   (ahaal01)
+                        Added "#include <stdio.h>" to enable printf to display
+                        floating point data for SGI platform.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delete jla02.o 
+<<
+~
+>>
+? delete jla02.obj 
+<<
+~
+>>
+? delete jla02.c 
+<<
+~
+>>
+? delete jla02.exe 
+<<
+~
+>>
+? delobj SEPPARAMDB -form jla02 
+<<
+~
+>>
+? fill jla02.frm 
+!!
+COPYFORM:	6.4	1993_10_20 19:03:41 GMT  
+FORM:	jla02		
+	80	22	0	0	1	0	1	9	0	0	0	0	0	0	0	3
+FIELD:
+	0	dectable	0	16	0	2	20	38	2	21	1	3	0		0	0	0	1073741857	0	0	0					1	0
+	0	intcol	-30	5	0	13	1	13	0	1	13	0	1	Intcol	1	1	0	65536	0	0	0		-f13			2	1
+	1	deccol	-10	12	5129	22	1	22	0	15	22	0	15	Deccol	15	1	0	65536	0	0	0		-f22.9			2	2
+TRIM:
+	0	0	DECTABLE TABLE:	0	0	0	0
+!!
+? copyform -i SEPPARAMDB jla02.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+Copied form 'jla02' to database.
+Encoding forms into database . . .
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+Copied form 'jla02' to database.
+Encoding forms into database . . .
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+Copied form 'jla02' to database.
+Encoding forms into database . . .
+>>
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+Copied form 'jla02' to database.
+Encoding forms into database . . .
+>>
+? fill jla02.sc 
+!!
+#include <stdio.h>
+EXEC SQL INCLUDE SQLCA;
+
+int main(argc,argv)
+int  argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char *argv[];
+EXEC SQL END DECLARE SECTION;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+   int   intcol;
+   double host_deccol;
+   int   datatype,
+	 type;
+   char  msgbuf[100];
+EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   /* Start up INGRES and the INGRES/FORMS system */
+   EXEC SQL CONNECT :argv[1];
+
+   EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+   EXEC FRS FORMS;
+
+   EXEC FRS MESSAGE 'Initializing Form...';
+   EXEC FRS FORMINIT jla02;
+   EXEC FRS INITTABLE jla02 dectable (hid_deccol = decimal(20,9),
+					hid_intcol = integer);
+
+   EXEC FRS DISPLAY jla02;
+   EXEC FRS INITIALIZE;
+
+   EXEC FRS ACTIVATE MENUITEM 'Browse';
+   EXEC FRS BEGIN;
+      EXEC FRS PUTROW jla02 dectable (hid_deccol = 12.4,
+					deccol = 99.9,
+					intcol = 1);
+      EXEC FRS REDISPLAY;
+
+      EXEC FRS GETROW jla02 dectable (:host_deccol = hid_deccol);
+
+      sprintf(msgbuf,"hid_deccol(12.4) = %f",host_deccol);
+      EXEC FRS MESSAGE :msgbuf WITH STYLE=POPUP;
+
+      EXEC FRS PUTROW jla02 dectable (deccol = :host_deccol);
+      EXEC FRS REDISPLAY;
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Inquire-deccol';
+   EXEC FRS BEGIN;
+      EXEC FRS INQUIRE_FRS COLUMN jla02 dectable
+	       (:datatype = DATATYPE(deccol), :type = TYPE(deccol));
+      sprintf(msgbuf,"Datatype(+/-10) is: %d   Type(2) is: %d", datatype, type);
+
+      EXEC FRS MESSAGE :msgbuf WITH STYLE=POPUP;
+
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Exit';
+   EXEC FRS BEGIN;
+      EXEC FRS BREAKDISPLAY;
+   EXEC FRS END;
+
+   EXEC FRS FINALIZE;
+
+   /* Terminate the FORMS and INGRES */
+   EXEC FRS ENDFORMS;
+   EXEC SQL DISCONNECT;
+
+   exit(0);
+} /* Main Program */
+
+!!
+? esqlc jla02.sc 
+<< if (UNIX||NT_GENERIC)
+ESQL jla02.sc:
+>>
+<< if (VMS)
+>>
+? sepcc jla02 
+<<
+>>
+<< IF (NT_GENERIC) 
+jla02.c
+>>
+? seplnk jla02 
+<<
+>>
+<< IF (NT_GENERIC) 
+   Creating library jla02.lib and object jla02.exp ...
+>>
+<<
+Microsoft (R) 32-Bit Executable Linker Version 2.50.4245
+Copyright (C) Microsoft Corp 1992-94. All rights reserved.
+
+-debug:none 
+-out:jla02.exe 
+jla02.obj 
+e:\qa\ingres\lib\ingres.lib 
+msvcrt.lib 
+kernel32.lib 
+user32.lib 
+advapi32.lib 
+>>
+? ferun jla02.exe SEPPARAMDB 
+<<
+
+%%     
+%% Initializing Form...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |_             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     +------------------------------------+                     |
+|                                                                                |
+|  Browse  Inquire-deccol  Exit                                                  |
+__________________________________________________________________________________
+@@
+>>
+<< IF (NT_GENERIC) 
+
+%%     
+%% Initializing Form...
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |_             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     +------------------------------------+                     |
+|                                                                                |
+|                                                                                |
+|  Browse  Inquire-deccol  Exit                                                  |
+__________________________________________________________________________________
+@@
+>>
+^^ `ESC'
+<<
+
+%% MENU KEY selected
+>>
+^^ Browse`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Browse
+%% MENU:   Browse  Inquire-deccol  Exit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Browse"
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |1            |99.900000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     +------------------------------------+                     |
+|                                                                                |
+|  Browse  Inquire-deccol  Exit  : Browse                                        |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |1            |99.900000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+| +----------------------------------------------------------------------------+ |
+| | hid_deccol(12.4) = 12.400000                                               | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |1            |12.400000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     +------------------------------------+                     |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |_1            |12.400000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     +------------------------------------+                     |
+|                                                                                |
+|  Browse  Inquire-deccol  Exit                                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Browse
+%% MENU:   Browse  Inquire-deccol  Exit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Browse"
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |1            |99.900000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     +------------------------------------+                     |
+|                                                                                |
+|                                                                                |
+|  Browse  Inquire-deccol  Exit  : Browse                                        |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |1            |99.900000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+| +----------------------------------------------------------------------------+ |
+| | hid_deccol(12.4) = 12.400000                                               | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |1            |12.400000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     +------------------------------------+                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |_1            |12.400000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     +------------------------------------+                     |
+|                                                                                |
+|                                                                                |
+|  Browse  Inquire-deccol  Exit                                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Inquire-deccol`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Inquire-deccol
+%% MENU:   Browse  Inquire-deccol  Exit
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Inquire-deccol"
+##
+__________________________________________________________________________________
+|DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |1            |12.400000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+| +----------------------------------------------------------------------------+ |
+| | Datatype(+/-10) is: -10   Type(2) is: 2                                    | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |_1            |12.400000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     +------------------------------------+                     |
+|                                                                                |
+|  Browse  Inquire-deccol  Exit                                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Inquire-deccol
+%% MENU:   Browse  Inquire-deccol  Exit
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Inquire-deccol"
+##
+__________________________________________________________________________________
+|DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |1            |12.400000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+| +----------------------------------------------------------------------------+ |
+| | Datatype(+/-10) is: -10   Type(2) is: 2                                    | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|DECTABLE TABLE:                                                                 |
+|                                                                                |
+|                     +------------------------------------+                     |
+|                     |Intcol       |Deccol                |                     |
+|                     |-------------+----------------------|                     |
+|                     |_1            |12.400000000          |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     |             |                      |                     |
+|                     +------------------------------------+                     |
+|                                                                                |
+|                                                                                |
+|  Browse  Inquire-deccol  Exit                                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Exit`CR'
+<<
+
+%% MENU RESPONSE: Exit
+%% MENU:   Browse  Inquire-deccol  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Exit"
+>>
+? delobj SEPPARAMDB -form jla02 
+<<
+INGRES DELOBJ Copyright (c) 1985, 1993 Ingres Corporation
+Deleting form jla02 with owner testenv from database...
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jla02 with owner testenv from database...
+
+>>
+<< IF (NT_GENERIC) 
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jla02 with owner testenv from database...
+
+>>
+<<
+INGRES DELOBJ Copyright (c) 1991, 1992 Ingres Corporation
+Deleting form jla02 with owner testenv from database...
+
+>>
+? delete jla02.o 
+<<
+~
+>>
+? delete jla02.obj 
+<<
+~
+>>
+? delete jla02.c 
+<<
+~
+>>
+? delete jla02.exe 
+<<
+~
+>>
+
+
+Ending at: Tue Mar 11 15:44:47 1997

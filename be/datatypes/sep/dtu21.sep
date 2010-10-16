@@ -1,0 +1,817 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: dtu21.sep
+	Time: Tue Mar 11 01:08:09 2003
+	User Name: ingres
+	Terminal type: septerm
+
+	Test ID : dtu21.sep
+	Module  : be/datatypes
+	Filename: dtu21.sep
+	Purpose	: To test the Unicode coercion support, first available with
+                  Ingres 2.6/0303 and later releases.
+	Input Files  : dtu21_nulls.sc
+	Output Files : dtu21_nulls.exe
+	Database     : unidb
+	Tables       : dtu21_uni, dtu21_char
+	Synopsis     : The Ingres variable II_CHARSETxx (where xx is the
+                       installation code) will set to UTF8 in the beginning
+                       of this test, and restore to its default value at the
+                       end.
+                       This test will create and populate 2 tables WITH NULLs
+                       in SQL Terminal Monitor: one non-Unicode table with char
+                       and varchar data types, and a Unicode table with nchar
+                       and nvarchar data types. The test also includes an
+                       embedded C program to create and execute database
+                       queries against the tables using SQL joins, locate(),
+                       left(), right(), and trim() functions.
+
+
+*** TEST CASES:
+    nchar_col = char_col
+    vchar_col = nvchar_col
+    vchar_col = nchar_col
+    nvchar_col = char_col
+    nchar_col = nchar_col (joining to itself)
+    nchar_col = nvchar_col
+    nvchar_col = nvchar_col (joining to itself)
+    locate(nchar_col, nchar_col)
+    locate(nvchar_col, nvchar_col)
+    locate(nvchar_col, nchar_col)
+    locate(nvchar_col, nvchar_col)
+    locate(nchar_col, 'string')
+    locate(nvchar_col, 'string')
+    left(trim(nchar_col),1) + right(nvchar_col,2)
+    left(trim(nchar_col),1) + left(trim(char_col),3)
+    right(nvchar_col,2) + left(vchar_col,1)
+
+
+ History: 11-Mar-2003	(wu$ca01)	Created
+          19-May-2003	(wu$ca01) Corrected test case 16 where locate 'a'
+                        should be 'A'. Removed the 'Known problem' section due
+                        to issue 12567496 is resolved.
+	  10-oct-2003	(somsa01) Updated to work on Windows.
+	  20-Jan-2004	(rogch01) Updated test to work on VMS.
+	  11-May-2004	(shafa01) Removed all steps used for setting the
+			II_CHARSETxx to UTF8 for all platforms. Due to Unicode
+			Coercion changes put in Ingres r3, this change should
+			only be in main and going forward.
+          18-Sep-2008	(vande02) Added conditional canons to allow for UTF8
+                        collation sequence order. Header cleanup.
+*/
+? fill char_tbl.sql 
+!!
+insert into dtu21_char VALUES ('cba', 'CBA')\g
+insert into dtu21_char VALUES ('f*d', 'D&F')\g
+insert into dtu21_char VALUES ('ihg', 'A-C')\g
+insert into dtu21_char VALUES ('lkj', 'GIJ')\g
+insert into dtu21_char VALUES ('onm', 'J@Q')\g
+insert into dtu21_char VALUES ('rqp', null)\g
+insert into dtu21_char VALUES (null, 'M%N')\g
+insert into dtu21_char VALUES ('ust', 'H#I')\g
+insert into dtu21_char VALUES ('w$u', 'cba')\g
+insert into dtu21_char VALUES ('zyx', 'f d')\g
+insert into dtu21_char VALUES ('CBA', 'L^J')\g
+insert into dtu21_char VALUES ('FED', 'RQP')\g
+!!
+? fill dtu21_nulls.sc 
+!!
+/* This program is to create and execute database queries to compare
+** and search the tables using the SQL joins, and locate() function.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  short     ind1, ind2;
+  char      st1[6];
+  char      st2[6];
+  wchar_t wc1[6], k1[6];
+  wchar_t wc2[6];
+  wchar_t wcc[36];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[6];
+  } nv1, nv2, k2;
+
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|===============================================================-
+==|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Select UNICODE table...");
+         EXEC SQL SELECT nchar_col, nvchar_col
+         INTO :wc1:ind1, :wc2:ind2
+         FROM dtu21_uni
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|\n", ind1 ? L"" : wc1, ind2 ? L"" : wc2);
+         EXEC SQL END;
+         break;
+
+      case 2:
+         print_header("Select NON-UNICODE table...");
+         EXEC SQL SELECT char_col, vchar_col
+         INTO :st1:ind1, :st2:ind2
+         FROM dtu21_char
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%s|\n", ind1 ? "" : st1, ind2 ? "" : st2);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("nchar_col = char_col...");
+         EXEC SQL SELECT dtu21_uni.nchar_col, dtu21_char.char_col
+         INTO :wc1, :st1
+         FROM dtu21_uni, dtu21_char
+         WHERE dtu21_uni.nchar_col = dtu21_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc1, st1);
+         EXEC SQL END;
+         break;
+
+      case 4:
+         print_header("vchar_col = nvchar_col...");
+         EXEC SQL SELECT dtu21_char.vchar_col, dtu21_uni.nvchar_col
+         INTO :st2, :wc2
+         FROM dtu21_char, dtu21_uni
+         WHERE dtu21_char.vchar_col = dtu21_uni.nvchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st2, wc2);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("vchar_col = nchar_col...");
+         EXEC SQL SELECT dtu21_char.vchar_col, dtu21_uni.nchar_col
+         INTO :st2, :wc1
+         FROM dtu21_char, dtu21_uni
+         WHERE dtu21_char.vchar_col = dtu21_uni.nchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%s|%S|\n", st2, wc1);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header("nvchar_col = char_col...");
+         EXEC SQL SELECT dtu21_uni.nvchar_col, dtu21_char.char_col
+         INTO :wc2, :st1
+         FROM dtu21_uni, dtu21_char
+         WHERE dtu21_uni.nvchar_col = dtu21_char.char_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|\n", wc2, st1);
+         EXEC SQL END;
+         break;
+
+      case 7:
+         print_header("nchar_col = nchar_col...");
+         EXEC SQL SELECT u1.nchar_col, u2.nchar_col
+         INTO :wc1, :wc2
+         FROM dtu21_uni u1, dtu21_uni u2
+         WHERE u1.nchar_col = u2.nchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|\n", wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 8:
+         print_header("nchar_col = nvchar_col...");
+         EXEC SQL SELECT u1.nchar_col, u2.nvchar_col
+         INTO :wc1, :wc2
+         FROM dtu21_uni u1, dtu21_uni u2
+         WHERE u1.nchar_col = u2.nvchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|\n", wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 9:
+         print_header("nvchar_col = nvchar_col...");
+         EXEC SQL SELECT u1.nvchar_col, u2.nvchar_col
+         INTO :wc1, :wc2
+         FROM dtu21_uni u1, dtu21_uni u2
+         WHERE u1.nvchar_col = u2.nvchar_col
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|\n", wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 10:
+         print_header("Updating UNICODE table...Select UNICODE table...");
+         EXEC SQL UPDATE dtu21_uni set nchar_col = 'ccc'
+         WHERE nchar_col is null;
+         EXEC SQL UPDATE dtu21_uni set nvchar_col = 'CCC'
+         WHERE nvchar_col is null;
+         EXEC SQL INSERT INTO dtu21_uni VALUES ('aaa','AAA');
+         EXEC SQL INSERT INTO dtu21_uni VALUES ('zzz', 'ZZZ');
+         EXEC SQL SELECT * INTO :wc1, :wc2
+         FROM dtu21_uni ORDER by nchar_col, nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|\n", wc1, wc2);
+         EXEC SQL END;
+         break;
+
+      case 11:
+         print_header("locate(nchar_col, nchar_col)...");
+         EXEC SQL SELECT nchar_col, locate(nchar_col, nchar_col)
+         INTO :wc1, :ind1
+         FROM dtu21_uni
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%d|\n", wc1, ind1);
+         EXEC SQL END;
+         break;
+
+      case 12:
+         print_header("locate(nvchar_col, nvchar_col)...");
+         EXEC SQL SELECT nvchar_col, locate(nvchar_col, nvchar_col)
+         INTO :wc2, :ind2
+         FROM dtu21_uni
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%d|\n", wc2, ind2);
+         EXEC SQL END;
+         break;
+
+
+      case 13:
+         print_header("locate(nvchar_col, nchar_col)...");
+         EXEC SQL SELECT nvchar_col, nchar_col, locate(nvchar_col, nchar_col)
+         INTO :wc2, :wc1, :ind1
+         FROM dtu21_uni
+         order by nvchar_col, nchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|%d|\n", wc2, wc1, ind1);
+         EXEC SQL END;
+         break;
+
+      case 14:
+         print_header("locate(nchar_col, nvchar_col)...");
+         EXEC SQL SELECT nchar_col, nvchar_col, locate(nchar_col, nvchar_col)
+         INTO :wc1, :wc2, :ind1
+         FROM dtu21_uni
+         order by nchar_col, nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|%d|\n", wc1, wc2, ind1);
+         EXEC SQL END;
+         break;
+
+      case 15:
+         print_header("locate(nchar_col, 'a')...");
+         EXEC SQL SELECT nchar_col, locate(nchar_col, 'a')
+         INTO :wc1, :ind1
+         FROM dtu21_uni
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%d|\n", wc1, ind1);
+         EXEC SQL END;
+         break;
+
+      case 16:
+         print_header("locate(nvchar_col, 'A')...");
+         EXEC SQL SELECT nvchar_col, locate(nvchar_col, 'A')
+         INTO :wc2, :ind2
+         FROM dtu21_uni
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%S|%d|\n", wc2, ind2);
+         EXEC SQL END;
+         break;
+
+      case 17:
+         print_header("left(trim(nchar_col),1) + right(nvchar_col,2)...");
+         EXEC SQL SELECT nchar_col, nvchar_col,
+         left(trim(nchar_col),1) + right(nvchar_col,2)
+         INTO :wc1, :wc2, :wcc
+         FROM dtu21_uni
+         order by nchar_col, nvchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%S|%S|\n", wc1, wc2, wcc);
+         EXEC SQL END;
+         break;
+
+      case 18:
+         print_header("left(trim(nchar_col),1) + left(trim(char_col),3)...");
+         EXEC SQL SELECT dtu21_uni.nchar_col, dtu21_char.char_col,
+         left(trim(dtu21_uni.nchar_col),1) + left(trim(dtu21_char.char_col),3)
+         INTO :wc1, :st1, :wcc
+         FROM dtu21_uni, dtu21_char
+         WHERE dtu21_uni.nchar_col = dtu21_char.char_col
+         order by dtu21_uni.nchar_col, dtu21_char.char_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc1, st1, wcc);
+         EXEC SQL END;
+         break;
+
+      case 19:
+         print_header("right(nvchar_col,2) + left(vchar_col,1)...");
+         EXEC SQL SELECT dtu21_uni.nvchar_col, dtu21_char.vchar_col,
+         right(dtu21_uni.nvchar_col,2) + left(dtu21_char.vchar_col,1)
+         INTO :wc2, :st2, :wcc
+         FROM dtu21_uni, dtu21_char
+         WHERE dtu21_uni.nvchar_col = dtu21_char.vchar_col
+         order by dtu21_uni.nvchar_col, dtu21_char.vchar_col;
+         EXEC SQL BEGIN;
+            printf("|%S|%s|%S|\n", wc2, st2, wcc);
+         EXEC SQL END;
+         break;
+
+
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu21_nulls.sc 
+<<
+ESQL dtu21_nulls.sc:
+>>
+<<
+>>
+? sepcc dtu21_nulls 
+<<
+dtu21_nulls.c
+>>
+<<
+
+>>
+? seplnk dtu21_nulls 
+<<
+
+>>
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* drop table dtu21_char\g
+<<
+~
+>>
+* drop table dtu21_uni\g
+<<
+~
+>>
+* create table dtu21_char (char_col char(5) with null, vchar_col varchar(5) with nul-
+l)\g
+<< 
+>>
+* \i char_tbl.sql
+<<
+~
+>>
+* create table dtu21_uni (nchar_col nchar(5) with null, nvchar_col nvarchar(5) with -
+null)\g
+<<
+>>
+* insert into dtu21_uni select char_col, vchar_col from dtu21_char\g
+<<
+(12 rows)
+>>
+* \q
+<<
+
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 1 
+<<
+Select UNICODE table...
+|=================================================================|
+|cba  |CBA|
+|CBA  |L^J|
+|f*d  |D&F|
+|FED  |RQP|
+|ihg  |A-C|
+|lkj  |GIJ|
+|onm  |J@Q|
+|rqp  ||
+|ust  |H#I|
+|w$u  |cba|
+|zyx  |f d|
+||M%N|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 2 
+<< IF (ING_CHARSET == "UTF8") 
+Select NON-UNICODE table...
+|=================================================================|
+|cba  |CBA|
+|CBA  |L^J|
+|f*d  |D&F|
+|FED  |RQP|
+|ihg  |A-C|
+|lkj  |GIJ|
+|onm  |J@Q|
+|rqp  ||
+|ust  |H#I|
+|w$u  |cba|
+|zyx  |f d|
+||M%N|
+|=================================================================|
+>>
+<<
+Select NON-UNICODE table...
+|=================================================================|
+|CBA  |L^J|
+|FED  |RQP|
+|cba  |CBA|
+|f*d  |D&F|
+|ihg  |A-C|
+|lkj  |GIJ|
+|onm  |J@Q|
+|rqp  ||
+|ust  |H#I|
+|w$u  |cba|
+|zyx  |f d|
+||M%N|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 3 
+<<
+nchar_col = char_col...
+|=================================================================|
+|cba  |cba  |
+|CBA  |CBA  |
+|f*d  |f*d  |
+|FED  |FED  |
+|ihg  |ihg  |
+|lkj  |lkj  |
+|onm  |onm  |
+|rqp  |rqp  |
+|ust  |ust  |
+|w$u  |w$u  |
+|zyx  |zyx  |
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 4 
+<< IF (ING_CHARSET == "UTF8") 
+vchar_col = nvchar_col...
+|=================================================================|
+|A-C|A-C|
+|cba|cba|
+|CBA|CBA|
+|D&F|D&F|
+|f d|f d|
+|GIJ|GIJ|
+|H#I|H#I|
+|J@Q|J@Q|
+|L^J|L^J|
+|M%N|M%N|
+|RQP|RQP|
+|=================================================================|
+>>
+<<
+vchar_col = nvchar_col...
+|=================================================================|
+|A-C|A-C|
+|CBA|CBA|
+|D&F|D&F|
+|GIJ|GIJ|
+|H#I|H#I|
+|J@Q|J@Q|
+|L^J|L^J|
+|M%N|M%N|
+|RQP|RQP|
+|cba|cba|
+|f d|f d|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 5 
+<< IF (ING_CHARSET == "UTF8") 
+vchar_col = nchar_col...
+|=================================================================|
+|cba|cba  |
+|CBA|CBA  |
+|=================================================================|
+>>
+<<
+vchar_col = nchar_col...
+|=================================================================|
+|CBA|CBA  |
+|cba|cba  |
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 6 
+<<
+nvchar_col = char_col...
+|=================================================================|
+|cba  |cba  |
+|CBA  |CBA  |
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 7 
+<<
+nchar_col = nchar_col...
+|=================================================================|
+|cba  |cba  |
+|CBA  |CBA  |
+|f*d  |f*d  |
+|FED  |FED  |
+|ihg  |ihg  |
+|lkj  |lkj  |
+|onm  |onm  |
+|rqp  |rqp  |
+|ust  |ust  |
+|w$u  |w$u  |
+|zyx  |zyx  |
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 8 
+<<
+nchar_col = nvchar_col...
+|=================================================================|
+|cba  |cba|
+|CBA  |CBA|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 9 
+<<
+nvchar_col = nvchar_col...
+|=================================================================|
+|A-C|A-C|
+|cba|cba|
+|CBA|CBA|
+|D&F|D&F|
+|f d|f d|
+|GIJ|GIJ|
+|H#I|H#I|
+|J@Q|J@Q|
+|L^J|L^J|
+|M%N|M%N|
+|RQP|RQP|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 10 
+<<
+Updating UNICODE table...Select UNICODE table...
+|=================================================================|
+|aaa  |AAA|
+|cba  |CBA|
+|CBA  |L^J|
+|ccc  |M%N|
+|f*d  |D&F|
+|FED  |RQP|
+|ihg  |A-C|
+|lkj  |GIJ|
+|onm  |J@Q|
+|rqp  |CCC|
+|ust  |H#I|
+|w$u  |cba|
+|zyx  |f d|
+|zzz  |ZZZ|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 11 
+<<
+locate(nchar_col, nchar_col)...
+|=================================================================|
+|aaa  |1|
+|cba  |1|
+|CBA  |1|
+|ccc  |1|
+|f*d  |1|
+|FED  |1|
+|ihg  |1|
+|lkj  |1|
+|onm  |1|
+|rqp  |1|
+|ust  |1|
+|w$u  |1|
+|zyx  |1|
+|zzz  |1|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 12 
+<<
+locate(nvchar_col, nvchar_col)...
+|=================================================================|
+|AAA|1|
+|A-C|1|
+|cba|1|
+|CBA|1|
+|CCC|1|
+|D&F|1|
+|f d|1|
+|GIJ|1|
+|H#I|1|
+|J@Q|1|
+|L^J|1|
+|M%N|1|
+|RQP|1|
+|ZZZ|1|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 13 
+<<
+locate(nvchar_col, nchar_col)...
+|=================================================================|
+|AAA|aaa  |6|
+|A-C|ihg  |6|
+|cba|w$u  |6|
+|CBA|cba  |6|
+|CCC|rqp  |6|
+|D&F|f*d  |6|
+|f d|zyx  |6|
+|GIJ|lkj  |6|
+|H#I|ust  |6|
+|J@Q|onm  |6|
+|L^J|CBA  |6|
+|M%N|ccc  |6|
+|RQP|FED  |6|
+|ZZZ|zzz  |6|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 14 
+<<
+locate(nchar_col, nvchar_col)...
+|=================================================================|
+|aaa  |AAA|6|
+|cba  |CBA|6|
+|CBA  |L^J|6|
+|ccc  |M%N|6|
+|f*d  |D&F|6|
+|FED  |RQP|6|
+|ihg  |A-C|6|
+|lkj  |GIJ|6|
+|onm  |J@Q|6|
+|rqp  |CCC|6|
+|ust  |H#I|6|
+|w$u  |cba|6|
+|zyx  |f d|6|
+|zzz  |ZZZ|6|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 15 
+<<
+locate(nchar_col, 'a')...
+|=================================================================|
+|aaa  |1|
+|cba  |3|
+|CBA  |6|
+|ccc  |6|
+|f*d  |6|
+|FED  |6|
+|ihg  |6|
+|lkj  |6|
+|onm  |6|
+|rqp  |6|
+|ust  |6|
+|w$u  |6|
+|zyx  |6|
+|zzz  |6|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 16 
+<<
+locate(nvchar_col, 'A')...
+|=================================================================|
+|AAA|1|
+|A-C|1|
+|cba|6|
+|CBA|3|
+|CCC|6|
+|D&F|6|
+|f d|6|
+|GIJ|6|
+|H#I|6|
+|J@Q|6|
+|L^J|6|
+|M%N|6|
+|RQP|6|
+|ZZZ|6|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 17 
+<<
+left(trim(nchar_col),1) + right(nvchar_col,2)...
+|=================================================================|
+|aaa  |AAA|aAA|
+|cba  |CBA|cBA|
+|CBA  |L^J|C^J|
+|ccc  |M%N|c%N|
+|f*d  |D&F|f&F|
+|FED  |RQP|FQP|
+|ihg  |A-C|i-C|
+|lkj  |GIJ|lIJ|
+|onm  |J@Q|o@Q|
+|rqp  |CCC|rCC|
+|ust  |H#I|u#I|
+|w$u  |cba|wba|
+|zyx  |f d|z d|
+|zzz  |ZZZ|zZZ|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 18 
+<<
+left(trim(nchar_col),1) + left(trim(char_col),3)...
+|=================================================================|
+|cba  |cba  |ccba|
+|CBA  |CBA  |CCBA|
+|f*d  |f*d  |ff*d|
+|FED  |FED  |FFED|
+|ihg  |ihg  |iihg|
+|lkj  |lkj  |llkj|
+|onm  |onm  |oonm|
+|rqp  |rqp  |rrqp|
+|ust  |ust  |uust|
+|w$u  |w$u  |ww$u|
+|zyx  |zyx  |zzyx|
+|=================================================================|
+>>
+? run dtu21_nulls.exe SEPPARAMDB3 19 
+<<
+right(nvchar_col,2) + left(vchar_col,1)...
+|=================================================================|
+|A-C|A-C|-CA|
+|cba|cba|bac|
+|CBA|CBA|BAC|
+|D&F|D&F|&FD|
+|f d|f d| df|
+|GIJ|GIJ|IJG|
+|H#I|H#I|#IH|
+|J@Q|J@Q|@QJ|
+|L^J|L^J|^JL|
+|M%N|M%N|%NM|
+|RQP|RQP|QPR|
+|=================================================================|
+>>
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* drop table dtu21_uni\g
+<<
+>>
+* drop table dtu21_char\g
+<<
+>>
+* \q
+<<
+
+>>
+? delete dtu21_nulls.c 
+<<
+file was deleted
+>>
+? delete dtu21_nulls.o 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu21_nulls.obj 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete dtu21_nulls.exe 
+<<
+file was deleted
+>>
+
+
+Ending at: Thu Sep 18 16:50:51 2008

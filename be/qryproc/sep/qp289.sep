@@ -1,0 +1,323 @@
+/*
+        Test Name: qp289.sep
+        Time: Mon May 14 11:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp289.sep
+        Module  : be/qryproc
+        Filename: qp289.sep
+        Purpose : To test the new feature row producing procedure. 
+        Input Files  : rp1.sc
+        Output Files : rp1.exe
+        Database     : qryprocdb
+        Tables       : qp289_table1, qp289_table2, qp289_table3
+        Synopsis     : This is to test the multiple for-loop, nested for-loop,
+                       multiple nested for-loop, nested-INSERT syntax for row
+		       producing procedures within an embedded sql program.
+		       Also, two destructive tests for expected errors with
+                       RESULT ROW and RETURN ROW syntax.
+
+ History: 11-May-2001   (wu$ca01)       Created
+**
+**  ROW PRODUCING PROCEDURE
+**
+**  - SYNTAX, ADVANCED (ESQLC)
+**
+*/
+? fill setup.sql 
+!!
+\i cleanup.sql
+create table qp289_table1 (a1 int, a2 char(10), a3 date)\g
+insert into qp289_table1 values(100, 'abcd', 'now')\g
+insert into qp289_table1 values(101, 'xyz', 'now')\g
+insert into qp289_table1 values(102, 'xxx', 'now')\g
+insert into qp289_table1 values(103, 'qqqqq', 'now')\g
+insert into qp289_table1 values(104, 'junk', 'now')\g
+create table qp289_table2 (a1 int, a2 char(10), a3 date)\g
+insert into qp289_table2 values(200, 'abcd', 'now')\g
+insert into qp289_table2 values(201, 'xyz', 'now')\g
+insert into qp289_table2 values(202, 'xxx', 'now')\g
+insert into qp289_table2 values(203, 'qqqqq', 'now')\g
+insert into qp289_table2 values(204, 'junk', 'now')\g
+create table qp289_table3 (a1 int, a2 char(10), a3 date)\g
+insert into qp289_table3 values(300, 'abcd', 'now')\g
+insert into qp289_table3 values(301, 'xyz', 'now')\g
+insert into qp289_table3 values(302, 'xxx', 'now')\g
+insert into qp289_table3 values(303, 'qqqqq', 'now')\g
+insert into qp289_table3 values(304, 'junk', 'now')\g
+!!
+? fill cleanup.sql 
+!!
+drop table qp289_table1\g
+drop table qp289_table2\g
+drop table qp289_table3\g
+drop procedure qp289_rp1\g
+!!
+? fill rp1.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+   EXEC SQL END DECLARE SECTION;
+
+   int       i;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+
+/*-------------------------------------------*
+   GOOD SYNTAX: test multiple FOR 
+*/
+printf("Procedure 1\n");
+   EXEC SQL
+
+create procedure qp289_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp289_table1 order by 1 do
+      buf = varchar(:v1);
+      message :buf;
+   endfor;
+   for select a1, a2, a3 into :v4, :v5, :v6 from qp289_table2 order by 1 do
+      buf = varchar(:v4);
+      message :buf;
+   endfor;
+end;
+
+   EXEC SQL execute procedure qp289_rp1;
+   EXEC SQL drop procedure qp289_rp1;
+
+/*-------------------------------------------*
+   GOOD SYNTAX: test nested FOR
+*/
+printf("Procedure 2\n");
+   EXEC SQL
+
+create procedure qp289_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp289_table1 order by 1 do
+      buf = varchar(:v1);
+      message :buf;
+      for select a1, a2, a3 into :v4, :v5, :v6 from qp289_table2 order by 1 do
+         buf = varchar(:v4);
+         message :buf;
+      endfor;
+   endfor;
+end;
+
+   EXEC SQL execute procedure qp289_rp1;
+   EXEC SQL drop procedure qp289_rp1;
+
+/*--------------------------------------------*
+   GOOD SYNTAX: test multiple nested FOR
+*/
+printf("Procedure 3\n");
+   EXEC SQL
+
+create procedure qp289_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   v7 int;
+   buf char(80) not null;
+begin
+   for select a1 into :v7 from qp289_table3 order by 1 do
+      buf = varchar(:v7);
+      message :buf;
+      for select a1, a2, a3 into :v1, :v2, :v3 from qp289_table1 order by 1 do
+         buf = varchar(:v1);
+         message :buf;
+      endfor;
+      for select a1, a2, a3 into :v4, :v5, :v6 from qp289_table2 order by 1 do
+         buf = varchar(:v4);
+         message :buf;
+      endfor;
+   endfor;
+end;
+
+   EXEC SQL execute procedure qp289_rp1;
+   EXEC SQL drop procedure qp289_rp1;
+
+/*---------------------------------------------*
+   GOOD SYNTAX: test nested INSERT 
+*/
+printf("Procedure 4\n");
+   EXEC SQL
+
+create procedure qp289_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp289_table1 order by 1 do
+      buf = varchar(:v1);
+      message :buf;
+      insert into qp289_table2 values (:v1, :v2, :v3); 
+   endfor;
+   for select a1 into :v1 from qp289_table2 order by 1 do
+      buf = varchar(:v1);
+      message :buf;
+   endfor;
+end;
+
+   EXEC SQL execute procedure qp289_rp1;
+   EXEC SQL drop procedure qp289_rp1;
+
+/*---------------------------------------------*
+   BAD SYNTAX: result row > return row
+*/
+printf("Procedure 5\n");
+   EXEC SQL
+
+create procedure qp289_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp289_table1 order by 1 do
+      return row (:v1, :v2);
+   endfor;
+end;
+
+   EXEC SQL execute procedure qp289_rp1;
+   EXEC SQL drop procedure qp289_rp1;
+
+/*---------------------------------------------*
+   BAD SYNTAX: result row < return row
+*/
+printf("Procedure 6\n");
+   EXEC SQL
+
+create procedure qp289_rp1
+       result row(int, char(10))
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   v4 int;
+   v5 char(10);
+   v6 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp289_table1 order by 1 do
+      return row (:v1, :v2, :v3);
+   endfor;
+end;
+
+   EXEC SQL execute procedure qp289_rp1;
+   EXEC SQL drop procedure qp289_rp1;
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc rp1.sc 
+<<
+~
+>>
+? sepcc rp1.c 
+<<
+~
+>>
+? seplnk rp1 
+<<
+~
+>>
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? run rp1.exe SEPPARAMDB 
+<<
+Procedure 1
+Procedure 2
+Procedure 3
+Procedure 4
+Procedure 5
+E_US098E The number of entries in a RETURN ROW list must match the number
+    of  entries in the corresponding RESULT ROW declaration.
+    (Fri Apr 13 15:04:49 2001)
+E_US0965 Procedure 'qp289_rp1' not found.
+    (Fri Apr 13 15:04:49 2001)
+E_US0965 Procedure 'qp289_rp1' not found.
+    (Fri Apr 13 15:04:49 2001)
+Procedure 6
+E_US098E The number of entries in a RETURN ROW list must match the number
+    of  entries in the corresponding RESULT ROW declaration.
+    (Fri Apr 13 15:04:49 2001)
+E_US0965 Procedure 'qp289_rp1' not found.
+    (Fri Apr 13 15:04:49 2001)
+E_US0965 Procedure 'qp289_rp1' not found.
+    (Fri Apr 13 15:04:49 2001)
+>>
+? delete rp1.c 
+<<
+~
+>>
+? delete rp1.o 
+<<
+~
+>>
+? delete rp1.obj 
+<<
+~
+>>
+? delete rp1.exe 
+<<
+~
+>>
+
+
+Ending at: Fri Apr 13 15:05:07 2001

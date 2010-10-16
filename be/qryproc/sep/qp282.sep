@@ -1,0 +1,551 @@
+/*
+	Test Name: qp282.sep
+	Time: Mon May 12 13:37:53 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :	create.sql, one.sc, two.sc, three.sc, pr_msg.sc
+	Output Files :	*.c, *.o, *.exe
+	Database     :	SEPPARAMDB
+	Tables       :	t1
+	Synopsis     :	When the execute procedure parameter list of a
+                        statement level rule definition contains
+                        parameters don't match the "set of" list of
+                        the corresponding procedure declaration, error
+                        msg E_OP08B1 should be correctly generated
+                        instead of E_AD1012.
+			(bug 80988)
+			ESQL version of qp273.sep.
+
+ History: 12-May-1997	(cheis01)	Created
+	  31-Dec-1998	(peili01)	Added delete files to remove files after
+					test finishes
+	  26-March-1999  (kamra01) modified VPG_SZ to 4096
+
+
+*/
+? fill create.sql 
+!!
+create table t1 (enum int, emp varchar(10), age int, addr varchar(15))
+	with page_size=4096\p\g
+insert into t1 values (1, 'aaaaaa', 1, 'AAAAAAA')\p\g
+insert into t1 values (2, 'bbbb', 2, 'BBBBBBBBB')\p\g
+!!
+? fill pr_msg.sc 
+!!
+void pr_msg()
+{
+        exec sql begin declare section;
+                char    msg[100];
+        exec sql end declare section;
+ 
+        exec sql inquire_sql (:msg = messagetext);
+        printf("%s\n", msg);
+}
+!!
+? fill one.sc 
+!!
+#include <stdio.h>
+
+exec sql include sqlca;
+exec sql include 'pr_msg.sc';
+
+main(argc, argv)
+int argc;
+char **argv;
+{
+	exec sql begin declare section;
+	char	dbname[20];
+	exec sql end declare section;
+
+	strcpy(dbname, argv[1]);
+	exec sql connect :dbname;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql set_sql (messagehandler = pr_msg);
+
+	printf("Creating procedure associated with STATEMENT level rule...\n");
+	exec sql create procedure p1
+		(tt1 set of (enum integer, addr varchar(13))) as
+		declare name	varchar(10) not null;
+			addr	varchar(20) not null;
+	begin
+		select emp into name from t1 
+		where enum in (select enum from tt1 where tt1.enum=t1.enum);
+		select addr into addr from tt1;
+		message name; message addr;
+		message 'table t1 is being updated.';
+	end;
+
+	printf("\nSTATEMENT level rule\n");
+	printf("with parameters correspond to procedure : \n\n");
+	printf("create rule r1 after update of t1 for each statement\n");
+	printf("execute procedure p1 (enum=new.enum, addr=new.addr);\n\n");
+	exec sql create rule r1 after update of t1 for each statement
+		execute procedure p1 (enum=new.enum, addr=new.addr);
+
+	printf("\nupdate t1 set addr='Islandia' where emp='aaaaaa'\n");
+	exec sql update t1 set addr='Islandia' where emp='aaaaaa';
+
+	printf("\nupdate t1 set age=38, addr='Kew Garden' where enum=2\n");
+	exec sql update t1 set age=38, addr='Kew Garden' where enum=2;
+
+	printf("\nupdate t1 set emp='Alan' where addr='Islandia'\n");
+	exec sql update t1 set emp='Alan' where addr='Islandia';
+
+	printf("\nupdate t1 set age=100, addr='Fresh Meadow' where enum=1\n");
+	exec sql update t1 set age=100, addr='Fresh Meadow' where enum=1;
+
+	printf("\nupdate t1 set enum=9 where age=38\n\n");
+	exec sql update t1 set enum=9 where age=38;
+
+	printf("\nupdate t1 set emp='Bill',addr='Great Neck' where emp='bbbb'\n");
+	exec sql update t1 set emp='Bill', addr='Great Neck' where emp='bbbb';
+
+	exec sql commit;
+	exec sql disconnect;
+}
+!!
+? fill two.sc 
+!!
+#include <stdio.h>
+
+exec sql include sqlca;
+exec sql include 'pr_msg.sc';
+
+main(argc, argv)
+int argc;
+char **argv;
+{
+	exec sql begin declare section;
+	char	dbname[20];
+	exec sql end declare section;
+
+	strcpy(dbname, argv[1]);
+	exec sql connect :dbname;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql set_sql (messagehandler = pr_msg);
+
+	printf("\nSTATEMENT level rule\n");
+	printf("with parameters' names DO NOT correspond to procedure : \n\n");
+	printf("create rule r1 after update of t1 for each statement\n");
+	printf("execute procedure p1 (age=new.age, emp=new.emp);\n\n");
+	exec sql create rule r1 after update of t1 for each statement
+		 execute procedure p1 (age=new.age, emp=new.emp);
+
+        printf("update t1 set addr='Islandia' where emp='aaaaaa'\n");
+        exec sql update t1 set addr='Islandia' where emp='aaaaaa';
+ 
+        printf("\nupdate t1 set age=38, addr='Kew Garden' where enum=2\n");
+        exec sql update t1 set age=38, addr='Kew Garden' where enum=2;
+ 
+        printf("\nupdate t1 set emp='Alan' where addr='Islandia'\n");
+        exec sql update t1 set emp='Alan' where addr='Islandia';
+ 
+        printf("\nupdate t1 set age=100, addr='Fresh Meadow' where enum=1\n");
+        exec sql update t1 set age=100, addr='Fresh Meadow' where enum=1;
+ 
+        printf("\nupdate t1 set enum=9 where age=38\n");
+        exec sql update t1 set enum=9 where age=38;
+ 
+        printf("\nupdate t1 set emp='Bill', ");
+	printf("addr='Great Neck' where emp='bbbb'\n");
+        exec sql update t1 set emp='Bill', addr='Great Neck' where emp='bbbb';
+
+	exec sql commit;
+	exec sql disconnect;
+}
+!!
+? fill three.sc 
+!!
+#include <stdio.h>
+
+exec sql include sqlca;
+exec sql include 'pr_msg.sc';
+
+main(argc, argv)
+int argc;
+char **argv;
+{
+	exec sql begin declare section;
+	char	dbname[20];
+	exec sql end declare section;
+
+	strcpy(dbname, argv[1]);
+	exec sql connect :dbname;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql set_sql (messagehandler = pr_msg);
+
+	printf("\nCreating procedure associated with ROW level rule...\n");
+	exec sql create procedure p1
+		(enum integer, addr varchar(13) not null) as
+		declare name	varchar(10) not null;
+	begin
+		select emp into name from t1 
+		where enum = :enum;
+		message name; message :addr;
+		message 'table t1 is being updated.';
+	end;
+
+	printf("\nROW level rule, as an sample\n");
+	printf("with parameters' names DO NOT correspond to procedure : \n");
+	printf("\ncreate rule r1 after update of t1\n");
+	printf("execute procedure p1 (addr=new.addr, age=new.age);\n\n");
+	exec sql create rule r1 after update of t1
+		 execute procedure p1 (addr=new.addr, age=new.age);
+
+        printf("\nupdate t1 set addr='Islandia' where emp='aaaaaa'\n");
+        exec sql update t1 set addr='Islandia' where emp='aaaaaa';
+ 
+        printf("\nupdate t1 set age=38, addr='Kew Garden' where enum=2\n");
+        exec sql update t1 set age=38, addr='Kew Garden' where enum=2;
+ 
+        printf("\nupdate t1 set emp='Alan' where addr='Islandia'\n");
+        exec sql update t1 set emp='Alan' where addr='Islandia';
+ 
+        printf("\nupdate t1 set age=100, addr='Fresh Meadow' where enum=1\n");
+        exec sql update t1 set age=100, addr='Fresh Meadow' where enum=1;
+ 
+        printf("\nupdate t1 set enum=9 where age=38\n");
+        exec sql update t1 set enum=9 where age=38;
+ 
+        printf("\nupdate t1 set emp='Bill', ");
+	printf("addr='Great Neck' where emp='bbbb'\n");
+        exec sql update t1 set emp='Bill', addr='Great Neck' where emp='bbbb';
+
+	exec sql commit;
+	exec sql disconnect;
+}
+!!
+? sepesqlc one 
+<<
+ESQL one.sc:
+>>
+? sepcc one 
+<<
+>>
+<<
+one.c
+>>
+? seplnk one 
+<<
+>>
+? sepesqlc two 
+<<
+ESQL two.sc:
+>>
+? sepcc two 
+<<
+>>
+<<
+two.c
+>>
+? seplnk two 
+<<
+>>
+? sepesqlc three 
+<<
+ESQL three.sc:
+>>
+? sepcc three 
+<<
+>>
+<<
+three.c
+>>
+? seplnk three 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop rule r1\g 
+<<
+E_US189D DROP RULE: Rule 'r1' does not exist.
+    (Mon May 12 13:39:33 1997)
+
+>>
+* drop procedure p1\g 
+<<
+~
+>>
+* drop table t1\g 
+<<
+~
+>>
+* \i create.sql 
+<<
+ 
+create table t1 (enum int, emp varchar(10), age int, addr varchar(15))
+	with page_size=4096
+insert into t1 values (1, 'aaaaaa', 1, 'AAAAAAA')
+(1 row)
+insert into t1 values (2, 'bbbb', 2, 'BBBBBBBBB')
+(1 row)
+>>
+* select * from t1\g\q 
+<<
+
++-------------+----------+-------------+---------------+
+|enum         |emp       |age          |addr           |
++-------------+----------+-------------+---------------+
+|            1|aaaaaa    |            1|AAAAAAA        |
+|            2|bbbb      |            2|BBBBBBBBB      |
++-------------+----------+-------------+---------------+
+(2 rows)
+>>
+? run one.exe SEPPARAMDB 
+<<
+Creating procedure associated with STATEMENT level rule...
+
+STATEMENT level rule
+with parameters correspond to procedure : 
+
+create rule r1 after update of t1 for each statement
+execute procedure p1 (enum=new.enum, addr=new.addr);
+
+
+update t1 set addr='Islandia' where emp='aaaaaa'
+aaaaaa
+Islandia
+table t1 is being updated.
+
+update t1 set age=38, addr='Kew Garden' where enum=2
+bbbb
+Kew Garden
+table t1 is being updated.
+
+update t1 set emp='Alan' where addr='Islandia'
+Alan
+Islandia
+table t1 is being updated.
+
+update t1 set age=100, addr='Fresh Meadow' where enum=1
+Alan
+Fresh Meadow
+table t1 is being updated.
+
+update t1 set enum=9 where age=38
+
+bbbb
+Kew Garden
+table t1 is being updated.
+
+update t1 set emp='Bill',addr='Great Neck' where emp='bbbb'
+Bill
+Great Neck
+table t1 is being updated.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from t1\g 
+<<
+
++-------------+----------+-------------+---------------+
+|enum         |emp       |age          |addr           |
++-------------+----------+-------------+---------------+
+|            1|Alan      |          100|Fresh Meadow   |
+|            9|Bill      |           38|Great Neck     |
++-------------+----------+-------------+---------------+
+(2 rows)
+>>
+* drop table t1\g 
+<<
+
+>>
+* \i create.sql 
+<<
+ 
+create table t1 (enum int, emp varchar(10), age int, addr varchar(15))
+	with page_size=4096
+insert into t1 values (1, 'aaaaaa', 1, 'AAAAAAA')
+(1 row)
+insert into t1 values (2, 'bbbb', 2, 'BBBBBBBBB')
+(1 row)
+>>
+* \q 
+<<
+
+>>
+? run two.exe SEPPARAMDB 
+<<
+
+STATEMENT level rule
+with parameters' names DO NOT correspond to procedure : 
+
+create rule r1 after update of t1 for each statement
+execute procedure p1 (age=new.age, emp=new.emp);
+
+update t1 set addr='Islandia' where emp='aaaaaa'
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Tue May 27 13:17:39 1997)
+
+update t1 set age=38, addr='Kew Garden' where enum=2
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Tue May 27 13:17:39 1997)
+
+update t1 set emp='Alan' where addr='Islandia'
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Tue May 27 13:17:39 1997)
+
+update t1 set age=100, addr='Fresh Meadow' where enum=1
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Tue May 27 13:17:39 1997)
+
+update t1 set enum=9 where age=38
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Tue May 27 13:17:39 1997)
+
+update t1 set emp='Bill', addr='Great Neck' where emp='bbbb'
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Tue May 27 13:17:39 1997)
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from t1\g 
+<<
+
++-------------+----------+-------------+---------------+
+|enum         |emp       |age          |addr           |
++-------------+----------+-------------+---------------+
+|            1|aaaaaa    |            1|AAAAAAA        |
+|            2|bbbb      |            2|BBBBBBBBB      |
++-------------+----------+-------------+---------------+
+(2 rows)
+>>
+* drop table t1\g 
+<<
+
+>>
+* drop procedure p1\g 
+<<
+
+>>
+* \i create.sql 
+<<
+ 
+create table t1 (enum int, emp varchar(10), age int, addr varchar(15))
+	with page_size=4096
+insert into t1 values (1, 'aaaaaa', 1, 'AAAAAAA')
+(1 row)
+insert into t1 values (2, 'bbbb', 2, 'BBBBBBBBB')
+(1 row)
+>>
+* \q 
+<<
+
+>>
+? run three.exe SEPPARAMDB 
+<<
+
+Creating procedure associated with ROW level rule...
+
+ROW level rule, as an sample
+with parameters' names DO NOT correspond to procedure : 
+
+create rule r1 after update of t1
+execute procedure p1 (addr=new.addr, age=new.age);
+
+
+update t1 set addr='Islandia' where emp='aaaaaa'
+E_QE0123 The database procedure parameter 'age' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Tue May 27 13:17:55 1997)
+
+update t1 set age=38, addr='Kew Garden' where enum=2
+E_QE0123 The database procedure parameter 'age' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Tue May 27 13:17:55 1997)
+
+update t1 set emp='Alan' where addr='Islandia'
+
+update t1 set age=100, addr='Fresh Meadow' where enum=1
+E_QE0123 The database procedure parameter 'age' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Tue May 27 13:17:55 1997)
+
+update t1 set enum=9 where age=38
+
+update t1 set emp='Bill', addr='Great Neck' where emp='bbbb'
+E_QE0123 The database procedure parameter 'age' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Tue May 27 13:17:56 1997)
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from t1\g 
+<<
+
++-------------+----------+-------------+---------------+
+|enum         |emp       |age          |addr           |
++-------------+----------+-------------+---------------+
+|            1|aaaaaa    |            1|AAAAAAA        |
+|            2|bbbb      |            2|BBBBBBBBB      |
++-------------+----------+-------------+---------------+
+(2 rows)
+>>
+* drop rule r1\g 
+<<
+
+>>
+* drop procedure p1\g 
+<<
+
+>>
+* drop table t1\g\q 
+<<
+
+>>
+? run rm pr_msg* one* two* three*
+<<
+~
+>>
+? delete pr_msg.*
+<<
+~
+>>
+? delete one.*
+<<
+~
+>>
+? delete two.*
+<<
+~
+>>
+? delete three.*
+<<
+~
+>>
+
+
+
+Ending at: Fri Aug 15 14:57:56 1997

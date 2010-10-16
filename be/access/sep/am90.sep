@@ -1,0 +1,452 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+
+	Test Name: am90.sep
+	Time: Thu May 06 12:58:09 2004
+	User Name: ingres
+	Terminal type: septerm
+
+	Test ID : am90.sep
+	Module  : be/access
+	Filename: am90.sep
+	Purpose	: To test the online modify feature, available with Ingres 3
+	          and later releases.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : am90_mod_upd
+	Synopsis     : Test online modify in a multithreaded program - one
+	               thread modifies the table, and one thread updates the
+	               table.
+	               
+	               NOTE: Prerequisite for online modify is the database
+	               must be journaled.
+
+History: 06-May-2004	(wu$ca01)	Created
+         03-Aug-2004	(wu$ca01) Changed global variable to local variable
+                        within each function, and added commit to all threads.
+         23-Mar-2005	(sinra04) Put command to bypass sep on VMS because
+			multithreaded ESQLC is not yet supported on VMS.
+         07-Apr-2005	(wu$ca01) Replaced array type long with pthread_t in
+         		order for test to run on all platforms.
+	 23-Jun-2005    (boija02) Cluster doesn't support online modify. Added
+			conditional based on SEPPARAM_CLUSTER being set to 
+			abort test.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+	19-Sep-2007	(rogch01)
+		Multithreaded esql is now supported on VMS.  Adding Joe's
+		changes to the library.
+*/
+.if SEPPARAM_CLUSTER
+? echo No online modify in a cluster
+<<
+No online modify in a cluster
+>> abort
+.else
+? fill am90.sc
+!!
+#ifdef _WIN32
+   #include <windows.h>
+   #define pthread_t HANDLE
+#else
+   #include <pthread.h> 
+   #define HANDLE int
+   #define stricmp strcasecmp
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+  
+exec sql include sqlca;
+
+#define THREAD_NUM 2
+
+void createTables(int);
+void print_err();
+void * modify_t(void *);
+void * update_t(void *);
+
+
+HANDLE h[THREAD_NUM];
+
+exec sql begin declare section;
+     char *dbname;
+exec sql end declare section;
+
+
+int
+main (int arg, char *argv[])
+{
+	int rtn, i;
+	int param[THREAD_NUM];
+	pthread_t lpthread[THREAD_NUM];
+        void *(*func_name[])(void *) = {modify_t, update_t};
+        
+	dbname = argv[1];
+	exec sql whenever sqlerror stop;
+	
+	/*------------------------------------------------*/
+	/* make connection to database                    */
+	/*------------------------------------------------*/
+	
+	exec sql connect :dbname as 'masterconn';
+	
+	/*------------------------------------------------*/
+	/* Create table.                                  */
+	/*------------------------------------------------*/
+	
+	if ((arg == 3) && (stricmp(argv[2], "init") == 0))
+	{
+		createTables(20000);
+		exec sql disconnect 'masterconn';
+		exit (0);
+	}
+	else
+	{	
+  	   for (i = 1; i <= THREAD_NUM; i++)
+		param[i-1] = i;
+	
+		/*-----------------------------------------------------*/
+		/* create 2 threads                                    */
+		/* lpthread      --> pointer to a buffer               */
+		/* NULL          --> default thread attribute          */
+		/* func_name[i]  --> array points to modify_t and      */
+		/*                   update_t threads will executed    */
+		/* param         --> pointer to paramters to be passed */
+		/*-----------------------------------------------------*/
+
+	   #ifdef _WIN32
+		for (i = 0; i < THREAD_NUM; i++) 
+	
+                {
+             	    h[i] = CreateThread(NULL,
+             		                0,
+             		                (LPTHREAD_START_ROUTINE)func_name[i],
+             		                &param[i],
+             		                0,
+             		                &lpthread[i]); 
+		}
+		WaitForMultipleObjects(THREAD_NUM, h, 1, INFINITE);
+      		
+	   #else
+                for (i = 0; i < THREAD_NUM; i++) 
+		{
+             	 if (rtn = pthread_create
+             	       (&lpthread[i],NULL,func_name[i],&param[i]))
+                 fprintf(stderr, "Error: pthread_create, %s\n", strerror(rtn)),
+                 exit(-1);
+                }   
+		/*-------------------------------------------------*/
+		/* wait for threads to exit                        */
+        	/*-------------------------------------------------*/
+        	for (i = 0; i < THREAD_NUM; )
+		{
+			if(pthread_join(lpthread[i], NULL) == 0)
+                    		i++; 
+		}
+	   #endif
+     		  
+	}
+	return 0;		
+
+}
+void createTables(int rowCount)
+{
+	
+	exec sql begin declare section;
+		int i;
+	exec sql end declare section;
+
+	exec sql whenever sqlerror continue;
+
+	exec sql drop table am90_mod_upd;
+	
+	exec sql whenever sqlerror stop;
+
+	/*---------------------------------------------------*/
+	/* Create table and populate it with 20000 rows.     */
+	/*---------------------------------------------------*/
+	exec sql create table am90_mod_upd 
+                            (id integer primary key not null not default,
+                             name varchar(40) not null,
+	                     ssn varchar(15),
+	                     address varchar(40),
+	                     city char(30),
+	                     state c(2),
+	                     zip int,
+	                     phone varchar(20),
+	                     DOB date not null,
+	                     age int1,	                          
+	                     gender c,
+	                     status text(20),
+	                     height float8,
+	                     weight smallint,
+	                     job_title text(40),
+	                     salary money);
+	
+	exec sql commit;
+	
+	for(i = 1; i <= rowCount; i++)
+	{
+	   exec sql insert into am90_mod_upd values 
+	                                (:i,
+	                                 'Employee XYZ',
+	                                 '123-45-6789',
+	                                 '888 Heaven Road',
+	                                 'Paradise Beach',
+	                                 'IL',
+	                                  60888,
+	                                 '888-497-1813',
+	                                 '22-October-1975',
+	                                  29,
+	                                 'M',
+	                                 'Unknown',
+	                                  180,
+	                                  145,
+	                                 'Sr. Software Engineer',
+	                                  80000);
+
+           if( (i % 5000) == 0)
+           exec sql commit;
+	}
+}
+
+
+void *modify_t(void *p)
+{
+	exec sql begin declare section;
+          	char connectName[50];
+	exec sql end declare section;
+	
+	exec sql whenever sqlerror stop;
+
+	/*------------------------------------------------------*/
+	/* sqlprint - prints all errors and database procedure  */
+	/* messages arising from embedded SQL statements.       */
+	/*------------------------------------------------------*/
+
+	exec sql whenever sqlerror call sqlprint;
+	
+	/*-----------------------------------------*/
+	/* thread 1 - modifies the table to btree  */
+	/*-----------------------------------------*/
+
+	 sprintf(connectName,"CONNECTION%d", *(int *)p);
+	 printf("THREAD CONNECTED\n");
+	 
+	 exec sql connect :dbname as :connectName;
+	 exec sql whenever sqlerror call sqlprint;	 
+	 
+	      exec sql modify am90_mod_upd to btree with concurrent_updates,
+	                                                 page_size = 8192,
+	                                                 compression;
+  
+         if (sqlca.sqlcode != 0) print_err();
+         exec sql commit;   
+	 exec sql disconnect :connectName;
+	 return p;
+}
+
+void *update_t(void *p)
+{
+	exec sql begin declare section;
+          	char connectName[50];
+	exec sql end declare section;
+	
+	
+	exec sql whenever sqlerror stop;
+	/*------------------------------------------------------*/
+	/* sqlprint - prints all errors and database procedure  */
+	/* messages arising from embedded SQL statements.       */
+	/*------------------------------------------------------*/
+	exec sql whenever sqlerror call sqlprint;
+	
+	/*---------------------------------------------*/
+	/* thread 2 - update column ssn = 111-22-3333  */
+	/*---------------------------------------------*/
+
+	 sprintf(connectName,"CONNECTION%d", *(int *)p);
+	 printf("THREAD CONNECTED\n");
+
+	 exec sql connect :dbname as :connectName;
+ 	 exec sql whenever sqlerror call sqlprint;
+
+              exec sql update am90_mod_upd set ssn = '111-22-3333';
+
+         if (sqlca.sqlcode != 0) print_err();
+         exec sql commit;         
+         exec sql  disconnect :connectName;
+         return p;
+}
+
+
+void print_err()
+{
+
+	exec sql begin declare section;
+		char message[550];
+	exec sql end declare section;
+
+	/*-----------------------------------------------------------*/
+	/* inquire_sql returns the status of the last SQL            */
+	/* database statement issued by an application               */
+        /*-----------------------------------------------------------*/ 
+	
+	exec sql inquire_sql(:message = errortext);
+
+	printf("%s\n", message);
+
+}
+!!
+? ckpdb -j +w SEPPARAMDB
+<<
+~
+>>
+? esqlc -multi am90.sc 
+<<
+ESQL am90.sc:
+>>
+<<
+>>
+? sepcc am90.c 
+<<
+>>
+<<
+am90.c
+>>
+? seplnk am90 
+<<
+>>
+? run am90.exe SEPPARAMDB init
+<<
+
+>>
+? ckpdb +j +w SEPPARAMDB
+<<
+~
+>>
+? sql -s SEPPARAMDB
+<<
+
+>>
+* select count(*) from am90_mod_upd \g
+<<
+
++-------------+
+|col1         |
++-------------+
+|        20000|
++-------------+
+(1 row)
+>>
+* select distinct ssn from am90_mod_upd \g
+<<
+
++---------------+
+|ssn            |
++---------------+
+|123-45-6789    |
++---------------+
+(1 row)
+>>
+* \q
+<<
+~
+>>
+? run am90.exe SEPPARAMDB
+<<
+THREAD CONNECTED
+THREAD CONNECTED
+>>
+? sql -s SEPPARAMDB
+<<
+
+>>
+*  select storage_structure from iitables where table_name = 'am90_mod_upd' \g
+<<
+
++----------------+
+|storage_structur|
++----------------+
+|BTREE           |
++----------------+
+(1 row)
+>>
+* select table_pagesize from iitables where table_name = 'am90_mod_upd' \g
+<<
+
++-------------+
+|table_pagesiz|
++-------------+
+|         8192|
++-------------+
+(1 row)
+>>
+* select is_compressed from iitables where table_name = 'am90_mod_upd' \g
+<<
++------+
+|is_com|
++------+
+|Y     |
++------+
+(1 row)
+>>
+* select count(*) from am90_mod_upd \g
+<<
+
++-------------+
+|col1         |
++-------------+
+|        20000|
++-------------+
+(1 row)
+>>
+* select distinct ssn from am90_mod_upd \g
+<<
+
++---------------+
+|ssn            |
++---------------+
+|111-22-3333    |
++---------------+
+(1 row)
+>>
+* select count(*) from am90_mod_upd where ssn = '111-22-3333' \g
+<<
+
++-------------+
+|col1         |
++-------------+
+|        20000|
++-------------+
+(1 row)
+>>
+* drop table am90_mod_upd \g
+<<
+
+>>
+* \q
+<<
+
+>>
+? delete am90.c
+<<
+~
+>>
+? delete am90.exe
+<<
+~
+>>
+? delete am90.obj
+<<
+~
+>>
+? delete am90.o
+<<
+~
+>>
+
+
+Ending at: Thu May 06 14:02:00 2004

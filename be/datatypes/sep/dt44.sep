@@ -1,0 +1,575 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name: dt44.sep
+	Time: Tue Jan 15 15:14:41 2003
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID	: dt44.sep
+	Module 	: 
+	Filename:
+	Purpose	: This test will test the date(expr) Data Type Conversion 
+		  Function.
+	Input Files  : drop.sql, tables_setup.sql, insert_test.sql
+	Output Files : None
+	Database     : datatypedb
+	Tables       : tbl_dt44_a, tbl_dt44_b
+	Synopsis     : In this test data is passed to the date function from
+		       another conversion function and table tbl_dt44_a. It also
+                       tests the supported and non-supported data types.
+		       Destructive tests include passing the date function
+		       non-supported dates in various combinations, such as
+		       non-leap year dates and invalid day, month and/or year
+		       dates. Read comments for detailed information about a
+	               certain test case.
+			
+                              
+ History: 15-Jan-2003	(shafa01)  Created
+          18-Jan-2007	(vande02)  Updated canons now that messages E_US10CE,
+				   E_US10D0, E_US10D1, and E_US10CF include
+				   date/time text.  Header cleanup.
+          29-Oct-2007	(kiria01) b117790
+Updating canons reflecting string-number coercion changes.
+*/
+/*	
+	This fill file is used to initialize the database by dropping the
+	tables that will be used in the test.
+*/
+? fill drop.sql 
+!!
+drop tbl_dt44_a\p\g
+drop tbl_dt44_b\p\g
+!!
+/*
+	This fill file is used to setup the required tables for this test.
+*/
+? fill tables_setup.sql 
+!!
+create table tbl_dt44_a(c_byte byte(15) default NULL,
+	c_byte_varying byte varying(15) default NULL,
+	c_c c15 default NULL,
+	c_char char(15) default NULL,
+	c_date date default NULL,
+	c_decimal decimal (8,2) default NULL,
+	c_float float default NULL,
+	c_float4 f4 default NULL,
+	c_int1 i1 default NULL,
+	c_int2 smallint default NULL,
+	c_int4 integer default NULL,
+	c_integer integer default NULL,
+	c_long_byte long byte,
+	c_long_varchar long varchar,
+	c_money money default NULL,
+	c_object_key object_key default NULL,
+	c_table_key table_key default NULL,
+	c_text text(15) default NULL,
+	c_varchar varchar(15) default NULL)\g
+
+INSERT INTO tbl_dt44_a (c_byte,
+	c_byte_varying,
+	 c_c,
+	 c_char,
+	c_date,
+	c_decimal,
+	c_float,
+	c_float4,
+	c_int1,
+	c_int2,
+	c_int4,
+	c_integer,
+	c_long_byte,
+	c_long_varchar,
+	c_money,
+	c_object_key,
+	c_table_key,
+	c_text,
+	c_varchar)
+VALUES (
+	'100103',
+	'100103',
+	'100103',
+	'100103',
+	'100103',
+	100103.00,
+	100103.00,
+	100103.00,
+	127,
+	010103,
+	100103,
+	100103,
+	'100103',
+	'100103',
+	100103.00,
+	'1020200310202003',
+	'10202003',
+	'100103',
+	'100103')\g
+
+create table tbl_dt44_b(c_date date default NULL,
+	from_data_type char(40) default NULL)\g
+!!
+/*
+	This fill file executes certain insert and update commands specific to a
+	test case performed later into the test.
+*/
+? fill insert_test.sql 
+!!
+insert into tbl_dt44_b (c_date) select date(c_c) from tbl_dt44_a\g
+update tbl_dt44_b set from_data_type='Converted from c' where from_data_type is NULL-
+\g
+insert into tbl_dt44_b (c_date) select date(c_char) from tbl_dt44_a\g
+update tbl_dt44_b set from_data_type='Converted from char' where from_data_type is N-
+ULL\g
+insert into tbl_dt44_b (c_date) select date(c_date) from tbl_dt44_a\g
+update tbl_dt44_b set from_data_type='Converted from date' where from_data_type is N-
+ULL\g
+insert into tbl_dt44_b (c_date) select date(c_text) from tbl_dt44_a\g
+update tbl_dt44_b set from_data_type='Converted from text' where from_data_type is N-
+ULL\g
+insert into tbl_dt44_b (c_date) select date(c_varchar) from tbl_dt44_a\g
+update tbl_dt44_b set from_data_type='Converted from varchar' where from_data_type i-
+s NULL\g
+!!
+/*	In this section of the test I am simply wrapping the secondary
+        conversion functions within the date conversion function (primary) and
+        passing 100103 to be converted to the date 01-oct-2003. 
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* select date(c(100103))\g
+<<
+
++-------------------------+
+|col1                     |
++-------------------------+
+|01-oct-2003              |
++-------------------------+
+(1 row)
+>>
+* select date(char(100103))\g
+<<
+
++-------------------------+
+|col1                     |
++-------------------------+
+|01-oct-2003              |
++-------------------------+
+(1 row)
+>>
+* select date(date('100103'))\g
+<<
+
++-------------------------+
+|col1                     |
++-------------------------+
+|01-oct-2003              |
++-------------------------+
+(1 row)
+>>
+* select date(text(100103))\g
+<<
+
++-------------------------+
+|col1                     |
++-------------------------+
+|01-oct-2003              |
++-------------------------+
+(1 row)
+>>
+* select date(varchar(100103))\g
+<<
+
++-------------------------+
+|col1                     |
++-------------------------+
+|01-oct-2003              |
++-------------------------+
+(1 row)
+>>
+/* 
+	When the decimal function is used without specifying the precision and
+	scale the date function will read it as a valid date.
+*/
+* select date(decimal(100103))\g
+<<
++-------------------------+
+|col1                     |
++-------------------------+
+|01-oct-2003              |
++-------------------------+
+(1 row)
+>>
+/*
+	The following two commands test the default legal input formats for US
+	dates. The default legal input formats for US dates are mm/dd/yy,
+        dd-mmm-yyyy and mmddyy.
+*/
+* select date('10/01/03')\g
+<<
++-------------------------+
+|col1                     |
++-------------------------+
+|01-oct-2003              |
++-------------------------+
+(1 row)
+>>
+* select date('01-oct-2003')\g
+<<
++-------------------------+
+|col1                     |
++-------------------------+
+|01-oct-2003              |
++-------------------------+
+(1 row)
+>>
+* select date('100103')\g
+<<
++-------------------------+
+|col1                     |
++-------------------------+
+|01-oct-2003              |
++-------------------------+
+(1 row)
+>>
+/*
+	In this section I test the date conversion function with the
+	non-supported data types. Appropriate error messages are canonized.
+*/
+* select date(int2(010103))\g
+<<
+
++-------------------------+
+|col1                     |
++-------------------------+
+|01-jan-2003              |
++-------------------------+
+(1 row)
+>>
+* select date(int4(100103))\g
+<<
+
++-------------------------+
+|col1                     |
++-------------------------+
+|01-oct-2003              |
++-------------------------+
+(1 row)
+>>
+* select date(long_byte(100103))\g
+<<
+
+E_US0B5B line 1, Function 'date' does not take an argument of type 'long
+    byte'. Explicitly convert the argument to the desired type.
+    (Wed Jan 15 12:36:09 2003)
+>>
+* select date(long_varchar(100103))\g
+<<
+
+E_US0B5B line 1, Function 'date' does not take an argument of type 'long
+    varchar'. Explicitly convert the argument to the desired type.
+    (Wed Jan 15 12:37:01 2003)
+>>
+* select date(money(100103))\g
+<<
+
+E_US0B5B line 1, Function 'date' does not take an argument of type
+    'money'. Explicitly convert the argument to the desired type.
+    (Wed Jan 15 12:37:39 2003)
+>>
+* select date(float4(100103))\g
+<<
+E_US10CE '100103.000' is not a valid date/time value.
+    (Mon Oct 29 15:17:01 2007)
+
+>>
+* select date(float8(100103))\g
+<<
+E_US10CE '100103.000' is not a valid date/time value.
+    (Mon Oct 29 15:17:01 2007)
+
+>>
+* select date(table_key('10202003'))\g
+<<
+
+E_US0B5B line 1, Function 'date' does not take an argument of type
+    'table_key'. Explicitly convert the argument to the desired type.
+    (Tue Feb 18 10:49:53 2003)
+>>
+* select date(object_key('1020200310202003'))\g
+<<
+
+E_US0B5B line 1, Function 'date' does not take an argument of type
+    'object_key'. Explicitly convert the argument to the desired type.
+    (Tue Feb 18 10:50:23 2003)
+>>
+/* 
+	When the decimal function is used with specifying the precision and
+        scale the date function will read it as an invalid date.
+*/
+* select date(decimal(100103,8,2))\g
+<<
+E_US10CE '100103.00' is not a valid date/time value.
+    (Thu Jan 18 18:06:39 2007)
+
+>>
+/*	
+	In this section of the test I am testing the '-' operand to test for
+	date intervals. When an older date (e.g. 010199) is subtracted from
+	a newer date (e.g. 010100), then result is displayed as a positive
+	number of days (e.g. 365 days). Which reflects that so many days have
+	past the newer date. When a newer date is subtracted from an older date,
+	then the days are displayed as a negative number of days 
+        (e.g. -365days). Which reflects that so many days are left to go from
+        the older to the newer date.
+*/
+*  select date('01/01/2000'), date('01/01/1999'), date('01/01/2000') - date('01/01/1-
+999')\g
+<<
+
++-----------------------------------------------------------------------------+
+|col1                     |col2                     |col3                     |
++-------------------------+-------------------------+-------------------------+
+|01-jan-2000              |01-jan-1999              |365 days                 |
++-----------------------------------------------------------------------------+
+(1 row)
+>>
+* select date('01/01/1999') , date('01/01/2000'), date('01/01/1999') - date('01/01/2-
+000')\g
+<<
+
++-----------------------------------------------------------------------------+
+|col1                     |col2                     |col3                     |
++-------------------------+-------------------------+-------------------------+
+|01-jan-1999              |01-jan-2000              |-365 days                |
++-----------------------------------------------------------------------------+
+(1 row)
+>>
+/*	
+	Similar test as above using a leap year.
+*/
+* select date('01/01/2001') , date('01/01/2000'), date('01/01/2001') - date('01/01/2-
+000')\g
+<<
+
++-----------------------------------------------------------------------------+
+|col1                     |col2                     |col3                     |
++-------------------------+-------------------------+-------------------------+
+|01-jan-2001              |01-jan-2000              |366 days                 |
++-----------------------------------------------------------------------------+
+(1 row)
+>>
+* select date('01/01/2000') , date('01/01/2001'), date('01/01/2000') - date('01/01/2-
+001')\g
+<<
+
++-----------------------------------------------------------------------------+
+|col1                     |col2                     |col3                     |
++-------------------------+-------------------------+-------------------------+
+|01-jan-2000              |01-jan-2001              |-366 days                |
++-----------------------------------------------------------------------------+
+(1 row)
+>>
+/*
+	Testing for valid and invalid leap year date. 29-feb-2000 is a valid
+        leap year date and 29-feb-2001 is invalid. Respective results are
+        canonized.
+*/
+* select date('022900')\g
+<<
+
++-------------------------+
+|col1                     |
++-------------------------+
+|29-feb-2000              |
++-------------------------+
+(1 row)
+>>
+* select date('022901')\g
+<<
+E_US10D1 29 is not a valid day for a date/time column.
+    (Thu Jan 18 18:07:23 2007)
+
+>>
+/*	
+	Testing the date function by passing it dates with invalid month, day
+        and/or year in the three US default input date formats.
+*/
+* select date('130103')\g
+<<
+E_US10D0 13 is not a valid month for a date/time column.
+    (Thu Jan 18 18:07:24 2007)
+
+>>
+* select date('000103')\g
+<<
+E_US10D0 0 is not a valid month for a date/time column.
+    (Thu Jan 18 18:07:25 2007)
+
+>>
+* select date('123203')\g
+<<
+E_US10D1 32 is not a valid day for a date/time column.
+    (Thu Jan 18 18:07:26 2007)
+
+>>
+* select date('120003')\g
+<<
+E_US10D1 0 is not a valid day for a date/time column.
+    (Thu Jan 18 18:07:28 2007)
+
+>>
+* select date('13/01/03')\g
+<<
+E_US10D0 13 is not a valid month for a date/time column.
+    (Thu Jan 18 18:07:29 2007)
+
+>>
+* select date('12/32/03')\g
+<<
+E_US10D1 32 is not a valid day for a date/time column.
+    (Thu Jan 18 18:07:30 2007)
+
+>>
+* select date('01-tri-2003')\g
+<<
+E_US10CE '01-tri-2003' is not a valid date/time value.
+    (Thu Jan 18 18:07:31 2007)
+
+>>
+* select date('32-fan-2003')\g
+<<
+E_US10CE '32-fan-2003' is not a valid date/time value.
+    (Thu Jan 18 18:07:33 2007)
+
+>>
+* select date('01-jan-20001')\g
+<<
+E_US10CF 20001 is not a valid year for a date/time column.
+    (Thu Jan 18 18:07:34 2007)
+
+>>
+/*
+	In the following section the required tables for this test are
+	created and then inserted with data to be tested with the date
+	conversion function.
+*/
+* \i drop.sql
+<<
+~
+>>
+* \i tables_setup.sql
+<<
+(1 row)
+>>
+/*
+	In the following section, values from selected columns of table
+        tbl_dt44_a are passed through the date conversion function, which in
+        turn are then inserted into the c_date column of table tbl_dt44_b. The
+        from_data_type column of table tbl_dt44_b shows what data type the
+        c_date data was converted from.
+*/
+* \i insert_test.sql
+<<
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+>>
+* select * from tbl_dt44_b\p\g
+<<
+select * from tbl_dt44_b
+
++-------------------+----------------------------------------+
+|c_date		    |from_data_type                          |
++-------------------+----------------------------------------+
+|01-oct-2003        |Converted from c                        |
+|01-oct-2003        |Converted from char                     |
+|01-oct-2003        |Converted from date                     |
+|01-oct-2003        |Converted from text                     |
+|01-oct-2003        |Converted from varchar                  |
++-------------------+----------------------------------------+
+(5 rows)
+>>
+/*
+	Preforming the above steps for the non-supported data types.
+*/
+* insert into tbl_dt44_b (c_date) select date(c_decimal) from tbl_dt44_a\g
+<<
+E_US10CE '100103.00' is not a valid date/time value.
+    (Thu Jan 18 18:07:35 2007)
+
+>>
+* insert into tbl_dt44_b (c_date) select date(c_float) from tbl_dt44_a\g
+<<
+E_US10CE '100103.000' is not a valid date/time value.
+    (Mon Oct 29 15:17:02 2007)
+
+>>
+* insert into tbl_dt44_b (c_date) select date(c_float4) from tbl_dt44_a\g
+<<
+E_US10CE '100103.000' is not a valid date/time value.
+    (Mon Oct 29 15:17:02 2007)
+
+>>
+* insert into tbl_dt44_b (c_date) select date(c_int2) from tbl_dt44_a\g
+<<
+(1 row)
+>>
+* insert into tbl_dt44_b (c_date) select date(c_int4) from tbl_dt44_a\g
+<<
+(1 row)
+>>
+* insert into tbl_dt44_b (c_date) select date(c_long_byte) from tbl_dt44_a\g
+<<
+
+E_US0B5B line 1, Function 'date' does not take an argument of type 'long
+    byte'. Explicitly convert the argument to the desired type.
+    (Thu Jan 16 11:58:36 2003)
+>>
+* insert into tbl_dt44_b (c_date) select date(c_long_varchar) from tbl_dt44_a\g
+<<
+
+E_US0B5B line 1, Function 'date' does not take an argument of type 'long
+    varchar'. Explicitly convert the argument to the desired type.
+    (Thu Jan 16 11:58:37 2003)
+>>
+* insert into tbl_dt44_b (c_date) select date(c_money) from tbl_dt44_a\g
+<<
+
+E_US0B5B line 1, Function 'date' does not take an argument of type
+    'money'. Explicitly convert the argument to the desired type.
+    (Thu Jan 16 11:58:39 2003)
+>>
+* insert into tbl_dt44_b (c_date) select date(c_object_key) from tbl_dt44_a\g
+<<
+
+E_US0B5B line 1, Function 'date' does not take an argument of type
+    'object_key'. Explicitly convert the argument to the desired type.
+    (Tue Feb 18 10:50:23 2003)
+>>
+* insert into tbl_dt44_b (c_date) select date(c_table_key) from tbl_dt44_a\g
+<<
+
+E_US0B5B line 1, Function 'date' does not take an argument of type
+    'table_key'. Explicitly convert the argument to the desired type.
+    (Tue Feb 18 10:49:53 2003)
+>>
+* \i drop.sql
+<<
+drop tbl_dt44_a
+drop tbl_dt44_b
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Mon Oct 29 15:17:03 2007

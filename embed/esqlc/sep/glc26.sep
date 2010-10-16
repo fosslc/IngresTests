@@ -1,0 +1,374 @@
+/*
+	Test Name: pza25sc.sep
+	Time: Wed Jan 26 17:01:02 1994
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : pza25sc
+	Module  : 3gl
+	Filename: pza25sc.sep
+	Purpose	: To test OUTER JOIN syntax in 3gl.
+	Input Files  : pza25sc.sc pza25sc.sql
+	Output Files :
+	Database     : SEPPARAMPDB
+	Tables       : emp, dept, mgr
+	Synopsis     :
+
+ History: 26-Jan-1994	(jbryson)	Created
+          02-Apr-1997   Modified (chiel02)
+                        Added an alternate canon for the sepcc command.   
+          01-May-2001	(sarjo01) Added ORDER BY's to assure consistent 
+                        results.
+*/
+? delete pza25sc.c 
+<<
+~
+>>
+? delete pza25sc.o 
+<<
+~
+>>
+? delete pza25sc.obj 
+<<
+~
+>>
+? delete pza25sc.exe 
+<<
+~
+>>
+? fill pza25sc.sql 
+!!
+create table emp (name varchar(10), dept integer, mgr integer)\p\g
+insert into emp values('emp1',1,1)\p\g
+insert into emp values('emp2',2,2)\p\g
+insert into emp values('emp4',4,4)\p\g
+
+create table dept (name varchar(10), dept integer)\p\g
+insert into dept values('dept1',1)\p\g
+insert into dept values('dept3',3)\p\g
+
+create table mgr (name varchar(10), mgr integer)\p\g
+insert into mgr values('mgr1',1)\p\g
+insert into mgr values('mgr4',4)\p\g
+insert into mgr values('mgr5',5)\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* drop table emp\g 
+<<
+~
+>>
+* drop table dept\g 
+<<
+~
+>>
+* drop table mgr\g 
+<<
+~
+>>
+* \i pza25sc.sql 
+<<
+ 
+create table emp (name varchar(10), dept integer, mgr integer)
+insert into emp values('emp1',1,1)
+(1 row)
+insert into emp values('emp2',2,2)
+(1 row)
+insert into emp values('emp4',4,4)
+(1 row)
+
+create table dept (name varchar(10), dept integer)
+insert into dept values('dept1',1)
+(1 row)
+insert into dept values('dept3',3)
+(1 row)
+
+create table mgr (name varchar(10), mgr integer)
+insert into mgr values('mgr1',1)
+(1 row)
+insert into mgr values('mgr4',4)
+(1 row)
+insert into mgr values('mgr5',5)
+(1 row)
+>>
+* \q 
+<<
+~
+>>
+? fill pza25sc.sc 
+!!
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+   short ind1, ind2, ind3;
+   char  ename[11], 
+	 dname[11],
+	 mname[11];
+EXEC SQL END DECLARE SECTION;
+
+int main(argc,argv)
+int  argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char *argv[];
+EXEC SQL END DECLARE SECTION;
+{
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   /* Start up INGRES and the INGRES/FORMS system */
+   EXEC SQL CONNECT :argv[1];
+
+   printf("\n\nINNER JOIN - select loop\n");
+   EXEC SQL SELECT ifnull(e.name,''),ifnull(d.name,'')
+	   INTO :ename:ind1, :dname:ind2
+	   FROM (emp e INNER JOIN dept d ON e.dept=d.dept) order by 1,2;
+   EXEC SQL BEGIN;
+      printf("%-10s   %s\n",ename,dname);
+   EXEC SQL END;
+
+   printf("\n\nRIGHT JOIN - select loop\n");
+   EXEC SQL SELECT ifnull(e.name,''),ifnull(d.name,'')
+	   INTO :ename:ind1, :dname:ind2
+	   FROM (emp e RIGHT JOIN dept d ON e.dept=d.dept) order by 1,2;
+   EXEC SQL BEGIN;
+      printf("%-10s   %s\n",ename,dname);
+   EXEC SQL END;
+
+   printf("\n\nLEFT JOIN - select loop\n");
+   EXEC SQL SELECT ifnull(e.name,''),ifnull(d.name,'')
+	   INTO :ename:ind1, :dname:ind2
+	   FROM (emp e LEFT JOIN dept d ON e.dept=d.dept) order by 1,2;
+   EXEC SQL BEGIN;
+      printf("%-10s   %s\n",ename,dname);
+   EXEC SQL END;
+
+   printf("\n\nFULL JOIN - select loop\n");
+   EXEC SQL SELECT ifnull(e.name,''),ifnull(d.name,'')
+	   INTO :ename:ind1, :dname:ind2
+	   FROM (emp e FULL JOIN dept d ON e.dept=d.dept) order by 1,2;
+   EXEC SQL BEGIN;
+      printf("%-10s   %s\n",ename,dname);
+   EXEC SQL END;
+
+   printf("\n\nINNER JOIN - cursor\n");
+   EXEC SQL DECLARE c1 CURSOR FOR 
+      SELECT ifnull(e.name,''),ifnull(d.name,'')
+	 FROM (emp e INNER JOIN dept d ON e.dept=d.dept) order by 1,2;
+   EXEC SQL OPEN c1;
+   while(1)
+   {
+      EXEC SQL FETCH c1 INTO :ename:ind1, :dname:ind2;
+      if (sqlca.sqlcode)
+         break;
+
+      printf("%-10s   %s\n",ename,dname);
+   }
+   EXEC SQL CLOSE c1;
+
+   printf("\n\nRIGHT JOIN - cursor\n");
+   EXEC SQL DECLARE c2 CURSOR FOR 
+      SELECT ifnull(e.name,''),ifnull(d.name,'')
+	 FROM (emp e RIGHT JOIN dept d ON e.dept=d.dept) order by 1,2;
+   EXEC SQL OPEN c2;
+   while(1)
+   {
+      EXEC SQL FETCH c2 INTO :ename:ind1, :dname:ind2;
+      if (sqlca.sqlcode)
+         break;
+
+      printf("%-10s   %s\n",ename,dname);
+   }
+   EXEC SQL CLOSE c2;
+
+   printf("\n\nLEFT JOIN - cursor\n");
+   EXEC SQL DECLARE c3 CURSOR FOR 
+      SELECT ifnull(e.name,''),ifnull(d.name,'')
+	 FROM (emp e LEFT JOIN dept d ON e.dept=d.dept) order by 1,2;
+   EXEC SQL OPEN c3;
+   while(1)
+   {
+      EXEC SQL FETCH c3 INTO :ename:ind1, :dname:ind2;
+      if (sqlca.sqlcode)
+         break;
+
+      printf("%-10s   %s\n",ename,dname);
+   }
+   EXEC SQL CLOSE c3;
+
+   printf("\n\nFULL JOIN - cursor\n");
+   EXEC SQL DECLARE c4 CURSOR FOR 
+      SELECT ifnull(e.name,''),ifnull(d.name,'')
+	 FROM (emp e FULL JOIN dept d ON e.dept=d.dept) order by 1,2;
+   EXEC SQL OPEN c4;
+   while(1)
+   {
+      EXEC SQL FETCH c4 INTO :ename:ind1, :dname:ind2;
+      if (sqlca.sqlcode)
+         break;
+
+      printf("%-10s   %s\n",ename,dname);
+   }
+   EXEC SQL CLOSE c4;
+
+   printf("\n\n2-FULL JOIN - cursor\n");
+   EXEC SQL DECLARE c5 CURSOR FOR 
+      SELECT ifnull(e.name,''),ifnull(d.name,''),ifnull(m.name,'')
+	 FROM ((emp e FULL JOIN dept d ON e.dept=d.dept)
+		      FULL JOIN mgr m on e.mgr = m.mgr)  order by 1,2,3;
+   EXEC SQL OPEN c5;
+   while(1)
+   {
+      EXEC SQL FETCH c5 INTO :ename:ind1, :dname:ind2, :mname:ind3;
+      if (sqlca.sqlcode)
+         break;
+
+      printf("%-10s   %-10s   %-10s\n",ename,dname,mname);
+   }
+   EXEC SQL CLOSE c5;
+
+   join_it("INNER");
+   join_it("RIGHT");
+   join_it("LEFT");
+   join_it("FULL");
+
+   EXEC SQL DISCONNECT;
+
+   exit(0);
+} /* Main Program */
+
+join_it(type)
+char *type;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+   char buf[200];
+EXEC SQL END DECLARE SECTION;
+
+   printf("\n\n%s JOIN - EXECUTE IMMEDIATE\n",type);
+   sprintf(buf,"SELECT ifnull(e.name,''),ifnull(d.name,'') FROM (emp e %s  JOIN dept-
+ d ON e.dept=d.dept) order by 1,2",type);
+
+   EXEC SQL EXECUTE IMMEDIATE :buf
+      INTO :ename:ind1, :dname:ind2;
+   EXEC SQL BEGIN;
+      printf("%-10s   %s\n",ename,dname);
+   EXEC SQL END;
+}
+!!
+? esqlc pza25sc.sc 
+<<
+ESQL pza25sc.sc:
+>>
+<<
+>>
+? sepcc pza25sc 
+<<
+>>
+<<
+pza25sc.c
+>>
+? seplnk pza25sc 
+<<
+>>
+? run pza25sc.exe SEPPARAMDB 
+<<
+
+
+INNER JOIN - select loop
+emp1         dept1
+
+
+RIGHT JOIN - select loop
+             dept3
+emp1         dept1
+
+
+LEFT JOIN - select loop
+emp1         dept1
+emp2         
+emp4         
+
+
+FULL JOIN - select loop
+             dept3
+emp1         dept1
+emp2         
+emp4         
+
+
+INNER JOIN - cursor
+emp1         dept1
+
+
+RIGHT JOIN - cursor
+             dept3
+emp1         dept1
+
+
+LEFT JOIN - cursor
+emp1         dept1
+emp2         
+emp4         
+
+
+FULL JOIN - cursor
+             dept3
+emp1         dept1
+emp2         
+emp4         
+
+
+2-FULL JOIN - cursor
+                          mgr5      
+             dept3                  
+emp1         dept1        mgr1      
+emp2                                
+emp4                      mgr4      
+
+
+INNER JOIN - EXECUTE IMMEDIATE
+emp1         dept1
+
+
+RIGHT JOIN - EXECUTE IMMEDIATE
+             dept3
+emp1         dept1
+
+
+LEFT JOIN - EXECUTE IMMEDIATE
+emp1         dept1
+emp2         
+emp4         
+
+
+FULL JOIN - EXECUTE IMMEDIATE
+             dept3
+emp1         dept1
+emp2         
+emp4         
+>>
+? delete pza25sc.c 
+<<
+~
+>>
+? delete pza25sc.o 
+<<
+~
+>>
+? delete pza25sc.obj 
+<<
+~
+>>
+? delete pza25sc.exe 
+<<
+~
+>>
+
+
+Ending at: Tue May 01 10:31:35 2001

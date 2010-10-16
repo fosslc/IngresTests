@@ -1,0 +1,1291 @@
+/*
+	Test Name: blob04.sep
+	Time: Fri Feb 26 17:08:09 1999
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : be/blobs
+	Filename: blob04.sep
+	Purpose	: To test Global Temporary Table operations with blob columns.
+	Input Files  : none.
+	Output Files : none.
+	Database     : SEPPARAMDB
+	Tables       : session.r1, session.r2
+	Synopsis     : This test tests Global Temporary Table operations with
+		       blob columns.
+
+ History: 26-Feb-1999	(somsa01)	Created.
+	  22-mar-1999	(walro03)
+		Removed -v"|" from sql statement; it caused diffs.
+	  07-apr-1999	(vande02)
+                Hard-coded VPG_SZ to 4K.
+           5-Nov-2003   (vande02)
+		Minor clean up changes by putting empty canons to confirm sql
+		connections to database, and lined up history comments and
+		synopsis for easy reading.
+*/
+? fill dgtt_norcvry.sql 
+!!
+/*
+** These tests attempt to evoke some of the NORECOVERY behaviors
+*/
+
+set lockmode session where readlock=nolock;\p\g
+
+/*
+** Test that rows added during this transaction are not backed out by ROLLBACK
+*/
+declare global temporary table session.r1 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;\p\g
+commit;\p\g
+insert into session.r1 values ('test1a', 'test1b', 1);\p\g
+insert into session.r1 values ('test2a', 'test2b', 2);\p\g
+insert into session.r1 values ('test3a', 'test3b', 3);\p\g
+insert into session.r1 values ('test4a', 'test4b', 4);\p\g
+insert into session.r1 values ('test5a', 'test5b', 5);\p\g
+insert into session.r1 values ('test6a', 'test6b', 6);\p\g
+insert into session.r1 values ('test7a', 'test7b', 7);\p\g
+insert into session.r1 values ('test8a', 'test8b', 8);\p\g
+insert into session.r1 values ('test9a', 'test9b', 9);\p\g
+insert into session.r1 values ('test10a', 'test10b', 10);\p\g
+insert into session.r1 values ('test11a', 'test11b', 11);\p\g
+insert into session.r1 values ('test12a', 'test12b', 12);\p\g
+select * from session.r1;\p\g
+rollback;\p\g
+select * from session.r1;\p\g
+
+/*
+** Test that rows added since the last savepoint are not out by
+** ROLLBACK TO SAVEPOINT by dropping the temp table.
+*/
+declare global temporary table session.r1 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;\p\g
+commit;\p\g
+savepoint svpt_a;\p\g
+insert into session.r1 values ('test121a', 'test121b', 121);\p\g
+insert into session.r1 values ('test122a', 'test122b', 122);\p\g
+insert into session.r1 values ('test123a', 'test122b', 123);\p\g
+insert into session.r1 values ('test124a', 'test124b', 124);\p\g
+insert into session.r1 values ('test125a', 'test125b', 125);\p\g
+insert into session.r1 values ('test126a', 'test126b', 126);\p\g
+insert into session.r1 values ('test127a', 'test127b', 127);\p\g
+select * from session.r1;\p\g
+rollback to svpt_a;\p\g
+select * from session.r1;\p\g
+
+commit;\p\g
+
+/*
+** Issue DECLARE GLOBAL TEMPORARY TABLE, then ROLLBACK.
+*/
+declare global temporary table session.r2 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;\p\g
+rollback;\p\g
+
+/*
+** Issue INSERT INTO SESSION.t, then ROLLBACK.
+*/
+commit;\p\g
+insert into session.r2 values ('test199a', 'test199b', 199);\p\g
+select * from session.r2;\p\g
+rollback;\p\g
+select * from session.r2;\p\g
+
+/*
+** Issue UPDATE SESSION.t, then ROLLBACK.
+*/
+declare global temporary table session.r2 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;\p\g
+insert into session.r2 values ('test199a', 'test199b', 199);\p\g
+commit;\p\g
+update session.r2 set a = 'test255a' where c = 199;\p\g
+select * from session.r2;\p\g
+rollback;\p\g
+select * from session.r2;\p\g
+
+/*
+** Issue DELETE FROM SESSION.t, then ROLLBACK.
+*/
+declare global temporary table session.r1 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;\p\g
+insert into session.r1 values ('test121a', 'test121b', 121);\p\g
+insert into session.r1 values ('test122a', 'test122b', 122);\p\g
+insert into session.r1 values ('test123a', 'test122b', 123);\p\g
+insert into session.r1 values ('test124a', 'test124b', 124);\p\g
+insert into session.r1 values ('test125a', 'test125b', 125);\p\g
+insert into session.r1 values ('test126a', 'test126b', 126);\p\g
+insert into session.r1 values ('test127a', 'test127b', 127);\p\g
+commit;\p\g
+delete from session.r1 where c = 123 or c = 124 or c = 125;\p\g
+select * from session.r1;\p\g
+rollback;\p\g
+select * from session.r1;\p\g
+
+/*
+** Issue MODIFY SESSION.t, then ROLLBACK.
+*/
+declare global temporary table session.r1 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;\p\g
+insert into session.r1 values ('test121a', 'test121b', 121);\p\g
+insert into session.r1 values ('test122a', 'test122b', 122);\p\g
+insert into session.r1 values ('test123a', 'test122b', 123);\p\g
+insert into session.r1 values ('test124a', 'test124b', 124);\p\g
+insert into session.r1 values ('test125a', 'test125b', 125);\p\g
+insert into session.r1 values ('test126a', 'test126b', 126);\p\g
+insert into session.r1 values ('test127a', 'test127b', 127);\p\g
+commit;\p\g
+modify session.r1 to btree on c ;\p\g
+rollback;\p\g
+select * from session.r1;\p\g
+
+/*
+** Issue DROP TABLE SESSION.t, then ROLLBACK.
+*/
+declare global temporary table session.r2 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;\p\g
+commit;\p\g
+drop table session.r2;\p\g
+rollback;\p\g
+select * from session.r2;\p\g
+!!
+? fill dgtt_simple.sql 
+!!
+/*
+** These tests verify the functionality of lightweight session tables by
+** attempting to ensure that operations are functioning properly.
+*/
+
+/*
+** Simple behavior tests
+*/
+
+/*
+** Declare a temporary table
+*/
+declare global temporary table session.t
+	(emp_id integer, phonenum integer, ename long varchar)
+	on commit preserve rows with norecovery, page_size=4096;\p\g
+
+/*
+** Insert 100 rows into the lightweight session table
+*/
+insert into session.t values (1,  2797,'abbaterd');\p\g
+insert into session.t values (2,  3559, 'abraham');\p\g
+insert into session.t values (3,  7824, 'acevedo');\p\g
+insert into session.t values (4,  2637, 'ackerman');\p\g
+insert into session.t values (5,  3307, 'ackerman');\p\g
+insert into session.t values (6,  5229, 'acosta');\p\g
+insert into session.t values (7,  3415, 'adams-duma');\p\g
+insert into session.t values (8,  5799, 'adkisson');\p\g
+insert into session.t values (9,  1234, 'dfsgsdfg');\p\g
+insert into session.t values (10, 2345, 'ewrtwergfhj');\p\g
+insert into session.t values (11, 3456, 'e4treyhd');\p\g
+insert into session.t values (12, 4567, 'dyugfhjgh');\p\g
+insert into session.t values (13, 5545, 'dfgkasdhf');\p\g
+insert into session.t values (14, 5678, 'erklhjirtn');\p\g
+insert into session.t values (15, 6789, 'sdsdlnmer');\p\g
+insert into session.t values (16, 7891, 'dfmdfkrtedfr');\p\g
+insert into session.t values (17, 6744, 'qweklqwenbtr');\p\g
+insert into session.t values (18, 3214, 'dfgdftydr');\p\g
+insert into session.t values (19, 3445, 'yytumuy');\p\g
+insert into session.t values (20, 9834, 'awneabnsertser');\p\g
+insert into session.t values (21, 3658, 'dfgndft');\p\g
+insert into session.t values (22, 8743, 'asxcnxcvndfg');\p\g
+insert into session.t values (23, 2487, 'erertyuytmkgdf');\p\g
+insert into session.t values (24, 1784, 'qnsbdbdfrr');\p\g
+insert into session.t values (25, 5824, 'fdnhfgmtyk');\p\g
+insert into session.t values (26, 5533, 'ababsddfhfg');\p\g
+insert into session.t values (27, 4422, 'tymymyu');\p\g
+insert into session.t values (28, 4477, 'sdndfssdfhjrty');\p\g
+insert into session.t values (29, 9966, 'weerw');\p\g
+insert into session.t values (30, 2244, 'fgh');\p\g
+insert into session.t values (31, 2154, 'hjghjiu');\p\g
+insert into session.t values (32, 9463, 'asdgsdghdfjtyf');\p\g
+insert into session.t values (33, 7287, 'hjkljkkui');\p\g
+insert into session.t values (34, 5578, 'xixcic');\p\g
+insert into session.t values (35, 5598, 'tymyusdjh');\p\g
+insert into session.t values (36, 5543, 'ajhrtky');\p\g
+insert into session.t values (37, 5526, 'djrjkt');\p\g
+insert into session.t values (38, 6694, 'asjsdfjdfg');\p\g
+insert into session.t values (39, 6617, 'uykuikui');\p\g
+insert into session.t values (40, 6618, 'adfhjfdg');\p\g
+insert into session.t values (41, 4439, 'yulkuik');\p\g
+insert into session.t values (42, 8724, 'ahahasd');\p\g
+insert into session.t values (43, 8979, 'rtjytkuy');\p\g
+insert into session.t values (44, 1615, 'dfjhgfjfg');\p\g
+insert into session.t values (45, 1617, 'uiuioiu');\p\g
+insert into session.t values (46, 1667, 'asasdasd');\p\g
+insert into session.t values (47, 1619, 'werwet');\p\g
+insert into session.t values (48, 7274, 'rtyrtyu');\p\g
+insert into session.t values (49, 7279, 'sdgfguyu');\p\g
+insert into session.t values (50, 2739, 'dfyfu');\p\g
+insert into session.t values (51,  12797,'abbafgterd');\p\g
+insert into session.t values (52,  23559, 'abrdafham');\p\g
+insert into session.t values (53,  37824, 'acevsdsedo');\p\g
+insert into session.t values (54,  42637, 'ackedrman');\p\g
+insert into session.t values (55,  53307, 'ackertrman');\p\g
+insert into session.t values (56,  65229, 'acoreersta');\p\g
+insert into session.t values (57,  73415, 'adamyus-duma');\p\g
+insert into session.t values (58,  85799, 'adkisdfsdsson');\p\g
+insert into session.t values (59,  91234, 'dfgdfg');\p\g
+insert into session.t values (60, 12345, 'ertretr');\p\g
+insert into session.t values (61, 23456, 'ghgfughu');\p\g
+insert into session.t values (62, 34567, 'fghfgh');\p\g
+insert into session.t values (63, 45545, 'yuiyuw');\p\g
+insert into session.t values (64, 45678, 'bdfgrty');\p\g
+insert into session.t values (65, 56789, 'dfdfgbfgh');\p\g
+insert into session.t values (66, 67891, 'ipouiryy');\p\g
+insert into session.t values (67, 76744, 'qerertd');\p\g
+insert into session.t values (68, 83214, 'dfvdfgbfgh');\p\g
+insert into session.t values (69, 93445, 'yuiowertbf');\p\g
+insert into session.t values (70, 19834, 'dfbfghtyi');\p\g
+insert into session.t values (71, 23658, 'qdxrsdgf');\p\g
+insert into session.t values (72, 38743, 'gfhghu');\p\g
+insert into session.t values (73, 42487, 'uiouter');\p\g
+insert into session.t values (74, 51784, 'tyityuh');\p\g
+insert into session.t values (75, 65824, 'asdfert');\p\g
+insert into session.t values (76, 75533, 'yuoier');\p\g
+insert into session.t values (77, 84422, 'iuoertwe');\p\g
+insert into session.t values (78, 94477, 'bdfgfggy');\p\g
+insert into session.t values (79, 19966, 'yuower');\p\g
+insert into session.t values (80, 12244, 'bdfgdft');\p\g
+insert into session.t values (81, 22154, 'wetertdf');\p\g
+insert into session.t values (82, 39463, 'yuioerwtv');\p\g
+insert into session.t values (83, 47287, 'yuiodfges');\p\g
+insert into session.t values (84, 55578, 'dbfddfg');\p\g
+insert into session.t values (85, 65598, 'dfgdfyut');\p\g
+insert into session.t values (86, 75543, 'vsdfwtr');\p\g
+insert into session.t values (87, 85526, 'bdfyrt');\p\g
+insert into session.t values (88, 96694, 'qwsert');\p\g
+insert into session.t values (89, 96617, 'sdfhtru');\p\g
+insert into session.t values (90, 16618, 'sftu');\p\g
+insert into session.t values (91, 24439, 'iyute');\p\g
+insert into session.t values (92, 38724, 'ghfsd');\p\g
+insert into session.t values (93, 48979, 'ytrwe');\p\g
+insert into session.t values (94, 51615, 'ngrw');\p\g
+insert into session.t values (95, 61617, 'bnfgdsyu');\p\g
+insert into session.t values (96, 71667, 'trewfbsdf');\p\g
+insert into session.t values (97, 81619, 'iuyrgds');\p\g
+insert into session.t values (98, 97274, 'rewbfd');\p\g
+insert into session.t values (99, 107279, 'ytrebnfg');\p\g
+insert into session.t values (100, 12739, 'ytrevbfg');\p\g
+
+
+/*
+** Retrieve the 100 rows just inserted and verify that they are correct
+*/
+select * from session.t;\p\g
+
+select * from session.t where emp_id > 10 and emp_id < 20;\p\g
+
+/*
+** Delete 10 rows
+*/
+delete from session.t where emp_id = 14;\p\g
+delete from session.t where emp_id = 23;\p\g
+delete from session.t where emp_id = 54;\p\g
+delete from session.t where emp_id = 76;\p\g
+delete from session.t where emp_id = 17;\p\g
+delete from session.t where emp_id = 90;\p\g
+delete from session.t where emp_id = 83;\p\g
+delete from session.t where emp_id = 58;\p\g
+delete from session.t where emp_id = 38;\p\g
+delete from session.t where emp_id = 22;\p\g
+
+/*
+** Attempt to retrieve the rows just deleted -- should find nothing.
+*/
+select * from session.t where emp_id = 14;\p\g
+select * from session.t where emp_id = 23;\p\g
+select * from session.t where emp_id = 54;\p\g
+select * from session.t where emp_id = 76;\p\g
+select * from session.t where emp_id = 17;\p\g
+select * from session.t where emp_id = 90;\p\g
+select * from session.t where emp_id = 83;\p\g
+select * from session.t where emp_id = 58;\p\g
+select * from session.t where emp_id = 38;\p\g
+select * from session.t where emp_id = 22;\p\g
+
+/*
+** Retrieve the remaining 90 rows, and verify that they are correct
+*/
+select * from session.t;\p\g
+select count(*) from session.t;\p\g
+
+/*
+** update 30 (appx) rows to have new values
+*/
+update session.t set phonenum=phonenum+12 where emp_id >20 and emp_id < 55;
+
+/*
+** Retrieve the remaining 90 rows, and verify that they are correct
+*/
+select * from session.t;\p\g
+select count(*) from session.t;\p\g
+
+/*
+** Drop the lightweight session table
+*/
+drop table session.t;\p\g
+
+/*
+** Ensure that it truly is gone.
+*/
+select * from session.t;\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i dgtt_norcvry.sql 
+<<
+/* SQL Startup File */
+/*
+** These tests attempt to evoke some of the NORECOVERY behaviors
+*/
+
+set lockmode session where readlock=nolock;
+
+/*
+** Test that rows added during this transaction are not backed out by ROLLBACK
+*/
+declare global temporary table session.r1 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;
+commit;
+insert into session.r1 values ('test1a', 'test1b', 1);
+(1 row)
+insert into session.r1 values ('test2a', 'test2b', 2);
+(1 row)
+insert into session.r1 values ('test3a', 'test3b', 3);
+(1 row)
+insert into session.r1 values ('test4a', 'test4b', 4);
+(1 row)
+insert into session.r1 values ('test5a', 'test5b', 5);
+(1 row)
+insert into session.r1 values ('test6a', 'test6b', 6);
+(1 row)
+insert into session.r1 values ('test7a', 'test7b', 7);
+(1 row)
+insert into session.r1 values ('test8a', 'test8b', 8);
+(1 row)
+insert into session.r1 values ('test9a', 'test9b', 9);
+(1 row)
+insert into session.r1 values ('test10a', 'test10b', 10);
+(1 row)
+insert into session.r1 values ('test11a', 'test11b', 11);
+(1 row)
+insert into session.r1 values ('test12a', 'test12b', 12);
+(1 row)
+select * from session.r1;
+
++--------------------------------+--------------------------------+-------------+
+|a                               |b                               |c            |
++--------------------------------+--------------------------------+-------------+
+|test1a                          |test1b                          |            1|
+|test2a                          |test2b                          |            2|
+|test3a                          |test3b                          |            3|
+|test4a                          |test4b                          |            4|
+|test5a                          |test5b                          |            5|
+|test6a                          |test6b                          |            6|
+|test7a                          |test7b                          |            7|
+|test8a                          |test8b                          |            8|
+|test9a                          |test9b                          |            9|
+|test10a                         |test10b                         |           10|
+|test11a                         |test11b                         |           11|
+|test12a                         |test12b                         |           12|
++--------------------------------+--------------------------------+-------------+
+(12 rows)
+rollback;
+select * from session.r1;
+E_US0845 Table 'r1' does not exist or is not owned by you.
+    (Fri Feb 26 17:15:33 1999)
+
+
+/*
+** Test that rows added since the last savepoint are not out by
+** ROLLBACK TO SAVEPOINT by dropping the temp table.
+*/
+declare global temporary table session.r1 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;
+commit;
+savepoint svpt_a;
+insert into session.r1 values ('test121a', 'test121b', 121);
+(1 row)
+insert into session.r1 values ('test122a', 'test122b', 122);
+(1 row)
+insert into session.r1 values ('test123a', 'test122b', 123);
+(1 row)
+insert into session.r1 values ('test124a', 'test124b', 124);
+(1 row)
+insert into session.r1 values ('test125a', 'test125b', 125);
+(1 row)
+insert into session.r1 values ('test126a', 'test126b', 126);
+(1 row)
+insert into session.r1 values ('test127a', 'test127b', 127);
+(1 row)
+select * from session.r1;
+
++--------------------------------+--------------------------------+-------------+
+|a                               |b                               |c            |
++--------------------------------+--------------------------------+-------------+
+|test121a                        |test121b                        |          121|
+|test122a                        |test122b                        |          122|
+|test123a                        |test122b                        |          123|
+|test124a                        |test124b                        |          124|
+|test125a                        |test125b                        |          125|
+|test126a                        |test126b                        |          126|
+|test127a                        |test127b                        |          127|
++--------------------------------+--------------------------------+-------------+
+(7 rows)
+rollback to svpt_a;
+select * from session.r1;
+E_US0845 Table 'r1' does not exist or is not owned by you.
+    (Fri Feb 26 17:15:34 1999)
+
+
+commit;
+
+/*
+** Issue DECLARE GLOBAL TEMPORARY TABLE, then ROLLBACK.
+*/
+declare global temporary table session.r2 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;
+rollback;
+
+/*
+** Issue INSERT INTO SESSION.t, then ROLLBACK.
+*/
+commit;
+insert into session.r2 values ('test199a', 'test199b', 199);
+(1 row)
+select * from session.r2;
+
++--------------------------------+--------------------------------+-------------+
+|a                               |b                               |c            |
++--------------------------------+--------------------------------+-------------+
+|test199a                        |test199b                        |          199|
++--------------------------------+--------------------------------+-------------+
+(1 row)
+rollback;
+select * from session.r2;
+E_US0845 Table 'r2' does not exist or is not owned by you.
+    (Fri Feb 26 17:15:35 1999)
+
+
+/*
+** Issue UPDATE SESSION.t, then ROLLBACK.
+*/
+declare global temporary table session.r2 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;
+insert into session.r2 values ('test199a', 'test199b', 199);
+(1 row)
+commit;
+update session.r2 set a = 'test255a' where c = 199;
+(1 row)
+select * from session.r2;
+
++--------------------------------+--------------------------------+-------------+
+|a                               |b                               |c            |
++--------------------------------+--------------------------------+-------------+
+|test255a                        |test199b                        |          199|
++--------------------------------+--------------------------------+-------------+
+(1 row)
+rollback;
+select * from session.r2;
+E_US0845 Table 'r2' does not exist or is not owned by you.
+    (Fri Feb 26 17:15:36 1999)
+
+
+/*
+** Issue DELETE FROM SESSION.t, then ROLLBACK.
+*/
+declare global temporary table session.r1 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;
+insert into session.r1 values ('test121a', 'test121b', 121);
+(1 row)
+insert into session.r1 values ('test122a', 'test122b', 122);
+(1 row)
+insert into session.r1 values ('test123a', 'test122b', 123);
+(1 row)
+insert into session.r1 values ('test124a', 'test124b', 124);
+(1 row)
+insert into session.r1 values ('test125a', 'test125b', 125);
+(1 row)
+insert into session.r1 values ('test126a', 'test126b', 126);
+(1 row)
+insert into session.r1 values ('test127a', 'test127b', 127);
+(1 row)
+commit;
+delete from session.r1 where c = 123 or c = 124 or c = 125;
+(3 rows)
+select * from session.r1;
+
++--------------------------------+--------------------------------+-------------+
+|a                               |b                               |c            |
++--------------------------------+--------------------------------+-------------+
+|test121a                        |test121b                        |          121|
+|test122a                        |test122b                        |          122|
+|test126a                        |test126b                        |          126|
+|test127a                        |test127b                        |          127|
++--------------------------------+--------------------------------+-------------+
+(4 rows)
+rollback;
+select * from session.r1;
+E_US0845 Table 'r1' does not exist or is not owned by you.
+    (Fri Feb 26 17:15:37 1999)
+
+
+/*
+** Issue MODIFY SESSION.t, then ROLLBACK.
+*/
+declare global temporary table session.r1 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;
+insert into session.r1 values ('test121a', 'test121b', 121);
+(1 row)
+insert into session.r1 values ('test122a', 'test122b', 122);
+(1 row)
+insert into session.r1 values ('test123a', 'test122b', 123);
+(1 row)
+insert into session.r1 values ('test124a', 'test124b', 124);
+(1 row)
+insert into session.r1 values ('test125a', 'test125b', 125);
+(1 row)
+insert into session.r1 values ('test126a', 'test126b', 126);
+(1 row)
+insert into session.r1 values ('test127a', 'test127b', 127);
+(1 row)
+commit;
+modify session.r1 to btree on c ;
+(7 rows)
+rollback;
+select * from session.r1;
+
++--------------------------------+--------------------------------+-------------+
+|a                               |b                               |c            |
++--------------------------------+--------------------------------+-------------+
+|test121a                        |test121b                        |          121|
+|test122a                        |test122b                        |          122|
+|test123a                        |test122b                        |          123|
+|test124a                        |test124b                        |          124|
+|test125a                        |test125b                        |          125|
+|test126a                        |test126b                        |          126|
+|test127a                        |test127b                        |          127|
++--------------------------------+--------------------------------+-------------+
+(7 rows)
+
+/*
+** Issue DROP TABLE SESSION.t, then ROLLBACK.
+*/
+declare global temporary table session.r2 (a long varchar, b long byte, c int)
+	on commit preserve rows with norecovery, page_size=4096;
+commit;
+drop table session.r2;
+rollback;
+select * from session.r2;
+E_US0845 Table 'r2' does not exist or is not owned by you.
+    (Fri Feb 26 17:15:39 1999)
+
+>>
+* \q 
+<<
+
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i dgtt_simple.sql 
+<<
+/* SQL Startup File */
+/*
+** These tests verify the functionality of lightweight session tables by
+** attempting to ensure that operations are functioning properly.
+*/
+
+/*
+** Simple behavior tests
+*/
+
+/*
+** Declare a temporary table
+*/
+declare global temporary table session.t
+	(emp_id integer, phonenum integer, ename long varchar)
+	on commit preserve rows with norecovery, page_size=4096;
+
+/*
+** Insert 100 rows into the lightweight session table
+*/
+insert into session.t values (1,  2797,'abbaterd');
+(1 row)
+insert into session.t values (2,  3559, 'abraham');
+(1 row)
+insert into session.t values (3,  7824, 'acevedo');
+(1 row)
+insert into session.t values (4,  2637, 'ackerman');
+(1 row)
+insert into session.t values (5,  3307, 'ackerman');
+(1 row)
+insert into session.t values (6,  5229, 'acosta');
+(1 row)
+insert into session.t values (7,  3415, 'adams-duma');
+(1 row)
+insert into session.t values (8,  5799, 'adkisson');
+(1 row)
+insert into session.t values (9,  1234, 'dfsgsdfg');
+(1 row)
+insert into session.t values (10, 2345, 'ewrtwergfhj');
+(1 row)
+insert into session.t values (11, 3456, 'e4treyhd');
+(1 row)
+insert into session.t values (12, 4567, 'dyugfhjgh');
+(1 row)
+insert into session.t values (13, 5545, 'dfgkasdhf');
+(1 row)
+insert into session.t values (14, 5678, 'erklhjirtn');
+(1 row)
+insert into session.t values (15, 6789, 'sdsdlnmer');
+(1 row)
+insert into session.t values (16, 7891, 'dfmdfkrtedfr');
+(1 row)
+insert into session.t values (17, 6744, 'qweklqwenbtr');
+(1 row)
+insert into session.t values (18, 3214, 'dfgdftydr');
+(1 row)
+insert into session.t values (19, 3445, 'yytumuy');
+(1 row)
+insert into session.t values (20, 9834, 'awneabnsertser');
+(1 row)
+insert into session.t values (21, 3658, 'dfgndft');
+(1 row)
+insert into session.t values (22, 8743, 'asxcnxcvndfg');
+(1 row)
+insert into session.t values (23, 2487, 'erertyuytmkgdf');
+(1 row)
+insert into session.t values (24, 1784, 'qnsbdbdfrr');
+(1 row)
+insert into session.t values (25, 5824, 'fdnhfgmtyk');
+(1 row)
+insert into session.t values (26, 5533, 'ababsddfhfg');
+(1 row)
+insert into session.t values (27, 4422, 'tymymyu');
+(1 row)
+insert into session.t values (28, 4477, 'sdndfssdfhjrty');
+(1 row)
+insert into session.t values (29, 9966, 'weerw');
+(1 row)
+insert into session.t values (30, 2244, 'fgh');
+(1 row)
+insert into session.t values (31, 2154, 'hjghjiu');
+(1 row)
+insert into session.t values (32, 9463, 'asdgsdghdfjtyf');
+(1 row)
+insert into session.t values (33, 7287, 'hjkljkkui');
+(1 row)
+insert into session.t values (34, 5578, 'xixcic');
+(1 row)
+insert into session.t values (35, 5598, 'tymyusdjh');
+(1 row)
+insert into session.t values (36, 5543, 'ajhrtky');
+(1 row)
+insert into session.t values (37, 5526, 'djrjkt');
+(1 row)
+insert into session.t values (38, 6694, 'asjsdfjdfg');
+(1 row)
+insert into session.t values (39, 6617, 'uykuikui');
+(1 row)
+insert into session.t values (40, 6618, 'adfhjfdg');
+(1 row)
+insert into session.t values (41, 4439, 'yulkuik');
+(1 row)
+insert into session.t values (42, 8724, 'ahahasd');
+(1 row)
+insert into session.t values (43, 8979, 'rtjytkuy');
+(1 row)
+insert into session.t values (44, 1615, 'dfjhgfjfg');
+(1 row)
+insert into session.t values (45, 1617, 'uiuioiu');
+(1 row)
+insert into session.t values (46, 1667, 'asasdasd');
+(1 row)
+insert into session.t values (47, 1619, 'werwet');
+(1 row)
+insert into session.t values (48, 7274, 'rtyrtyu');
+(1 row)
+insert into session.t values (49, 7279, 'sdgfguyu');
+(1 row)
+insert into session.t values (50, 2739, 'dfyfu');
+(1 row)
+insert into session.t values (51,  12797,'abbafgterd');
+(1 row)
+insert into session.t values (52,  23559, 'abrdafham');
+(1 row)
+insert into session.t values (53,  37824, 'acevsdsedo');
+(1 row)
+insert into session.t values (54,  42637, 'ackedrman');
+(1 row)
+insert into session.t values (55,  53307, 'ackertrman');
+(1 row)
+insert into session.t values (56,  65229, 'acoreersta');
+(1 row)
+insert into session.t values (57,  73415, 'adamyus-duma');
+(1 row)
+insert into session.t values (58,  85799, 'adkisdfsdsson');
+(1 row)
+insert into session.t values (59,  91234, 'dfgdfg');
+(1 row)
+insert into session.t values (60, 12345, 'ertretr');
+(1 row)
+insert into session.t values (61, 23456, 'ghgfughu');
+(1 row)
+insert into session.t values (62, 34567, 'fghfgh');
+(1 row)
+insert into session.t values (63, 45545, 'yuiyuw');
+(1 row)
+insert into session.t values (64, 45678, 'bdfgrty');
+(1 row)
+insert into session.t values (65, 56789, 'dfdfgbfgh');
+(1 row)
+insert into session.t values (66, 67891, 'ipouiryy');
+(1 row)
+insert into session.t values (67, 76744, 'qerertd');
+(1 row)
+insert into session.t values (68, 83214, 'dfvdfgbfgh');
+(1 row)
+insert into session.t values (69, 93445, 'yuiowertbf');
+(1 row)
+insert into session.t values (70, 19834, 'dfbfghtyi');
+(1 row)
+insert into session.t values (71, 23658, 'qdxrsdgf');
+(1 row)
+insert into session.t values (72, 38743, 'gfhghu');
+(1 row)
+insert into session.t values (73, 42487, 'uiouter');
+(1 row)
+insert into session.t values (74, 51784, 'tyityuh');
+(1 row)
+insert into session.t values (75, 65824, 'asdfert');
+(1 row)
+insert into session.t values (76, 75533, 'yuoier');
+(1 row)
+insert into session.t values (77, 84422, 'iuoertwe');
+(1 row)
+insert into session.t values (78, 94477, 'bdfgfggy');
+(1 row)
+insert into session.t values (79, 19966, 'yuower');
+(1 row)
+insert into session.t values (80, 12244, 'bdfgdft');
+(1 row)
+insert into session.t values (81, 22154, 'wetertdf');
+(1 row)
+insert into session.t values (82, 39463, 'yuioerwtv');
+(1 row)
+insert into session.t values (83, 47287, 'yuiodfges');
+(1 row)
+insert into session.t values (84, 55578, 'dbfddfg');
+(1 row)
+insert into session.t values (85, 65598, 'dfgdfyut');
+(1 row)
+insert into session.t values (86, 75543, 'vsdfwtr');
+(1 row)
+insert into session.t values (87, 85526, 'bdfyrt');
+(1 row)
+insert into session.t values (88, 96694, 'qwsert');
+(1 row)
+insert into session.t values (89, 96617, 'sdfhtru');
+(1 row)
+insert into session.t values (90, 16618, 'sftu');
+(1 row)
+insert into session.t values (91, 24439, 'iyute');
+(1 row)
+insert into session.t values (92, 38724, 'ghfsd');
+(1 row)
+insert into session.t values (93, 48979, 'ytrwe');
+(1 row)
+insert into session.t values (94, 51615, 'ngrw');
+(1 row)
+insert into session.t values (95, 61617, 'bnfgdsyu');
+(1 row)
+insert into session.t values (96, 71667, 'trewfbsdf');
+(1 row)
+insert into session.t values (97, 81619, 'iuyrgds');
+(1 row)
+insert into session.t values (98, 97274, 'rewbfd');
+(1 row)
+insert into session.t values (99, 107279, 'ytrebnfg');
+(1 row)
+insert into session.t values (100, 12739, 'ytrevbfg');
+(1 row)
+
+
+/*
+** Retrieve the 100 rows just inserted and verify that they are correct
+*/
+select * from session.t;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
+|            1|         2797|abbaterd                        |
+|            2|         3559|abraham                         |
+|            3|         7824|acevedo                         |
+|            4|         2637|ackerman                        |
+|            5|         3307|ackerman                        |
+|            6|         5229|acosta                          |
+|            7|         3415|adams-duma                      |
+|            8|         5799|adkisson                        |
+|            9|         1234|dfsgsdfg                        |
+|           10|         2345|ewrtwergfhj                     |
+|           11|         3456|e4treyhd                        |
+|           12|         4567|dyugfhjgh                       |
+|           13|         5545|dfgkasdhf                       |
+|           14|         5678|erklhjirtn                      |
+|           15|         6789|sdsdlnmer                       |
+|           16|         7891|dfmdfkrtedfr                    |
+|           17|         6744|qweklqwenbtr                    |
+|           18|         3214|dfgdftydr                       |
+|           19|         3445|yytumuy                         |
+|           20|         9834|awneabnsertser                  |
+|           21|         3658|dfgndft                         |
+|           22|         8743|asxcnxcvndfg                    |
+|           23|         2487|erertyuytmkgdf                  |
+|           24|         1784|qnsbdbdfrr                      |
+|           25|         5824|fdnhfgmtyk                      |
+|           26|         5533|ababsddfhfg                     |
+|           27|         4422|tymymyu                         |
+|           28|         4477|sdndfssdfhjrty                  |
+|           29|         9966|weerw                           |
+|           30|         2244|fgh                             |
+|           31|         2154|hjghjiu                         |
+|           32|         9463|asdgsdghdfjtyf                  |
+|           33|         7287|hjkljkkui                       |
+|           34|         5578|xixcic                          |
+|           35|         5598|tymyusdjh                       |
+|           36|         5543|ajhrtky                         |
+|           37|         5526|djrjkt                          |
+|           38|         6694|asjsdfjdfg                      |
+|           39|         6617|uykuikui                        |
+|           40|         6618|adfhjfdg                        |
+|           41|         4439|yulkuik                         |
+|           42|         8724|ahahasd                         |
+|           43|         8979|rtjytkuy                        |
+|           44|         1615|dfjhgfjfg                       |
+|           45|         1617|uiuioiu                         |
+|           46|         1667|asasdasd                        |
+|           47|         1619|werwet                          |
+|           48|         7274|rtyrtyu                         |
+|           49|         7279|sdgfguyu                        |
+|           50|         2739|dfyfu                           |
+|           51|        12797|abbafgterd                      |
+|           52|        23559|abrdafham                       |
+|           53|        37824|acevsdsedo                      |
+|           54|        42637|ackedrman                       |
+|           55|        53307|ackertrman                      |
+|           56|        65229|acoreersta                      |
+|           57|        73415|adamyus-duma                    |
+|           58|        85799|adkisdfsdsson                   |
+|           59|        91234|dfgdfg                          |
+|           60|        12345|ertretr                         |
+|           61|        23456|ghgfughu                        |
+|           62|        34567|fghfgh                          |
+|           63|        45545|yuiyuw                          |
+|           64|        45678|bdfgrty                         |
+|           65|        56789|dfdfgbfgh                       |
+|           66|        67891|ipouiryy                        |
+|           67|        76744|qerertd                         |
+|           68|        83214|dfvdfgbfgh                      |
+|           69|        93445|yuiowertbf                      |
+|           70|        19834|dfbfghtyi                       |
+|           71|        23658|qdxrsdgf                        |
+|           72|        38743|gfhghu                          |
+|           73|        42487|uiouter                         |
+|           74|        51784|tyityuh                         |
+|           75|        65824|asdfert                         |
+|           76|        75533|yuoier                          |
+|           77|        84422|iuoertwe                        |
+|           78|        94477|bdfgfggy                        |
+|           79|        19966|yuower                          |
+|           80|        12244|bdfgdft                         |
+|           81|        22154|wetertdf                        |
+|           82|        39463|yuioerwtv                       |
+|           83|        47287|yuiodfges                       |
+|           84|        55578|dbfddfg                         |
+|           85|        65598|dfgdfyut                        |
+|           86|        75543|vsdfwtr                         |
+|           87|        85526|bdfyrt                          |
+|           88|        96694|qwsert                          |
+|           89|        96617|sdfhtru                         |
+|           90|        16618|sftu                            |
+|           91|        24439|iyute                           |
+|           92|        38724|ghfsd                           |
+|           93|        48979|ytrwe                           |
+|           94|        51615|ngrw                            |
+|           95|        61617|bnfgdsyu                        |
+|           96|        71667|trewfbsdf                       |
+|           97|        81619|iuyrgds                         |
+|           98|        97274|rewbfd                          |
+|           99|       107279|ytrebnfg                        |
+|          100|        12739|ytrevbfg                        |
++-------------+-------------+--------------------------------+
+(100 rows)
+
+select * from session.t where emp_id > 10 and emp_id < 20;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
+|           11|         3456|e4treyhd                        |
+|           12|         4567|dyugfhjgh                       |
+|           13|         5545|dfgkasdhf                       |
+|           14|         5678|erklhjirtn                      |
+|           15|         6789|sdsdlnmer                       |
+|           16|         7891|dfmdfkrtedfr                    |
+|           17|         6744|qweklqwenbtr                    |
+|           18|         3214|dfgdftydr                       |
+|           19|         3445|yytumuy                         |
++-------------+-------------+--------------------------------+
+(9 rows)
+
+/*
+** Delete 10 rows
+*/
+delete from session.t where emp_id = 14;
+(1 row)
+delete from session.t where emp_id = 23;
+(1 row)
+delete from session.t where emp_id = 54;
+(1 row)
+delete from session.t where emp_id = 76;
+(1 row)
+delete from session.t where emp_id = 17;
+(1 row)
+delete from session.t where emp_id = 90;
+(1 row)
+delete from session.t where emp_id = 83;
+(1 row)
+delete from session.t where emp_id = 58;
+(1 row)
+delete from session.t where emp_id = 38;
+(1 row)
+delete from session.t where emp_id = 22;
+(1 row)
+
+/*
+** Attempt to retrieve the rows just deleted -- should find nothing.
+*/
+select * from session.t where emp_id = 14;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
++-------------+-------------+--------------------------------+
+(0 rows)
+select * from session.t where emp_id = 23;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
++-------------+-------------+--------------------------------+
+(0 rows)
+select * from session.t where emp_id = 54;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
++-------------+-------------+--------------------------------+
+(0 rows)
+select * from session.t where emp_id = 76;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
++-------------+-------------+--------------------------------+
+(0 rows)
+select * from session.t where emp_id = 17;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
++-------------+-------------+--------------------------------+
+(0 rows)
+select * from session.t where emp_id = 90;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
++-------------+-------------+--------------------------------+
+(0 rows)
+select * from session.t where emp_id = 83;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
++-------------+-------------+--------------------------------+
+(0 rows)
+select * from session.t where emp_id = 58;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
++-------------+-------------+--------------------------------+
+(0 rows)
+select * from session.t where emp_id = 38;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
++-------------+-------------+--------------------------------+
+(0 rows)
+select * from session.t where emp_id = 22;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
++-------------+-------------+--------------------------------+
+(0 rows)
+
+/*
+** Retrieve the remaining 90 rows, and verify that they are correct
+*/
+select * from session.t;
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
+|            1|         2797|abbaterd                        |
+|            2|         3559|abraham                         |
+|            3|         7824|acevedo                         |
+|            4|         2637|ackerman                        |
+|            5|         3307|ackerman                        |
+|            6|         5229|acosta                          |
+|            7|         3415|adams-duma                      |
+|            8|         5799|adkisson                        |
+|            9|         1234|dfsgsdfg                        |
+|           10|         2345|ewrtwergfhj                     |
+|           11|         3456|e4treyhd                        |
+|           12|         4567|dyugfhjgh                       |
+|           13|         5545|dfgkasdhf                       |
+|           15|         6789|sdsdlnmer                       |
+|           16|         7891|dfmdfkrtedfr                    |
+|           18|         3214|dfgdftydr                       |
+|           19|         3445|yytumuy                         |
+|           20|         9834|awneabnsertser                  |
+|           21|         3658|dfgndft                         |
+|           24|         1784|qnsbdbdfrr                      |
+|           25|         5824|fdnhfgmtyk                      |
+|           26|         5533|ababsddfhfg                     |
+|           27|         4422|tymymyu                         |
+|           28|         4477|sdndfssdfhjrty                  |
+|           29|         9966|weerw                           |
+|           30|         2244|fgh                             |
+|           31|         2154|hjghjiu                         |
+|           32|         9463|asdgsdghdfjtyf                  |
+|           33|         7287|hjkljkkui                       |
+|           34|         5578|xixcic                          |
+|           35|         5598|tymyusdjh                       |
+|           36|         5543|ajhrtky                         |
+|           37|         5526|djrjkt                          |
+|           39|         6617|uykuikui                        |
+|           40|         6618|adfhjfdg                        |
+|           41|         4439|yulkuik                         |
+|           42|         8724|ahahasd                         |
+|           43|         8979|rtjytkuy                        |
+|           44|         1615|dfjhgfjfg                       |
+|           45|         1617|uiuioiu                         |
+|           46|         1667|asasdasd                        |
+|           47|         1619|werwet                          |
+|           48|         7274|rtyrtyu                         |
+|           49|         7279|sdgfguyu                        |
+|           50|         2739|dfyfu                           |
+|           51|        12797|abbafgterd                      |
+|           52|        23559|abrdafham                       |
+|           53|        37824|acevsdsedo                      |
+|           55|        53307|ackertrman                      |
+|           56|        65229|acoreersta                      |
+|           57|        73415|adamyus-duma                    |
+|           59|        91234|dfgdfg                          |
+|           60|        12345|ertretr                         |
+|           61|        23456|ghgfughu                        |
+|           62|        34567|fghfgh                          |
+|           63|        45545|yuiyuw                          |
+|           64|        45678|bdfgrty                         |
+|           65|        56789|dfdfgbfgh                       |
+|           66|        67891|ipouiryy                        |
+|           67|        76744|qerertd                         |
+|           68|        83214|dfvdfgbfgh                      |
+|           69|        93445|yuiowertbf                      |
+|           70|        19834|dfbfghtyi                       |
+|           71|        23658|qdxrsdgf                        |
+|           72|        38743|gfhghu                          |
+|           73|        42487|uiouter                         |
+|           74|        51784|tyityuh                         |
+|           75|        65824|asdfert                         |
+|           77|        84422|iuoertwe                        |
+|           78|        94477|bdfgfggy                        |
+|           79|        19966|yuower                          |
+|           80|        12244|bdfgdft                         |
+|           81|        22154|wetertdf                        |
+|           82|        39463|yuioerwtv                       |
+|           84|        55578|dbfddfg                         |
+|           85|        65598|dfgdfyut                        |
+|           86|        75543|vsdfwtr                         |
+|           87|        85526|bdfyrt                          |
+|           88|        96694|qwsert                          |
+|           89|        96617|sdfhtru                         |
+|           91|        24439|iyute                           |
+|           92|        38724|ghfsd                           |
+|           93|        48979|ytrwe                           |
+|           94|        51615|ngrw                            |
+|           95|        61617|bnfgdsyu                        |
+|           96|        71667|trewfbsdf                       |
+|           97|        81619|iuyrgds                         |
+|           98|        97274|rewbfd                          |
+|           99|       107279|ytrebnfg                        |
+|          100|        12739|ytrevbfg                        |
++-------------+-------------+--------------------------------+
+(90 rows)
+select count(*) from session.t;
+
++-------------+
+|col1         |
++-------------+
+|           90|
++-------------+
+(1 row)
+
+/*
+** update 30 (appx) rows to have new values
+*/
+update session.t set phonenum=phonenum+12 where emp_id >20 and emp_id < 55;
+
+/*
+** Retrieve the remaining 90 rows, and verify that they are correct
+*/
+select * from session.t;
+(30 rows)
+
++-------------+-------------+--------------------------------+
+|emp_id       |phonenum     |ename                           |
++-------------+-------------+--------------------------------+
+|            1|         2797|abbaterd                        |
+|            2|         3559|abraham                         |
+|            3|         7824|acevedo                         |
+|            4|         2637|ackerman                        |
+|            5|         3307|ackerman                        |
+|            6|         5229|acosta                          |
+|            7|         3415|adams-duma                      |
+|            8|         5799|adkisson                        |
+|            9|         1234|dfsgsdfg                        |
+|           10|         2345|ewrtwergfhj                     |
+|           11|         3456|e4treyhd                        |
+|           12|         4567|dyugfhjgh                       |
+|           13|         5545|dfgkasdhf                       |
+|           15|         6789|sdsdlnmer                       |
+|           16|         7891|dfmdfkrtedfr                    |
+|           18|         3214|dfgdftydr                       |
+|           19|         3445|yytumuy                         |
+|           20|         9834|awneabnsertser                  |
+|           21|         3670|dfgndft                         |
+|           24|         1796|qnsbdbdfrr                      |
+|           25|         5836|fdnhfgmtyk                      |
+|           26|         5545|ababsddfhfg                     |
+|           27|         4434|tymymyu                         |
+|           28|         4489|sdndfssdfhjrty                  |
+|           29|         9978|weerw                           |
+|           30|         2256|fgh                             |
+|           31|         2166|hjghjiu                         |
+|           32|         9475|asdgsdghdfjtyf                  |
+|           33|         7299|hjkljkkui                       |
+|           34|         5590|xixcic                          |
+|           35|         5610|tymyusdjh                       |
+|           36|         5555|ajhrtky                         |
+|           37|         5538|djrjkt                          |
+|           39|         6629|uykuikui                        |
+|           40|         6630|adfhjfdg                        |
+|           41|         4451|yulkuik                         |
+|           42|         8736|ahahasd                         |
+|           43|         8991|rtjytkuy                        |
+|           44|         1627|dfjhgfjfg                       |
+|           45|         1629|uiuioiu                         |
+|           46|         1679|asasdasd                        |
+|           47|         1631|werwet                          |
+|           48|         7286|rtyrtyu                         |
+|           49|         7291|sdgfguyu                        |
+|           50|         2751|dfyfu                           |
+|           51|        12809|abbafgterd                      |
+|           52|        23571|abrdafham                       |
+|           53|        37836|acevsdsedo                      |
+|           55|        53307|ackertrman                      |
+|           56|        65229|acoreersta                      |
+|           57|        73415|adamyus-duma                    |
+|           59|        91234|dfgdfg                          |
+|           60|        12345|ertretr                         |
+|           61|        23456|ghgfughu                        |
+|           62|        34567|fghfgh                          |
+|           63|        45545|yuiyuw                          |
+|           64|        45678|bdfgrty                         |
+|           65|        56789|dfdfgbfgh                       |
+|           66|        67891|ipouiryy                        |
+|           67|        76744|qerertd                         |
+|           68|        83214|dfvdfgbfgh                      |
+|           69|        93445|yuiowertbf                      |
+|           70|        19834|dfbfghtyi                       |
+|           71|        23658|qdxrsdgf                        |
+|           72|        38743|gfhghu                          |
+|           73|        42487|uiouter                         |
+|           74|        51784|tyityuh                         |
+|           75|        65824|asdfert                         |
+|           77|        84422|iuoertwe                        |
+|           78|        94477|bdfgfggy                        |
+|           79|        19966|yuower                          |
+|           80|        12244|bdfgdft                         |
+|           81|        22154|wetertdf                        |
+|           82|        39463|yuioerwtv                       |
+|           84|        55578|dbfddfg                         |
+|           85|        65598|dfgdfyut                        |
+|           86|        75543|vsdfwtr                         |
+|           87|        85526|bdfyrt                          |
+|           88|        96694|qwsert                          |
+|           89|        96617|sdfhtru                         |
+|           91|        24439|iyute                           |
+|           92|        38724|ghfsd                           |
+|           93|        48979|ytrwe                           |
+|           94|        51615|ngrw                            |
+|           95|        61617|bnfgdsyu                        |
+|           96|        71667|trewfbsdf                       |
+|           97|        81619|iuyrgds                         |
+|           98|        97274|rewbfd                          |
+|           99|       107279|ytrebnfg                        |
+|          100|        12739|ytrevbfg                        |
++-------------+-------------+--------------------------------+
+(90 rows)
+select count(*) from session.t;
+
++-------------+
+|col1         |
++-------------+
+|           90|
++-------------+
+(1 row)
+
+/*
+** Drop the lightweight session table
+*/
+drop table session.t;
+
+/*
+** Ensure that it truly is gone.
+*/
+select * from session.t;
+E_US0845 Table 't' does not exist or is not owned by you.
+    (Fri Feb 26 17:16:26 1999)
+
+>>
+* \q 
+<<
+
+>>
+
+
+Ending at: Fri Feb 26 17:16:38 1999

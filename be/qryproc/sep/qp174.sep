@@ -1,0 +1,743 @@
+/*
+	Test Name    : eka02.sep  (former eka02.sep)
+	Time         : 29-JUN-1989 11:22:50
+	User Name    : testenv
+	Test ID      : eka02
+	Module       : 
+	Filename     : eka02.sep
+	Purpose	     : Test of the various queries in the 'mappings' document
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : s, p, sp 
+	Synopsis     : variety of simple selects, including tests whose
+			outcome depends on which type of SQL is being used
+
+	History	: xx-xxx-1989	Created				Author
+		11-26-91 Converted to using setup test.CAMACHO
+	Setup Test   : eaa00.sep
+          28-Aug-1996	(Author)
+          17-Feb-1999	(madsu02)
+	16-Jun-2001	(rogch01)
+		Update row orders.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* select sname from s 
+<<
+>>
+*	where sno in 
+<<
+>>
+*	 (select sno from sp 
+<<
+>>
+*	where pno in (select pno from sp where sno='s1')) order by sname;\g 
+<<
+
++------+
+|sname |
++------+
+|blake |
+|clark |
+|jones |
+|smith |
++------+
+(4 rows)
+>>
+* select pno, city from s, sp where s.sno=sp.sno order by 1, 2;\g 
+<<
+
++------+----------+
+|pno   |city      |
++------+----------+
+|p1    |london    |
+|p1    |paris     |
+|p2    |london    |
+|p2    |london    |
+|p2    |paris     |
+|p2    |paris     |
+|p3    |london    |
+|p4    |london    |
+|p4    |london    |
+|p5    |london    |
+|p5    |london    |
+|p6    |london    |
++------+----------+
+(12 rows)
+>>
+* select city from s 
+<<
+>>
+*	where exists 
+<<
+>>
+*	 (select * from sp 
+<<
+>>
+*	where sp.sno = s.sno) order by 1;\g 
+<<
+
++----------+
+|city      |
++----------+
+|london    |
+|london    |
+|paris     |
+|paris     |
++----------+
+(4 rows)
+>>
+<<
+
++----------+
+|city      |
++----------+
+|london    |
+|paris     |
+|paris     |
+|london    |
++----------+
+(4 rows)
+>>
+* select distinct city from s 
+<<
+>>
+*	where exists 
+<<
+>>
+*	 (select * from sp 
+<<
+>>
+*	where sp.sno = s.sno) order by 1;\g 
+<<
+
++----------+
+|city      |
++----------+
+|london    |
+|paris     |
++----------+
+(2 rows)
+>>
+* select s.* from s order by sno;\g 
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s1    |smith |    20|london    |
+|s2    |jones |    10|paris     |
+|s3    |blake |    30|paris     |
+|s4    |clark |    20|london    |
+|s5    |adams |    30|athens    |
++------+------+------+----------+
+(5 rows)
+>>
+* select * from s order by sno;\g
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s1    |smith |    20|london    |
+|s2    |jones |    10|paris     |
+|s3    |blake |    30|paris     |
+|s4    |clark |    20|london    |
+|s5    |adams |    30|athens    |
++------+------+------+----------+
+(5 rows)
+>>
+* select pno, pname, ascii(weight) from p order by pno;\g 
+<<
++------+----------+------+
+|pno   |pname     |col3  |
++------+----------+------+
+|p1    |nut       |12    |
+|p2    |bolt      |17    |
+|p3    |screw     |17    |
+|p4    |screw     |14    |
+
+
+|p5    |cam       |12    |
+|p6    |cog       |19    |
++------+----------+------+
+(6 rows)
+>>
+* select sum(qty), avg(qty) from sp 
+<<
+>>
+*	where pno = 'p2' order by 1;\g
+/*
+    aggregate functions in the select list without group by 
+*/
+<<
+
++-------------+-----------+
+|col1         |col2       |
++-------------+-----------+
+|         1000|    250.000|
++-------------+-----------+
+(1 row)
+>>
+* select * from s 
+<<
+>>
+*	where status >any 
+<<
+>>
+*	 (select avg(status) from s 
+<<
+>>
+*	where city = 'rome') order by 1;\g 
+/*
+    If the argument set is empty, COUNT gives zero in both SQL and QUEL,
+    but the other aggregate functions give null in SQL, zero in QUEL.  In this
+    query, if STATUS is alsways >0 and the AVG is taken over the empty set, IBM
+    SQL will return an empty result on the following query, while QUEL will 
+    return the set of all suppliers. 
+*/
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
++------+------+------+----------+
+(0 rows)
+>>
+* select pno, weight from p 
+<<
+>>
+*	where weight = 17 order by 1; \g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p2    |    17|
+|p3    |    17|
++------+------+
+(2 rows)
+>>
+* select pno, weight from p where weight != 17 order by 1; \g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p1    |    12|
+|p4    |    14|
+|p5    |    12|
+|p6    |    19|
++------+------+
+(4 rows)
+>>
+* select pno, weight from p where weight <> 17 order by 1;\g 
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p1    |    12|
+|p4    |    14|
+|p5    |    12|
+|p6    |    19|
++------+------+
+(4 rows)
+>>
+* select pno, weight from p 
+<<
+>>
+*	where weight ^= 17 order by 1; \g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p1    |    12|
+|p4    |    14|
+|p5    |    12|
+|p6    |    19|
++------+------+
+(4 rows)
+>>
+* select pno, weight from p where weight > 17; \g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p6    |    19|
++------+------+
+(1 row)
+>>
+* select pno, weight from p where weight >= 17 order by 1;\g 
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p2    |    17|
+|p3    |    17|
+|p6    |    19|
++------+------+
+(3 rows)
+>>
+* select pno, weight from p 
+<<
+>>
+*	where weight < 17 order by 1; \g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p1    |    12|
+|p4    |    14|
+|p5    |    12|
++------+------+
+(3 rows)
+>>
+* select pno, weight from p where weight <= 17 order by 1; \g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p1    |    12|
+|p2    |    17|
+|p3    |    17|
+|p4    |    14|
+|p5    |    12|
++------+------+
+(5 rows)
+>>
+* select pno, weight from p where weight between 12 and 15 order by 1;\g 
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p1    |    12|
+|p4    |    14|
+|p5    |    12|
++------+------+
+(3 rows)
+>>
+* select pno, weight from p 
+<<
+>>
+*	where weight not between 12 and 15 order by 1; \g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p2    |    17|
+|p3    |    17|
+|p6    |    19|
++------+------+
+(3 rows)
+>>
+* select pno, weight from p where weight not in (12, 17, 0) order by 1;\g 
+<<
+
++------+------+
+|pno   |weight|
++------+------+
+|p4    |    14|
+|p6    |    19|
++------+------+
+(2 rows)
+>>
+* select pno, weight from p 
+<<
+>>
+*	where weight ~= 17;\g 
+<<
+E_US0A8E line 1, Invalid operator '~='.
+    (29-JUN-1989 13:53:11)
+
+>>
+* select pno, weight from p 
+<<
+>>
+*	where weight is null;\g 
+<<
+
++------+------+
+|pno   |weight|
++------+------+
++------+------+
+(0 rows)
+>>
+* select pno, weight from p 
+<<
+>>
+*	where pname like 'nu';\g
+<<
+
++------+------+
+|pno   |weight|
++------+------+
++------+------+
+(0 rows)
+>>
+* select * from s sx 
+<<
+>>
+*	where status >any 
+<<
+>>
+*	 (select avg(status) from s sy 
+<<
+>>
+*	where sy.city = sx.city);\g 
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s3    |blake |    30|paris     |
++------+------+------+----------+
+(1 row)
+>>
+* select pno from p px 
+<<
+>>
+*	where px.weight * 3 >any 
+<<
+>>
+*	 (select sum(weight) from p py 
+<<
+>>
+*	where py.city > px.city or py.color > px.color) ;\g 
+<<
+
++------+
+|pno   |
++------+
+|p6    |
++------+
+(1 row)
+>>
+* select * from s 
+<<
+>>
+*	where city in 
+<<
+>>
+*	 (select city from p 
+<<
+>>
+*	where color = 'red') order by sname;\g 
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s4    |clark |    20|london    |
+|s1    |smith |    20|london    |
++------+------+------+----------+
+(2 rows)
+>>
+* select * from s 
+<<
+>>
+*	where city not in 
+<<
+>>
+*	 (select city from p 
+<<
+>>
+*	where color = 'red') order by sname;\g
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s5    |adams |    30|athens    |
+|s3    |blake |    30|paris     |
+|s2    |jones |    10|paris     |
++------+------+------+----------+
+(3 rows)
+>>
+* select * from s sx 
+<<
+>>
+*	where city > any 
+<<
+>>
+*	 (select city from s 
+<<
+>>
+*	where sno = 's1') order by 1;\g 
+/*
+    Scalar comparison operators (<, >, ...) can be used instead of IN in
+    IBM SQL when the subquery retruns a set containing at most one member.
+    It raises an exception if the set returned contains more than one member.
+    RTI SQL allows the scalar comparison operators, but can't catch the
+    case 
+<<
+>>
+*	where more than one member is returned in the set.
+*/
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s2    |jones |    10|paris     |
+|s3    |blake |    30|paris     |
++------+------+------+----------+
+(2 rows)
+>>
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s3    |blake |    30|paris     |
+|s2    |jones |    10|paris     |
++------+------+------+----------+
+(2 rows)
+>>
+* select * from p 
+<<
+>>
+*	where pno >any 
+<<
+>>
+*	 (select pno from sp 
+<<
+>>
+*	where qty=100);\g 
+/*
+    Quantified comparison operators (=ANY, >ALL) map to EXISTS
+*/
+<<
+
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p6    |cog       |red   |    19|london    |
++------+----------+------+------+----------+
+(1 row)
+>>
+* select * from p 
+<<
+>>
+*	where pno <any 
+<<
+>>
+*	 (select pno from sp 
+<<
+>>
+*	where qty=100) order by pno;\g 
+/*
+    Quantified comparison operators (=ANY, >ALL) map to EXISTS
+*/
+<<
+
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p1    |nut       |red   |    12|london    |
+|p2    |bolt      |green |    17|paris     |
+|p3    |screw     |blue  |    17|rome      |
+|p4    |screw     |red   |    14|london    |
+|p5    |cam       |blue  |    12|paris     |
++------+----------+------+------+----------+
+(5 rows)
+>>
+* select sname from s 
+<<
+>>
+*	where not exists 
+<<
+>>
+*	 (select pno from p 
+<<
+>>
+*	where not exists 
+<<
+>>
+*		(select sno from sp 
+<<
+>>
+*			where sp.sno = s.sno and sp.pno = p.pno));\g
+/*
+    Names of suppliers who supply all parts
+*/
+<<
+
++------+
+|sname |
++------+
+|smith |
++------+
+(1 row)
+>>
+* select * from sp spx 
+<<
+>>
+*	where spx.qty in 
+<<
+>>
+*	 (select avg(qty) from sp spy);\g 
+/*
+    IN with a subquery, where the subquery is an aggregate function
+*/
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
++------+------+------+
+(0 rows)
+>>
+* select pno from sp 
+<<
+>>
+*	where qty >= 400 group by pno;\g 
+/*
+   Aggregates in the SELECT target list, with GROUP BY In the following case, 
+   GROUP BY just maps to DISTINCT since there is no aggregate function 
+   reference.
+*/
+<<
+
++------+
+|pno   |
++------+
+|p2    |
+|p3    |
+|p5    |
++------+
+(3 rows)
+>>
+* select pno, sum(qty) from sp group by pno order by 1;\g
+/*
+    Aggregates in the SELECT target list, with GROUP BY
+    GROUP BY becomes a BY clause in the aggregate function
+*/
+<<
+
++------+-------------+
+|pno   |col2         |
++------+-------------+
+|p1    |          600|
+|p2    |         1000|
+|p3    |          400|
+|p4    |          500|
+|p5    |          500|
+|p6    |          100|
++------+-------------+
+(6 rows)
+>>
+* select pno, sum(qty) from sp where sno != 's1' group by pno order by 1;\g 
+/*
+    Aggregates in the SELECT target list, with GROUP BY
+*/
+<<
+
++------+-------------+
+|pno   |col2         |
++------+-------------+
+|p1    |          300|
+|p2    |          800|
+|p4    |          300|
+|p5    |          400|
++------+-------------+
+(4 rows)
+>>
+* select pno, sum(qty) from sp group by pno having count(sno) >1 order by 1;\g 
+/*
+    Aggregate functions in the SELECT target list with GROUP BY
+    HAVING maps to a WHERE clause that does *NOT* have to be included in
+    aggregate functions in the target list
+*/
+<<
+
++------+-------------+
+|pno   |col2         |
++------+-------------+
+|p1    |          600|
+|p2    |         1000|
+|p4    |          500|
+|p5    |          500|
++------+-------------+
+(4 rows)
+>>
+* select max(qty), min(qty) from sp having avg(qty)> 500;\g 
+/*
+    Aggregate functions in the SELECT target list with GROUP BY
+    HAVING maps to a WHERE clause that does *NOT* have to be included in
+    aggregate functions in the target list
+*/
+<<
+
++------+------+
+|col1  |col2  |
++------+------+
++------+------+
+(0 rows)
+>>
+* select pno from sp 
+<<
+>>
+*	where qty in 
+<<
+>>
+*	 (select avg(qty) from sp 
+<<
+>>
+*	where qty > 100 group by pno having count (sno) >1);\g 
+/*
+    Aggregate functions in the SELECT target list with GROUP BY
+    HAVING maps to a WHERE clause that does *NOT* have to be included in
+    aggregate functions in the target list
+*/
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p1    |
+|p4    |
++------+
+(3 rows)
+>>
+* select pno from p 
+<<
+>>
+*	where weight > 16 
+<<
+>>
+* union 
+<<
+>>
+*	select pno from sp where sno = 's2' order by 1;\g 
+/*
+    UNION
+*/
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p3    |
+|p6    |
++------+
+(4 rows)
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Wed Feb 17 14:46:45 1999

@@ -1,0 +1,1729 @@
+/*
+	Test Name: pha25.sep
+	Time: Wed Jun  6 15:29:11 1990
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : pha25
+	Module  : 4gl
+	Filename: pha25.sep
+	Purpose	: Confirmatory Basic test of Database updates using
+                  "where qualification".
+	Input Files  : (none)
+	Output Files : (none)
+	Database     : SEPPARAMDB
+	Tables       : pha25_tbl
+	Synopsis     : Using ISQL, create table pha25_tbl, and load it with
+                       5 rows. Create an application and run it. Query the
+                       table, add and delete database rows, re-query. Exit
+                       from the application. Destroy the application and the
+                       form, and drop the table.
+
+        NOTE: This is an updated version of Kelly's pha02. This copy is
+              modified for 6.4, and has been restructured for portability.
+
+	History	: 08-jun-1990	Created			www
+        	  21-jun-1993	(sandhya)  changed filename to 8 characters
+				to make it more portable.
+                  06-Jan-1995   changed deleter to delobj and edit into
+                                correct format.                 (QA)
+          24-Apr-1996	(clate01)
+		Modified for NT
+          26-Aug-1996	(Author)
+	24-Nov-2001	(rogch01)
+		Removed NT canons to allow test to run clean in 24 lines.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -application pha25 
+<<
+~
+>>
+? delobj SEPPARAMDB -form pha25uf1 
+<<
+~
+>>
+? fill pha25.frm 
+!!
+COPYFORM:	6.4	1990_06_08 21:53:26 GMT  
+FORM:	pha25uf1	fields in the vendor table	
+	80	23	0	0	14	0	1	7	0	0	0	0	0	0	0	14
+FIELD:
+	0	vendorno	-30	3	0	12	1	23	0	0	12	0	11	Vendorno :	0	0	0	0	0	0	0		-i12			0	0
+	1	vname	-21	33	0	30	1	38	1	0	30	0	8	Vname :	0	0	0	0	0	0	0		c30			0	1
+	2	street	-21	23	0	20	1	29	2	0	20	0	9	Street :	0	0	0	0	0	0	0		c20			0	2
+	3	city	-21	18	0	15	1	22	3	0	15	0	7	City :	0	0	0	0	0	0	0		c15			0	3
+	4	state	-21	13	0	10	1	18	4	0	10	0	8	State :	0	0	0	0	0	0	0		c10			0	4
+	5	zip	-21	13	0	10	1	16	5	0	10	0	6	Zip :	0	0	0	0	0	0	0		c10			0	5
+	6	contact	-21	13	0	10	1	20	6	0	10	0	10	Contact :	0	0	0	0	0	0	0		c10			0	6
+	7	newvendorno	-30	3	0	8	1	23	10	0	8	0	15	New Vendorno :	0	0	0	0	0	0	0		-i8			0	7
+	8	newvname	-21	33	0	30	1	42	11	0	30	0	12	New Vname :	0	0	0	0	0	0	0		c30			0	8
+	9	newstreet	-21	23	0	20	1	33	12	0	20	0	13	New Street :	0	0	0	0	0	0	0		c20			0	9
+	10	newcity	-21	18	0	15	1	26	13	0	15	0	11	New City :	0	0	0	0	0	0	0		c15			0	10
+	11	newstate	-21	5	0	2	1	14	14	0	2	0	12	New State :	0	0	0	0	0	0	0		c2			0	11
+	12	newzip	-21	13	0	10	1	20	15	0	10	0	10	New Zip :	0	0	0	0	0	0	0		c10			0	12
+	13	newcontact	-21	13	0	10	1	24	16	0	10	0	14	New Contact :	0	0	0	0	0	0	0		c10			0	13
+TRIM:
+	0	9	Change to ======>	0	0	0	0
+!!
+? fill pha25uf1.osq 
+!!
+initialize (h_err = smallint ) =
+{
+  message 'Enter retrieval parameters and select Query menuitem'  +
+    ' or add a new vendor and select AddVendor menuitem.';
+  sleep 3;
+  mode query;
+}
+
+'Query' =
+{
+  commit;
+  set lockmode on pha25_tbl where readlock = exclusive;
+  pha25uf1 = 
+    select  vendorno, vname, street, city, state, zip, contact  from pha25_tbl
+    where qualification ( vendorno = :vendorno, vname = :vname, 
+      street = :street, city = :city, state = :state, zip = :zip, 
+      contact = :contact )
+    order by   vendorno
+    {
+      initialize =
+      {
+        set_forms form( mode = 'query' );
+      }
+      'Update' =
+      {
+        message 'Testing UPDATE with WITH QUALIFICATION clause...';
+        sleep 2;
+        update pha25_tbl
+          set vendorno = :newvendorno,  vname = :newvname,  
+            street = :newstreet, city = :newcity,  state = :newstate,  
+            zip = :newzip,  contact = :newcontact
+          where qualification ( vendorno = :vendorno, vname = :vname, 
+            street = :street, city = :city, state = :state, zip = :zip, 
+            contact = :contact );
+        message 'Updating emp ' + varchar(vendorno);
+        sleep 2;
+        inquire_ingres ( h_err = errorno );
+        if h_err > 0 then
+          rollback;
+          message 'Operation failed.';
+          sleep 2;
+          endloop;
+        endif;
+      }
+
+      'Delete' = 
+      { 
+        message 'Testing DELETE with WITH QUALIFICATION clause...';
+        sleep 2;
+        delete from  pha25_tbl
+          where qualification ( vendorno = :vendorno, vname = :vname, 
+          street = :street, city = :city, state = :state, zip = :zip, 
+          contact = :contact );
+        message 'Deleting emp ' + varchar(vendorno);
+        sleep 2; 
+        inquire_ingres ( h_err = errorno );
+        if h_err > 0 then
+          rollback;
+          message 'Operation failed.';
+          sleep 2;
+          endloop; 
+        endif;
+        commit;
+        next;
+      }
+      'Next' =
+      {
+        next;
+      }
+      'Clear'=
+      {
+        clear field all;
+      }
+      'End', key frskey3 =
+      {
+        endloop;
+      }
+    }; /* End of submenu */
+
+    commit;
+    clear field all;
+    resume field vendorno;
+} /* end of menu item */
+
+
+'AddVendor' =
+{
+
+  insert into pha25_tbl
+  values (:vendorno, :vname, :street, :city, :state, :zip, :contact);
+  commit;
+
+  message 'Adding vendor # ' + varchar(vendorno);
+  sleep 1;
+  clear field all;
+  resume field vendorno;
+}
+
+
+'End', key frskey3 =
+{
+  return;
+}
+!!
+? copyform -s -i SEPPARAMDB pha25.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1993 Ingres Corporation
+>>
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+? fill pha25.sql 
+!!
+insert into pha25_tbl (vendorno,vname,street,city,state,zip,contact) values
+(1,'Oakland Supply','12 E. 14th','Oakland','CA','94602','Fred');\p\g
+insert into pha25_tbl (vendorno,vname,street,city,state,zip,contact) values
+(2,'City Tubing','9 Main Street','El Cerrito','CA','94530','Albert');\p\g
+insert into pha25_tbl (vendorno,vname,street,city,state,zip,contact) values
+(3,'Treetop Parts','22 Galvin Drive','Albany','NY','10940','Martha');\p\g
+insert into pha25_tbl (vendorno,vname,street,city,state,zip,contact) values
+(4,'Estuary Specials','1 Waterway Drive','Alameda','CA','94501','Marilyn');\p\g
+insert into pha25_tbl (vendorno,vname,street,city,state,zip,contact) values
+(5,'Trans-Bay Treasures','2 Embarcadero','San Francisco','CA','94101','Q');\p\g\q
+!!
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* delete from pha25_tbl;\g 
+<<
+~
+>>
+* \i pha25.sql 
+<<
+ 
+ insert into pha25_tbl (vendorno,vname,street,city,state,zip,contact) values
+(1,'Oakland Supply','12 E. 14th','Oakland','CA','94602','Fred');
+(1 row)
+insert into pha25_tbl (vendorno,vname,street,city,state,zip,contact) values
+(2,'City Tubing','9 Main Street','El Cerrito','CA','94530','Albert');
+(1 row)
+insert into pha25_tbl (vendorno,vname,street,city,state,zip,contact) values
+(3,'Treetop Parts','22 Galvin Drive','Albany','NY','10940','Martha');
+(1 row)
+insert into pha25_tbl (vendorno,vname,street,city,state,zip,contact) values
+(4,'Estuary Specials','1 Waterway Drive','Alameda','CA','94501','Marilyn');
+(1 row)
+insert into pha25_tbl (vendorno,vname,street,city,state,zip,contact) values
+(5,'Trans-Bay Treasures','2 Embarcadero','San Francisco','CA','94101','Q');
+(1 row)
+>>
+? abf SEPPARAMDB 
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ create`CR'pha25`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`ESC'
+<<
+~
+>>
+^^ select`CR'pha25uf1`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ go`CR'
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Go
+%% MENU:   NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Go"
+
+%% 
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                             ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                             ||
+||Forcing compilation to create internal object code.                           ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                             ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pha25uf1.osq' . . .                                                ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                             ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pha25uf1.osq' . . .                                                ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%%     
+%% Fetching 'pha25uf1' from the database ...
+%% Enter retrieval parameters and select Query menuitem or add a new vendor and sele-
+ct AddVendor menuitem.
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Go"
+
+%% 
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                            ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pha25uf1.osq' . . .                                               ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pha25uf1.osq' . . .                                               ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                              
+%%     
+%% Fetching 'pha25uf1' from the database ...
+%% Enter retrieval parameters and select Query menuitem or add a new vendor and sele-
+ct AddVendor menuitem.
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Go"
+
+%% 
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                            ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pha25uf1.osq' . . .                                               ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'pha25'                                                    |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Processing frame 'pha25uf1' . . .                                            ||
+||Forcing compilation to create internal object code.                           ||
+||Compiling 'pha25uf1.osq' . . .                                               ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                            
+%%     
+%% Fetching 'pha25uf1' from the database ...
+%% Enter retrieval parameters and select Query menuitem or add a new vendor and sele-
+ct AddVendor menuitem.
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ query`CR'`TAB'`TAB'`TAB'`TAB'`TAB'`TAB'`TAB'11`CR'New Oakland Supply`CR'12 Main`C-
+R'New Oakland`CR'NH08902`CR'Bruce`ESC'
+<<
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _1                                                                    |
+|Vname : Oakland Supply                                                          |
+|Street : 12 E. 14th                                                             |
+|City : Oakland                                                                  |
+|State : CA                                                                      |
+|Zip : 94602                                                                     |
+|Contact : Fred                                                                  |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD New State :
+##
+__________________________________________________________________________________
+|Vendorno : 1                                                                    |
+|Vname : Oakland Supply                                                          |
+|Street : 12 E. 14th                                                             |
+|City : Oakland                                                                  |
+|State : CA                                                                      |
+|Zip : 94602                                                                     |
+|Contact : Fred                                                                  |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno : 11                                                               |
+|New Vname : New Oakland Supply                                                  |
+|New Street : 12 Main                                                            |
+|New City : New Oakland                                                          |
+|New State : N_H                                                                  |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD New Contact :
+##
+__________________________________________________________________________________
+|Vendorno : 1                                                                    |
+|Vname : Oakland Supply                                                          |
+|Street : 12 E. 14th                                                             |
+|City : Oakland                                                                  |
+|State : CA                                                                      |
+|Zip : 94602                                                                     |
+|Contact : Fred                                                                  |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno : 11                                                               |
+|New Vname : New Oakland Supply                                                  |
+|New Street : 12 Main                                                            |
+|New City : New Oakland                                                          |
+|New State : NH                                                                  |
+|New Zip : 08902                                                                 |
+|New Contact : Bruce_                                                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+>>
+^^ update`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Update
+%% MENU:   Update  Delete  Next  Clear  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Update"
+
+%% Testing UPDATE with WITH QUALIFICATION clause...
+%% Updating emp 1
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : 1                                                                    |
+|Vname : Oakland Supply                                                          |
+|Street : 12 E. 14th                                                             |
+|City : Oakland                                                                  |
+|State : CA                                                                      |
+|Zip : 94602                                                                     |
+|Contact : Fred                                                                  |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno : 11                                                               |
+|New Vname : New Oakland Supply                                                  |
+|New Street : 12 Main                                                            |
+|New City : New Oakland                                                          |
+|New State : NH                                                                  |
+|New Zip : 08902                                                                 |
+|New Contact : _Bruce                                                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`TAB'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Update  Delete  Next  Clear  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : 2                                                                    |
+|Vname : City Tubing                                                             |
+|Street : 9 Main Street                                                          |
+|City : El Cerrito                                                               |
+|State : CA                                                                      |
+|Zip : 94530                                                                     |
+|Contact : Albert                                                                |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno : 11                                                               |
+|New Vname : New Oakland Supply                                                  |
+|New Street : 12 Main                                                            |
+|New City : New Oakland                                                          |
+|New State : NH                                                                  |
+|New Zip : 08902                                                                 |
+|New Contact : _Bruce                                                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ delete`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Delete
+%% MENU:   Update  Delete  Next  Clear  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Delete"
+
+%% Testing DELETE with WITH QUALIFICATION clause...
+%% Deleting emp 2
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _3                                                                    |
+|Vname : Treetop Parts                                                           |
+|Street : 22 Galvin Drive                                                        |
+|City : Albany                                                                   |
+|State : NY                                                                      |
+|Zip : 10940                                                                     |
+|Contact : Martha                                                                |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno : 11                                                               |
+|New Vname : New Oakland Supply                                                  |
+|New Street : 12 Main                                                            |
+|New City : New Oakland                                                          |
+|New State : NH                                                                  |
+|New Zip : 08902                                                                 |
+|New Contact : Bruce                                                             |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ clear`CR'5`ESC'
+<<
+
+%% MENU RESPONSE: Clear
+%% MENU:   Update  Delete  Next  Clear  End
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Clear"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Vendorno :
+##
+__________________________________________________________________________________
+|Vendorno : 5_                                                                    |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+>>
+^^ delete`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Delete
+%% MENU:   Update  Delete  Next  Clear  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Delete"
+
+%% Testing DELETE with WITH QUALIFICATION clause...
+%% Deleting emp 5
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _4                                                                    |
+|Vname : Estuary Specials                                                        |
+|Street : 1 Waterway Drive                                                       |
+|City : Alameda                                                                  |
+|State : CA                                                                      |
+|Zip : 94501                                                                     |
+|Contact : Marilyn                                                               |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'22`CR'X Parts`CR'X Street`CR'Xville`CR'XX`CR'99999`CR'Mr. X`ESC'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   Update  Delete  Next  Clear  End
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "End"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Contact :
+##
+__________________________________________________________________________________
+|Vendorno : 22                                                                   |
+|Vname : X Parts                                                                 |
+|Street : X Street                                                               |
+|City : Xville                                                                   |
+|State : XX                                                                      |
+|Zip : 99999                                                                     |
+|Contact : Mr. X_                                                                 |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+>>
+^^ add`CR'`ESC'
+<<
+
+%% MENU RESPONSE: AddVendor
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "AddVendor"
+
+%% Adding vendor # 22
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ query`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Query
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Query"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _3                                                                    |
+|Vname : Treetop Parts                                                           |
+|Street : 22 Galvin Drive                                                        |
+|City : Albany                                                                   |
+|State : NY                                                                      |
+|Zip : 10940                                                                     |
+|Contact : Martha                                                                |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Update  Delete  Next  Clear  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _4                                                                    |
+|Vname : Estuary Specials                                                        |
+|Street : 1 Waterway Drive                                                       |
+|City : Alameda                                                                  |
+|State : CA                                                                      |
+|Zip : 94501                                                                     |
+|Contact : Marilyn                                                               |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Update  Delete  Next  Clear  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _11                                                                   |
+|Vname : New Oakland Supply                                                      |
+|Street : 12 Main                                                                |
+|City : New Oakland                                                              |
+|State : NH                                                                      |
+|Zip : 08902                                                                     |
+|Contact : Bruce                                                                 |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ next`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Next
+%% MENU:   Update  Delete  Next  Clear  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Next"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _22                                                                   |
+|Vname : X Parts                                                                 |
+|Street : X Street                                                               |
+|City : Xville                                                                   |
+|State : XX                                                                      |
+|Zip : 99999                                                                     |
+|Contact : Mr. X                                                                 |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Update  Delete  Next  Clear  End                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ delete`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Delete
+%% MENU:   Update  Delete  Next  Clear  End
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Delete"
+
+%% Testing DELETE with WITH QUALIFICATION clause...
+%% Deleting emp 22
+%% No more rows
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|Vendorno : _                                                                     |
+|Vname :                                                                         |
+|Street :                                                                        |
+|City :                                                                          |
+|State :                                                                         |
+|Zip :                                                                           |
+|Contact :                                                                       |
+|                                                                                |
+|                                                                                |
+|Change to ======>                                                               |
+|New Vendorno :                                                                  |
+|New Vname :                                                                     |
+|New Street :                                                                    |
+|New City :                                                                      |
+|New State :                                                                     |
+|New Zip :                                                                       |
+|New Contact :                                                                   |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Query  AddVendor  End                                                         |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: End
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "End"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: pha25uf1                                                        |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: _pha25uf1                                                        |
+|   Source File: pha25uf1.osq                                                    |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 24-nov-2001 19:27:27  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 24-nov-2001 19:27:27     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "End"
+              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: pha25uf1                                                       |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: _pha25uf1                                                       |
+|   Source File: pha25uf1.osq                                                   |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 11-jan-1991 15:14:24  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 11-jan-1991 15:14:24     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   Query  AddVendor  End
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "End"
+||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a USER Frame Definition.                                             |
+|                                                                                |
+|    Frame Name: pha25uf1                                                       |
+|                                                                                |
+|  Short Remark:                                                                 |
+|                                                                                |
+|     Form Name: _pha25uf1                                                       |
+|   Source File: pha25uf1.osq                                                   |
+|   Return Type: none                                                            |
+|                                                                                |
+|        Static: no                                                              |
+|                                                                                |
+|                                                                                |
+|       Created: 11-oct-1990 16:09:41  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 11-oct-1990 16:09:41     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  FormEdit  LongRemark  Print  >                    |
+__________________________________________________________________________________
+@@
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'
+<<
+~
+>>
+? delobj SEPPARAMDB -application pha25 
+<<
+~
+>>
+? delobj SEPPARAMDB -form pha25uf1 
+<<
+~
+>>
+
+
+Ending at: Sat Nov 24 19:29:25 2001

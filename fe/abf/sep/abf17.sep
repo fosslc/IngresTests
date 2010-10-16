@@ -1,0 +1,603 @@
+/*
+	Test Name: oea15.sep
+	Time:  2-OCT-1992 10:54:29
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : oea15
+	Module  : copyform, abf, image
+	Filename: OEA15.SEP
+	Purpose	: test fix for bug 44485 - ABF applications drop the trailing
+		   spaces from returned varchar variables.
+	Input Files  : oea15.frm (copyform), fr1.osq (frame1 code),
+			fr2.osq (frame2 code), pr1.osq (procedure1 code)
+	Output Files : fr1.osq, fr2.osq & oea15.frm
+	Database     : SEPPARAMDB -- tested on ABFDB on Swift and Cuckoo
+	Tables       : none
+	Synopsis     : deleter to delete app oea15, form oea15fr1 and
+			form oea15fr2. copyform oea15.frm, creates forms
+			oea15fr1 and oea15fr2, abf, create app oea15,
+	    4		create frame fr1 with form oea15fr1 and fr1.osq,
+			create frame fr2 with form oea15fr2 and fr2.osq,
+                        create application pr1 with pr1.osq, then 'go' to
+			image and run, check the callframe and callproc
+			results,  the results should include trailing spaces
+			in the varchar variables returned to the calling frame.
+
+ History:  2-OCT-1992	(Author) Jeremy Brown	Created: 2-OCT-1992
+           9-FEB-1993	(jeremyb)  corrected the bug number that the sep test
+				checks for.  Had been over written by global
+				search and replace.
+	 2-FEB-1993  (jeremyb)  inserted -s flag after SQL and COPYFORM
+			commands where needed to eliminate duplicate CANONs
+			and DIFFs when run over HETNET and STAR.
+        10-May-1993     (judi) Corrected the canon for the copyform command.
+			The -s option was used on the copyform command so the
+			results will be different.
+          10-May-1993	(Author)
+          07-Dec-1995	(Author)
+          10-Apr-1996	(clate01)
+		Modified Canons for Windows NT
+          29-Aug-1996	(clate01)
+		cleanup the unnecessary diffs
+	27-Nov-2001	(rogch01)
+		Removed NT canons to allow test to run clean in 24 lines.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -application oea15 
+<<
+~
+>>
+? delobj SEPPARAMDB -form oea15fr1 oea15fr2 
+<<
+~
+>>
+? fill oea15.frm 
+!!
+COPYFORM:	6.4	1992_09_30 00:29:59 GMT  
+FORM:	oea15fr1		
+	80	23	0	0	0	0	6	9	0	0	0	0	0	0	0	0
+FIELD:
+TRIM:
+	6	3	This is the test application showing bug #44485, which is the problem	0	0	0	0
+	6	4	with trailing blanks being truncated on varchar values being returned	0	0	0	0
+	6	5	from 4GL frames and procedures. To test this, hit either the 'CallFrame'	0	0	0	-
+0
+	6	6	or 'CallProc' menuitems. Both objects return the value 'abf   ' as a	0	0	0	0
+	6	7	varchar. The application then shows what was actually received. Hit	0	0	0	0
+	6	8	'End' when you are done.	0	0	0	0
+FORM:	oea15fr2		
+	80	23	0	0	0	0	0	9	0	0	0	0	0	0	0	0
+FIELD:
+TRIM:
+!!
+? fill fr1.osq 
+!!
+initialize (rval = varchar(10)) =
+{
+}
+
+
+'callproc' =
+{
+    rval = callproc pr1;
+    message 'The value returned is ''' + :rval + '''. The length of the ' +
+	    'return value is ' + varchar(length(:rval)) + '.'
+	with style = popup;
+}
+
+
+'callframe' =
+{
+    rval = callframe fr2;
+    message 'The value returned is ''' + :rval + '''. The length of the ' +
+	    'return value is ' + varchar(length(:rval)) + '.'
+	with style = popup;
+}
+
+
+'end' =
+{
+    return;
+}
+
+!!
+? fill fr2.osq 
+!!
+initialize (retval = varchar(10))=
+{
+    retval = 'assign   ';
+	return ('return    ');
+}
+
+'dummy' =
+{
+	return retval;
+}
+!!
+? fill pr1.osq 
+!!
+procedure pr1 =
+{
+   return 'abf   ';
+}
+
+!!
+? copyform -s -i -r SEPPARAMDB oea15.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+>>
+? abf SEPPARAMDB 
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ create`CR'oea15`ESC'
+<<
+~
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`CR'fr1`CR'`ESC'
+<<
+~
+>>
+^^ ok`CR'oea15fr1`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'`CR'`CR'fr2`ESC'
+<<
+~
+>>
+^^ ok`CR'oea15fr2`TAB'`TAB'varchar`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ create`CR'p`CR'`CR'pr1`ESC'
+<<
+~
+>>
+^^ ok`CR'`TAB'varchar`ESC'
+<<
+~
+>>
+^^ end`CR'f`ESC'
+<<
+~
+>>
+^^ go`CR'y`CR'
+<<
+~
+>>
+^^ callproc`CR'`CR'callframe`CR'`CR'end`CR'
+<< IF (NT_GENERIC)
+
+%% MENU RESPONSE: callproc
+%% MENU:   callproc  callframe  end
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "callproc"
+
+%% Fetching 'pr1' from the database ...##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|      This is the test application showing bug #44485, which is the problem     |
+|      with trailing blanks being truncated on varchar values being returned     |
+|      from 4GL frames and procedures. To test this, hit either the 'CallFrame'  |
+|      or 'CallProc' menuitems. Both objects return the value 'abf   ' as a      |
+|      varchar. The application then shows what was actually received. Hit       |
+|      'End' when you are done.                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The value returned is 'abf   '. The length of the return value is 6.       | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|      This is the test application showing bug #44485, which is the problem     |
+|      with trailing blanks being truncated on varchar values being returned     |
+|      from 4GL frames and procedures. To test this, hit either the 'CallFrame'  |
+|      or 'CallProc' menuitems. Both objects return the value 'abf   ' as a      |
+|      varchar. The application then shows what was actually received. Hit       |
+|      'End' when you are done.                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  callproc  callframe  end_                                                      |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: callframe
+%% MENU:   callproc  callframe  end
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "callframe"
+
+%% Fetching 'fr2' from the database ...
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                                                                                |
+|                                                                                |
+|                                                                                |
+|      This is the test application showing bug #44485, which is the problem     |
+|      with trailing blanks being truncated on varchar values being returned     |
+|      from 4GL frames and procedures. To test this, hit either the 'CallFrame'  |
+|      or 'CallProc' menuitems. Both objects return the value 'abf   ' as a      |
+|      varchar. The application then shows what was actually received. Hit       |
+|      'End' when you are done.                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|Fetching 'fr2' from the database ...                                            |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|      This is the test application showing bug #44485, which is the problem     |
+|      with trailing blanks being truncated on varchar values being returned     |
+|      from 4GL frames and procedures. To test this, hit either the 'CallFrame'  |
+|      or 'CallProc' menuitems. Both objects return the value 'abf   ' as a      |
+|      varchar. The application then shows what was actually received. Hit       |
+|      'End' when you are done.                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The value returned is 'return    '. The length of the return value is 10.  | |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|      This is the test application showing bug #44485, which is the problem     |
+|      with trailing blanks being truncated on varchar values being returned     |
+|      from 4GL frames and procedures. To test this, hit either the 'CallFrame'  |
+|      or 'CallProc' menuitems. Both objects return the value 'abf   ' as a      |
+|      varchar. The application then shows what was actually received. Hit       |
+|      'End' when you are done.                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  callproc  callframe  end_                                                      |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: end
+%% MENU:   callproc  callframe  end
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "end"
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: oea15                            Default Start:                         |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_fr1                     |User Frame   |                                       ||
+||fr2                     |User Frame   |                                       ||
+||pr1                     |4GL Procedure|                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+>>
+<<
+
+%% MENU RESPONSE: callproc
+%% MENU:   callproc  callframe  end
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "callproc"
+
+%% Fetching 'pr1' from the database ...##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|      This is the test application showing bug #44485, which is the problem     |
+|      with trailing blanks being truncated on varchar values being returned     |
+|      from 4GL frames and procedures. To test this, hit either the 'CallFrame'  |
+|      or 'CallProc' menuitems. Both objects return the value 'abf   ' as a      |
+|      varchar. The application then shows what was actually received. Hit       |
+|      'End' when you are done.                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The value returned is 'abf   '. The length of the return value is 6.          | -
+|
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|      This is the test application showing bug #44485, which is the problem     |
+|      with trailing blanks being truncated on varchar values being returned     |
+|      from 4GL frames and procedures. To test this, hit either the 'CallFrame'  |
+|      or 'CallProc' menuitems. Both objects return the value 'abf   ' as a      |
+|      varchar. The application then shows what was actually received. Hit       |
+|      'End' when you are done.                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  callproc  callframe  end_                                                      |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: callframe
+%% MENU:   callproc  callframe  end
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "callframe"
+
+%% Fetching 'fr2' from the database ...
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_                                                                                |
+|                                                                                |
+|                                                                                |
+|      This is the test application showing bug #44485, which is the problem     |
+|      with trailing blanks being truncated on varchar values being returned     |
+|      from 4GL frames and procedures. To test this, hit either the 'CallFrame'  |
+|      or 'CallProc' menuitems. Both objects return the value 'abf   ' as a      |
+|      varchar. The application then shows what was actually received. Hit       |
+|      'End' when you are done.                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|Fetching 'fr2' from the database ...                                            |
+__________________________________________________________________________________
+@@
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|      This is the test application showing bug #44485, which is the problem     |
+|      with trailing blanks being truncated on varchar values being returned     |
+|      from 4GL frames and procedures. To test this, hit either the 'CallFrame'  |
+|      or 'CallProc' menuitems. Both objects return the value 'abf   ' as a      |
+|      varchar. The application then shows what was actually received. Hit       |
+|      'End' when you are done.                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+| +----------------------------------------------------------------------------+ |
+| | The value returned is 'return    '. The length of the return value is 10.       -
+| |
+| |                                                        _[PRESS RETURN]      | |
+| +----------------------------------------------------------------------------+ |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% REDRAWING FRAME
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|      This is the test application showing bug #44485, which is the problem     |
+|      with trailing blanks being truncated on varchar values being returned     |
+|      from 4GL frames and procedures. To test this, hit either the 'CallFrame'  |
+|      or 'CallProc' menuitems. Both objects return the value 'abf   ' as a      |
+|      varchar. The application then shows what was actually received. Hit       |
+|      'End' when you are done.                                                  |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  callproc  callframe  end_                                                      |
+__________________________________________________________________________________
+@@
+
+%% MENU RESPONSE: end
+%% MENU:   callproc  callframe  end
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "end"
+                                                                   |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: oea15                           Default Start:                         |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_fr1                     |User Frame   |                                       ||
+||fr2                     |User Frame   |                                       ||
+||pr1                     |4GL Procedure|                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'
+<<
+~
+>>
+
+
+Ending at: Thu Aug 29 14:59:20 1996

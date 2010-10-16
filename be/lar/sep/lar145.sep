@@ -1,0 +1,777 @@
+/*
+Copyright (c) 2006 Ingres Corporation
+
+
+	Test Name: lar145.sep
+	Time: Wed Feb  8 18:27:53 1995
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : lar145.sep
+	Module  : be/lar
+	Filename: lar145.sep
+	Purpose	: Test table-level rollforwarddb with blob table
+	                 > journaled and nonjournaled.
+	Input Files  : fillblob.sc, updateblob.sc, f2500,
+	               prfdb04.sep, bea24.sep (used for blob contents)
+	Output Files : fillblob.[c,o,exe], updateblob.[c,o,exe]
+	Database     : SEPPARAMDB
+	Tables       : comp_heaptbl
+	Synopsis     : Using esqlc programs, creates a blob table and
+	               populates it.  Ckpdb -j, insert & update,
+	               rollforwarddb -table.  Checks blob contents.
+	               Updates a row to alter blob data, then does a
+                       rollforwarddb -table.  Checks contents:  back to row
+                       count and no updated blob which is how the table was
+                       since the last ckpdb -j with no journals to apply.
+	               Reloads with db-level rollforwarddb and retests with
+	               journaling on.
+
+                        IMPORTANT: If  diffs are present after the 
+                                   select count(*) , then the test has failed.
+
+ History: 24-Sep-1998   (uptad01) Created from lar17.sep
+                        This test applies the above Synopsis to Compressed heap
+                        tables 
+	  15-aug-1999	(popri01) Correct put_handler definition.
+			Add second ckpdb based on lar17, which appears to have
+			been the basis for these new blob tests (and which
+			does not encounter diff's on last query). The original
+			test comments ("retests with journaling on") would 
+			also seem to indicate a second ckpdb.
+          21-Apr-2000	(marwi08)  Cleaning up CANON text ("INGRES error
+                        log" vs. "error log").
+          08-Jun-2004   (vande02) Removing usage of '-noblobs' flag from this
+                        test due to it not being supported as of II 2.5.  See
+                        issues 8762048 and 13356305. Removed the redundant test
+                        case 'rollforwarddb SEPPARAMDB -table=comp_heaptbl'.
+			Adding checks of relstat2 to verify the status of table
+			level recovery (allowed or disallowed).  Added an update
+			to row bea24.sep just after the final ckpdb +j when
+                        journaling is enabled followed by a select to verify
+                        table level recovery of 'comp_heaptbl' was successful
+                        now that it is allowed since the last ckpdb +j.  Changed
+                        several statements that select a blob to select the left
+                        most 32 characters so the canons will result in a neater
+                        and shorter display.  Aligned history comments.
+                        Put in empty canons for SQL connection verification.
+                        Changed the test purpose and synopsis to reflect the
+                        removal of the '-noblobs' option.  Test unsupported
+                        '-noblobs' option in one test lar17.sep.
+          01-Nov-2004   (vande02) Changing test input file lar01.sep to
+                        lar17.sep so this test is not dependent on lar01.sep
+                        which is not included in the open source test pack.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+          12-Jun-2006   (hanal04) Updated select of copyright.
+          11-Dec-2006   (vande02) Updated select of copyright again.
+          12-Nov-2007   (drivi01) Rename all binaries containing word "update"
+                                  to use "updte" instead, to avoid Vista's
+                                  installer detection.
+*/
+? fill fillblob.sc 
+!!
+#include <stdio.h>
+
+EXEC SQL INCLUDE SQLCA;
+char result[100001];
+
+int get_handler();
+int put_handler();
+void erreur();
+
+void main(int argc,char *argv[])
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char dbname[50];
+	char filename[256];
+EXEC SQL END DECLARE SECTION;
+
+
+
+	if (argc < 3)
+	{
+		printf ("\nUsage : fillblob <dbname> <filename> [create]\n");
+		exit(1);
+	}
+	strcpy(dbname, argv[1]);
+	strcpy(filename,argv[2]);
+	EXEC SQL WHENEVER SQLERROR STOP;
+	EXEC SQL CONNECT :dbname;
+	EXEC SQL WHENEVER SQLERROR CALL erreur;
+
+	if (argc == 4)
+	{	
+		EXEC SQL WHENEVER SQLERROR CONTINUE;
+		EXEC SQL DROP TABLE comp_heaptbl;
+		EXEC SQL WHENEVER SQLERROR CALL erreur;
+		EXEC SQL CREATE TABLE comp_heaptbl ( filename varchar(256), filecontent long varch-
+ar);
+	}
+
+	EXEC SQL INSERT INTO comp_heaptbl VALUES(:filename,datahandler(put_handler(filename-
+)));
+	EXEC SQL COMMIT;
+
+	EXEC SQL DISCONNECT;
+}
+
+void erreur()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char message[256];
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL INQUIRE_SQL(:message=errortext);
+	printf("\nSQL ERROR: %s",message);
+	EXEC SQL ROLLBACK;
+	EXEC SQL DISCONNECT;
+	exit(1);
+}
+
+int put_handler(char *filename)
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char mon_segment[3000];
+	int longueur;
+	EXEC SQL END DECLARE SECTION;
+
+	FILE *fic;
+	
+	fic = fopen (filename,"r");
+	if (fic == (FILE*)0) 
+	{
+		printf ("FillBlob Error: Cannot open file %s\n",filename);
+		exit(1);
+	}
+	while (fgets(mon_segment,100,fic)!= NULL )
+	{
+		longueur = strlen (mon_segment);
+		EXEC SQL PUT DATA (segment=:mon_segment,segmentlength=:longueur);
+	}
+	EXEC SQL PUT DATA (dataend = 1);
+        return longueur;
+}
+
+int get_handler()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char mon_segment[101];
+	int longueur;
+	int data_end;
+	EXEC SQL END DECLARE SECTION;
+	EXEC SQL WHENEVER SQLERROR call erreur;
+
+	strcpy(result,"");
+
+	data_end = 0;
+
+	while (data_end != 1)
+	{
+		EXEC SQL GET DATA (:mon_segment = segment, :longueur=segmentlength,:data_end = dat-
+aend)
+		WITH maxlength =100;
+		strcat (result, mon_segment);
+	}
+         return longueur;
+}
+
+!!
+? fill updteblob.sc 
+!!
+#include <stdio.h>
+
+EXEC SQL INCLUDE SQLCA;
+int put_handler();
+void erreur();
+
+void main(int argc,char *argv[])
+{
+EXEC SQL BEGIN DECLARE SECTION;
+	char dbname[50];
+	char filename[256];
+	char oldname[256];
+EXEC SQL END DECLARE SECTION;
+
+
+
+	if (argc < 4)
+	{
+		printf ("\nUsage : updteblob <dbname> <filename> <oldname>\n");
+		exit(1);
+	}
+	strcpy(dbname, argv[1]);
+	strcpy(filename,argv[2]);
+	strcpy(oldname, argv[3]);
+	EXEC SQL WHENEVER SQLERROR STOP;
+	EXEC SQL CONNECT :dbname;
+	EXEC SQL WHENEVER SQLERROR CALL erreur;
+
+	EXEC SQL UPDATE comp_heaptbl 
+	SET filecontent = datahandler(put_handler(filename))
+	WHERE filename = :oldname;
+
+	EXEC SQL COMMIT;
+
+	EXEC SQL DISCONNECT;
+}
+
+void erreur()
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char message[256];
+	EXEC SQL END DECLARE SECTION;
+
+	EXEC SQL INQUIRE_SQL(:message=errortext);
+	printf("\nSQL ERROR: %s",message);
+	EXEC SQL ROLLBACK;
+	EXEC SQL DISCONNECT;
+	exit(1);
+}
+
+int put_handler(char *filename)
+{
+	EXEC SQL BEGIN DECLARE SECTION;
+	char mon_segment[3000];
+	int longueur;
+	EXEC SQL END DECLARE SECTION;
+
+	FILE *fic;
+	
+
+	fic = fopen (filename,"r");
+	if (fic == (FILE*)0) 
+	{
+		printf ("FillBlob Error: Cannot open file %s\n",filename);
+		exit(1);
+	}
+	while (fgets(mon_segment,100,fic)!= NULL )
+	{
+		longueur = strlen (mon_segment);
+		EXEC SQL PUT DATA (segment=:mon_segment,segmentlength=:longueur);
+	}
+	EXEC SQL PUT DATA (dataend = 1);
+        return longueur;
+}
+!!
+? fill f2500 
+!!
+ 100 chars --------------------------------------------------------------------------
+-------------->
+ 200 chars --------------------------------------------------------------------------
+-------------->
+ 300 chars --------------------------------------------------------------------------
+-------------->
+ 400 chars --------------------------------------------------------------------------
+-------------->
+ 500 chars --------------------------------------------------------------------------
+-------------->
+ 600 chars --------------------------------------------------------------------------
+-------------->
+ 700 chars --------------------------------------------------------------------------
+-------------->
+ 800 chars --------------------------------------------------------------------------
+-------------->
+ 900 chars --------------------------------------------------------------------------
+-------------->
+1000 chars --------------------------------------------------------------------------
+-------------->
+1100 chars --------------------------------------------------------------------------
+-------------->
+1200 chars --------------------------------------------------------------------------
+-------------->
+1300 chars --------------------------------------------------------------------------
+-------------->
+1400 chars --------------------------------------------------------------------------
+-------------->
+1500 chars --------------------------------------------------------------------------
+-------------->
+1600 chars --------------------------------------------------------------------------
+-------------->
+1700 chars --------------------------------------------------------------------------
+-------------->
+1800 chars --------------------------------------------------------------------------
+-------------->
+1900 chars --------------------------------------------------------------------------
+-------------->
+2000 chars --------------------------------------------------------------------------
+-------------->
+2100 chars --------------------------------------------------------------------------
+-------------->
+2200 chars --------------------------------------------------------------------------
+-------------->
+2300 chars --------------------------------------------------------------------------
+-------------->
+2400 chars --------------------------------------------------------------------------
+-------------->
+2500 chars --------------------------------------------------------------------------
+-------------->
+!!
+? cp @file(ing_tst,be,lar,sep,lar17.sep) prfdb04.sep 
+<<
+>>
+? cp @file(ing_tst,be,lar,sep,lar17.sep) bea24.sep 
+<<
+>>
+? sepesqlc fillblob.sc 
+<<
+ESQL fillblob.sc:
+>>
+? sepcc fillblob.c 
+<<
+~
+>>
+? seplnk fillblob 
+<<
+~
+>>
+? sepesqlc updteblob.sc 
+<<
+ESQL updteblob.sc:
+>>
+? sepcc updteblob.c 
+<<
+~
+>>
+? seplnk updteblob 
+<<
+~
+>>
+? run fillblob.exe SEPPARAMDB prfdb04.sep create 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* modify comp_heaptbl to heap with compression;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? run fillblob.exe SEPPARAMDB bea24.sep 
+<<
+>>
+? run fillblob.exe SEPPARAMDB updteblob.sc 
+<<
+>>
+? ckpdb -l +w -d -j SEPPARAMDB 
+<<
+~
+>>
+? run fillblob.exe SEPPARAMDB fillblob.sc 
+<<
+>>
+? run updteblob.exe SEPPARAMDB f2500 updteblob.sc 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from comp_heaptbl;\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select filecontent from comp_heaptbl where filename='updteblob.sc'\g 
+<<
++--------------------------------+
+|filecontent                     |
++--------------------------------+
+| 100 chars -------------------------------------------------------------------------
+--------------->\n 200 chars --------------------------------------------------------
+-------------------------------->\n 300 chars ---------------------------------------
+------------------------------------------------->\n 400 chars ----------------------
+------------------------------------------------------------------>\n 500 chars -----
+----------------------------------------------------------------------------------->-
+\n 600 chars ------------------------------------------------------------------------
+---------------->\n 700 chars -------------------------------------------------------
+--------------------------------->\n 800 chars --------------------------------------
+-------------------------------------------------->\n 900 chars ---------------------
+------------------------------------------------------------------->\n1000 chars ----
+-------------------------------------------------------------------------------------
+>\n1100 chars -----------------------------------------------------------------------
+----------------->\n1200 chars ------------------------------------------------------
+---------------------------------->\n1300 chars -------------------------------------
+--------------------------------------------------->\n1400 chars --------------------
+-------------------------------------------------------------------->\n1500 chars ---
+-------------------------------------------------------------------------------------
+->\n1600 chars ----------------------------------------------------------------------
+------------------>\n1700 chars -----------------------------------------------------
+----------------------------------->\n1800 chars ------------------------------------
+---------------------------------------------------->\n1900 chars -------------------
+--------------------------------------------------------------------->\n2000 chars --
+-------------------------------------------------------------------------------------
+-->\n2100 chars ---------------------------------------------------------------------
+------------------->\n2200 chars ----------------------------------------------------
+------------------------------------>\n2300 chars -----------------------------------
+----------------------------------------------------->\n2400 chars ------------------
+---------------------------------------------------------------------->\n2500 chars -
+-------------------------------------------------------------------------------------
+--->\n|
++--------------------------------+
+(1 row)
+>>
+* \q 
+<<
+>>
+/*
+Successful recovery but no journals to apply
+*/
+? rollforwarddb SEPPARAMDB -table=comp_heaptbl 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from comp_heaptbl;\g 
+<<
++-------------+
+|col1         |
++-------------+
+|            3|
++-------------+
+(1 row)
+>>
+* select filecontent from comp_heaptbl where filename='updteblob.sc'\g 
+<<
+
++--------------------------------+
+|filecontent                     |
++--------------------------------+
+|#include <stdio.h>\n\nEXEC SQL INCLUDE SQLCA;\nint put_handler();\nvoid erreur();\n-
+\nvoid main(int argc,char *argv[])\n{\nEXEC SQL BEGIN DECLARE SECTION;\n\tchar dbnam-
+e[50];\n\tchar filename[256];\n\tchar oldname[256];\nEXEC SQL END DECLARE SECTION;\n-
+\n\n\n\tif (argc < 4)\n\t{\n\t\tprintf ("\\nUsage : updteblob <dbname> <filename> <-
+oldname>\\n");\n\t\texit(1);\n\t}\n\tstrcpy(dbname, argv[1]);\n\tstrcpy(filename,arg-
+v[2]);\n\tstrcpy(oldname, argv[3]);\n\tEXEC SQL WHENEVER SQLERROR STOP;\n\tEXEC SQL -
+CONNECT :dbname;\n\tEXEC SQL WHENEVER SQLERROR CALL erreur;\n\n\tEXEC SQL UPDATE com-
+p_heaptbl \n\tSET filecontent = datahandler(put_handler(filename))\n\tWHERE filename-
+ = :oldname;\n\n\tEXEC SQL COMMIT;\n\n\tEXEC SQL DISCONNECT;\n}\n\nvoid erreur()\n{\-
+n\tEXEC SQL BEGIN DECLARE SECTION;\n\tchar message[256];\n\tEXEC SQL END DECLARE SEC-
+TION;\n\n\tEXEC SQL INQUIRE_SQL(:message=errortext);\n\tprintf("\\nSQL ERROR: %s",me-
+ssage);\n\tEXEC SQL ROLLBACK;\n\tEXEC SQL DISCONNECT;\n\texit(1);\n}\n\nint put_hand-
+ler(char *filename)\n{\n\tEXEC SQL BEGIN DECLARE SECTION;\n\tchar mon_segment[3000];-
+\n\tint longueur;\n\tEXEC SQL END DECLARE SECTION;\n\n\tFILE *fic;\n\t\n\n\tfic = fo-
+pen (filename,"r");\n\tif (fic == (FILE*)0) \n\t{\n\t\tprintf ("FillBlob Error: Cann-
+ot open file %s\\n",filename);\n\t\texit(1);\n\t}\n\twhile (fgets(mon_segment,100,fi-
+c)!= NULL )\n\t{\n\t\tlongueur = strlen (mon_segment);\n\t\tEXEC SQL PUT DATA (segme-
+nt=:mon_segment,segmentlength=:longueur);\n\t}\n\tEXEC SQL PUT DATA (dataend = 1);\n-
+        return longueur;\n}\n|
++--------------------------------+
+(1 row)
+>>
+* select filecontent from comp_heaptbl where filename='fillblob.sc';\g
+<<
++--------------------------------+
+|filecontent                     |
++--------------------------------+
++--------------------------------+
+(0 rows)
+>>
+* select filename from comp_heaptbl order by filename;\g
+<<
+
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+|filename                                                                           -
+                                                                                    -
+                                                                                    -
+     |
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+|bea24.sep                                                                          -
+                                                                                    -
+                                                                                    -
+     |
+|prfdb04.sep                                                                        -
+                                                                                    -
+                                                                                    -
+     |
+|updteblob.sc                                                                      -
+                                                                                    -
+                                                                                    -
+     |
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+(3 rows)
+>>
+* \q
+<<
+>>
+/*
+Successful database recovery but no journals to apply
+*/
+? rollforwarddb SEPPARAMDB 
+<<
+~
+>>
+? run fillblob.exe SEPPARAMDB fillblob.sc 
+<<
+>>
+? run updteblob.exe SEPPARAMDB f2500 updteblob.sc 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select count(*) from comp_heaptbl;\g
+<<
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select left(filecontent,32) as filecontent_32 from comp_heaptbl where filename='up-
+dteblob.sc';\g
+<<
+
++--------------------------------+
+|filecontent_32                  |
++--------------------------------+
+| 100 chars ---------------------|
++--------------------------------+
+(1 row)
+>>
+* \q
+<<
+>>
+/*
+Table level recovery expected to fail due to the last database
+rollforwarddb WITHOUT journaling which also restored relstat2 to
+DISALLOW table level recovery.  Relstat2 staus will not be changed
+to ALLOW table level recovering UNTIL the next checkpoint (ckpdb +j).
+*/
+? rollforwarddb SEPPARAMDB -table=comp_heaptbl 
+<<
+Fri Jun  4 16:08:03 2004 RFP: Preparing for table level rollforward on : lardb      -
+                     
+Fri Jun  4 16:08:03 2004 CPP: Completed drain of log file for database: lardb
+Fri Jun  4 16:08:03 2004 E_DM135F_RFP_NO_TBL_RECOV	Table level recovery disallowed f-
+or table comp_heaptbl
+Fri Jun  4 16:08:03 2004 E_DM135E_RFP_USR_INVALID_TABLE	An invalid table has been sp-
+ecified on the command line.
+Fri Jun  4 16:08:03 2004 E_DM1301_RFP_ROLL_FORWARD	An error occurred that prevents f-
+urther processing.
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+/*
+When 0x800 is set in relstat2 table level recovery is DISALLOWED
+*/
+* select relid, hex(relstat2) from iirelation where relid='comp_heaptbl';\g
+<<
+
++--------------------------------+--------+
+|relid                           |col2    |
++--------------------------------+--------+
+|comp_heaptbl                    |04000802|
++--------------------------------+--------+
+(1 row)
+>>
+* select count(*) from comp_heaptbl;\g
+<<
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select left(filecontent,32) as filecontent_32 from comp_heaptbl where filename='up-
+dteblob.sc';\g
+<<
+
++--------------------------------+
+|filecontent_32                  |
++--------------------------------+
+| 100 chars ---------------------|
++--------------------------------+
+(1 row)
+>>
+/*
+Here is what blob bea24.sep looks like before we update it after next ckpdb.
+*/
+* select left(filecontent,32) as filecontent_32 from comp_heaptbl where filename='be-
+a24.sep'\g
+<<
+
++--------------------------------+
+|filecontent_32                  |
++--------------------------------+
+|/*\n\tCopyright (c) 2004 Ingres Co|
++--------------------------------+
+(1 row)
+>>
+* \q
+<<
+>>
+? ckpdb -l +w -d +j SEPPARAMDB 
+<<
+~
+>>
+/*
+Update blob bea24.sep in comp_heaptbl now that journaling is enabled and table
+level recovery of comp_heaptbl will be successful and show the updated blob.
+*/
+? run updteblob.exe SEPPARAMDB f2500 bea24.sep 
+<<
+>>
+/*
+Successful table level recovery and journals are applied as journaling was
+enabled during the last ckpdb
+*/
+? rollforwarddb SEPPARAMDB -table=comp_heaptbl 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+/*
+When same hex bit is set to zero in relstat2 table level recovery IS ALLOWED
+*/
+* select relid, hex(relstat2) from iirelation where relid='comp_heaptbl';\g
+<<
+
++--------------------------------+--------+
+|relid                           |col2    |
++--------------------------------+--------+
+|comp_heaptbl                    |04000002|
++--------------------------------+--------+
+(1 row)
+>>
+* select count(*) from comp_heaptbl;\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select left(filecontent,32) as filecontent_32 from comp_heaptbl where filename='be-
+a24.sep'\g
+<<
+
++--------------------------------+
+|filecontent_32                  |
++--------------------------------+
+| 100 chars ---------------------|
++--------------------------------+
+(1 row)
+>>
+* select left(filecontent,32) as filecontent_32 from comp_heaptbl where filename='up-
+dteblob.sc';\g
+<<
+
++--------------------------------+
+|filecontent_32                  |
++--------------------------------+
+| 100 chars ---------------------|
++--------------------------------+
+(1 row)
+>>
+* select filename from comp_heaptbl order by filename;\g
+<<
+
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+|filename                                                                           -
+                                                                                    -
+                                                                                    -
+     |
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+|bea24.sep                                                                          -
+                                                                                    -
+                                                                                    -
+     |
+|fillblob.sc                                                                        -
+                                                                                    -
+                                                                                    -
+     |
+|prfdb04.sep                                                                        -
+                                                                                    -
+                                                                                    -
+     |
+|updteblob.sc                                                                      -
+                                                                                    -
+                                                                                    -
+     |
++------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+-----+
+(4 rows)
+>>
+* drop table comp_heaptbl;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? delete fillblob.exe 
+<<
+~
+>>
+? delete fillblob.o 
+<<
+~
+>>
+? delete fillblob.c 
+<<
+~
+>>
+? delete fillblob.obj 
+<<
+~
+>>
+? delete updteblob.exe 
+<<
+~
+>>
+? delete updteblob.o 
+<<
+~
+>>
+? delete updteblob.obj 
+<<
+~
+>>
+? delete updteblob.c 
+<<
+~
+>>
+? delete prfdb04.sep 
+<<
+~
+>>
+? delete bea24.sep 
+<<
+~
+>>
+
+
+Ending at: Fri Jun  4 16:09:51 2004

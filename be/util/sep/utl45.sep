@@ -1,0 +1,128 @@
+/*
+	Copyright (c) 2006 Ingres Corporation
+
+	Test Name: utl45.sep
+	Time: Sat Jan 12 07:24:04 2002
+	User Name: testenv
+	Terminal type: septerm
+ 
+   Test ID : utl45
+   Module  : BE/UTIL
+   Filename: utl45.sep
+   Purpose  : To test auditdb -table=tablename -file
+   Input Files  : utl45_1.sql, utl45_2.sql
+   Output Files : utl45_tbl1.trl
+   Database     : SEPPARAMDB
+   Tables       : utl45_tbl1, utl45_tbl2
+   Synopsis     : This test is designed to verify that auditdb is working. It
+                  will use the "-table=tablename -file" option to create a
+                  tablename.trl file. This test is using a table (utl45_tbl1)
+                  with a long varchar column. It should fail on versions of
+                  Ingres prior to 2.6 (due to long varchar causing corrupt
+                  .trl file to be created).
+
+ History: 18-Dec-2001   (marwi08)   Created
+          01-Sep-2005   (sinra04) Added -wait with auditdb command to wait until
+			journals are current before starting the audit. 
+			This test used to fail on faster machines.
+	26-Sep-2006	(rogch01)
+		Add +w to ckpdb in case the database is momentarily unavailable
+		following the previous command.  For some reason, auditdb can
+		fail to find the table on the first invocation if it follows
+		straight on from the table creation.  Added a sleep.
+*/
+? ckpdb +j +w SEPPARAMDB 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop utl45_tbl1;\g 
+<<
+~
+>>
+* create table utl45_tbl1 (col1 char(10), col2 long varchar)\g 
+<<
+
+>>
+* commit\g 
+<<
+
+>>
+* insert into utl45_tbl1 values ('a1', 'a1')\g 
+<<
+(1 row)
+>>
+* commit\g 
+<<
+
+>>
+* update utl45_tbl1 set col2='b1'\g 
+<<
+(1 row)
+>>
+* commit\g 
+<<
+
+>>
+* \q 
+<<
+
+>>
+? sleep 1
+<<
+>>
+? auditdb SEPPARAMDB -table=utl45_tbl1 -file -wait
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop utl45_tbl2;\g
+<<
+~
+>>
+* create table utl45_tbl2 (date date not null with default, -
+username char(32) not null with default, -
+operation char(8) not null with default, -
+tranid1 integer not null with default, tranid2 integer not null with default, -
+table_id1 integer not null with default, -
+table_id2 integer not null with default, col1 char(10), col2 long varchar)\g 
+<<
+
+>>
+* copy table utl45_tbl2 () from 'utl45_tbl1.trl'\g 
+<<
+(3 rows)
+>>
+* select operation, col1, col2 from utl45_tbl2\g 
+<<
+
++--------+----------+--------------------------------+
+|operatio|col1      |col2                            |
++--------+----------+--------------------------------+
+|append  |a1        |a1                              |
+|repold  |a1        |a1                              |
+|repnew  |a1        |b1                              |
++--------+----------+--------------------------------+
+(3 rows)
+>>
+* drop utl45_tbl1, utl45_tbl2;\g 
+<<
+~
+>>
+* \q 
+<<
+
+>>
+? delete utl45_tbl1.trl 
+<<
+file was deleted
+>>
+
+
+Ending at: Sat Jan 12 07:35:02 2002

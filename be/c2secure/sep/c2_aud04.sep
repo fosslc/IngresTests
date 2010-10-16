@@ -1,0 +1,305 @@
+/*
+	Test Name: c2aloc02.sep
+	Time: Mon Jan 25 11:26:08 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:	c2aloc02.sep
+	Purpose	:	to test ALTER LOCATION
+	Input Files  :
+	Output Files :
+	Database     :	iidbdb, SEPPARAMDB
+	Tables       :
+	Synopsis     :  This test  attempts to alter a location :
+                        - from inside/outside iidbdb
+                        - with a location_name that does/does not exist	
+                        - ensure that the specified usages replace the
+                          'old' ones
+                        syntaxtest
+                        - various permutions of the valid usages DATABASE, WORK,
+                          JOURNAL, CHECKPOINT, DUMP, ALL
+                        - attempt to enter incorrect syntax
+
+
+ History: 25-Jan-1993	(jrimpler)	Created
+          03-Jan-1995   (holla02)       Modified to conform to changes in
+                                        1.1/03; also eliminated mkdir setup
+                                        and used sql -s
+          20-Jun-1995	(ciodi01)
+                        Updated canons for SQL "alter location" statements that
+			intentionally cause a syntax error: syntax for
+			ALTER LOCATION has been updated.
+*/
+? fill createloc.qry 
+!!
+drop location nonexist;\g
+drop location testloc1;\g
+create location testloc1 with area='LOCAREA',usage=(database);\g
+!!
+? setenv LOCAREA @file(tmp) 
+<<
+environment variable was defined
+>>
+? sql -s iidbdb 
+<<
+>>
+* alter user testenv with default_privileges = all;\g 
+<<
+>>
+* \q 
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* \i createloc.qry 
+<<
+~
+>>
+* select location_name,data_usage,jrnl_usage,ckpt_usage,work_usage,dump_usage 
+<<
+>>
+*     from iilocation_info where location_name='testloc1'; \g 
+<<
+
++--------------------------------+------+------+------+------+------+
+|location_name                   |data_u|jrnl_u|ckpt_u|work_u|dump_u|
++--------------------------------+------+------+------+------+------+
+|testloc1                        |Y     |N     |N     |N     |N     |
++--------------------------------+------+------+------+------+------+
+(1 row)
+>>
+* alter location testloc1 with usage=(database,work);\g 
+<<
+>>
+* select location_name,data_usage,jrnl_usage,ckpt_usage,work_usage,dump_usage 
+<<
+>>
+*     from iilocation_info where location_name='testloc1';\g 
+<<
+
++--------------------------------+------+------+------+------+------+
+|location_name                   |data_u|jrnl_u|ckpt_u|work_u|dump_u|
++--------------------------------+------+------+------+------+------+
+|testloc1                        |Y     |N     |N     |Y     |N     |
++--------------------------------+------+------+------+------+------+
+(1 row)
+>>
+* alter location testloc1 with usage=(dump);\g 
+<<
+>>
+* select location_name,data_usage,jrnl_usage,ckpt_usage,work_usage,dump_usage 
+<<
+>>
+*     from iilocation_info where location_name='testloc1';\g 
+<<
+
++--------------------------------+------+------+------+------+------+
+|location_name                   |data_u|jrnl_u|ckpt_u|work_u|dump_u|
++--------------------------------+------+------+------+------+------+
+|testloc1                        |N     |N     |N     |N     |Y     |
++--------------------------------+------+------+------+------+------+
+(1 row)
+>>
+* alter location testloc1 with nousage;\g 
+<<
+>>
+* select location_name,data_usage,jrnl_usage,ckpt_usage,work_usage,dump_usage 
+<<
+>>
+*     from iilocation_info where location_name='testloc1';\g 
+<<
+
++--------------------------------+------+------+------+------+------+
+|location_name                   |data_u|jrnl_u|ckpt_u|work_u|dump_u|
++--------------------------------+------+------+------+------+------+
+|testloc1                        |N     |N     |N     |N     |N     |
++--------------------------------+------+------+------+------+------+
+(1 row)
+>>
+* alter location testloc1 with usage=(database,work,journal,checkpoint,dump);\g 
+<<
+>>
+* alter location testloc1 with usage=(all);\g 
+<<
+>>
+* alter location nonexist with usage=(database);\g 
+<<
+E_US18B9 ALTER/DROP LOCATION: The location 'nonexist' not found.
+    (Mon Jan 25 12:24:27 1993)
+>>
+* alter location;\g 
+<<
+E_US0EF5 line 1, Syntax error on 'EOF'.  The correct syntax is: 
+    ALTER LOCATION <location_name> 
+      WITH USAGE = (<usage> {,<usage>}) | NOUSAGE 
+     
+      where <usage> is DATABASE, WORK, JOURNAL, CHECKPOINT, DUMP or 
+                       ALL.
+    (Tue Jun 20 16:52:42 1995)
+
+>>
+* alter_location testloc1 with usage=(database,work);\g 
+<<
+E_US081C Syntax error.  Last symbol read was: 'alter_location'.
+    (Mon Jan 25 12:26:51 1993)
+
+>>
+* alter location 'testloc1' with usage=(database,work);\g 
+<<
+E_US0EF5 line 1, Syntax error on ''testloc1''.  The correct syntax is: 
+    ALTER LOCATION <location_name> 
+      WITH USAGE = (<usage> {,<usage>}) | NOUSAGE 
+     
+      where <usage> is DATABASE, WORK, JOURNAL, CHECKPOINT, DUMP or 
+                       ALL.
+    (Tue Jun 20 16:52:49 1995)
+
+>>
+* alter location(testloc1) with usage=(database,work);\g 
+<<
+E_US0EF5 line 1, Syntax error on '('.  The correct syntax is: 
+    ALTER LOCATION <location_name> 
+      WITH USAGE = (<usage> {,<usage>}) | NOUSAGE 
+     
+      where <usage> is DATABASE, WORK, JOURNAL, CHECKPOINT, DUMP or 
+                       ALL.
+    (Tue Jun 20 16:52:53 1995)
+
+>>
+* alter location testloc1 usage=(database,work);\g 
+<<
+E_US0EF5 line 1, Syntax error on 'usage'.  The correct syntax is: 
+    ALTER LOCATION <location_name> 
+      WITH USAGE = (<usage> {,<usage>}) | NOUSAGE 
+     
+      where <usage> is DATABASE, WORK, JOURNAL, CHECKPOINT, DUMP or 
+                       ALL.
+    (Tue Jun 20 16:52:58 1995)
+
+>>
+* alter location testloc1 use=(database,work);\g 
+<<
+E_US0EF5 line 1, Syntax error on 'use'.  The correct syntax is: 
+    ALTER LOCATION <location_name> 
+      WITH USAGE = (<usage> {,<usage>}) | NOUSAGE 
+     
+      where <usage> is DATABASE, WORK, JOURNAL, CHECKPOINT, DUMP or 
+                       ALL.
+    (Tue Jun 20 16:53:02 1995)
+
+>>
+* alter location testloc1 with area='LOCAREA' , usage=(database,work);\g 
+<<
+E_US18D9 'AREA' cannot be specified on the ALTER LOCATION statement.
+    Please reenter this statement with the 'AREA' parameter omitted.
+    (Mon Jan 25 12:31:16 1993)
+>>
+* alter location testloc1 with usage database,work;\g 
+<<
+E_US18D1 CREATE/ALTER LOCATION: Syntax error in the 'WITH' clause.
+    Last token read was 'usage'.
+     Please check the syntax of the 'WITH' clause and reenter the statement.
+    (Mon Jan 25 12:31:44 1993)
+>>
+* alter location testloc1 with usage (database,xxx);\g 
+<<
+E_US18D1 CREATE/ALTER LOCATION: Syntax error in the 'WITH' clause.
+    Last token read was 'usage'.
+     Please check the syntax of the 'WITH' clause and reenter the statement.
+    (Mon Jan 25 12:32:09 1993)
+>>
+* alter location testloc1 with usage=(database,xxx);\g 
+<<
+E_US18DA CREATE/ALTER LOCATION: Unrecognized usage specified: 'xxx'
+    Please check the spelling of this usage and reenter the command.
+    (Mon Jan 25 12:32:30 1993)
+>>
+* alter location testloc1 with usage=(database,work);\g 
+<<
+>>
+* alter location testloc1, with usage=(database);\g 
+<<
+E_US0EF5 line 1, Syntax error on ','.  The correct syntax is: 
+    ALTER LOCATION <location_name> 
+      WITH USAGE = (<usage> {,<usage>}) | NOUSAGE 
+     
+      where <usage> is DATABASE, WORK, JOURNAL, CHECKPOINT, DUMP or 
+                       ALL.
+    (Tue Jun 20 16:53:10 1995)
+
+>>
+* alter location testloc1 nousage;\g 
+<<
+E_US0EF5 line 1, Syntax error on 'nousage'.  The correct syntax is: 
+    ALTER LOCATION <location_name> 
+      WITH USAGE = (<usage> {,<usage>}) | NOUSAGE 
+     
+      where <usage> is DATABASE, WORK, JOURNAL, CHECKPOINT, DUMP or 
+                       ALL.
+    (Tue Jun 20 16:53:17 1995)
+
+>>
+* alter location testloc1 with usage=NOUSAGE;\g 
+<<
+E_US18D1 CREATE/ALTER LOCATION: Syntax error in the 'WITH' clause.
+    Last token read was 'usage'.
+     Please check the syntax of the 'WITH' clause and reenter the statement.
+    (Mon Jan 25 12:34:31 1993)
+>>
+* alter location testloc1 add usage=(work);\g 
+<<
+E_US0EF5 line 1, Syntax error on 'add'.  The correct syntax is: 
+    ALTER LOCATION <location_name> 
+      WITH USAGE = (<usage> {,<usage>}) | NOUSAGE 
+     
+      where <usage> is DATABASE, WORK, JOURNAL, CHECKPOINT, DUMP or 
+                       ALL.
+    (Tue Jun 20 16:53:21 1995)
+
+>>
+* alter location testloc1 with usage=(database work);\g 
+<<
+E_US0EF5 line 1, Syntax error on 'work'.  The correct syntax is: 
+    ALTER LOCATION <location_name> 
+      WITH USAGE = (<usage> {,<usage>}) | NOUSAGE 
+     
+      where <usage> is DATABASE, WORK, JOURNAL, CHECKPOINT, DUMP or 
+                       ALL.
+    (Tue Jun 20 16:53:23 1995)
+
+>>
+* \q 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* alter location testloc1 with usage=(database);\g 
+<<
+E_US18D4 You must be connected to the 'iidbdb' database
+    to issue 'CREATE/ALTER/DROP LOCATION' statements.
+     Ensure your session is connected to the iidbdb database.
+    (Mon Jan 25 12:41:03 1993)
+>>
+* \q 
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* drop location testloc1;\g 
+<<
+>>
+* drop location nonexist;\g 
+<<
+~
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Tue Jun 20 13:53:49 1995

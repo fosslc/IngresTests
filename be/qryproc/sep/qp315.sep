@@ -1,0 +1,1754 @@
+/*
+	Copyright (c) 2006 Ingres Corporation
+
+        Test Name: qp315.sep
+        Time: Wed Apr  9 11:33:03 2003
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp315
+        Module  : BE/QRYPROC
+        Filename: qp315.sep
+        Purpose : To test ALTER/CREATE SEQUENCE and use of sequences in
+                  ESQLC
+        Input Files  : qp315_altseqtest.sc, qp315_misctests.sc
+        Output Files : None
+        Database     : SEPPARAMDB
+        Tables       : qp315_tbl1, qp315_tbl2, qp315_tbl3
+        Synopsis     : This test will test ALTER/CREATE SEQUENCE and the use
+                       of sequences in ESQLC. It will use NEXTVAL and CURRVAL
+                       with both integer and decimal sequences but with Oracle
+                       format syntax only. It will test the use of sequences
+                       with INSERT, UPDATE, and SELECT SQL statements with
+                       procedures, rules, views, and other standard SQL
+                       statements.
+
+**
+** NOTE: This test is identical to qp314.sep except that it uses Oracle format
+**       syntax only instead of ANSI.
+**
+ History:  9-Apr-2003   (marwi08) Created
+          15-Apr-2003   (vande02) Added Windows specific specc canons and
+                                  delete command for *.obj objects.
+          25-Apr-2003   (vande02) Adding alternate canons for delete *.obj to
+                                  avoid diffs on non-NT_GENERIC platforms.
+           9-Dec-2003   (marwi08) Rewrote test to make it work better and to
+                                  generate smaller canons.
+          27-Sep-2006   (hanal04) Fix for Bugs 116297 and 112605 mean that
+                                  cached sequence number are thrown away.
+                                  update canons accordingly.
+
+*/
+? fill qp315_altseqtest.sc 
+!!
+/* This program will create both integer and decimal sequences that will be
+** altered via the ALTER SEQUENCE command and then it will verify that the
+** sequences are still usable by doing standard SELECT, INSERT, and UPDATE
+** tests with NEXTVAL/CURRVAL.
+**
+** It will also create the necessary tables that will be used to test that
+** the sequences work correctly after they have been altered.
+**
+** It will use Oracle format sequence statements (i.e. nextval/currval,
+** nominvalue, nocycle, nomaxvalue, nocache, noorder)
+**
+** This program is identical to the qp314_altseqtest.sc except that it uses
+** Oracle format syntax only instead of ANSI.
+*/
+
+#include <stddef.h>                     
+#include <stdio.h>
+#include <stdlib.h>
+EXEC SQL INCLUDE SQLCA;
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int v1;
+      double v2;
+      char v3[6];
+      int v4;
+      char *dbname; 
+      int casen;
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   casen = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+   EXEC SQL SET AUTOCOMMIT ON;
+   
+   switch(casen){
+   case 0:
+   printf("Setup for Testing\n");
+   printf("#\n");
+   printf("# Case 0: Drop all sequences and tables to clear database\n");
+   printf("#      and recreate new sequences and tables.\n");
+   printf("#\n");
+   EXEC SQL WHENEVER SQLERROR continue;
+   printf("Dropping sequences and tables...\n");
+   EXEC SQL DROP SEQUENCE qp315_intseq1;
+   EXEC SQL DROP SEQUENCE qp315_intseq2;
+   EXEC SQL DROP SEQUENCE qp315_intseq3;
+   EXEC SQL DROP SEQUENCE qp315_decseq1;
+   EXEC SQL DROP SEQUENCE qp315_decseq2;
+   EXEC SQL DROP TABLE qp315_tbl1;
+   EXEC SQL DROP TABLE qp315_tbl2;
+   EXEC SQL DROP TABLE qp315_tbl3;
+
+   printf("Continuing...\n");
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+   printf("Creating sequences...\n");
+   EXEC SQL CREATE SEQUENCE qp315_intseq1;
+   EXEC SQL CREATE SEQUENCE qp315_decseq1 as decimal;
+   EXEC SQL CREATE SEQUENCE qp315_intseq2 as integer
+      START with 10 
+      INCREMENT BY 10
+      MINVALUE 5
+      MAXVALUE 2500;
+   EXEC SQL CREATE SEQUENCE qp315_decseq2 as decimal
+      START with 10
+      INCREMENT BY 10
+      MINVALUE 5 
+      MAXVALUE 2500;
+   EXEC SQL CREATE SEQUENCE qp315_intseq3 as integer CYCLE;
+   printf("Sequences created...\n");
+   
+   printf("Continuing...\n");
+  
+   printf("Creating tables...\n");
+   EXEC SQL CREATE TABLE qp315_tbl1 (
+      col1 char(5),
+      col2 int);
+   EXEC SQL CREATE TABLE qp315_tbl2 (
+      c1 char(5),
+      c2 decimal);
+   printf("Tables created...\n");
+   break;
+  
+   case 1:
+   printf("Alter Sequences.\n");
+   printf("#\n");
+   printf("# Case 1: Alter integer and decimal sequences.\n");
+   printf("#\n");
+   printf("Now altering first integer sequence...\n");
+   EXEC SQL ALTER SEQUENCE qp315_intseq1
+      maxvalue 1000000
+      nocycle;
+   printf("Now altering first decimal sequence...\n");
+   EXEC SQL ALTER SEQUENCE qp315_decseq1
+      minvalue 1000
+      restart with 1000
+      cache 100;
+   printf("Now altering second integer sequence...\n");
+   EXEC SQL ALTER SEQUENCE qp315_intseq2
+      nomaxvalue;
+   printf("Now altering second decimal sequence...\n");
+   EXEC SQL ALTER SEQUENCE qp315_decseq2
+      nomaxvalue;
+   printf("Alter sequences completed...\n");
+   break;
+
+   case 2:
+   printf("Testing Sequence Usability - Inserts\n");
+   printf("#\n");
+   printf("# Case 2: Test NEXTVAL option via table inserts.\n");
+   printf("#\n");
+   printf("Insert into table 1 - NEXTVAL of 1st integer sequence...\n");
+   EXEC SQL INSERT INTO qp315_tbl1 values(
+      'test1', 
+      qp315_intseq1.nextval);
+   printf("Insert into table 1 - NEXTVAL of 2nd integer sequence...\n");
+   EXEC SQL INSERT INTO qp315_tbl1 values(
+      'test2', 
+      qp315_intseq2.nextval);
+   printf("Insert into table 2 - NEXTVAL of 1st decimal sequence...\n");
+   EXEC SQL INSERT INTO qp315_tbl2 values(
+      'test1',
+      qp315_decseq1.nextval);
+   printf("Insert into table 2 - NEXTVAL of 2nd decimal sequence...\n");
+   EXEC SQL INSERT INTO qp315_tbl2 values(
+      'test2',
+      qp315_decseq2.nextval);
+   /* Just adding additional rows to each table */
+   printf("Insert into table 1 - NEXTVAL of 1st integer sequence...\n");
+   EXEC SQL INSERT INTO qp315_tbl1 values(
+      'test3', 
+      qp315_intseq1.nextval);
+   printf("Insert into table 1 - NEXTVAL of 2nd integer sequence...\n");
+   EXEC SQL INSERT INTO qp315_tbl1 values(
+      'test4', 
+      qp315_intseq2.nextval);
+   printf("Insert into table 2 - NEXTVAL of 1st decimal sequence...\n");
+   EXEC SQL INSERT INTO qp315_tbl2 values(
+      'test3',
+      qp315_decseq1.nextval);
+   printf("Insert into table 2 - NEXTVAL of 2nd decimal sequence...\n");
+   EXEC SQL INSERT INTO qp315_tbl2 values(
+      'test4',
+      qp315_decseq2.nextval);
+   printf("Inserts completed...\n");
+   break;
+
+   case 3:
+   printf("Verification of Data\n");
+   printf("#\n");
+   printf("# Case 3: Verify that data in each table is correct.\n");
+   printf("#\n");
+   printf("Table 1 data...\n");
+   printf("|----------|\n");
+   printf("| col1|col2|\n");
+   EXEC SQL SELECT * INTO :v3, :v1
+      FROM qp315_tbl1 order by 1, 2;
+   EXEC SQL BEGIN;
+      printf("|-----|----|\n");
+      printf("|%s|%4d|\n",v3,v1);
+   EXEC SQL END;
+   printf("|----------|\n");
+   printf("Table 2 data...\n");
+   printf("|----------|\n");
+   printf("|   c1|  c2|\n");
+   EXEC SQL SELECT * INTO :v3, :v2
+      FROM qp315_tbl2 order by 1, 2;
+   EXEC SQL BEGIN;
+      printf("|-----|----|\n");
+      printf("|%s|%4.0f|\n",v3,v2);
+   EXEC SQL END;
+   printf("|----------|\n");
+   printf("Verification completed...\n");
+   printf("Sequence Usability Test completed...\n");
+   break;
+   
+   case 4:
+   EXEC SQL SET AUTOCOMMIT OFF;
+   printf("Testing Sequences Usability -  Updates\n");
+   printf("#\n");
+   printf("# Case 4: Testing NEXTVAL/CURRVAL options via\n");
+   printf("#      table updates.\n");
+   printf("#\n");
+   printf("First do some additional sequence alters...\n");
+   EXEC SQL ALTER SEQUENCE qp315_intseq1 nocycle;
+   EXEC SQL ALTER SEQUENCE qp315_intseq2 noorder;
+   EXEC SQL ALTER SEQUENCE qp315_decseq1 nocycle;
+   EXEC SQL ALTER SEQUENCE qp315_decseq2 noorder;
+   printf("Additional alters completed...\n");
+   printf("Update table 1 with NEXTVAL from 1st integer sequence...\n");
+    EXEC SQL UPDATE qp315_tbl1
+      set col2 = qp315_intseq1.nextval
+      where col1 = 'test1';
+   printf("Update table 1 with CURRVAL from 1st integer sequence...\n");
+   EXEC SQL UPDATE qp315_tbl1
+      set col2 = qp315_intseq1.currval
+      where col1 = 'test2';
+   printf("Update table 1 with NEXTVAL from 2nd integer sequence...\n");
+    EXEC SQL UPDATE qp315_tbl1
+      set col2 = qp315_intseq2.nextval
+      where col1 = 'test3';
+   printf("Update table 1 with CURRVAL from 2nd integer sequence...\n");
+   EXEC SQL UPDATE qp315_tbl1
+      set col2 = qp315_intseq2.currval
+      where col1 = 'test4';
+   printf("Update table 2 with NEXTVAL from 1st decimal sequence...\n");
+   EXEC SQL UPDATE qp315_tbl2
+      set c2 = qp315_decseq1.nextval
+      where c1 = 'test1';
+   printf("Update table 2 with CURRVAL from 1st decimal sequence...\n");
+   EXEC SQL UPDATE qp315_tbl2
+      set c2 = qp315_decseq1.currval
+      where c1 = 'test2';
+   printf("Update table 2 with NEXTVAL from 2nd decimal sequence...\n");
+   EXEC SQL UPDATE qp315_tbl2
+      set c2 = qp315_decseq2.nextval
+      where c1 = 'test3';
+   printf("Update table 2 with CURRVAL from 2nd decimal sequence...\n");
+   EXEC SQL UPDATE qp315_tbl2
+      set c2 = qp315_decseq2.currval
+      where c1 = 'test4';
+   printf("Updates completed...\n");
+   EXEC SQL COMMIT;
+   break;
+
+   case 5:
+   printf("Alters of Third Sequence\n");
+   printf("#\n");
+   printf("# Case 5: Now do several alters to the 3rd sequence.\n");
+   printf("#\n");
+   printf("Altering 3rd integer sequence...\n");
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 nomaxvalue;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 minvalue -2147483647;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 nominvalue;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 maxvalue +2147483647;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 minvalue -2147483647;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 restart with 99;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 increment by 3;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 restart with 0;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 increment by 1;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 cache 2147483647;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 cache 1000;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 nocache;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 restart with 22000;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 increment by 1;
+   EXEC SQL ALTER SEQUENCE qp315_intseq3 cache 2147483647;
+   printf("Alter sequences completed...\n");
+   break;
+   
+   case 6:
+   EXEC SQL SET AUTOCOMMIT OFF;
+   printf("Testing Sequence Usability - Insert/Update\n");
+   printf("#\n");
+   printf("# Case 6: Testing NEXTVAL/CURRVAL option via\n");
+   printf("#      table insert and update.\n");
+   printf("#\n");
+   printf("Insert into table 1 - NEXTVAL from 3rd integer sequence...\n");
+   EXEC SQL INSERT INTO qp315_tbl1 
+      VALUES('test3',qp315_intseq3.nextval);
+   printf("Insert completed...\n");
+   
+   printf("Continuing...\n");
+   
+   printf("Update into table 1 - CURRVAL from 3rd integer sequence...\n");
+   EXEC SQL UPDATE qp315_tbl1
+      set col2 = qp315_intseq3.currval
+      where col1='test1';
+   printf("Update completed...\n");
+   EXEC SQL COMMIT;
+   break;
+   
+   case 7:
+   printf("Table 1 Data Verification\n");
+   printf("#\n");
+   printf("# Case 7: Verify data in table 1 is correct.\n");
+   printf("#\n");
+   printf("Table 1 data...\n");
+   printf("|------------|\n");
+   printf("| col1|  col2|\n");
+   EXEC SQL SELECT * INTO :v3, :v1
+      FROM qp315_tbl1 order by 1, 2;
+   EXEC SQL BEGIN;
+      printf("|-----|------|\n");
+      printf("|%s|%6d|\n",v3,v1);
+   EXEC SQL END;
+   printf("|------------|\n");
+   printf("Verification completed...\n");
+   printf("Sequence Usability Test completed...\n");
+   break;
+
+   case 8:
+   EXEC SQL SET AUTOCOMMIT OFF;
+   printf("Testing Sequence Usability - Insert\n");
+   printf("#\n");
+   printf("# Case 8: Create third test table using AS SELECT with\n");
+   printf("#      NEXTVAL option and test sequence using the\n");
+   printf("#      CURRVAL option.\n");
+   printf("#\n");
+   printf("Creating table...\n");
+   EXEC SQL CREATE TABLE qp315_tbl3 as select
+      col1, col2, qp315_intseq3.nextval
+      FROM qp315_tbl1;
+   printf("Table created...\n");
+
+   printf("Continuing...\n");
+
+   printf("Inserting row into table 3...\n");
+   EXEC SQL INSERT INTO qp315_tbl3
+      SELECT col1, col2, qp315_intseq3.currval
+      FROM qp315_tbl1;
+   printf("Insert completed...\n");
+   EXEC SQL COMMIT;
+   break;
+   
+   case 9:
+   printf("Verification of Data\n");
+   printf("#\n");
+   printf("# Case 9: Verify data in table 3 is correct.\n");
+   printf("#\n");
+   printf("Table 3 data...\n");
+   printf("|-------------------|\n");
+   printf("| col1|  col2|  col3|\n");
+   EXEC SQL SELECT * INTO :v3, :v1, :v4
+      FROM qp315_tbl3 order by 1, 2, 3;
+   EXEC SQL BEGIN;
+      printf("|-----|------|------|\n");
+      printf("|%s|%6d|%6d|\n",v3,v1,v4);
+   EXEC SQL END;
+   printf("|-------------------|\n");
+   printf("Verification completed...\n");
+   printf("Sequence Usability Test completed...\n");
+   return(0);
+   }
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? fill qp315_misctests.sc 
+!!
+/* This program will recreate both integer and decimal sequences that will be
+** used with procedures, rules, views, and global temporary tables.
+** 
+** It will also create the necessary tables, procedure, rules, and views that 
+** will be used to test that the sequences work correctly with the above 
+** statements.
+** 
+** This program will also be used to test sequences with global temporary
+** tables as well.
+** 
+** It will test the use of NEXTVAL and CURRVAL on both integer and decimal
+** type sequences with Oracle format using INSERT, UPDATE, and SELECT SQL
+** statements.
+**
+** This program is identical to the qp315_misctests.sc except that it uses
+** Oracle format syntax only instead of ANSI.
+*/
+
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+EXEC SQL INCLUDE SQLCA;
+
+int main(int argc, char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int x1;
+      int x2;
+      double x3;
+      char x4[7];
+      char *dbname;
+      int casen;
+   EXEC SQL END DECLARE SECTION;
+
+   dbname = argv[1];
+   casen = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+   EXEC SQL SET AUTOCOMMIT ON;
+
+   switch(casen){
+   case 0:
+   printf("PART 1: Setup for Testing - Dropping Objects\n");
+   printf("#\n");
+   printf("# Case 0: Drop all sequences, tables, and procedures\n");
+   printf("#      to clear database\n");
+   printf("#\n");
+   EXEC SQL WHENEVER SQLERROR continue;
+   printf("Dropping sequences, tables, and procedures...\n");
+   EXEC SQL DROP SEQUENCE qp315_intseq1;
+   EXEC SQL DROP SEQUENCE qp315_intseq2;
+   EXEC SQL DROP SEQUENCE qp315_decseq1;
+   EXEC SQL DROP SEQUENCE qp315_decseq2;
+   EXEC SQL DROP TABLE qp315_tbl1;
+   EXEC SQL DROP TABLE qp315_tbl2;
+   EXEC SQL DROP TABLE qp315_tbl3;
+   EXEC SQL DROP PROCEDURE qp315_proc1;
+   EXEC SQL DROP PROCEDURE qp315_proc2;
+   printf("Drops completed...\n");
+   break;
+
+   case 1:
+   printf("PART 2: Setup for Testing - Recreate Objects\n");
+   printf("#\n");
+   printf("# Case 1: Recreate new sequences, tables, and procedures.\n");
+   printf("#\n");
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+   printf("Creating sequences...\n");
+   EXEC SQL CREATE SEQUENCE qp315_intseq1 as integer
+      START with 1
+      INCREMENT BY 1
+      NOMINVALUE
+      MAXVALUE 50;
+   printf("First sequence completed...\n");
+   EXEC SQL CREATE SEQUENCE qp315_decseq1 as decimal
+      START with 1
+      INCREMENT BY 5
+      NOMINVALUE
+      MAXVALUE 200;
+   printf("Second sequence completed...\n");
+   EXEC SQL CREATE SEQUENCE qp315_intseq2 as integer 
+      START with 10 
+      INCREMENT BY 10
+      MINVALUE 5 
+      MAXVALUE 2500;
+   printf("Third sequence completed...\n");
+   EXEC SQL CREATE SEQUENCE qp315_decseq2 as decimal
+      START with 10
+      INCREMENT BY 10
+      MINVALUE 5 
+      MAXVALUE 2500;
+   printf("Fourth sequence completed...\n");
+   printf("Sequences created...\n");
+
+   printf("Continuing...\n");
+
+   printf("Creating tables...\n");
+   EXEC SQL CREATE TABLE qp315_tbl1 (
+      col1 int4 not null,
+      col2 char(6) not null)
+      with page_size = 4096;
+   printf("First table completed...\n");
+   EXEC SQL CREATE TABLE qp315_tbl2 (
+      c1 int4 not null,
+      c2 int4 not null)
+      with page_size = 4096;
+   printf("Second table completed...\n");
+   EXEC SQL CREATE TABLE qp315_tbl3 (
+      col1 int4 not null,
+      col2 decimal not null)
+      with page_size = 4096;
+   printf("Third table completed...\n");
+   printf("Tables created...\n");
+
+   printf("Continuing...\n");
+
+   printf("Creating procedures...\n");
+   EXEC SQL CREATE PROCEDURE qp315_proc1 (a1 integer) as
+      BEGIN
+         INSERT INTO qp315_tbl2 
+         SELECT col1, qp315_intseq1.nextval
+         FROM qp315_tbl1
+         WHERE col1 = a1;
+      END;
+   printf("First procedure completed...\n");
+   EXEC SQL CREATE PROCEDURE qp315_proc2 (b1 integer) as
+      BEGIN
+         INSERT INTO qp315_tbl3 
+         SELECT col1, qp315_decseq1.nextval
+         FROM qp315_tbl1
+         WHERE col1 = b1;
+      END;
+   printf("Second procedure completed...\n");
+   printf("Procedures created...\n");
+   break;
+
+   case 2:
+   printf("PART 3: Setup for Testing - Create New Objects and\n");
+   printf("        Insert Rows Into First Table\n");
+   printf("#\n");
+   printf("# Case 2: Create new rules and views and insert\n");
+   printf("#      some test rows into first table.\n");
+   printf("#\n");
+   printf("Creating rules...\n");
+   EXEC SQL CREATE RULE qp315_rule1 
+      AFTER INSERT INTO qp315_tbl1
+      EXECUTE PROCEDURE qp315_proc1 (a1 = new.col1);
+   printf("First rule completed...\n");
+   EXEC SQL CREATE RULE qp315_rule2 
+      AFTER INSERT INTO qp315_tbl1
+      EXECUTE PROCEDURE qp315_proc2 (b1 = new.col1);
+   printf("Second rule completed...\n");
+   printf("Rules created...\n");
+
+   printf("Continuing...\n");
+
+   printf("Creating views...\n");
+   EXEC SQL CREATE VIEW qp315_view1 (v1,v2) as
+      SELECT col1,col2
+      FROM qp315_tbl1
+      WHERE col1 > 1;
+   printf("First view completed...\n");
+   EXEC SQL CREATE VIEW qp315_view2 (v3,v4) as
+      SELECT c1,c2
+      FROM qp315_tbl2
+      WHERE c1 > c2;
+   printf("Second view completed...\n");
+   EXEC SQL CREATE VIEW qp315_view3 (v5,v6) as
+      SELECT col1,col2
+      FROM qp315_tbl3
+      WHERE col1 < col2;
+   printf("Third view completed...\n");
+   EXEC SQL CREATE VIEW qp315_view4 (v7,v8,v9) as
+      SELECT qp315_tbl1.col1, qp315_tbl2.c2, qp315_tbl3.col2
+      FROM qp315_tbl1, qp315_tbl2, qp315_tbl3
+      WHERE (qp315_tbl1.col1 > 10 AND qp315_tbl2.c2 < 4 
+            AND qp315_tbl3.col2 > 20);
+   printf("Fourth view completed...\n");
+   printf("Views created...\n");
+
+   printf("Continuing...\n");
+
+   printf("Inserting rows into first table...\n");
+   EXEC SQL INSERT INTO qp315_tbl1 values(1,'test1');
+   EXEC SQL INSERT INTO qp315_tbl1 values(2,'test2');
+   EXEC SQL INSERT INTO qp315_tbl1 values(3,'test3');
+   printf("Insert completed...\n");
+   break;
+
+   case 3:
+   printf("Verification of Data\n"); 
+   printf("#\n"); 
+   printf("# Case 3: Verify that data in each table is correct.\n");
+   printf("#\n");
+   printf("Table 1 data...\n");
+   printf("|-----------|\n");
+   printf("|col1| col2 |\n");
+   EXEC SQL SELECT * INTO :x1, :x4 
+      FROM qp315_tbl1 order by 2, 1;
+   EXEC SQL BEGIN;
+      printf("|----|------|\n");
+      printf("|%4d|%s|\n",x1,x4);
+   EXEC SQL END;
+   printf("|-----------|\n");
+   printf("Table 2 data...\n");
+   printf("|---------|\n");
+   printf("|  c1|  c2|\n");
+   EXEC SQL SELECT * INTO :x1, :x2 
+      FROM qp315_tbl2 order by 1, 2;
+   EXEC SQL BEGIN;
+      printf("|----|----|\n");
+      printf("|%4d|%4d|\n",x1,x2);
+   EXEC SQL END;
+   printf("|---------|\n");
+   printf("Table 3 data...\n");
+   printf("|----------|\n");
+   printf("|col1| col2|\n");
+   EXEC SQL SELECT * INTO :x1, :x3 
+      FROM qp315_tbl3 order by 1, 2;
+   EXEC SQL BEGIN;
+      printf("|----|-----|\n");
+      printf("|%4d|%5.0f|\n",x1,x3);
+   EXEC SQL END;
+   printf("|----------|\n");
+   printf("Verification completed...\n");
+   break;
+
+   case 4:
+   printf("Testing Sequence Usability - Update, Delete, Insert\n");
+   printf("#\n");
+   printf("# Case 4: Do an update, delete, and insert of first table\n");
+   printf("#      to see what effect sequences have on other tables\n");
+   printf("#      with the rules and procedures.\n");
+   printf("#\n");
+   printf("Updating row in first table...\n");
+   EXEC SQL UPDATE qp315_tbl1 set col1=11 where col1=1;
+   printf("Update completed...\n");
+
+   printf("Continuing...\n");
+
+   printf("Deleting row in first table...\n");
+   EXEC SQL DELETE FROM qp315_tbl1 where col1=3;
+   printf("Delete completed...\n");
+
+   printf("Continuing...\n");
+
+   printf("Inserting new rows into first table...\n");
+   EXEC SQL INSERT INTO qp315_tbl1 values(4,'test4');
+   EXEC SQL INSERT INTO qp315_tbl1 values(5,'test5');
+   printf("Inserts completed...\n");
+   break;
+
+   case 5:
+   printf("Verification of Tables and Views\n");
+   printf("#\n");
+   printf("# Case 5: Verify effects of last use of sequences on all\n");
+   printf("#      tables and views.\n");
+   printf("#\n");
+   printf("Table 1 data...\n");
+   printf("|-----------|\n");
+   printf("|col1| col2 |\n");
+   EXEC SQL SELECT * INTO :x1, :x4 
+      FROM qp315_tbl1 order by 2, 1;
+   EXEC SQL BEGIN;
+      printf("|----|------|\n");
+      printf("|%4d|%s|\n",x1,x4);
+   EXEC SQL END;
+   printf("|-----------|\n");
+   printf("Table 2 data...\n");
+   printf("|---------|\n");
+   printf("|  c1|  c2|\n");
+   EXEC SQL SELECT * INTO :x1, :x2 
+      FROM qp315_tbl2 order by 1, 2;
+   EXEC SQL BEGIN;
+      printf("|----|----|\n");
+      printf("|%4d|%4d|\n",x1,x2);
+   EXEC SQL END;
+   printf("|---------|\n");
+   printf("Table 3 data...\n");
+   printf("|----------|\n");
+   printf("|col1| col2|\n");
+   EXEC SQL SELECT * INTO :x1, :x3 
+      FROM qp315_tbl3 order by 1, 2;
+   EXEC SQL BEGIN;
+      printf("|----|-----|\n");
+      printf("|%4d|%5.0f|\n",x1,x3);
+   EXEC SQL END;
+   printf("|----------|\n");
+   printf("View 1 data...\n");
+   printf("|-----------|\n");
+   printf("|  v1|    v2|\n");
+   EXEC SQL SELECT * INTO :x1, :x4 
+      FROM qp315_view1 order by 2, 1;
+   EXEC SQL BEGIN;
+      printf("|----|------|\n");
+      printf("|%4d|%s|\n",x1,x4);
+   EXEC SQL END;
+   printf("|-----------|\n");
+   printf("View 2 data...\n");
+   printf("|---------|\n");
+   printf("|  v3|  v4|\n");
+   EXEC SQL SELECT * INTO :x1, :x2 
+      FROM qp315_view2 order by 2, 1;
+   EXEC SQL BEGIN;
+      printf("|----|----|\n");
+      printf("|%4d|%4d|\n",x1,x2);
+   EXEC SQL END;
+   printf("|---------|\n");
+   printf("View 3 data...\n");
+   printf("|----------|\n");
+   printf("|  v5|   v6|\n");
+   EXEC SQL SELECT * INTO :x1, :x3 
+      FROM qp315_view3 order by 2, 1;
+   EXEC SQL BEGIN;
+      printf("|----|-----|\n");
+      printf("|%4d|%5.0f|\n",x1,x3);
+   EXEC SQL END;
+   printf("|----------|\n");
+   printf("View 4 data...\n");
+   printf("|---------------|\n");
+   printf("|  v7|  v8|   v9|\n");
+   printf("|----|----|-----|\n");
+   EXEC SQL SELECT * INTO :x1, :x2, :x3 
+      FROM qp315_view4 order by 1, 2, 3;
+   EXEC SQL BEGIN;
+      printf("|%4d|%4d|%5.0f|\n",x1,x2,x3);
+   EXEC SQL END;
+   printf("|---------------|\n");
+   printf("Verification completed...\n");
+   break;
+
+   case 6:
+   printf("Testing Sequence Usability - Insert/Update/Insert into View\n");
+   printf("#\n");
+   printf("# Case 6: Do an insert, update, and another insert into\n");
+   printf("#      first view to test effects of sequences with rules\n");
+   printf("#      and procedures.\n");
+   printf("#\n");
+   EXEC SQL SET AUTOCOMMIT OFF;
+   printf("Inserting row into first view using NEXTVAL...\n");
+   EXEC SQL INSERT INTO qp315_view1
+      VALUES (qp315_intseq2.nextval,'test7');
+   printf("Insert completed...\n");
+
+   printf("Continuing...\n");
+
+   printf("Updating row in first view using NEXTVAL...\n");
+   EXEC SQL UPDATE qp315_view1
+      SET v1 = qp315_intseq2.nextval
+      WHERE v2='test4';
+   printf("Update completed...\n");
+
+   printf("Continuing...\n");
+
+   printf("Insert another row using CURRVAL from int sequence...\n");
+   EXEC SQL INSERT INTO qp315_view1
+      VALUES (qp315_intseq2.currval, 'test8');
+   printf("Insert completed...\n");
+   EXEC SQL COMMIT;
+   break;
+
+   case 7:
+   printf("Testing Sequence Usability - Updates to 2nd View/Table\n");
+   printf("#\n");
+   printf("# Case 7: Do updates to 2nd view and 2nd table using NEXTVAL\n");
+   printf("#      from decimal sequence to test effect on other tables\n");
+   printf("#      and views.\n");
+   printf("#\n");
+   printf("Updating 2nd view using NEXTVAL from decimal sequence...\n");
+   EXEC SQL UPDATE qp315_view2
+      SET v4 = qp315_decseq2.nextval
+      WHERE v3=5;
+   printf("Update completed...\n");
+
+   printf("Continuing...\n");
+
+   printf("Updating 2nd table using NEXTVAL from decimal sequence...\n");
+   EXEC SQL UPDATE qp315_tbl2
+      SET c2 = qp315_decseq1.nextval
+      WHERE c1=2;
+   printf("Update completed...\n");
+   break;
+
+   case 8:
+   printf("Testing Sequence Usability - With Global Temporary Table\n");
+   printf("#\n");
+   printf("# Case 8: Test the use of sequences with creation, insert,\n");
+   printf("#      and update of a Global Temporary Table using both\n");
+   printf("#      NEXTVAL and CURRVAL options.\n");
+   printf("#\n");
+   EXEC SQL SET AUTOCOMMIT OFF;
+   printf("Creating a GTT using NEXTVAL of integer sequence...\n");
+   EXEC SQL DECLARE global temporary table session.qp315_tt1 (gtc1,gtc2) as
+      SELECT col2, qp315_intseq1.nextval
+      FROM qp315_tbl1 on commit
+      PRESERVE rows with norecovery,
+      PAGE_SIZE = 4096;
+   printf("Global Temporary Table completed...\n");
+
+   printf("Continuing...\n");
+
+   printf("Verification of data in GTT after create...\n");
+   printf("Global temp table data...\n");
+   printf("|-------------|\n");
+   printf("| gtc1 | gtc2 |\n");
+   EXEC SQL SELECT * INTO :x4, :x1 
+      FROM session.qp315_tt1 order by 1, 2;
+   EXEC SQL BEGIN;
+      printf("|------|------|\n");
+      printf("|%s|%6d|\n",x4,x1);
+   EXEC SQL END;
+   printf("|-------------|\n");
+   printf("Verification completed...\n");
+
+   printf("Continuing...\n");
+
+   printf("Inserting row into GTT using NEXTVAL from int seq...\n");
+   EXEC SQL INSERT INTO session.qp315_tt1
+      VALUES ('test9', qp315_intseq2.nextval);
+   printf("Insert completed...\n");
+
+   printf("Continuing...\n");
+
+   printf("Updating row in GTT using NEXTVAL from dec seq...\n");
+   EXEC SQL UPDATE session.qp315_tt1
+      SET gtc2 = qp315_decseq1.nextval
+      WHERE gtc1 = 'test2';
+   printf("Update completed...\n");
+
+   printf("Continuing...\n");
+
+   printf("Inserting row into GTT using CURRVAL from dec seq...\n");
+   EXEC SQL INSERT INTO session.qp315_tt1
+      VALUES ('test10', qp315_decseq1.currval);
+   printf("Insert completed...\n");
+
+   printf("Continuing...\n");
+
+   printf("Updating row in GTT using CURRVAL from int seq...\n");
+   EXEC SQL UPDATE session.qp315_tt1
+      SET gtc2 = qp315_intseq2.currval
+      WHERE gtc1 = 'test5';
+   printf("Update completed...\n");
+
+   printf("Do a final verification of data in GTT.\n");
+   printf("Global temp table data...\n");
+   printf("|-------------|\n");
+   printf("| gtc1 | gtc2 |\n");
+   EXEC SQL SELECT * INTO :x4, :x1 
+      FROM session.qp315_tt1 order by 1, 2;
+   EXEC SQL BEGIN;
+      printf("|------|------|\n");
+      printf("|%s|%6d|\n",x4,x1);
+   EXEC SQL END;
+   printf("|-------------|\n");
+   printf("Verification completed...\n");
+   return(0);
+   }
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc qp315_altseqtest.sc 
+<<
+ESQL qp315_altseqtest.sc:
+>>
+<<
+>>
+? sepcc qp315_altseqtest 
+<<
+>>
+<< IF (NT_GENERIC) 
+qp315_altseqtest.c
+>> 
+? seplnk qp315_altseqtest 
+<<
+>>
+? esqlc qp315_misctests.sc 
+<<
+ESQL qp315_misctests.sc:
+>>
+<<
+>>
+? sepcc qp315_misctests 
+<<
+>>
+<< IF (NT_GENERIC)
+qp315_misctests.c
+>>
+? seplnk qp315_misctests 
+<<
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 0 
+<<
+Setup for Testing
+#
+# Case 0: Drop all sequences and tables to clear database
+#      and recreate new sequences and tables.
+#
+Dropping sequences and tables...
+Continuing...
+Creating sequences...
+Sequences created...
+Continuing...
+Creating tables...
+Tables created...
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 1 
+<<
+Alter Sequences.
+#
+# Case 1: Alter integer and decimal sequences.
+#
+Now altering first integer sequence...
+Now altering first decimal sequence...
+Now altering second integer sequence...
+Now altering second decimal sequence...
+Alter sequences completed...
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 2 
+<<
+Testing Sequence Usability - Inserts
+#
+# Case 2: Test NEXTVAL option via table inserts.
+#
+Insert into table 1 - NEXTVAL of 1st integer sequence...
+Insert into table 1 - NEXTVAL of 2nd integer sequence...
+Insert into table 2 - NEXTVAL of 1st decimal sequence...
+Insert into table 2 - NEXTVAL of 2nd decimal sequence...
+Insert into table 1 - NEXTVAL of 1st integer sequence...
+Insert into table 1 - NEXTVAL of 2nd integer sequence...
+Insert into table 2 - NEXTVAL of 1st decimal sequence...
+Insert into table 2 - NEXTVAL of 2nd decimal sequence...
+Inserts completed...
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 3 
+<<
+Verification of Data
+#
+# Case 3: Verify that data in each table is correct.
+#
+Table 1 data...
+|----------|
+| col1|col2|
+|-----|----|
+|test1|   1|
+|-----|----|
+|test2|  10|
+|-----|----|
+|test3|   2|
+|-----|----|
+|test4|  20|
+|----------|
+Table 2 data...
+|----------|
+|   c1|  c2|
+|-----|----|
+|test1|1000|
+|-----|----|
+|test2|  10|
+|-----|----|
+|test3|1001|
+|-----|----|
+|test4|  20|
+|----------|
+Verification completed...
+Sequence Usability Test completed...
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 4 
+<<
+Testing Sequences Usability -  Updates
+#
+# Case 4: Testing NEXTVAL/CURRVAL options via
+#      table updates.
+#
+First do some additional sequence alters...
+Additional alters completed...
+Update table 1 with NEXTVAL from 1st integer sequence...
+Update table 1 with CURRVAL from 1st integer sequence...
+Update table 1 with NEXTVAL from 2nd integer sequence...
+Update table 1 with CURRVAL from 2nd integer sequence...
+Update table 2 with NEXTVAL from 1st decimal sequence...
+Update table 2 with CURRVAL from 1st decimal sequence...
+Update table 2 with NEXTVAL from 2nd decimal sequence...
+Update table 2 with CURRVAL from 2nd decimal sequence...
+Updates completed...
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 3 
+<<
+Verification of Data
+#
+# Case 3: Verify that data in each table is correct.
+#
+Table 1 data...
+|----------|
+| col1|col2|
+|-----|----|
+|test1|  21|
+|-----|----|
+|test2|  21|
+|-----|----|
+|test3| 210|
+|-----|----|
+|test4| 210|
+|----------|
+Table 2 data...
+|----------|
+|   c1|  c2|
+|-----|----|
+|test1|1100|
+|-----|----|
+|test2|1100|
+|-----|----|
+|test3| 210|
+|-----|----|
+|test4| 210|
+|----------|
+Verification completed...
+Sequence Usability Test completed...
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 5 
+<<
+Alters of Third Sequence
+#
+# Case 5: Now do several alters to the 3rd sequence.
+#
+Altering 3rd integer sequence...
+Alter sequences completed...
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 6 
+<<
+Testing Sequence Usability - Insert/Update
+#
+# Case 6: Testing NEXTVAL/CURRVAL option via
+#      table insert and update.
+#
+Insert into table 1 - NEXTVAL from 3rd integer sequence...
+Insert completed...
+Continuing...
+Update into table 1 - CURRVAL from 3rd integer sequence...
+Update completed...
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 7 
+<<
+Table 1 Data Verification
+#
+# Case 7: Verify data in table 1 is correct.
+#
+Table 1 data...
+|------------|
+| col1|  col2|
+|-----|------|
+|test1| 22000|
+|-----|------|
+|test2|    21|
+|-----|------|
+|test3|   210|
+|-----|------|
+|test3| 22000|
+|-----|------|
+|test4|   210|
+|------------|
+Verification completed...
+Sequence Usability Test completed...
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 8 
+<<
+Testing Sequence Usability - Insert
+#
+# Case 8: Create third test table using AS SELECT with
+#      NEXTVAL option and test sequence using the
+#      CURRVAL option.
+#
+Creating table...
+Table created...
+Continuing...
+Inserting row into table 3...
+Insert completed...
+>>
+? run qp315_altseqtest.exe SEPPARAMDB 9 
+<<
+Verification of Data
+#
+# Case 9: Verify data in table 3 is correct.
+#
+Table 3 data...
+|-------------------|
+| col1|  col2|  col3|
+|-----|------|------|
+|test1| 22000| 22001|
+|-----|------|------|
+|test1| 22000| 22005|
+|-----|------|------|
+|test2|    21| 22002|
+|-----|------|------|
+|test2|    21| 22005|
+|-----|------|------|
+|test3|   210| 22003|
+|-----|------|------|
+|test3|   210| 22005|
+|-----|------|------|
+|test3| 22000| 22005|
+|-----|------|------|
+|test3| 22000| 22005|
+|-----|------|------|
+|test4|   210| 22004|
+|-----|------|------|
+|test4|   210| 22005|
+|-------------------|
+Verification completed...
+Sequence Usability Test completed...
+>>
+? run qp315_misctests.exe SEPPARAMDB 0 
+<<
+PART 1: Setup for Testing - Dropping Objects
+#
+# Case 0: Drop all sequences, tables, and procedures
+#      to clear database
+#
+Dropping sequences, tables, and procedures...
+Drops completed...
+>>
+? run qp315_misctests.exe SEPPARAMDB 1 
+<<
+PART 2: Setup for Testing - Recreate Objects
+#
+# Case 1: Recreate new sequences, tables, and procedures.
+#
+Creating sequences...
+First sequence completed...
+Second sequence completed...
+Third sequence completed...
+Fourth sequence completed...
+Sequences created...
+Continuing...
+Creating tables...
+First table completed...
+Second table completed...
+Third table completed...
+Tables created...
+Continuing...
+Creating procedures...
+First procedure completed...
+Second procedure completed...
+Procedures created...
+>>
+? run qp315_misctests.exe SEPPARAMDB 2 
+<<
+PART 3: Setup for Testing - Create New Objects and
+        Insert Rows Into First Table
+#
+# Case 2: Create new rules and views and insert
+#      some test rows into first table.
+#
+Creating rules...
+First rule completed...
+Second rule completed...
+Rules created...
+Continuing...
+Creating views...
+First view completed...
+Second view completed...
+Third view completed...
+Fourth view completed...
+Views created...
+Continuing...
+Inserting rows into first table...
+Insert completed...
+>>
+? run qp315_misctests.exe SEPPARAMDB 3 
+<<
+Verification of Data
+#
+# Case 3: Verify that data in each table is correct.
+#
+Table 1 data...
+|-----------|
+|col1| col2 |
+|----|------|
+|   1|test1 |
+|----|------|
+|   2|test2 |
+|----|------|
+|   3|test3 |
+|-----------|
+Table 2 data...
+|---------|
+|  c1|  c2|
+|----|----|
+|   1|   1|
+|----|----|
+|   2|   2|
+|----|----|
+|   3|   3|
+|---------|
+Table 3 data...
+|----------|
+|col1| col2|
+|----|-----|
+|   1|    1|
+|----|-----|
+|   2|    6|
+|----|-----|
+|   3|   11|
+|----------|
+Verification completed...
+>>
+? run qp315_misctests.exe SEPPARAMDB 4 
+<<
+Testing Sequence Usability - Update, Delete, Insert
+#
+# Case 4: Do an update, delete, and insert of first table
+#      to see what effect sequences have on other tables
+#      with the rules and procedures.
+#
+Updating row in first table...
+Update completed...
+Continuing...
+Deleting row in first table...
+Delete completed...
+Continuing...
+Inserting new rows into first table...
+Inserts completed...
+>>
+? run qp315_misctests.exe SEPPARAMDB 5 
+<<
+Verification of Tables and Views
+#
+# Case 5: Verify effects of last use of sequences on all
+#      tables and views.
+#
+Table 1 data...
+|-----------|
+|col1| col2 |
+|----|------|
+|  11|test1 |
+|----|------|
+|   2|test2 |
+|----|------|
+|   4|test4 |
+|----|------|
+|   5|test5 |
+|-----------|
+Table 2 data...
+|---------|
+|  c1|  c2|
+|----|----|
+|   1|   1|
+|----|----|
+|   2|   2|
+|----|----|
+|   3|   3|
+|----|----|
+|   4|   4|
+|----|----|
+|   5|   5|
+|---------|
+Table 3 data...
+|----------|
+|col1| col2|
+|----|-----|
+|   1|    1|
+|----|-----|
+|   2|    6|
+|----|-----|
+|   3|   11|
+|----|-----|
+|   4|   16|
+|----|-----|
+|   5|   21|
+|----------|
+View 1 data...
+|-----------|
+|  v1|    v2|
+|----|------|
+|  11|test1 |
+|----|------|
+|   2|test2 |
+|----|------|
+|   4|test4 |
+|----|------|
+|   5|test5 |
+|-----------|
+View 2 data...
+|---------|
+|  v3|  v4|
+|---------|
+View 3 data...
+|----------|
+|  v5|   v6|
+|----|-----|
+|   2|    6|
+|----|-----|
+|   3|   11|
+|----|-----|
+|   4|   16|
+|----|-----|
+|   5|   21|
+|----------|
+View 4 data...
+|---------------|
+|  v7|  v8|   v9|
+|----|----|-----|
+|  11|   1|   21|
+|  11|   2|   21|
+|  11|   3|   21|
+|---------------|
+Verification completed...
+>>
+? run qp315_misctests.exe SEPPARAMDB 6 
+<<
+Testing Sequence Usability - Insert/Update/Insert into View
+#
+# Case 6: Do an insert, update, and another insert into
+#      first view to test effects of sequences with rules
+#      and procedures.
+#
+Inserting row into first view using NEXTVAL...
+Insert completed...
+Continuing...
+Updating row in first view using NEXTVAL...
+Update completed...
+Continuing...
+Insert another row using CURRVAL from int sequence...
+Insert completed...
+>>
+? run qp315_misctests.exe SEPPARAMDB 5 
+<<
+Verification of Tables and Views
+#
+# Case 5: Verify effects of last use of sequences on all
+#      tables and views.
+#
+Table 1 data...
+|-----------|
+|col1| col2 |
+|----|------|
+|  11|test1 |
+|----|------|
+|   2|test2 |
+|----|------|
+|  20|test4 |
+|----|------|
+|   5|test5 |
+|----|------|
+|  10|test7 |
+|----|------|
+|  20|test8 |
+|-----------|
+Table 2 data...
+|---------|
+|  c1|  c2|
+|----|----|
+|   1|   1|
+|----|----|
+|   2|   2|
+|----|----|
+|   3|   3|
+|----|----|
+|   4|   4|
+|----|----|
+|   5|   5|
+|----|----|
+|  10|   6|
+|----|----|
+|  20|   7|
+|----|----|
+|  20|   8|
+|---------|
+Table 3 data...
+|----------|
+|col1| col2|
+|----|-----|
+|   1|    1|
+|----|-----|
+|   2|    6|
+|----|-----|
+|   3|   11|
+|----|-----|
+|   4|   16|
+|----|-----|
+|   5|   21|
+|----|-----|
+|  10|   26|
+|----|-----|
+|  20|   31|
+|----|-----|
+|  20|   36|
+|----------|
+View 1 data...
+|-----------|
+|  v1|    v2|
+|----|------|
+|  11|test1 |
+|----|------|
+|   2|test2 |
+|----|------|
+|  20|test4 |
+|----|------|
+|   5|test5 |
+|----|------|
+|  10|test7 |
+|----|------|
+|  20|test8 |
+|-----------|
+View 2 data...
+|---------|
+|  v3|  v4|
+|----|----|
+|  10|   6|
+|----|----|
+|  20|   7|
+|----|----|
+|  20|   8|
+|---------|
+View 3 data...
+|----------|
+|  v5|   v6|
+|----|-----|
+|   2|    6|
+|----|-----|
+|   3|   11|
+|----|-----|
+|   4|   16|
+|----|-----|
+|   5|   21|
+|----|-----|
+|  10|   26|
+|----|-----|
+|  20|   31|
+|----|-----|
+|  20|   36|
+|----------|
+View 4 data...
+|---------------|
+|  v7|  v8|   v9|
+|----|----|-----|
+|  11|   1|   21|
+|  11|   1|   26|
+|  11|   1|   31|
+|  11|   1|   36|
+|  11|   2|   21|
+|  11|   2|   26|
+|  11|   2|   31|
+|  11|   2|   36|
+|  11|   3|   21|
+|  11|   3|   26|
+|  11|   3|   31|
+|  11|   3|   36|
+|  20|   1|   21|
+|  20|   1|   21|
+|  20|   1|   26|
+|  20|   1|   26|
+|  20|   1|   31|
+|  20|   1|   31|
+|  20|   1|   36|
+|  20|   1|   36|
+|  20|   2|   21|
+|  20|   2|   21|
+|  20|   2|   26|
+|  20|   2|   26|
+|  20|   2|   31|
+|  20|   2|   31|
+|  20|   2|   36|
+|  20|   2|   36|
+|  20|   3|   21|
+|  20|   3|   21|
+|  20|   3|   26|
+|  20|   3|   26|
+|  20|   3|   31|
+|  20|   3|   31|
+|  20|   3|   36|
+|  20|   3|   36|
+|---------------|
+Verification completed...
+>>
+? run qp315_misctests.exe SEPPARAMDB 7 
+<<
+Testing Sequence Usability - Updates to 2nd View/Table
+#
+# Case 7: Do updates to 2nd view and 2nd table using NEXTVAL
+#      from decimal sequence to test effect on other tables
+#      and views.
+#
+Updating 2nd view using NEXTVAL from decimal sequence...
+Update completed...
+Continuing...
+Updating 2nd table using NEXTVAL from decimal sequence...
+Update completed...
+>>
+? run qp315_misctests.exe SEPPARAMDB 5 
+<<
+Verification of Tables and Views
+#
+# Case 5: Verify effects of last use of sequences on all
+#      tables and views.
+#
+Table 1 data...
+|-----------|
+|col1| col2 |
+|----|------|
+|  11|test1 |
+|----|------|
+|   2|test2 |
+|----|------|
+|  20|test4 |
+|----|------|
+|   5|test5 |
+|----|------|
+|  10|test7 |
+|----|------|
+|  20|test8 |
+|-----------|
+Table 2 data...
+|---------|
+|  c1|  c2|
+|----|----|
+|   1|   1|
+|----|----|
+|   2|  41|
+|----|----|
+|   3|   3|
+|----|----|
+|   4|   4|
+|----|----|
+|   5|   5|
+|----|----|
+|  10|   6|
+|----|----|
+|  20|   7|
+|----|----|
+|  20|   8|
+|---------|
+Table 3 data...
+|----------|
+|col1| col2|
+|----|-----|
+|   1|    1|
+|----|-----|
+|   2|    6|
+|----|-----|
+|   3|   11|
+|----|-----|
+|   4|   16|
+|----|-----|
+|   5|   21|
+|----|-----|
+|  10|   26|
+|----|-----|
+|  20|   31|
+|----|-----|
+|  20|   36|
+|----------|
+View 1 data...
+|-----------|
+|  v1|    v2|
+|----|------|
+|  11|test1 |
+|----|------|
+|   2|test2 |
+|----|------|
+|  20|test4 |
+|----|------|
+|   5|test5 |
+|----|------|
+|  10|test7 |
+|----|------|
+|  20|test8 |
+|-----------|
+View 2 data...
+|---------|
+|  v3|  v4|
+|----|----|
+|  10|   6|
+|----|----|
+|  20|   7|
+|----|----|
+|  20|   8|
+|---------|
+View 3 data...
+|----------|
+|  v5|   v6|
+|----|-----|
+|   2|    6|
+|----|-----|
+|   3|   11|
+|----|-----|
+|   4|   16|
+|----|-----|
+|   5|   21|
+|----|-----|
+|  10|   26|
+|----|-----|
+|  20|   31|
+|----|-----|
+|  20|   36|
+|----------|
+View 4 data...
+|---------------|
+|  v7|  v8|   v9|
+|----|----|-----|
+|  11|   1|   21|
+|  11|   1|   26|
+|  11|   1|   31|
+|  11|   1|   36|
+|  11|   3|   21|
+|  11|   3|   26|
+|  11|   3|   31|
+|  11|   3|   36|
+|  20|   1|   21|
+|  20|   1|   21|
+|  20|   1|   26|
+|  20|   1|   26|
+|  20|   1|   31|
+|  20|   1|   31|
+|  20|   1|   36|
+|  20|   1|   36|
+|  20|   3|   21|
+|  20|   3|   21|
+|  20|   3|   26|
+|  20|   3|   26|
+|  20|   3|   31|
+|  20|   3|   31|
+|  20|   3|   36|
+|  20|   3|   36|
+|---------------|
+Verification completed...
+>>
+? run qp315_misctests.exe SEPPARAMDB 8 
+<<
+Testing Sequence Usability - With Global Temporary Table
+#
+# Case 8: Test the use of sequences with creation, insert,
+#      and update of a Global Temporary Table using both
+#      NEXTVAL and CURRVAL options.
+#
+Creating a GTT using NEXTVAL of integer sequence...
+Global Temporary Table completed...
+Continuing...
+Verification of data in GTT after create...
+Global temp table data...
+|-------------|
+| gtc1 | gtc2 |
+|------|------|
+|test1 |     9|
+|------|------|
+|test2 |    10|
+|------|------|
+|test4 |    11|
+|------|------|
+|test5 |    12|
+|------|------|
+|test7 |    13|
+|------|------|
+|test8 |    14|
+|-------------|
+Verification completed...
+Continuing...
+Inserting row into GTT using NEXTVAL from int seq...
+Insert completed...
+Continuing...
+Updating row in GTT using NEXTVAL from dec seq...
+Update completed...
+Continuing...
+Inserting row into GTT using CURRVAL from dec seq...
+Insert completed...
+Continuing...
+Updating row in GTT using CURRVAL from int seq...
+Update completed...
+Do a final verification of data in GTT.
+Global temp table data...
+|-------------|
+| gtc1 | gtc2 |
+|------|------|
+|test1 |     9|
+|------|------|
+|test10|    46|
+|------|------|
+|test2 |    46|
+|------|------|
+|test4 |    11|
+|------|------|
+|test5 |    30|
+|------|------|
+|test7 |    13|
+|------|------|
+|test8 |    14|
+|------|------|
+|test9 |    30|
+|-------------|
+Verification completed...
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop sequence qp315_intseq1\g 
+<<
+>>
+* drop sequence qp315_intseq2\g 
+<<
+>>
+* drop sequence qp315_intseq3\g 
+<<
+>>
+* drop sequence qp315_decseq1\g 
+<<
+>>
+* drop sequence qp315_decseq2\g 
+<<
+>>
+* drop qp315_tbl1\g 
+<<
+>>
+* drop qp315_tbl2\g 
+<<
+>>
+* drop qp315_tbl3\g 
+<<
+>>
+* drop procedure qp315_proc1\g 
+<<
+>>
+* drop procedure qp315_proc2\g 
+<<
+>>
+* \q 
+<<
+>>
+? delete qp315_altseqtest.c 
+<<
+file was deleted
+>>
+? delete qp315_altseqtest.o 
+<<
+~
+>>
+? delete qp315_altseqtest.obj 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete qp315_altseqtest.exe 
+<<
+file was deleted
+>>
+? delete qp315_misctests.c 
+<<
+file was deleted
+>>
+? delete qp315_misctests.o 
+<<
+~
+>>
+? delete qp315_misctests.obj 
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete qp315_misctests.exe 
+<<
+file was deleted
+>>
+
+
+Ending at: Tue Dec  9 15:28:25 2003

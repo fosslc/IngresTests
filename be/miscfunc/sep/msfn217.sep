@@ -1,0 +1,1148 @@
+/*
+        Test Name: msfn217.sep
+        Time: Wed Feb 09 07:07:50 2000
+
+        Test ID : chk_create_col_isam_ref.sep
+        Module  :
+        Purpose :
+        Input Files  :
+        Output Files :
+        Database     : SEPPARAMDB
+        Tables       :
+        Synopsis     : Test ANSI constraint definitions
+
+    History: 09-Feb-2000 (panyu01) Created.
+                         Changes needed after fixes for issues
+                         8728643, 8734064
+             27-Mar-2000 (sarjo01) Cleanup.
+	25-Jul-2001	(rogch01)
+		Stop ignoring failed connections.
+*/
+? fill sedfile.cmds
+!!
+s/$t_con_r*/&__ERROR/g;s/__ERROR.*/ Warning message/g
+!!
+? sepset sed sedfile.cmds
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table t_const1;\g 
+<<
+~
+>>
+* drop table t_const2;\g 
+<<
+~
+>>
+* create table t_const1 (col1 int not null unique, col2 char(8)) with location=(ii_u-
+ser1, ii_user2);\g 
+<<
+
+>>
+* insert into t_const1 values (1, 'one');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const1 values (2, 'two');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const1 values (3, 'three');\g 
+<<
+
+(1 row)
+>>
+* select * from t_const1 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|one     |
+|            2|two     |
+|            3|three   |
++-------------+--------+
+(3 rows)
+>>
+* commit;\g 
+<<
+~
+>>
+* create table t_const2 (col1 int references t_const1(col1) on delete set null with -
+(index=idx_t_const02, structure=isam, fillfactor=1, allocation=4, extend=1, location-
+=(ii_index1, ii_index2)), col2 varchar(8));\g 
+<<
+
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (2, 'second');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (3, 'third');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (4, 'fourth');\g 
+<<
+
+E_US1906 Cannot INSERT into table '"t_const2"' because the values do not
+    match those in table '"t_const1"' (violation of REFERENTIAL constraint
+    '"$t_con_r0000086000000000"').
+    (Tue Feb 29 09:01:09 2000)
+
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (2, 'second');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (3, 'third');\g 
+<<
+
+(1 row)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|first   |
+|            1|first   |
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(6 rows)
+>>
+* commit;\g 
+<<
+~
+>>
+* select col1 from idx_t_const02 order by col1;\g 
+<<
+
+
++-------------+
+|col1         |
++-------------+
+|            1|
+|            1|
+|            2|
+|            2|
+|            3|
+|            3|
++-------------+
+(6 rows)
+>>
+* select constraint_type from iiconstraints where table_name='t_const2';\g 
+<<
+
+
++------+
+|constr|
++------+
+|R     |
++------+
+(1 row)
+>>
+* select table_name, storage_structure, location_name, multi_locations from iitables-
+ where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+----------------+--------------------------------+-
+------+
+|table_name                      |storage_structur|location_name                   |-
+multi_|
++--------------------------------+----------------+--------------------------------+-
+------+
+|idx_t_const02                   |ISAM            |ii_index1                       |-
+Y     |
++--------------------------------+----------------+--------------------------------+-
+------+
+(1 row)
+>>
+* select location_name from iimulti_locations where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+
+|location_name                   |
++--------------------------------+
+|ii_index2                       |
++--------------------------------+
+(1 row)
+>>
+* select table_name,table_ifillpct, table_dfillpct, table_lfillpct, table_minpages f-
+rom iitables where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+------+------+------+-------------+
+|table_name                      |table_|table_|table_|table_minpage|
++--------------------------------+------+------+------+-------------+
+|idx_t_const02                   |   100|     1|    70|            0|
++--------------------------------+------+------+------+-------------+
+(1 row)
+>>
+* select table_name, table_maxpages, unique_scope, allocation_size, extend_size from-
+ iitables where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+-------------+------+-------------+-------------+
+|table_name                      |table_maxpage|unique|allocation_si|extend_size  |
++--------------------------------+-------------+------+-------------+-------------+
+|idx_t_const02                   |            0|      |           16|           16|
++--------------------------------+-------------+------+-------------+-------------+
+(1 row)
+>>
+* commit;\g 
+<<
+~
+>>
+* delete from t_const1 where col1=1;\g 
+<<
+
+(1 row)
+>>
+* select * from t_const1 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            2|two     |
+|            3|three   |
++-------------+--------+
+(2 rows)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
+|             |first   |
+|             |first   |
++-------------+--------+
+(6 rows)
+>>
+* insert into t_const1 values (1, 'one');\g 
+<<
+
+(1 row)
+>>
+* select * from t_const1 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|one     |
+|            2|two     |
+|            3|three   |
++-------------+--------+
+(3 rows)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
+|             |first   |
+|             |first   |
++-------------+--------+
+(6 rows)
+>>
+* update t_const2 set col1=1 where col2='first';\g 
+<<
+
+(2 rows)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|first   |
+|            1|first   |
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(6 rows)
+>>
+* drop table t_const2;\g 
+<<
+~
+>>
+* create table t_const2 (col1 int references t_const1(col1) on update restrict with -
+(index=idx_t_const02, structure=isam, fillfactor=50, allocation=100, extend=10, loca-
+tion=(ii_index1, ii_index2)), col2 varchar(8));\g 
+<<
+
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (2, 'second');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (3, 'third');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (4, 'fourth');\g 
+<<
+
+E_US1906 Cannot INSERT into table '"t_const2"' because the values do not
+    match those in table '"t_const1"' (violation of REFERENTIAL constraint
+    '"$t_con_r0000086b00000000"').
+    (Tue Feb 29 09:08:04 2000)
+
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (2, 'second');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (3, 'third');\g 
+<<
+
+(1 row)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|first   |
+|            1|first   |
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(6 rows)
+>>
+* commit;\g 
+<<
+~
+>>
+* select col1 from idx_t_const02 order by col1;\g 
+<<
+
+
++-------------+
+|col1         |
++-------------+
+|            1|
+|            1|
+|            2|
+|            2|
+|            3|
+|            3|
++-------------+
+(6 rows)
+>>
+* select constraint_type from iiconstraints where table_name='t_const2';\g 
+<<
+
+
++------+
+|constr|
++------+
+|R     |
++------+
+(1 row)
+>>
+* select table_name, storage_structure, location_name, multi_locations from iitables-
+ where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+----------------+--------------------------------+-
+------+
+|table_name                      |storage_structur|location_name                   |-
+multi_|
++--------------------------------+----------------+--------------------------------+-
+------+
+|idx_t_const02                   |ISAM            |ii_index1                       |-
+Y     |
++--------------------------------+----------------+--------------------------------+-
+------+
+(1 row)
+>>
+* select location_name from iimulti_locations where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+
+|location_name                   |
++--------------------------------+
+|ii_index2                       |
++--------------------------------+
+(1 row)
+>>
+* select table_name,table_ifillpct, table_dfillpct, table_lfillpct, table_minpages f-
+rom iitables where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+------+------+------+-------------+
+|table_name                      |table_|table_|table_|table_minpage|
++--------------------------------+------+------+------+-------------+
+|idx_t_const02                   |   100|    50|    70|            0|
++--------------------------------+------+------+------+-------------+
+(1 row)
+>>
+* select table_name, table_maxpages, unique_scope, allocation_size, extend_size from-
+ iitables where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+-------------+------+-------------+-------------+
+|table_name                      |table_maxpage|unique|allocation_si|extend_size  |
++--------------------------------+-------------+------+-------------+-------------+
+|idx_t_const02                   |            0|      |          112|           16|
++--------------------------------+-------------+------+-------------+-------------+
+(1 row)
+>>
+* commit;\g 
+<<
+~
+>>
+* update t_const1 set col1=4 where col2='one';\g 
+<<
+
+E_US1911 Cannot DELETE/UPDATE table '"t_const1"' because the values are
+    still used in table '"t_const2"' (violation of REFERENTIAL constraint
+    '"$t_con_r0000086b00000000"' with RESTRICT referential action).
+    (Tue Feb 29 09:10:29 2000)
+
+>>
+* select * from t_const1 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|one     |
+|            2|two     |
+|            3|three   |
++-------------+--------+
+(3 rows)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|first   |
+|            1|first   |
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(6 rows)
+>>
+* drop table t_const2;\g 
+<<
+~
+>>
+* commit;\g 
+<<
+~
+>>
+* create table t_const2 (col1 int references t_const1(col1) on update cascade with (-
+index=idx_t_const02, structure=isam, fillfactor=100, allocation=100, extend=10, loca-
+tion=(ii_index1, ii_index2)), col2 varchar(8));\g 
+<<
+
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (2, 'second');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (3, 'third');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (4, 'fourth');\g 
+<<
+
+E_US1906 Cannot INSERT into table '"t_const2"' because the values do not
+    match those in table '"t_const1"' (violation of REFERENTIAL constraint
+    '"$t_con_r0000087600000000"').
+    (Tue Feb 29 09:12:31 2000)
+
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (2, 'second');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (3, 'third');\g 
+<<
+
+(1 row)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|first   |
+|            1|first   |
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(6 rows)
+>>
+* commit;\g 
+<<
+~
+>>
+* select col1 from idx_t_const02 order by col1;\g 
+<<
+
+
++-------------+
+|col1         |
++-------------+
+|            1|
+|            1|
+|            2|
+|            2|
+|            3|
+|            3|
++-------------+
+(6 rows)
+>>
+* select constraint_type from iiconstraints where table_name='t_const2';\g 
+<<
+
+
++------+
+|constr|
++------+
+|R     |
++------+
+(1 row)
+>>
+* select table_name, storage_structure, location_name, multi_locations from iitables-
+ where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+----------------+--------------------------------+-
+------+
+|table_name                      |storage_structur|location_name                   |-
+multi_|
++--------------------------------+----------------+--------------------------------+-
+------+
+|idx_t_const02                   |ISAM            |ii_index1                       |-
+Y     |
++--------------------------------+----------------+--------------------------------+-
+------+
+(1 row)
+>>
+* select location_name from iimulti_locations where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+
+|location_name                   |
++--------------------------------+
+|ii_index2                       |
++--------------------------------+
+(1 row)
+>>
+* select table_name,table_ifillpct, table_dfillpct, table_lfillpct, table_minpages f-
+rom iitables where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+------+------+------+-------------+
+|table_name                      |table_|table_|table_|table_minpage|
++--------------------------------+------+------+------+-------------+
+|idx_t_const02                   |   100|   100|    70|            0|
++--------------------------------+------+------+------+-------------+
+(1 row)
+>>
+* select table_name, table_maxpages, unique_scope, allocation_size, extend_size from-
+ iitables where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+-------------+------+-------------+-------------+
+|table_name                      |table_maxpage|unique|allocation_si|extend_size  |
++--------------------------------+-------------+------+-------------+-------------+
+|idx_t_const02                   |            0|      |          112|           16|
++--------------------------------+-------------+------+-------------+-------------+
+(1 row)
+>>
+* commit;\g 
+<<
+~
+>>
+* update t_const1 set col1=4 where col2='one';\g 
+<<
+
+(1 row)
+>>
+* select * from t_const1 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            2|two     |
+|            3|three   |
+|            4|one     |
++-------------+--------+
+(3 rows)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
+|            4|first   |
+|            4|first   |
++-------------+--------+
+(6 rows)
+>>
+* drop table t_const2;\g 
+<<
+~
+>>
+* update t_const1 set col1=1 where col2='one';\g 
+<<
+
+(1 row)
+>>
+* select * from t_const1 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|one     |
+|            2|two     |
+|            3|three   |
++-------------+--------+
+(3 rows)
+>>
+* commit;\g 
+<<
+~
+>>
+* create table t_const2 (col1 int references t_const1(col1) on delete cascade with (-
+index=idx_t_const02, structure=isam, fillfactor=100, allocation=500, extend=1008, -
+location=(ii_index1, ii_index2)), col2 varchar(8));\g 
+<<
+
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (2, 'second');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (3, 'third');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (4, 'fourth');\g 
+<<
+
+E_US1906 Cannot INSERT into table '"t_const2"' because the values do not
+    match those in table '"t_const1"' (violation of REFERENTIAL constraint
+    '"$t_con_r0000088c00000000"').
+    (Tue Feb 29 09:19:00 2000)
+
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (2, 'second');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (3, 'third');\g 
+<<
+
+(1 row)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|first   |
+|            1|first   |
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(6 rows)
+>>
+* commit;\g 
+<<
+~
+>>
+* select col1 from idx_t_const02 order by col1;\g 
+<<
+
+
++-------------+
+|col1         |
++-------------+
+|            1|
+|            1|
+|            2|
+|            2|
+|            3|
+|            3|
++-------------+
+(6 rows)
+>>
+* select constraint_type from iiconstraints where table_name='t_const2';\g 
+<<
+
+
++------+
+|constr|
++------+
+|R     |
++------+
+(1 row)
+>>
+* select table_name, storage_structure, location_name, multi_locations from iitables-
+ where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+----------------+--------------------------------+-
+------+
+|table_name                      |storage_structur|location_name                   |-
+multi_|
++--------------------------------+----------------+--------------------------------+-
+------+
+|idx_t_const02                   |ISAM            |ii_index1                       |-
+Y     |
++--------------------------------+----------------+--------------------------------+-
+------+
+(1 row)
+>>
+* select location_name from iimulti_locations where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+
+|location_name                   |
++--------------------------------+
+|ii_index2                       |
++--------------------------------+
+(1 row)
+>>
+* select table_name,table_ifillpct, table_dfillpct, table_lfillpct, table_minpages f-
+rom iitables where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+------+------+------+-------------+
+|table_name                      |table_|table_|table_|table_minpage|
++--------------------------------+------+------+------+-------------+
+|idx_t_const02                   |   100|   100|    70|            0|
++--------------------------------+------+------+------+-------------+
+(1 row)
+>>
+* select table_name, table_maxpages, unique_scope, allocation_size, extend_size from-
+ iitables where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+-------------+------+-------------+-------------+
+|table_name                      |table_maxpage|unique|allocation_si|extend_size  |
++--------------------------------+-------------+------+-------------+-------------+
+|idx_t_const02                   |            0|      |          512|         1008|
++--------------------------------+-------------+------+-------------+-------------+
+(1 row)
+>>
+* commit;\g 
+<<
+~
+>>
+* delete from t_const1 where col2='one';\g 
+<<
+
+(1 row)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(4 rows)
+>>
+* select * from t_const1 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            2|two     |
+|            3|three   |
++-------------+--------+
+(2 rows)
+>>
+* insert into t_const1 values (1, 'one');\g 
+<<
+
+(1 row)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(4 rows)
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|first   |
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(5 rows)
+>>
+* drop table t_const2;\g 
+<<
+~
+>>
+* commit;\g 
+<<
+~
+>>
+* create table t_const2 (col1 int references t_const1(col1) on delete restrict with -
+(index=idx_t_const02, structure=isam, fillfactor=100, allocation=100, extend=10, loc-
+ation=(ii_index1, ii_index2)), col2 varchar(8));\g 
+<<
+
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (2, 'second');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (3, 'third');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (4, 'fourth');\g 
+<<
+
+E_US1906 Cannot INSERT into table '"t_const2"' because the values do not
+    match those in table '"t_const1"' (violation of REFERENTIAL constraint
+    '"$t_con_r0000089700000000"').
+    (Tue Feb 29 09:26:01 2000)
+
+>>
+* insert into t_const2 values (1, 'first');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (2, 'second');\g 
+<<
+
+(1 row)
+>>
+* insert into t_const2 values (3, 'third');\g 
+<<
+
+(1 row)
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|first   |
+|            1|first   |
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(6 rows)
+>>
+* commit;\g 
+<<
+~
+>>
+* select col1 from idx_t_const02 order by col1;\g 
+<<
+
+
++-------------+
+|col1         |
++-------------+
+|            1|
+|            1|
+|            2|
+|            2|
+|            3|
+|            3|
++-------------+
+(6 rows)
+>>
+* select constraint_type from iiconstraints where table_name='t_const2';\g 
+<<
+
+
++------+
+|constr|
++------+
+|R     |
++------+
+(1 row)
+>>
+* select table_name, storage_structure, location_name, multi_locations from iitables-
+ where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+----------------+--------------------------------+-
+------+
+|table_name                      |storage_structur|location_name                   |-
+multi_|
++--------------------------------+----------------+--------------------------------+-
+------+
+|idx_t_const02                   |ISAM            |ii_index1                       |-
+Y     |
++--------------------------------+----------------+--------------------------------+-
+------+
+(1 row)
+>>
+* select location_name from iimulti_locations where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+
+|location_name                   |
++--------------------------------+
+|ii_index2                       |
++--------------------------------+
+(1 row)
+>>
+* select table_name,table_ifillpct, table_dfillpct, table_lfillpct, table_minpages f-
+rom iitables where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+------+------+------+-------------+
+|table_name                      |table_|table_|table_|table_minpage|
++--------------------------------+------+------+------+-------------+
+|idx_t_const02                   |   100|   100|    70|            0|
++--------------------------------+------+------+------+-------------+
+(1 row)
+>>
+* select table_name, table_maxpages, unique_scope, allocation_size, extend_size from-
+ iitables where table_name='idx_t_const02';\g 
+<<
+
+
++--------------------------------+-------------+------+-------------+-------------+
+|table_name                      |table_maxpage|unique|allocation_si|extend_size  |
++--------------------------------+-------------+------+-------------+-------------+
+|idx_t_const02                   |            0|      |          112|           16|
++--------------------------------+-------------+------+-------------+-------------+
+(1 row)
+>>
+* commit;\g 
+<<
+~
+>>
+* delete from t_const1 where col2='one';\g 
+<<
+
+E_US1911 Cannot DELETE/UPDATE table '"t_const1"' because the values are
+    still used in table '"t_const2"' (violation of REFERENTIAL constraint
+    '"$t_con_r0000089700000000"' with RESTRICT referential action).
+    (Tue Feb 29 09:28:08 2000)
+
+>>
+* select * from t_const2 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|first   |
+|            1|first   |
+|            2|second  |
+|            2|second  |
+|            3|third   |
+|            3|third   |
++-------------+--------+
+(6 rows)
+>>
+* select * from t_const1 order by col1;\g 
+<<
+
+
++-------------+--------+
+|col1         |col2    |
++-------------+--------+
+|            1|one     |
+|            2|two     |
+|            3|three   |
++-------------+--------+
+(3 rows)
+>>
+* drop table t_const2;\g 
+<<
+~
+>>
+* drop table t_const1;\g 
+<<
+~
+>>
+* \q 
+<<
+~
+>>
+? unsepset sed
+<<
+>>
+
+
+Ending at: Tue Feb 29 09:29:05 2000

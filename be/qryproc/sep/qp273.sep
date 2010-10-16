@@ -1,0 +1,379 @@
+/*
+	Test Name: qp273.sep
+	Time: Mon Mar 24 11:53:51 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :	create.sql, update.sql, pro1.sql, pro2.sql,
+			rule1, rule2, rule3, b80988.runme
+	Output Files :
+	Database     :	SEPPARAMDB
+	Tables       :	t1
+	Synopsis     :	When the execute procedure parameter list of a
+			statement level rule definition contains 
+			parameters don't match the "set of" list of
+			the corresponding procedure declaration, error
+			msg E_OP08B1 should be correctly generated
+			instead of E_AD1012.
+			(bug 80988)
+
+ History: 24-Mar-1997	(cheis01)	Created
+*/
+? fill create.sql 
+!!
+create table t1 (enum int, emp varchar(10), age int, addr varchar(15))
+	with page_size=2048\p\g
+insert into t1 values (1, 'aaaaaa', 1, 'AAAAAAA')\p\g
+insert into t1 values (2, 'bbbb', 2, 'BBBBBBBBB')\p\g
+!!
+? fill update.sql 
+!!
+update t1 set addr='Islandia' where emp='aaaaaa'\p\g
+update t1 set age=38, addr='Kew Garden' where enum=2\p\g
+update t1 set emp='Alan' where addr='Islandia'\p\g
+update t1 set age=100, addr='Fresh Meadow' where enum=1\p\g
+update t1 set enum=9 where age=38\p\g
+update t1 set emp='Bill', addr='Great Neck' where emp='bbbb'\p\g
+!!
+? fill pro1.sql 
+!!
+/*
+procedure associated with STATEMENT level rule
+*/
+create procedure p1 (tt1 set of (enum integer, addr varchar(13))) as
+declare name	varchar(10) not null;
+	addr	varchar(20) not null;
+begin
+	select emp into name from t1 
+	where enum in (select enum from tt1 where tt1.enum=t1.enum);
+	select addr into addr from tt1;
+	message name; message addr;
+	message 'table t1 is being updated.';
+end;
+\p\g
+!!
+? fill pro2.sql 
+!!
+/*
+procedure associated with ROW level rule
+*/
+create procedure p1 (enum integer, addr varchar(13) not null) as
+declare name	varchar(10) not null;
+begin
+	select emp into name from t1 
+	where enum = :enum;
+	message name; message :addr;
+	message 'table t1 is being updated.';
+end;
+\p\g
+!!
+? fill rule1 
+!!
+/*
+STATEMENT rule;
+parameters correspond to procedure.
+*/
+create rule r1 after update of t1 for each statement 
+execute procedure p1 (enum=new.enum, addr=new.addr)\p\g
+!!
+? fill rule2 
+!!
+/*
+STATEMENT rule;
+parameters' names DO NOT correspond to procedure.
+*/
+create rule r1 after update of t1 for each statement 
+execute procedure p1 (age=new.age, emp=new.emp)\p\g
+!!
+? fill rule3 
+!!
+/*
+ROW level rule, as an sample;
+parameters' names DO NOT correspond to procedure.
+*/
+create rule r1 after update of t1
+execute procedure p1 (addr=new.addr, age=new.age)\p\g
+!!
+? fill b80988.runme 
+!!
+\i create.sql
+
+select * from t1\p\g
+
+\i pro1.sql
+
+\i rule1
+
+\i update.sql
+
+select * from t1\p\g
+
+drop table t1\p\g
+
+\i create.sql
+
+\i rule2
+
+\i update.sql
+
+select * from t1\p\g
+
+drop table t1\p\g
+
+drop procedure p1\p\g
+
+\i create.sql
+
+\i pro2.sql
+
+\i rule3
+
+\i update.sql
+
+select * from t1\p\g
+
+drop rule r1\p\g
+drop procedure p1\p\g
+drop table t1\p\g\q
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop rule r1\g 
+<<
+~
+>>
+* drop procedure p1\g 
+<<
+~
+>>
+* drop table t1\g 
+<<
+~
+>>
+* \i b80988.runme 
+<<
+ 
+create table t1 (enum int, emp varchar(10), age int, addr varchar(15))
+	with page_size=2048
+insert into t1 values (1, 'aaaaaa', 1, 'AAAAAAA')
+(1 row)
+insert into t1 values (2, 'bbbb', 2, 'BBBBBBBBB')
+(1 row)
+
+select * from t1
+
++-------------+----------+-------------+---------------+
+|enum         |emp       |age          |addr           |
++-------------+----------+-------------+---------------+
+|            1|aaaaaa    |            1|AAAAAAA        |
+|            2|bbbb      |            2|BBBBBBBBB      |
++-------------+----------+-------------+---------------+
+(2 rows)
+
+/*
+procedure associated with STATEMENT level rule
+*/
+create procedure p1 (tt1 set of (enum integer, addr varchar(13))) as
+declare name	varchar(10) not null;
+	addr	varchar(20) not null;
+begin
+	select emp into name from t1 
+	where enum in (select enum from tt1 where tt1.enum=t1.enum);
+	select addr into addr from tt1;
+	message name; message addr;
+	message 'table t1 is being updated.';
+end;
+
+/*
+STATEMENT rule;
+parameters correspond to procedure.
+*/
+create rule r1 after update of t1 for each statement 
+execute procedure p1 (enum=new.enum, addr=new.addr)
+
+update t1 set addr='Islandia' where emp='aaaaaa'
+MESSAGE 0: aaaaaa
+MESSAGE 0: Islandia
+MESSAGE 0: table t1 is being updated.
+(1 row)
+update t1 set age=38, addr='Kew Garden' where enum=2
+MESSAGE 0: bbbb
+MESSAGE 0: Kew Garden
+MESSAGE 0: table t1 is being updated.
+(1 row)
+update t1 set emp='Alan' where addr='Islandia'
+MESSAGE 0: Alan
+MESSAGE 0: Islandia
+MESSAGE 0: table t1 is being updated.
+(1 row)
+update t1 set age=100, addr='Fresh Meadow' where enum=1
+MESSAGE 0: Alan
+MESSAGE 0: Fresh Meadow
+MESSAGE 0: table t1 is being updated.
+(1 row)
+update t1 set enum=9 where age=38
+MESSAGE 0: bbbb
+MESSAGE 0: Kew Garden
+MESSAGE 0: table t1 is being updated.
+(1 row)
+update t1 set emp='Bill', addr='Great Neck' where emp='bbbb'
+MESSAGE 0: Bill
+MESSAGE 0: Great Neck
+MESSAGE 0: table t1 is being updated.
+(1 row)
+
+select * from t1
+
++-------------+----------+-------------+---------------+
+|enum         |emp       |age          |addr           |
++-------------+----------+-------------+---------------+
+|            1|Alan      |          100|Fresh Meadow   |
+|            9|Bill      |           38|Great Neck     |
++-------------+----------+-------------+---------------+
+(2 rows)
+
+drop table t1
+
+create table t1 (enum int, emp varchar(10), age int, addr varchar(15))
+	with page_size=2048
+insert into t1 values (1, 'aaaaaa', 1, 'AAAAAAA')
+(1 row)
+insert into t1 values (2, 'bbbb', 2, 'BBBBBBBBB')
+(1 row)
+
+/*
+STATEMENT rule;
+parameters' names DO NOT correspond to procedure.
+*/
+create rule r1 after update of t1 for each statement 
+execute procedure p1 (age=new.age, emp=new.emp)
+
+update t1 set addr='Islandia' where emp='aaaaaa'
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Mon Mar 24 12:14:33 1997)
+
+update t1 set age=38, addr='Kew Garden' where enum=2
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Mon Mar 24 12:14:33 1997)
+
+update t1 set emp='Alan' where addr='Islandia'
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Mon Mar 24 12:14:33 1997)
+
+update t1 set age=100, addr='Fresh Meadow' where enum=1
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Mon Mar 24 12:14:33 1997)
+
+update t1 set enum=9 where age=38
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Mon Mar 24 12:14:33 1997)
+
+update t1 set emp='Bill', addr='Great Neck' where emp='bbbb'
+E_OP08B1 The database procedure parameter 'emp' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Mon Mar 24 12:14:33 1997)
+
+
+select * from t1
+
++-------------+----------+-------------+---------------+
+|enum         |emp       |age          |addr           |
++-------------+----------+-------------+---------------+
+|            1|aaaaaa    |            1|AAAAAAA        |
+|            2|bbbb      |            2|BBBBBBBBB      |
++-------------+----------+-------------+---------------+
+(2 rows)
+
+drop table t1
+
+drop procedure p1
+
+create table t1 (enum int, emp varchar(10), age int, addr varchar(15))
+	with page_size=2048
+insert into t1 values (1, 'aaaaaa', 1, 'AAAAAAA')
+(1 row)
+insert into t1 values (2, 'bbbb', 2, 'BBBBBBBBB')
+(1 row)
+
+/*
+procedure associated with ROW level rule
+*/
+create procedure p1 (enum integer, addr varchar(13) not null) as
+declare name	varchar(10) not null;
+begin
+	select emp into name from t1 
+	where enum = :enum;
+	message name; message :addr;
+	message 'table t1 is being updated.';
+end;
+
+/*
+ROW level rule, as an sample;
+parameters' names DO NOT correspond to procedure.
+*/
+create rule r1 after update of t1
+execute procedure p1 (addr=new.addr, age=new.age)
+
+update t1 set addr='Islandia' where emp='aaaaaa'
+E_QE0123 The database procedure parameter 'age' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Mon Mar 24 12:14:35 1997)
+
+update t1 set age=38, addr='Kew Garden' where enum=2
+E_QE0123 The database procedure parameter 'age' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Mon Mar 24 12:14:35 1997)
+
+update t1 set emp='Alan' where addr='Islandia'
+(0 rows)
+update t1 set age=100, addr='Fresh Meadow' where enum=1
+E_QE0123 The database procedure parameter 'age' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Mon Mar 24 12:14:36 1997)
+
+update t1 set enum=9 where age=38
+(0 rows)
+update t1 set emp='Bill', addr='Great Neck' where emp='bbbb'
+E_QE0123 The database procedure parameter 'age' is invalid. The parameter
+    name does not exist in the procedure referenced by an EXECUTE PROCEDURE
+    statement or database rule invocation.
+    (Mon Mar 24 12:14:36 1997)
+
+
+select * from t1
+
++-------------+----------+-------------+---------------+
+|enum         |emp       |age          |addr           |
++-------------+----------+-------------+---------------+
+|            1|aaaaaa    |            1|AAAAAAA        |
+|            2|bbbb      |            2|BBBBBBBBB      |
++-------------+----------+-------------+---------------+
+(2 rows)
+
+drop rule r1
+drop procedure p1
+drop table t1
+>>
+
+
+Ending at: Mon Mar 24 12:14:46 1997

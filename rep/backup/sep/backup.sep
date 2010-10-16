@@ -1,0 +1,1370 @@
+/*
+	Test Name: backup.sep
+	Time: Tue Feb 18 12:34:33 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:	runrep.opt1, runrep.opt2, distserv.opt, 
+			insert.qry, delete.qry, update.qry.  
+	Purpose	:	Using different database types to test
+			the Central-to-Backup(Figure 2-6 in User Guide).
+	Input Files  :
+	Output Files :
+	Database     :	repdb1, repdb2, repdb3.
+	Tables       :	emp, dependents
+	Synopsis     :	Created one source database(repdb1) and two
+			target databases(one is protected read, the
+			other one is unprotected read).  Configure
+			and do the different tests(insert, delete 
+			and update).
+
+ History: 18-Feb-1997	(li$to01)	Created
+	  05-Oct-1998	(kinte01)	Modify to support VMS
+	  08-dec-1998	(nanpr01)	Removed imagerep.
+	20-May-1999 (abbjo03)
+		Replace DD_RSERVERS by its default. Use default runrepl.opts.
+		Remove unnecessary ddmovcfg. Replace ddgenrul by repcfg.
+          04-04-2003    (madsu02) 
+	                            rpserver command on VMS displays process
+				    started information,  edited sep test
+				    to ignore the results.
+	24-Apr-2007	(boija02) Adding -TPC1 for cluster portability
+*/
+? fill runrep.opt1 
+!!
+-SVR1
+-IDBreplnode::repdb2
+-OWNtestenv
+-TPC1
+!!
+? fill runrep.opt2 
+!!
+-SVR2
+-IDBreplnode::repdb1
+-OWNtestenv
+-TPC1
+!!
+? cp runrep.opt1 @file(ii_system,ingres,rep,servers,server1,runrepl.opt) 
+<<
+>>
+? cp runrep.opt2 @file(ii_system,ingres,rep,servers,server2,runrepl.opt) 
+<<
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* insert into dd_databases values(10,'replnode','repdb1',' ','ingres',' ',1,' ','Loc-
+al Database')\g 
+<<
+(1 row)
+>>
+* insert into dd_databases values(20,'replnode','repdb2',' ','ingres',' ',0,' ','Rem-
+ote Database Protected Read')\g 
+<<
+(1 row)
+>>
+* insert into dd_databases values(30,'replnode','repdb3',' ','ingres',' ',0,' ','Rem-
+ote Database Unprotected Read')\g
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (10,0,1,1-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (20,0,2,2-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (10,10,20,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_tables(table_no,table_name,table_owner,columns_registered,cd-
+ds_no,index_used) values (1,'dependents','testenv',date('now'),0,'dependents')\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_tables(table_no,table_name,table_owner,columns_registered,cd-
+ds_no,index_used) values (2,'emp','testenv',date('now'),0,'emp')\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (1,'birth',3,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (1,'depname',2,2)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (1,'name',1,1)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (2,'hourly_rate',3,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (2,'manager',4,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (2,'name',1,1)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (2,'title',2,0)\g 
+<<
+(1 row)
+>>
+* \q 
+<<
+~
+>>
+? ddgensup SEPPARAMDB_1 1
+<<
+~
+>>
+? ddgensup SEPPARAMDB_1 2
+<<
+~
+>>
+? ddmovcfg SEPPARAMDB_1 20
+<<
+Moving contents of Replicator catalogs to 'replnode::repdb2' . . .
+Processing table 'testenv.dependents' . . .
+Generating support tables for 'testenv.dependents' . . . 
+Creating procedure 'dependents00001rmi' . . .
+Creating procedure 'dependents00001rmu' . . .
+Creating procedure 'dependents00001rmd' . . .
+Support procedures for 'testenv.dependents' have been created . . .
+
+Processing table 'testenv.emp' . . .
+Generating support tables for 'testenv.emp' . . . 
+Creating procedure 'emp00002rmi' . . .
+Creating procedure 'emp00002rmu' . . .
+Creating procedure 'emp00002rmd' . . .
+Support procedures for 'testenv.emp' have been created . . .
+
+Configuration moved to 'replnode::repdb2'
+>>
+? repcfg SEPPARAMDB_1 cdds activate 0
+<<
+~
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+~
+>>
+? sql -s SEPPARAMDB_2 
+<<
+~
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+~
+>>
+? rpserver 2 
+<<
+~
+>>
+? fill insert.qry 
+!!
+insert into emp values ('wood, robert1', 'analyst', 40, 'turner, russell');\g
+insert into emp values ('wood, robert2', 'programmer', 60, 'turner, russell');\g
+insert into emp values ('wood, robert3', 'analyst', 45, 'turner, russell');\g
+insert into emp values ('wood, robert4', 'consultant', 60, 'turner, russell');\g
+insert into emp values ('wood, robert5', 'programmer', 70, 'turner, russell');\g
+insert into emp values ('wood, robert6', 'consultant', 50, 'turner, russell');\g
+insert into emp values ('wood, robert7', 'programmer', 60, 'turner, russell');\g
+insert into emp values ('wood, robert8', 'analyst', 50, 'turner, russell');\g
+insert into emp values ('wood, robert9', 'consultant', 70, 'turner, russell');\g
+insert into emp values ('wood, robert10', 'programmer', 55, 'turner, russell');\g
+insert into emp values ('wood, robert11', 'analyst', 45, 'king, richard');\g
+insert into emp values ('wood, robert12', 'programmer', 60, 'king, richard');\g
+insert into emp values ('wood, robert13', 'Sr programmer', 75, 'turner, russell');\g
+insert into emp values ('wood, robert14', 'analyst', 45, 'turner, russell');\g
+insert into emp values ('wood, robert15', 'programmer', 60, 'turner, russell');\g
+insert into emp values ('wood, robert16', 'consultant', 65, 'king, richard');\g
+insert into emp values ('wood, robert17', 'programmer', 70, 'turner, russell');\g
+insert into emp values ('wood, robert18', 'analyst', 45, 'king, richard');\g
+insert into emp values ('wood, robert19', 'analyst', 40, 'turner, russell');\g
+insert into emp values ('wood, robert20', 'programmer', 50, 'turner, russell');\g
+insert into dependents values ('wood, robert1', 'brian', '12-apr-1990');\g
+insert into dependents values ('wood, robert2', 'mary', '30-jun-1987');\g
+insert into dependents values ('wood, robert3', 'katy', '25-sep-1990');\g
+insert into dependents values ('wood, robert4', 'john', '18-may-1991');\g
+insert into dependents values ('wood, robert5', 'joseph', '05-oct-1992');\g
+
+!!
+? fill delete.qry 
+!!
+delete from emp where name like 'wood%';\g
+delete from dependents where name like 'wood%';\g
+
+!!
+? fill update.qry 
+!!
+update emp set title='QA',hourly_rate=100, manager='Terrence Clark' where name like -
+'wood%';\p\g
+update dependents set depname='dept#420', birth='02-01-1990' where name = 'wood, rob-
+ert1';\p\g
+update dependents set depname='dept#421', birth='02-02-1990' where name = 'wood, rob-
+ert2';\p\g
+update dependents set depname='dept#422', birth='02-03-1990' where name = 'wood, rob-
+ert3';\p\g
+update dependents set depname='dept#423', birth='02-04-1990' where name = 'wood, rob-
+ert4';\p\g
+update dependents set depname='dept#424', birth='02-05-1990' where name = 'wood, rob-
+ert5';\p\g
+
+!!
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* select * from emp;\g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|Alcott, Scott       |Sr Programmer  |              $50.00|Wolfe, Neal         |
+|Applegate, Donald   |Analyst        |              $51.00|Wolfe, Neal         |
+|Bee, Charles        |Sr Programmer  |              $43.00|Fielding, Wallace   |
+|Belter, Kris        |Programmer     |              $33.00|Alcott, Scott       |
+|Beringer, Tom       |Programmer     |              $41.00|King, Richard       |
+|Beveridge, Fern     |Project Leader |              $57.00|Wolfe, Neal         |
+|Bluff, Clarence     |Programmer     |              $24.00|Jones, Ashley       |
+|Bridges, Debra      |Sr Programmer  |              $48.00|Parsons, Carol      |
+|Chung, Arthur       |Programmer     |              $21.00|Ortega, Julio       |
+|Downing, Susan      |Programmer     |              $29.00|Bee, Charles        |
+|Fielding, Wallace   |Project Leader |              $47.00|Jones, Betty        |
+|Fine, Laurence      |Sr Programmer  |              $42.00|Jones, Betty        |
+|Hilton, Connie      |Programmer     |              $37.00|Bridges, Debra      |
+|Jones, Ashley       |Sr Programmer  |              $49.00|Turner, Russell     |
+|Jones, Betty        |Project Leader |              $66.00|Turner, Russell     |
+|King, Richard       |Sr Programmer  |              $39.00|Beveridge, Fernce   |
+|Lorenzo, Sue        |Consultant     |              $52.00|Parsons, Carol      |
+|Moore, Holly        |Programmer     |              $36.00|Thompson, Howard    |
+|Noonan, Brad        |Programmer     |              $25.00|Jones, Ashley       |
+|O'Foote, Suzanne    |Programmer     |              $40.00|Bridges, Debra      |
+|Ortega, Julio       |Sr Programmer  |              $50.00|Wolfe, Neal         |
+|Parsons, Carol      |Project Leader |              $55.00|Wolfe, Neal         |
+|Peterson, Jean      |Analyst        |              $32.00|Alcott, Scott       |
+|Randall, David      |Programmer     |              $34.00|Alcott, Scott       |
+|Rolls, Richard      |Programmer     |              $28.00|King, Richard       |
+|Smith, Chester      |Programmer     |              $22.00|Bee, Charles        |
+|Smith, Peggy        |Consultant     |              $32.00|Thompson, Howard    |
+|Stein, Frank        |Programmer     |              $27.00|Thompson, Howard    |
+|Thompson, Howard    |Sr Programmer  |              $45.00|Jones, Betty        |
+|Turner, Russell     |Project Leader |              $53.00|Jones, Betty        |
+|Walters, Lindsay    |Analyst        |              $44.00|Fine, Laurence      |
+|Wolfe, Neal         |Project Leader |              $65.00|                    |
++--------------------+---------------+--------------------+--------------------+
+(32 rows)
+>>
+* select * from dependents;\g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|Alcott, Scott       |Deborah        |05-may-1986              |
+|Alcott, Scott       |Jason          |08-jan-1971              |
+|Bee, Charles        |Chester        |24-aug-1981              |
+|Bee, Charles        |Tom            |10-jun-1983              |
+|Belter, Kris        |Alfred         |26-sep-1988              |
+|Belter, Kris        |Janet          |16-sep-1985              |
+|Belter, Kris        |Jennifer       |08-jun-1988              |
+|Bluff, Clarence     |Marvin         |31-may-1979              |
+|Bridges, Debra      |Daphne         |04-sep-1988              |
+|Downing, Susan      |Tom            |08-jun-1988              |
+|Fine, Laurence      |Patricia       |17-jun-1978              |
+|Jones, Ashley       |Marvin         |31-may-1979              |
+|Lorenzo, Sue        |Aaron          |12-apr-1987              |
+|Lorenzo, Sue        |Daphne         |31-may-1979              |
+|Noonan, Brad        |Carol          |31-may-1979              |
+|Noonan, Brad        |Patricia       |20-sep-1983              |
+|Noonan, Brad        |Stephen        |18-sep-1988              |
+|O'Foote, Suzanne    |Walter         |24-aug-1981              |
+|Peterson, Jean      |James          |12-apr-1987              |
+|Randall, David      |Lynn           |17-jun-1978              |
+|Randall, David      |Michele        |12-apr-1987              |
+|Smith, Chester      |Avery          |17-jun-1978              |
+|Smith, Peggy        |Brent          |08-sep-1988              |
+|Stein, Frank        |Annette        |12-apr-1987              |
+|Thompson, Howard    |Raquel         |08-sep-1988              |
+|Walters, Lindsay    |George         |24-aug-1981              |
+|Wolfe, Neal         |Bruce          |01-jun-1983              |
+|Wolfe, Neal         |Ernest         |12-apr-1987              |
++--------------------+---------------+-------------------------+
+(28 rows)
+>>
+* \q 
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+~
+>>
+* select * from emp;\g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|Alcott, Scott       |Sr Programmer  |              $50.00|Wolfe, Neal         |
+|Applegate, Donald   |Analyst        |              $51.00|Wolfe, Neal         |
+|Bee, Charles        |Sr Programmer  |              $43.00|Fielding, Wallace   |
+|Belter, Kris        |Programmer     |              $33.00|Alcott, Scott       |
+|Beringer, Tom       |Programmer     |              $41.00|King, Richard       |
+|Beveridge, Fern     |Project Leader |              $57.00|Wolfe, Neal         |
+|Bluff, Clarence     |Programmer     |              $24.00|Jones, Ashley       |
+|Bridges, Debra      |Sr Programmer  |              $48.00|Parsons, Carol      |
+|Chung, Arthur       |Programmer     |              $21.00|Ortega, Julio       |
+|Downing, Susan      |Programmer     |              $29.00|Bee, Charles        |
+|Fielding, Wallace   |Project Leader |              $47.00|Jones, Betty        |
+|Fine, Laurence      |Sr Programmer  |              $42.00|Jones, Betty        |
+|Hilton, Connie      |Programmer     |              $37.00|Bridges, Debra      |
+|Jones, Ashley       |Sr Programmer  |              $49.00|Turner, Russell     |
+|Jones, Betty        |Project Leader |              $66.00|Turner, Russell     |
+|King, Richard       |Sr Programmer  |              $39.00|Beveridge, Fernce   |
+|Lorenzo, Sue        |Consultant     |              $52.00|Parsons, Carol      |
+|Moore, Holly        |Programmer     |              $36.00|Thompson, Howard    |
+|Noonan, Brad        |Programmer     |              $25.00|Jones, Ashley       |
+|O'Foote, Suzanne    |Programmer     |              $40.00|Bridges, Debra      |
+|Ortega, Julio       |Sr Programmer  |              $50.00|Wolfe, Neal         |
+|Parsons, Carol      |Project Leader |              $55.00|Wolfe, Neal         |
+|Peterson, Jean      |Analyst        |              $32.00|Alcott, Scott       |
+|Randall, David      |Programmer     |              $34.00|Alcott, Scott       |
+|Rolls, Richard      |Programmer     |              $28.00|King, Richard       |
+|Smith, Chester      |Programmer     |              $22.00|Bee, Charles        |
+|Smith, Peggy        |Consultant     |              $32.00|Thompson, Howard    |
+|Stein, Frank        |Programmer     |              $27.00|Thompson, Howard    |
+|Thompson, Howard    |Sr Programmer  |              $45.00|Jones, Betty        |
+|Turner, Russell     |Project Leader |              $53.00|Jones, Betty        |
+|Walters, Lindsay    |Analyst        |              $44.00|Fine, Laurence      |
+|Wolfe, Neal         |Project Leader |              $65.00|                    |
++--------------------+---------------+--------------------+--------------------+
+(32 rows)
+>>
+* select * from dependents;\g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|Alcott, Scott       |Deborah        |05-may-1986              |
+|Alcott, Scott       |Jason          |08-jan-1971              |
+|Bee, Charles        |Chester        |24-aug-1981              |
+|Bee, Charles        |Tom            |10-jun-1983              |
+|Belter, Kris        |Alfred         |26-sep-1988              |
+|Belter, Kris        |Janet          |16-sep-1985              |
+|Belter, Kris        |Jennifer       |08-jun-1988              |
+|Bluff, Clarence     |Marvin         |31-may-1979              |
+|Bridges, Debra      |Daphne         |04-sep-1988              |
+|Downing, Susan      |Tom            |08-jun-1988              |
+|Fine, Laurence      |Patricia       |17-jun-1978              |
+|Jones, Ashley       |Marvin         |31-may-1979              |
+|Lorenzo, Sue        |Aaron          |12-apr-1987              |
+|Lorenzo, Sue        |Daphne         |31-may-1979              |
+|Noonan, Brad        |Carol          |31-may-1979              |
+|Noonan, Brad        |Patricia       |20-sep-1983              |
+|Noonan, Brad        |Stephen        |18-sep-1988              |
+|O'Foote, Suzanne    |Walter         |24-aug-1981              |
+|Peterson, Jean      |James          |12-apr-1987              |
+|Randall, David      |Lynn           |17-jun-1978              |
+|Randall, David      |Michele        |12-apr-1987              |
+|Smith, Chester      |Avery          |17-jun-1978              |
+|Smith, Peggy        |Brent          |08-sep-1988              |
+|Stein, Frank        |Annette        |12-apr-1987              |
+|Thompson, Howard    |Raquel         |08-sep-1988              |
+|Walters, Lindsay    |George         |24-aug-1981              |
+|Wolfe, Neal         |Bruce          |01-jun-1983              |
+|Wolfe, Neal         |Ernest         |12-apr-1987              |
++--------------------+---------------+-------------------------+
+(28 rows)
+>>
+* \q 
+<<
+~
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* \i insert.qry 
+<<
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+>>
+* select * from emp where name like 'wood%';\g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|wood, robert1       |analyst        |              $40.00|turner, russell     |
+|wood, robert10      |programmer     |              $55.00|turner, russell     |
+|wood, robert11      |analyst        |              $45.00|king, richard       |
+|wood, robert12      |programmer     |              $60.00|king, richard       |
+|wood, robert13      |Sr programmer  |              $75.00|turner, russell     |
+|wood, robert14      |analyst        |              $45.00|turner, russell     |
+|wood, robert15      |programmer     |              $60.00|turner, russell     |
+|wood, robert16      |consultant     |              $65.00|king, richard       |
+|wood, robert17      |programmer     |              $70.00|turner, russell     |
+|wood, robert18      |analyst        |              $45.00|king, richard       |
+|wood, robert19      |analyst        |              $40.00|turner, russell     |
+|wood, robert2       |programmer     |              $60.00|turner, russell     |
+|wood, robert20      |programmer     |              $50.00|turner, russell     |
+|wood, robert3       |analyst        |              $45.00|turner, russell     |
+|wood, robert4       |consultant     |              $60.00|turner, russell     |
+|wood, robert5       |programmer     |              $70.00|turner, russell     |
+|wood, robert6       |consultant     |              $50.00|turner, russell     |
+|wood, robert7       |programmer     |              $60.00|turner, russell     |
+|wood, robert8       |analyst        |              $50.00|turner, russell     |
+|wood, robert9       |consultant     |              $70.00|turner, russell     |
++--------------------+---------------+--------------------+--------------------+
+(20 rows)
+>>
+* select * from dependents where name like 'wood%';\g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|wood, robert1       |brian          |12-apr-1990              |
+|wood, robert2       |mary           |30-jun-1987              |
+|wood, robert3       |katy           |25-sep-1990              |
+|wood, robert4       |john           |18-may-1991              |
+|wood, robert5       |joseph         |05-oct-1992              |
++--------------------+---------------+-------------------------+
+(5 rows)
+>>
+* \q 
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+~
+>>
+* select * from emp where name like 'wood%';\g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|wood, robert1       |analyst        |              $40.00|turner, russell     |
+|wood, robert10      |programmer     |              $55.00|turner, russell     |
+|wood, robert11      |analyst        |              $45.00|king, richard       |
+|wood, robert12      |programmer     |              $60.00|king, richard       |
+|wood, robert13      |Sr programmer  |              $75.00|turner, russell     |
+|wood, robert14      |analyst        |              $45.00|turner, russell     |
+|wood, robert15      |programmer     |              $60.00|turner, russell     |
+|wood, robert16      |consultant     |              $65.00|king, richard       |
+|wood, robert17      |programmer     |              $70.00|turner, russell     |
+|wood, robert18      |analyst        |              $45.00|king, richard       |
+|wood, robert19      |analyst        |              $40.00|turner, russell     |
+|wood, robert2       |programmer     |              $60.00|turner, russell     |
+|wood, robert20      |programmer     |              $50.00|turner, russell     |
+|wood, robert3       |analyst        |              $45.00|turner, russell     |
+|wood, robert4       |consultant     |              $60.00|turner, russell     |
+|wood, robert5       |programmer     |              $70.00|turner, russell     |
+|wood, robert6       |consultant     |              $50.00|turner, russell     |
+|wood, robert7       |programmer     |              $60.00|turner, russell     |
+|wood, robert8       |analyst        |              $50.00|turner, russell     |
+|wood, robert9       |consultant     |              $70.00|turner, russell     |
++--------------------+---------------+--------------------+--------------------+
+(20 rows)
+>>
+* select * from dependents where name like 'wood%';\g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|wood, robert1       |brian          |12-apr-1990              |
+|wood, robert2       |mary           |30-jun-1987              |
+|wood, robert3       |katy           |25-sep-1990              |
+|wood, robert4       |john           |18-may-1991              |
+|wood, robert5       |joseph         |05-oct-1992              |
++--------------------+---------------+-------------------------+
+(5 rows)
+>>
+* \q 
+<<
+~
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* \i update.qry
+<<
+/* SQL Startup File */
+ update emp set title='QA',hourly_rate=100, manager='Terrence Clark' where name like-
+ 'wood%';
+(20 rows)
+update dependents set depname='dept#420', birth='02-01-1990' where name = 'wood, rob-
+ert1';
+(1 row)
+update dependents set depname='dept#421', birth='02-02-1990' where name = 'wood, rob-
+ert2';
+(1 row)
+update dependents set depname='dept#422', birth='02-03-1990' where name = 'wood, rob-
+ert3';
+(1 row)
+update dependents set depname='dept#423', birth='02-04-1990' where name = 'wood, rob-
+ert4';
+(1 row)
+update dependents set depname='dept#424', birth='02-05-1990' where name = 'wood, rob-
+ert5';
+(1 row)
+>>
+* select * from emp where name like 'wood%';\g
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|wood, robert1       |QA             |             $100.00|Terrence Clark      |
+|wood, robert10      |QA             |             $100.00|Terrence Clark      |
+|wood, robert11      |QA             |             $100.00|Terrence Clark      |
+|wood, robert12      |QA             |             $100.00|Terrence Clark      |
+|wood, robert13      |QA             |             $100.00|Terrence Clark      |
+|wood, robert14      |QA             |             $100.00|Terrence Clark      |
+|wood, robert15      |QA             |             $100.00|Terrence Clark      |
+|wood, robert16      |QA             |             $100.00|Terrence Clark      |
+|wood, robert17      |QA             |             $100.00|Terrence Clark      |
+|wood, robert18      |QA             |             $100.00|Terrence Clark      |
+|wood, robert19      |QA             |             $100.00|Terrence Clark      |
+|wood, robert2       |QA             |             $100.00|Terrence Clark      |
+|wood, robert20      |QA             |             $100.00|Terrence Clark      |
+|wood, robert3       |QA             |             $100.00|Terrence Clark      |
+|wood, robert4       |QA             |             $100.00|Terrence Clark      |
+|wood, robert5       |QA             |             $100.00|Terrence Clark      |
+|wood, robert6       |QA             |             $100.00|Terrence Clark      |
+|wood, robert7       |QA             |             $100.00|Terrence Clark      |
+|wood, robert8       |QA             |             $100.00|Terrence Clark      |
+|wood, robert9       |QA             |             $100.00|Terrence Clark      |
++--------------------+---------------+--------------------+--------------------+
+(20 rows)
+>>
+* select * from dependents where name like 'wood%';\g
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|wood, robert1       |dept#420       |01-feb-1990              |
+|wood, robert2       |dept#421       |02-feb-1990              |
+|wood, robert3       |dept#422       |03-feb-1990              |
+|wood, robert4       |dept#423       |04-feb-1990              |
+|wood, robert5       |dept#424       |05-feb-1990              |
++--------------------+---------------+-------------------------+
+(5 rows)
+>>
+* \q
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+~
+>>
+* select * from emp where name like 'wood%';\g
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|wood, robert1       |QA             |             $100.00|Terrence Clark      |
+|wood, robert10      |QA             |             $100.00|Terrence Clark      |
+|wood, robert11      |QA             |             $100.00|Terrence Clark      |
+|wood, robert12      |QA             |             $100.00|Terrence Clark      |
+|wood, robert13      |QA             |             $100.00|Terrence Clark      |
+|wood, robert14      |QA             |             $100.00|Terrence Clark      |
+|wood, robert15      |QA             |             $100.00|Terrence Clark      |
+|wood, robert16      |QA             |             $100.00|Terrence Clark      |
+|wood, robert17      |QA             |             $100.00|Terrence Clark      |
+|wood, robert18      |QA             |             $100.00|Terrence Clark      |
+|wood, robert19      |QA             |             $100.00|Terrence Clark      |
+|wood, robert2       |QA             |             $100.00|Terrence Clark      |
+|wood, robert20      |QA             |             $100.00|Terrence Clark      |
+|wood, robert3       |QA             |             $100.00|Terrence Clark      |
+|wood, robert4       |QA             |             $100.00|Terrence Clark      |
+|wood, robert5       |QA             |             $100.00|Terrence Clark      |
+|wood, robert6       |QA             |             $100.00|Terrence Clark      |
+|wood, robert7       |QA             |             $100.00|Terrence Clark      |
+|wood, robert8       |QA             |             $100.00|Terrence Clark      |
+|wood, robert9       |QA             |             $100.00|Terrence Clark      |
++--------------------+---------------+--------------------+--------------------+
+(20 rows)
+>>
+* select * from dependents where name like 'wood%';\g
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|wood, robert1       |dept#420       |01-feb-1990              |
+|wood, robert2       |dept#421       |02-feb-1990              |
+|wood, robert3       |dept#422       |03-feb-1990              |
+|wood, robert4       |dept#423       |04-feb-1990              |
+|wood, robert5       |dept#424       |05-feb-1990              |
++--------------------+---------------+-------------------------+
+(5 rows)
+>>
+*\q
+<<
+~
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* \i delete.qry 
+<<
+(20 rows)
+(5 rows)
+>>
+* select * from emp where name like 'wood%';\g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
++--------------------+---------------+--------------------+--------------------+
+(0 rows)
+>>
+* select * from dependents where name like 'wood%';\g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
++--------------------+---------------+-------------------------+
+(0 rows)
+>>
+* select * from emp;\g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|Alcott, Scott       |Sr Programmer  |              $50.00|Wolfe, Neal         |
+|Applegate, Donald   |Analyst        |              $51.00|Wolfe, Neal         |
+|Bee, Charles        |Sr Programmer  |              $43.00|Fielding, Wallace   |
+|Belter, Kris        |Programmer     |              $33.00|Alcott, Scott       |
+|Beringer, Tom       |Programmer     |              $41.00|King, Richard       |
+|Beveridge, Fern     |Project Leader |              $57.00|Wolfe, Neal         |
+|Bluff, Clarence     |Programmer     |              $24.00|Jones, Ashley       |
+|Bridges, Debra      |Sr Programmer  |              $48.00|Parsons, Carol      |
+|Chung, Arthur       |Programmer     |              $21.00|Ortega, Julio       |
+|Downing, Susan      |Programmer     |              $29.00|Bee, Charles        |
+|Fielding, Wallace   |Project Leader |              $47.00|Jones, Betty        |
+|Fine, Laurence      |Sr Programmer  |              $42.00|Jones, Betty        |
+|Hilton, Connie      |Programmer     |              $37.00|Bridges, Debra      |
+|Jones, Ashley       |Sr Programmer  |              $49.00|Turner, Russell     |
+|Jones, Betty        |Project Leader |              $66.00|Turner, Russell     |
+|King, Richard       |Sr Programmer  |              $39.00|Beveridge, Fernce   |
+|Lorenzo, Sue        |Consultant     |              $52.00|Parsons, Carol      |
+|Moore, Holly        |Programmer     |              $36.00|Thompson, Howard    |
+|Noonan, Brad        |Programmer     |              $25.00|Jones, Ashley       |
+|O'Foote, Suzanne    |Programmer     |              $40.00|Bridges, Debra      |
+|Ortega, Julio       |Sr Programmer  |              $50.00|Wolfe, Neal         |
+|Parsons, Carol      |Project Leader |              $55.00|Wolfe, Neal         |
+|Peterson, Jean      |Analyst        |              $32.00|Alcott, Scott       |
+|Randall, David      |Programmer     |              $34.00|Alcott, Scott       |
+|Rolls, Richard      |Programmer     |              $28.00|King, Richard       |
+|Smith, Chester      |Programmer     |              $22.00|Bee, Charles        |
+|Smith, Peggy        |Consultant     |              $32.00|Thompson, Howard    |
+|Stein, Frank        |Programmer     |              $27.00|Thompson, Howard    |
+|Thompson, Howard    |Sr Programmer  |              $45.00|Jones, Betty        |
+|Turner, Russell     |Project Leader |              $53.00|Jones, Betty        |
+|Walters, Lindsay    |Analyst        |              $44.00|Fine, Laurence      |
+|Wolfe, Neal         |Project Leader |              $65.00|                    |
++--------------------+---------------+--------------------+--------------------+
+(32 rows)
+>>
+* select * from dependents;\g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|Alcott, Scott       |Deborah        |05-may-1986              |
+|Alcott, Scott       |Jason          |08-jan-1971              |
+|Bee, Charles        |Chester        |24-aug-1981              |
+|Bee, Charles        |Tom            |10-jun-1983              |
+|Belter, Kris        |Alfred         |26-sep-1988              |
+|Belter, Kris        |Janet          |16-sep-1985              |
+|Belter, Kris        |Jennifer       |08-jun-1988              |
+|Bluff, Clarence     |Marvin         |31-may-1979              |
+|Bridges, Debra      |Daphne         |04-sep-1988              |
+|Downing, Susan      |Tom            |08-jun-1988              |
+|Fine, Laurence      |Patricia       |17-jun-1978              |
+|Jones, Ashley       |Marvin         |31-may-1979              |
+|Lorenzo, Sue        |Aaron          |12-apr-1987              |
+|Lorenzo, Sue        |Daphne         |31-may-1979              |
+|Noonan, Brad        |Carol          |31-may-1979              |
+|Noonan, Brad        |Patricia       |20-sep-1983              |
+|Noonan, Brad        |Stephen        |18-sep-1988              |
+|O'Foote, Suzanne    |Walter         |24-aug-1981              |
+|Peterson, Jean      |James          |12-apr-1987              |
+|Randall, David      |Lynn           |17-jun-1978              |
+|Randall, David      |Michele        |12-apr-1987              |
+|Smith, Chester      |Avery          |17-jun-1978              |
+|Smith, Peggy        |Brent          |08-sep-1988              |
+|Stein, Frank        |Annette        |12-apr-1987              |
+|Thompson, Howard    |Raquel         |08-sep-1988              |
+|Walters, Lindsay    |George         |24-aug-1981              |
+|Wolfe, Neal         |Bruce          |01-jun-1983              |
+|Wolfe, Neal         |Ernest         |12-apr-1987              |
++--------------------+---------------+-------------------------+
+(28 rows)
+>>
+* \q 
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+~
+>>
+* select * from emp where name like 'wood%';\g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
++--------------------+---------------+--------------------+--------------------+
+(0 rows)
+>>
+* select * from dependents where name like 'wood%';\g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
++--------------------+---------------+-------------------------+
+(0 rows)
+>>
+* select * from emp;\g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|Alcott, Scott       |Sr Programmer  |              $50.00|Wolfe, Neal         |
+|Applegate, Donald   |Analyst        |              $51.00|Wolfe, Neal         |
+|Bee, Charles        |Sr Programmer  |              $43.00|Fielding, Wallace   |
+|Belter, Kris        |Programmer     |              $33.00|Alcott, Scott       |
+|Beringer, Tom       |Programmer     |              $41.00|King, Richard       |
+|Beveridge, Fern     |Project Leader |              $57.00|Wolfe, Neal         |
+|Bluff, Clarence     |Programmer     |              $24.00|Jones, Ashley       |
+|Bridges, Debra      |Sr Programmer  |              $48.00|Parsons, Carol      |
+|Chung, Arthur       |Programmer     |              $21.00|Ortega, Julio       |
+|Downing, Susan      |Programmer     |              $29.00|Bee, Charles        |
+|Fielding, Wallace   |Project Leader |              $47.00|Jones, Betty        |
+|Fine, Laurence      |Sr Programmer  |              $42.00|Jones, Betty        |
+|Hilton, Connie      |Programmer     |              $37.00|Bridges, Debra      |
+|Jones, Ashley       |Sr Programmer  |              $49.00|Turner, Russell     |
+|Jones, Betty        |Project Leader |              $66.00|Turner, Russell     |
+|King, Richard       |Sr Programmer  |              $39.00|Beveridge, Fernce   |
+|Lorenzo, Sue        |Consultant     |              $52.00|Parsons, Carol      |
+|Moore, Holly        |Programmer     |              $36.00|Thompson, Howard    |
+|Noonan, Brad        |Programmer     |              $25.00|Jones, Ashley       |
+|O'Foote, Suzanne    |Programmer     |              $40.00|Bridges, Debra      |
+|Ortega, Julio       |Sr Programmer  |              $50.00|Wolfe, Neal         |
+|Parsons, Carol      |Project Leader |              $55.00|Wolfe, Neal         |
+|Peterson, Jean      |Analyst        |              $32.00|Alcott, Scott       |
+|Randall, David      |Programmer     |              $34.00|Alcott, Scott       |
+|Rolls, Richard      |Programmer     |              $28.00|King, Richard       |
+|Smith, Chester      |Programmer     |              $22.00|Bee, Charles        |
+|Smith, Peggy        |Consultant     |              $32.00|Thompson, Howard    |
+|Stein, Frank        |Programmer     |              $27.00|Thompson, Howard    |
+|Thompson, Howard    |Sr Programmer  |              $45.00|Jones, Betty        |
+|Turner, Russell     |Project Leader |              $53.00|Jones, Betty        |
+|Walters, Lindsay    |Analyst        |              $44.00|Fine, Laurence      |
+|Wolfe, Neal         |Project Leader |              $65.00|                    |
++--------------------+---------------+--------------------+--------------------+
+(32 rows)
+>>
+* select * from dependents;\g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|Alcott, Scott       |Deborah        |05-may-1986              |
+|Alcott, Scott       |Jason          |08-jan-1971              |
+|Bee, Charles        |Chester        |24-aug-1981              |
+|Bee, Charles        |Tom            |10-jun-1983              |
+|Belter, Kris        |Alfred         |26-sep-1988              |
+|Belter, Kris        |Janet          |16-sep-1985              |
+|Belter, Kris        |Jennifer       |08-jun-1988              |
+|Bluff, Clarence     |Marvin         |31-may-1979              |
+|Bridges, Debra      |Daphne         |04-sep-1988              |
+|Downing, Susan      |Tom            |08-jun-1988              |
+|Fine, Laurence      |Patricia       |17-jun-1978              |
+|Jones, Ashley       |Marvin         |31-may-1979              |
+|Lorenzo, Sue        |Aaron          |12-apr-1987              |
+|Lorenzo, Sue        |Daphne         |31-may-1979              |
+|Noonan, Brad        |Carol          |31-may-1979              |
+|Noonan, Brad        |Patricia       |20-sep-1983              |
+|Noonan, Brad        |Stephen        |18-sep-1988              |
+|O'Foote, Suzanne    |Walter         |24-aug-1981              |
+|Peterson, Jean      |James          |12-apr-1987              |
+|Randall, David      |Lynn           |17-jun-1978              |
+|Randall, David      |Michele        |12-apr-1987              |
+|Smith, Chester      |Avery          |17-jun-1978              |
+|Smith, Peggy        |Brent          |08-sep-1988              |
+|Stein, Frank        |Annette        |12-apr-1987              |
+|Thompson, Howard    |Raquel         |08-sep-1988              |
+|Walters, Lindsay    |George         |24-aug-1981              |
+|Wolfe, Neal         |Bruce          |01-jun-1983              |
+|Wolfe, Neal         |Ernest         |12-apr-1987              |
++--------------------+---------------+-------------------------+
+(28 rows)
+>>
+* \q 
+<<
+~
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+
+>>
+? sql -s SEPPARAMDB_2 
+<<
+~
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* update dd_db_cdds set database_no=30, target_type=3 where cdds_no=0 and server_no=-
+2;\g
+<<
+(1 row)
+>>
+* update dd_paths set targetdb=30 where cdds_no=0 and  localdb=10;\g\q
+<<
+(1 row)
+>>
+? rpserver 2 
+<<
+~
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* \i insert.qry 
+<<
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+>>
+* select * from emp where name like 'wood%' \g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|wood, robert1       |analyst        |              $40.00|turner, russell     |
+|wood, robert10      |programmer     |              $55.00|turner, russell     |
+|wood, robert11      |analyst        |              $45.00|king, richard       |
+|wood, robert12      |programmer     |              $60.00|king, richard       |
+|wood, robert13      |Sr programmer  |              $75.00|turner, russell     |
+|wood, robert14      |analyst        |              $45.00|turner, russell     |
+|wood, robert15      |programmer     |              $60.00|turner, russell     |
+|wood, robert16      |consultant     |              $65.00|king, richard       |
+|wood, robert17      |programmer     |              $70.00|turner, russell     |
+|wood, robert18      |analyst        |              $45.00|king, richard       |
+|wood, robert19      |analyst        |              $40.00|turner, russell     |
+|wood, robert2       |programmer     |              $60.00|turner, russell     |
+|wood, robert20      |programmer     |              $50.00|turner, russell     |
+|wood, robert3       |analyst        |              $45.00|turner, russell     |
+|wood, robert4       |consultant     |              $60.00|turner, russell     |
+|wood, robert5       |programmer     |              $70.00|turner, russell     |
+|wood, robert6       |consultant     |              $50.00|turner, russell     |
+|wood, robert7       |programmer     |              $60.00|turner, russell     |
+|wood, robert8       |analyst        |              $50.00|turner, russell     |
+|wood, robert9       |consultant     |              $70.00|turner, russell     |
++--------------------+---------------+--------------------+--------------------+
+(20 rows)
+>>
+* select * from dependents where name like 'wood%' \g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|wood, robert1       |brian          |12-apr-1990              |
+|wood, robert2       |mary           |30-jun-1987              |
+|wood, robert3       |katy           |25-sep-1990              |
+|wood, robert4       |john           |18-may-1991              |
+|wood, robert5       |joseph         |05-oct-1992              |
++--------------------+---------------+-------------------------+
+(5 rows)
+>>
+* commit \g\q
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+~
+>>
+? sql -s SEPPARAMDB_3 
+<<
+~
+>>
+* select * from emp where name like 'wood%' \g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|wood, robert1       |analyst        |              $40.00|turner, russell     |
+|wood, robert10      |programmer     |              $55.00|turner, russell     |
+|wood, robert11      |analyst        |              $45.00|king, richard       |
+|wood, robert12      |programmer     |              $60.00|king, richard       |
+|wood, robert13      |Sr programmer  |              $75.00|turner, russell     |
+|wood, robert14      |analyst        |              $45.00|turner, russell     |
+|wood, robert15      |programmer     |              $60.00|turner, russell     |
+|wood, robert16      |consultant     |              $65.00|king, richard       |
+|wood, robert17      |programmer     |              $70.00|turner, russell     |
+|wood, robert18      |analyst        |              $45.00|king, richard       |
+|wood, robert19      |analyst        |              $40.00|turner, russell     |
+|wood, robert2       |programmer     |              $60.00|turner, russell     |
+|wood, robert20      |programmer     |              $50.00|turner, russell     |
+|wood, robert3       |analyst        |              $45.00|turner, russell     |
+|wood, robert4       |consultant     |              $60.00|turner, russell     |
+|wood, robert5       |programmer     |              $70.00|turner, russell     |
+|wood, robert6       |consultant     |              $50.00|turner, russell     |
+|wood, robert7       |programmer     |              $60.00|turner, russell     |
+|wood, robert8       |analyst        |              $50.00|turner, russell     |
+|wood, robert9       |consultant     |              $70.00|turner, russell     |
++--------------------+---------------+--------------------+--------------------+
+(20 rows)
+>>
+* select * from dependents where name like 'wood%' \g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|wood, robert1       |brian          |12-apr-1990              |
+|wood, robert2       |mary           |30-jun-1987              |
+|wood, robert3       |katy           |25-sep-1990              |
+|wood, robert4       |john           |18-may-1991              |
+|wood, robert5       |joseph         |05-oct-1992              |
++--------------------+---------------+-------------------------+
+(5 rows)
+>>
+* select * from emp;\g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|Alcott, Scott       |Sr Programmer  |              $50.00|Wolfe, Neal         |
+|Applegate, Donald   |Analyst        |              $51.00|Wolfe, Neal         |
+|Bee, Charles        |Sr Programmer  |              $43.00|Fielding, Wallace   |
+|Belter, Kris        |Programmer     |              $33.00|Alcott, Scott       |
+|Beringer, Tom       |Programmer     |              $41.00|King, Richard       |
+|Beveridge, Fern     |Project Leader |              $57.00|Wolfe, Neal         |
+|Bluff, Clarence     |Programmer     |              $24.00|Jones, Ashley       |
+|Bridges, Debra      |Sr Programmer  |              $48.00|Parsons, Carol      |
+|Chung, Arthur       |Programmer     |              $21.00|Ortega, Julio       |
+|Downing, Susan      |Programmer     |              $29.00|Bee, Charles        |
+|Fielding, Wallace   |Project Leader |              $47.00|Jones, Betty        |
+|Fine, Laurence      |Sr Programmer  |              $42.00|Jones, Betty        |
+|Hilton, Connie      |Programmer     |              $37.00|Bridges, Debra      |
+|Jones, Ashley       |Sr Programmer  |              $49.00|Turner, Russell     |
+|Jones, Betty        |Project Leader |              $66.00|Turner, Russell     |
+|King, Richard       |Sr Programmer  |              $39.00|Beveridge, Fernce   |
+|Lorenzo, Sue        |Consultant     |              $52.00|Parsons, Carol      |
+|Moore, Holly        |Programmer     |              $36.00|Thompson, Howard    |
+|Noonan, Brad        |Programmer     |              $25.00|Jones, Ashley       |
+|O'Foote, Suzanne    |Programmer     |              $40.00|Bridges, Debra      |
+|Ortega, Julio       |Sr Programmer  |              $50.00|Wolfe, Neal         |
+|Parsons, Carol      |Project Leader |              $55.00|Wolfe, Neal         |
+|Peterson, Jean      |Analyst        |              $32.00|Alcott, Scott       |
+|Randall, David      |Programmer     |              $34.00|Alcott, Scott       |
+|Rolls, Richard      |Programmer     |              $28.00|King, Richard       |
+|Smith, Chester      |Programmer     |              $22.00|Bee, Charles        |
+|Smith, Peggy        |Consultant     |              $32.00|Thompson, Howard    |
+|Stein, Frank        |Programmer     |              $27.00|Thompson, Howard    |
+|Thompson, Howard    |Sr Programmer  |              $45.00|Jones, Betty        |
+|Turner, Russell     |Project Leader |              $53.00|Jones, Betty        |
+|Walters, Lindsay    |Analyst        |              $44.00|Fine, Laurence      |
+|Wolfe, Neal         |Project Leader |              $65.00|                    |
+|wood, robert1       |analyst        |              $40.00|turner, russell     |
+|wood, robert10      |programmer     |              $55.00|turner, russell     |
+|wood, robert11      |analyst        |              $45.00|king, richard       |
+|wood, robert12      |programmer     |              $60.00|king, richard       |
+|wood, robert13      |Sr programmer  |              $75.00|turner, russell     |
+|wood, robert14      |analyst        |              $45.00|turner, russell     |
+|wood, robert15      |programmer     |              $60.00|turner, russell     |
+|wood, robert16      |consultant     |              $65.00|king, richard       |
+|wood, robert17      |programmer     |              $70.00|turner, russell     |
+|wood, robert18      |analyst        |              $45.00|king, richard       |
+|wood, robert19      |analyst        |              $40.00|turner, russell     |
+|wood, robert2       |programmer     |              $60.00|turner, russell     |
+|wood, robert20      |programmer     |              $50.00|turner, russell     |
+|wood, robert3       |analyst        |              $45.00|turner, russell     |
+|wood, robert4       |consultant     |              $60.00|turner, russell     |
+|wood, robert5       |programmer     |              $70.00|turner, russell     |
+|wood, robert6       |consultant     |              $50.00|turner, russell     |
+|wood, robert7       |programmer     |              $60.00|turner, russell     |
+|wood, robert8       |analyst        |              $50.00|turner, russell     |
+|wood, robert9       |consultant     |              $70.00|turner, russell     |
++--------------------+---------------+--------------------+--------------------+
+(52 rows)
+>>
+* select * from dependents;\g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|Alcott, Scott       |Deborah        |05-may-1986              |
+|Alcott, Scott       |Jason          |08-jan-1971              |
+|Bee, Charles        |Chester        |24-aug-1981              |
+|Bee, Charles        |Tom            |10-jun-1983              |
+|Belter, Kris        |Alfred         |26-sep-1988              |
+|Belter, Kris        |Janet          |16-sep-1985              |
+|Belter, Kris        |Jennifer       |08-jun-1988              |
+|Bluff, Clarence     |Marvin         |31-may-1979              |
+|Bridges, Debra      |Daphne         |04-sep-1988              |
+|Downing, Susan      |Tom            |08-jun-1988              |
+|Fine, Laurence      |Patricia       |17-jun-1978              |
+|Jones, Ashley       |Marvin         |31-may-1979              |
+|Lorenzo, Sue        |Aaron          |12-apr-1987              |
+|Lorenzo, Sue        |Daphne         |31-may-1979              |
+|Noonan, Brad        |Carol          |31-may-1979              |
+|Noonan, Brad        |Patricia       |20-sep-1983              |
+|Noonan, Brad        |Stephen        |18-sep-1988              |
+|O'Foote, Suzanne    |Walter         |24-aug-1981              |
+|Peterson, Jean      |James          |12-apr-1987              |
+|Randall, David      |Lynn           |17-jun-1978              |
+|Randall, David      |Michele        |12-apr-1987              |
+|Smith, Chester      |Avery          |17-jun-1978              |
+|Smith, Peggy        |Brent          |08-sep-1988              |
+|Stein, Frank        |Annette        |12-apr-1987              |
+|Thompson, Howard    |Raquel         |08-sep-1988              |
+|Walters, Lindsay    |George         |24-aug-1981              |
+|Wolfe, Neal         |Bruce          |01-jun-1983              |
+|Wolfe, Neal         |Ernest         |12-apr-1987              |
+|wood, robert1       |brian          |12-apr-1990              |
+|wood, robert2       |mary           |30-jun-1987              |
+|wood, robert3       |katy           |25-sep-1990              |
+|wood, robert4       |john           |18-may-1991              |
+|wood, robert5       |joseph         |05-oct-1992              |
++--------------------+---------------+-------------------------+
+(33 rows)
+>>
+* \q 
+<<
+~
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* \i update.qry
+<<
+/* SQL Startup File */
+ update emp set title='QA',hourly_rate=100, manager='Terrence Clark' where name like-
+ 'wood%';
+(20 rows)
+update dependents set depname='dept#420', birth='02-01-1990' where name = 'wood, rob-
+ert1';
+(1 row)
+update dependents set depname='dept#421', birth='02-02-1990' where name = 'wood, rob-
+ert2';
+(1 row)
+update dependents set depname='dept#422', birth='02-03-1990' where name = 'wood, rob-
+ert3';
+(1 row)
+update dependents set depname='dept#423', birth='02-04-1990' where name = 'wood, rob-
+ert4';
+(1 row)
+update dependents set depname='dept#424', birth='02-05-1990' where name = 'wood, rob-
+ert5';
+(1 row)
+>>
+* select * from emp where name like 'wood%';\g
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|wood, robert1       |QA             |             $100.00|Terrence Clark      |
+|wood, robert10      |QA             |             $100.00|Terrence Clark      |
+|wood, robert11      |QA             |             $100.00|Terrence Clark      |
+|wood, robert12      |QA             |             $100.00|Terrence Clark      |
+|wood, robert13      |QA             |             $100.00|Terrence Clark      |
+|wood, robert14      |QA             |             $100.00|Terrence Clark      |
+|wood, robert15      |QA             |             $100.00|Terrence Clark      |
+|wood, robert16      |QA             |             $100.00|Terrence Clark      |
+|wood, robert17      |QA             |             $100.00|Terrence Clark      |
+|wood, robert18      |QA             |             $100.00|Terrence Clark      |
+|wood, robert19      |QA             |             $100.00|Terrence Clark      |
+|wood, robert2       |QA             |             $100.00|Terrence Clark      |
+|wood, robert20      |QA             |             $100.00|Terrence Clark      |
+|wood, robert3       |QA             |             $100.00|Terrence Clark      |
+|wood, robert4       |QA             |             $100.00|Terrence Clark      |
+|wood, robert5       |QA             |             $100.00|Terrence Clark      |
+|wood, robert6       |QA             |             $100.00|Terrence Clark      |
+|wood, robert7       |QA             |             $100.00|Terrence Clark      |
+|wood, robert8       |QA             |             $100.00|Terrence Clark      |
+|wood, robert9       |QA             |             $100.00|Terrence Clark      |
++--------------------+---------------+--------------------+--------------------+
+(20 rows)
+>>
+* select * from dependents where name like 'wood%';\g
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|wood, robert1       |dept#420       |01-feb-1990              |
+|wood, robert2       |dept#421       |02-feb-1990              |
+|wood, robert3       |dept#422       |03-feb-1990              |
+|wood, robert4       |dept#423       |04-feb-1990              |
+|wood, robert5       |dept#424       |05-feb-1990              |
++--------------------+---------------+-------------------------+
+(5 rows)
+>>
+* \q
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_3 
+<<
+~
+>>
+* select * from emp where name like 'wood%';\g
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
+|wood, robert1       |QA             |             $100.00|Terrence Clark      |
+|wood, robert10      |QA             |             $100.00|Terrence Clark      |
+|wood, robert11      |QA             |             $100.00|Terrence Clark      |
+|wood, robert12      |QA             |             $100.00|Terrence Clark      |
+|wood, robert13      |QA             |             $100.00|Terrence Clark      |
+|wood, robert14      |QA             |             $100.00|Terrence Clark      |
+|wood, robert15      |QA             |             $100.00|Terrence Clark      |
+|wood, robert16      |QA             |             $100.00|Terrence Clark      |
+|wood, robert17      |QA             |             $100.00|Terrence Clark      |
+|wood, robert18      |QA             |             $100.00|Terrence Clark      |
+|wood, robert19      |QA             |             $100.00|Terrence Clark      |
+|wood, robert2       |QA             |             $100.00|Terrence Clark      |
+|wood, robert20      |QA             |             $100.00|Terrence Clark      |
+|wood, robert3       |QA             |             $100.00|Terrence Clark      |
+|wood, robert4       |QA             |             $100.00|Terrence Clark      |
+|wood, robert5       |QA             |             $100.00|Terrence Clark      |
+|wood, robert6       |QA             |             $100.00|Terrence Clark      |
+|wood, robert7       |QA             |             $100.00|Terrence Clark      |
+|wood, robert8       |QA             |             $100.00|Terrence Clark      |
+|wood, robert9       |QA             |             $100.00|Terrence Clark      |
++--------------------+---------------+--------------------+--------------------+
+(20 rows)
+>>
+* select * from dependents where name like 'wood%';\g
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
+|wood, robert1       |dept#420       |01-feb-1990              |
+|wood, robert2       |dept#421       |02-feb-1990              |
+|wood, robert3       |dept#422       |03-feb-1990              |
+|wood, robert4       |dept#423       |04-feb-1990              |
+|wood, robert5       |dept#424       |05-feb-1990              |
++--------------------+---------------+-------------------------+
+(5 rows)
+>>
+* \q
+<<
+~
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* delete from dependents00001sha\g
+<<
+~
+>>
+* \i delete.qry
+<<
+(20 rows)
+(5 rows)
+>>
+*select * from emp where name like 'wood%' \g
+<<
+ 
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
++--------------------+---------------+--------------------+--------------------+
+(0 rows)
+>>
+* select * from dependents where name like 'wood%' \g
+<<
+ 
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
++--------------------+---------------+-------------------------+
+(0 rows)
+>>
+* commit;\g\q
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+~
+>>
+? sql -s SEPPARAMDB_3 
+<<
+~
+>>
+* select * from emp where name like 'wood%' \g 
+<<
+
++--------------------+---------------+--------------------+--------------------+
+|name                |title          |hourly_rate         |manager             |
++--------------------+---------------+--------------------+--------------------+
++--------------------+---------------+--------------------+--------------------+
+(0 rows)
+>>
+* select * from dependents where name like 'wood%' \g 
+<<
+
++--------------------+---------------+-------------------------+
+|name                |depname        |birth                    |
++--------------------+---------------+-------------------------+
++--------------------+---------------+-------------------------+
+(0 rows)
+>>
+* \q 
+<<
+~
+>>
+? sql -s SEPPARAMDB_1 
+<<
+~
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+
+>>
+? sql -s SEPPARAMDB_2 
+<<
+~
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+
+>>
+
+
+Ending at: Tue Mar  4 18:30:51 1997

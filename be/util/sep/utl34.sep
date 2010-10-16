@@ -1,0 +1,415 @@
+/*
+	Test Name: utl34.sep
+	Time: Tue Apr 24 15:51:23 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl34.sep
+	Module  : be/util
+	Filename: utl34.sep
+	Purpose	: To test the new copydb flags for the maximum size 32K 
+                  column, first available with II 2.6/0106 and later releases.
+	Input Files  : kopy32.sc
+	Output Files : kopy32.exe
+	Database     : utildb3, utildb4
+	Tables       : utl34_table1, utl34_table2, utl34_table3, utl34_table4,
+                       utl34_table5
+	Synopsis     : This sep test is to test the 32K bytes per column for 
+                       all character data types with copydb. The program is to 
+                       create five tables in database utildb3. Then these
+                       tables will be copied to database utildb4. 
+
+ History: 24-Apr-2001	(wu$ca01)	Created
+          05-Jun-2001	(wu$ca01) Test will fail on NT platform for 
+                        'long varchar' data type. See issue 10928220. Once the
+                        issue is fixed, <<IF (NT_GENERIC)>> CANON can be remove.
+          09-Aug-2001	(wu$ca01) Added commands to cleanup temporary test
+                        files at the end. Clarified the Purpose text.
+          11-Dec-2001	(wu$ca01) Issue 10928220 resolved, remove (NT_GENERIC)
+                        CANON.
+           8-May-2003	(wu$ca01) Updated test due to schema has changed (i.e.
+                        'utl34_table1.tes' to 'utl34_table1.testenv'). Added
+                        the drop statements to clean out the tables in the
+                        database.
+*/
+? fill kopy32.sc 
+!!
+/* This program is to create five tables, each with different character data 
+** type for testing the copydb with the maximum size column of 32K bytes.
+*/
+
+#include <stdio.h>
+exec sql include sqlca;
+
+main(int argc, char* argv[])
+{
+    exec sql begin declare section;
+      char   *dbname;
+	varchar struct {
+	    short	buf_size;
+	    char	buf[32000];
+	} vch;
+
+	varchar struct {
+	    short	buf_size;
+	    char	buf[32000];
+	} vch2;
+   
+    exec sql end declare section;
+
+    exec sql whenever sqlerror call sqlprint;
+
+    dbname = argv[1];
+
+    exec sql connect :dbname;
+    /* Ignore errors from drop table */
+    exec sql whenever sqlerror continue;
+    exec sql drop table utl34_table1;
+    exec sql drop table utl34_table2;
+    exec sql drop table utl34_table3;
+    exec sql drop table utl34_table4;
+    exec sql drop table utl34_table5;
+
+    exec sql whenever sqlerror call sqlprint;
+/* Create table utl34_table1. */
+    exec sql create table utl34_table1(col_c c(32000));
+
+    memset(vch.buf, 'a', 32000);
+    vch.buf_size = 32000;
+    memset(vch.buf+5, '@', 10);
+    memset(vch.buf+31990, '!', 10);
+
+    exec sql insert into utl34_table1 values (:vch);
+
+    exec sql select col_c into :vch2 from utl34_table1;
+
+    if (vch.buf_size == vch2.buf_size &&
+	memcmp(vch.buf, vch2.buf, 32000) == 0)
+    {
+        printf("Table utl34_table1 is successfully created!!!\n");
+    }
+    else
+	printf("Failure!!!\n");
+
+/* Create table utl34_table2. */
+    exec sql create table utl34_table2(col_char char(32000));
+
+    memset(vch.buf, '3', 32000);
+    vch.buf_size = 32000;
+    memset(vch.buf, '*', 10);
+    memset(vch.buf+31990, '!', 10);
+
+    exec sql insert into utl34_table2 values (:vch);
+
+    exec sql select col_char into :vch2 from utl34_table2;
+
+    if (vch.buf_size == vch2.buf_size &&
+        memcmp(vch.buf, vch2.buf, 32000) == 0)
+    {
+        printf("Table utl34_table2 is successfully created!!!\n");
+    }
+    else
+        printf("Failure!!!\n");
+
+/* Create table utl34_table3. */
+    exec sql create table utl34_table3(col_text text(32000));
+
+    memset(vch.buf, '@', 32000);
+    vch.buf_size = 32000;
+    memset(vch.buf, '?', 10);
+    memset(vch.buf+31990, '#', 10);
+
+    exec sql insert into utl34_table3 values (:vch);
+
+    exec sql select col_text into :vch2 from utl34_table3;
+
+    if (vch.buf_size == vch2.buf_size &&
+        memcmp(vch.buf, vch2.buf, 32000) == 0)
+    {
+        printf("Table utl34_table3 is successfully created!!!\n");
+    }
+    else
+        printf("Failure!!!\n");
+
+/* Create table utl34_table4. */
+    exec sql create table utl34_table4(col_varchar varchar(32000));
+
+    memset(vch.buf, 'q', 32000);
+    vch.buf_size = 32000;
+    memset(vch.buf, '$', 10);
+    memset(vch.buf+31990, '?', 10);
+
+    exec sql insert into utl34_table4 values (:vch);
+
+    exec sql select col_varchar into :vch2 from utl34_table4;
+
+    if (vch.buf_size == vch2.buf_size &&
+        memcmp(vch.buf, vch2.buf, 32000) == 0)
+    {
+        printf("Table utl34_table4 is successfully created!!!\n");
+    }
+    else
+        printf("Failure!!!\n");
+
+/* Create table utl34_table5. */
+    exec sql create table utl34_table5(col_longvar long varchar);
+
+    memset(vch.buf, 'z', 32000);
+    vch.buf_size = 32000;
+    memset(vch.buf, '9', 10);
+    memset(vch.buf+31990, '0', 10);
+
+    exec sql insert into utl34_table5 values (:vch);
+
+    exec sql select col_longvar into :vch2 from utl34_table5;
+
+    if (vch.buf_size == vch2.buf_size &&
+        memcmp(vch.buf, vch2.buf, 32000) == 0)
+    {
+        printf("Table utl34_table5 is successfully created!!!\n");
+    }
+    else
+        printf("Failure!!!\n");
+
+    exec sql disconnect;
+}
+
+!!
+? esqlc kopy32.sc 
+<<
+~
+>>
+? sepcc kopy32 
+<<
+~
+>>
+? seplnk kopy32 
+<<
+~
+>>
+? run kopy32.exe SEPPARAMDB3 
+<<
+Table utl34_table1 is successfully created!!!
+Table utl34_table2 is successfully created!!!
+Table utl34_table3 is successfully created!!!
+Table utl34_table4 is successfully created!!!
+Table utl34_table5 is successfully created!!!
+>>
+? copydb -add_drop -all -infile=kopy32.in -outfile=kopy32.out -noint utildb3 
+<<
+~
+>>
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* \i kopy32.out 
+<<
+~
+>>
+* \q 
+<<
+~
+>>
+? sql -s SEPPARAMDB4 
+<<
+
+>>
+* \i kopy32.in
+<<
+~
+>>
+* select varchar(left(col_c,20),60) from utl34_table1\p\g
+<<
+ select varchar(left(col_c,20),60) from utl34_table1
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|aaaaa@@@@@@@@@@aaaaa                                        |
++------------------------------------------------------------+
+(1 row)
+>>
+* select varchar(right(col_c,20),60) from utl34_table1\p\g
+<<
+ select varchar(right(col_c,20),60) from utl34_table1
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|aaaaaaaaaa!!!!!!!!!!                                        |
++------------------------------------------------------------+
+(1 row)
+>>
+* select varchar(left(col_char,20),60) from utl34_table2\p\g
+<<
+ select varchar(left(col_char,20),60) from utl34_table2
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|**********3333333333                                        |
++------------------------------------------------------------+
+(1 row)
+>>
+* select varchar(right(col_char,20),60) from utl34_table2\p\g
+<<
+ select varchar(right(col_char,20),60) from utl34_table2
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|3333333333!!!!!!!!!!                                        |
++------------------------------------------------------------+
+(1 row)
+>>
+* select varchar(left(col_text,20),60) from utl34_table3\p\g
+<<
+ select varchar(left(col_text,20),60) from utl34_table3
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|??????????@@@@@@@@@@                                        |
++------------------------------------------------------------+
+(1 row)
+>>
+* select varchar(right(col_text,20),60) from utl34_table3\p\g
+<<
+ select varchar(right(col_text,20),60) from utl34_table3
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|@@@@@@@@@@##########                                        |
++------------------------------------------------------------+
+(1 row)
+>>
+* select varchar(left(col_varchar,20),60) from utl34_table4\p\g
+<<
+ select varchar(left(col_varchar,20),60) from utl34_table4
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|$$$$$$$$$$qqqqqqqqqq                                        |
++------------------------------------------------------------+
+(1 row)
+>>
+* select varchar(right(col_varchar,20),60) from utl34_table4\p\g
+<<
+ select varchar(right(col_varchar,20),60) from utl34_table4
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|qqqqqqqqqq??????????                                        |
++------------------------------------------------------------+
+(1 row)
+>>
+* select varchar(left(col_longvar,20),60) from utl34_table5\p\g
+<<
+ select varchar(left(col_longvar,20),60) from utl34_table5
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|9999999999zzzzzzzzzz                                        |
++------------------------------------------------------------+
+(1 row)
+>>
+* select varchar(right(col_longvar,20),60) from utl34_table5\p\g
+<<
+ select varchar(right(col_longvar,20),60) from utl34_table5
+
++------------------------------------------------------------+
+|col1                                                        |
++------------------------------------------------------------+
+|zzzzzzzzzz0000000000                                        |
++------------------------------------------------------------+
+(1 row)
+>>
+* \q
+<<
+~
+>>
+? sql -s SEPPARAMDB3
+<<
+
+>>
+* drop table utl34_table1\p\g
+<<
+/* SQL Startup File */
+ drop table utl34_table1
+>>
+* drop table utl34_table2\p\g
+<<
+ drop table utl34_table2
+>>
+* drop table utl34_table3\p\g
+<<
+ drop table utl34_table3
+>>
+* drop table utl34_table4\p\g
+<<
+ drop table utl34_table4
+>>
+* drop table utl34_table5\p\g
+<<
+ drop table utl34_table5
+>>
+* \q
+<<
+~
+>>
+? delete kopy32.sc 
+<<
+~
+>>
+? delete kopy32.c 
+<<
+~
+>>
+? delete kopy32.o 
+<<
+~
+>>
+? delete kopy32.obj 
+<<
+~
+>>
+? delete kopy32.exe 
+<<
+~
+>>
+? delete kopy32.in
+<<
+~
+>>
+? delete kopy32.out
+<<
+~
+>>
+? delete utl34_table1.testenv
+<<
+~
+>>
+? delete utl34_table2.testenv
+<<
+~
+>>
+? delete utl34_table3.testenv
+<<
+~
+>>
+? delete utl34_table4.testenv
+<<
+~
+>>
+? delete utl34_table5.testenv
+<<
+~
+>>
+
+
+Ending at: Mon Jun 04 18:37:49 2001

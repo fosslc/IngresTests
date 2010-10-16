@@ -1,0 +1,298 @@
+/*
+	Copyright (c) 2007 Ingres Corporation
+
+        Test Name: qp299.sep
+        Time: Fri May 11 13:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp299.sep
+        Module  : be/qryproc
+        Filename: qp299.sep
+        Purpose : To test the new feature SQL syntax of 'select first'.
+        Input Files  : setup.sql
+        Output Files : first1.exe, first2.exe
+        Database     : qryprocdb
+        Tables       : qp299_table1, qp299_table2, qp299_table3
+        Synopsis     : A new reserved (keyword) word of 'FIRST' has been added
+                       to SQL to enable the ability to quantify a select for so
+                       many of the first rows in a query.  This test will use
+                       valid  and invalid syntax for select and subselect
+		       queries within an embedded C program.  This feature
+                       is available starting with Ingres II 2.6/0106.
+
+ History: 11-May-2001   (sarjo01) Created
+          17-May-2001   (sarjo01) Recanonized, adding some new test cases.
+			Issue 10983067 created and current incorrect behavior
+		        is in the canon Query 4 from run first2.exe.
+	  14-Jun-2004   (sinra04) Replaced esqlc command with sepesqlc command
+			to make tests when run on VMS use same canon as that
+			of  Unix & Windows.
+	  20-Apr-2007	(hayke02) Fix for bug 117404 causes two syntax errors
+			to change and two syntax errors to disappear.
+	  17-Jan-2008	(hayke02) Reinstate 'Error in file' message to VMS
+			canon which was erroneously removed by previous change.
+
+**
+**  SELECT FIRST ... SYNTAX   
+**
+**  ESQLC 
+**
+**  Known Problems:
+**
+**  1) SELECT FIRST 0 ... returns rows, (Issue 10891825) (RESOLVED)
+**  2) Query 8: SELECT FIRST ... in a SUBSELECT (Issue 10842919) (RESOLVED)
+**     This causes a precompiler syntax error currently. 
+**  3) Queries 5,6,7: runtime syntax errors (Issue 10842919) (RESOLVED)
+**  4) SELECT FIRST 1A ... wrong error msg. (10983067).
+**
+*/
+? fill setup.sql 
+!!
+drop table qp299_table1\g
+drop table qp299_table2\g
+drop table qp299_table3\g
+create table qp299_table1 (a1 int)\g
+insert into qp299_table1 values (0)\g
+insert into qp299_table1 select a1 + 1 from qp299_table1\g
+insert into qp299_table1 select a1 + 2 from qp299_table1\g
+insert into qp299_table1 select a1 + 4 from qp299_table1\g
+insert into qp299_table1 select a1 + 8 from qp299_table1\g
+insert into qp299_table1 select a1 + 16 from qp299_table1\g
+insert into qp299_table1 select a1 + 32 from qp299_table1\g
+insert into qp299_table1 select a1 + 64 from qp299_table1\g
+insert into qp299_table1 select a1 + 128 from qp299_table1\g
+insert into qp299_table1 select a1 from qp299_table1\g
+create table qp299_table2 as select a1 from qp299_table1 where a1 < 10\g
+commit\g
+!!
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? fill first1.sc 
+!!
+/*
+** All queries should cause precompiler
+** syntax errors.
+*/
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+      int       i;
+      char      a1[64];
+   EXEC SQL END DECLARE SECTION;
+
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+
+   i = 0;
+   printf("Query 1\n");
+   EXEC SQL select first 1a into :a1 from qp299_table2;
+   EXEC SQL BEGIN;
+      i++;
+   EXEC SQL END;
+   printf("Query 1: %d\n", i);
+
+   i = 0;
+   printf("Query 2\n");
+   EXEC SQL select first a1 into :a1 from qp299_table2;
+   EXEC SQL BEGIN;
+      i++;
+   EXEC SQL END;
+   printf("Query 2: %d\n", i);
+
+   i = 0;
+   printf("Query 3\n");
+   EXEC SQL select first junk a1 into :a1 from qp299_table2;
+   EXEC SQL BEGIN;
+      i++;
+   EXEC SQL END;
+   printf("Query 3: %d\n", i);
+
+   i = 0;
+   printf("Query 4\n");
+   EXEC SQL select first 1.1 a1 into :a1 from qp299_table2;
+   EXEC SQL BEGIN;
+      i++;
+   EXEC SQL END;
+   printf("Query 4: %d\n", i);
+
+   i = 0;
+   printf("Query 5\n");
+   EXEC SQL select first -1 a1 into :a1 from qp299_table2;
+   EXEC SQL BEGIN;
+      i++;
+   EXEC SQL END;
+   printf("Query 5: %d\n", i);
+}
+!!
+? fill first2.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+      int       i;
+      int       ival;
+   EXEC SQL END DECLARE SECTION;
+
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+
+   i = 0;
+   printf("Query 1\n");
+   EXEC SQL select first 0 a1 into :ival from qp299_table2;
+   EXEC SQL BEGIN;
+      i++;
+   EXEC SQL END;
+   printf("Query 1: %d\n", i);
+
+   i = 0;
+   printf("Query 2\n");
+   EXEC SQL select first 1 a1 into :ival from qp299_table1;
+   EXEC SQL BEGIN;
+      i++;
+   EXEC SQL END;
+   printf("Query 2: %d\n", i);
+
+   i = 0;
+   printf("Query 3\n");
+   EXEC SQL select first 10 a1 into :ival from qp299_table1 order by 1;
+   EXEC SQL BEGIN;
+      i++;
+   EXEC SQL END;
+   printf("Query 3: %d\n", i);
+
+   i = 0;
+   printf("Query 4\n");
+   EXEC SQL select first 1a a1 into :ival from qp299_table2;
+   EXEC SQL BEGIN;
+      i++;
+   EXEC SQL END;
+   printf("Query 4: %d\n", i);
+
+   printf("Query 5\n");
+   EXEC SQL create table qp299_table3 as select first 0 a1 from qp299_table2;
+   EXEC SQL select count(*) into :i from qp299_table3; 
+   printf("Query 5: %d\n", i);
+
+   EXEC SQL drop table qp299_table3;
+
+   printf("Query 6\n");
+   EXEC SQL create table qp299_table3 as select first 1 a1 from qp299_table2;
+   EXEC SQL select count(*) into :i from qp299_table3; 
+   printf("Query 6: %d\n", i);
+
+   EXEC SQL drop table qp299_table3;
+
+   printf("Query 7\n");
+   EXEC SQL create table qp299_table3 as select first 10 a1 from qp299_table2;
+   EXEC SQL select count(*) into :i from qp299_table3; 
+   printf("Query 7: %d\n", i);
+
+   EXEC SQL drop table qp299_table3;
+
+}
+!!
+? sepesqlc first1.sc 
+<<
+ESQL first1.sc:
+%% Error in file first1.sc, Line 44:
+E_EQ0070 Missing word 'INTO' in SELECT/FETCH statement.
+
+%% Error in file first1.sc, Line 52:
+E_EQ0244 Syntax error on '1.1'.
+
+>>
+<< IF (VMS) 
+%% Error in file first1.sc, Line 44:
+E_EQ0070 Missing word 'INTO' in SELECT/FETCH statement.
+
+%% Error in file first1.sc, Line 52:
+E_EQ0244 Syntax error on '1.1'.
+
+>>
+? sepesqlc first2.sc 
+<<
+~
+>>
+? sepcc first2.c 
+<<
+~
+>>
+? seplnk first2 
+<<
+~
+>>
+? run first2.exe SEPPARAMDB 
+<<
+Query 1
+Query 1: 20
+Query 2
+Query 2: 1
+Query 3
+Query 3: 10
+Query 4
+E_US0836 line 1, Column 'a' not found in any specified table.
+    (Thu May 17 12:21:56 2001)
+Query 4: 0
+Query 5
+Query 5: 20
+Query 6
+Query 6: 1
+Query 7
+Query 7: 10
+>>
+? delete first1.c 
+<<
+~
+>>
+? delete first2.c 
+<<
+~
+>>
+? delete first2.o 
+<<
+~
+>>
+? delete first2.obj 
+<<
+~
+>>
+? delete first2.exe 
+<<
+~
+>>
+
+
+Ending at: Thu May 17 12:22:24 2001

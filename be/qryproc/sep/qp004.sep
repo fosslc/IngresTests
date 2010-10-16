@@ -1,0 +1,221 @@
+/*
+	Test Name: EAA05
+	Time: 28-MAY-1992 10:11:37
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : EAA05
+	Module  : 
+	Filename: EAA05.SEP
+	Purpose	: Check for correctness of returns in UNION ALL
+		as described in technotes r6032.dbms
+	Input Files  :
+	Output Files :eaa05_a.tes, eaa05_b.tes created with FILL commands
+	Database     :
+	Tables       :
+	Synopsis     : perform outer join
+
+		use FILL to create data files - these tables
+			were supplied by a customer, and include
+			duplicate names
+
+> If you have support then use Ingres/ADVISOR and go look at document
+> number US-13272 which discusses this. 
+
+		drop and create test tables
+		copy in the data from files
+		display table content
+		do normal join
+		do "outer join", test for correctly retained
+			duplicates in UNION ALL
+
+	REQUIRES SEPPARAMDB variable/logical
+
+
+ History: 28-MAY-1992	jds	Created
+				canonized against 6.4/02
+
+          28-MAY-1992	jds	test against 6.3, alt canons for drop
+				table
+	  23-Mar-1999 (vande02) Hard-coded VPG_SZ to 2K and changed 'sql -s
+                                SEPPARAMDB' canon to be empty, in order to
+                                catch the msg. "TM could not connect..." if the
+                                test database did not exist.
+*/
+? fill eaa05_a.tes 
+!!
+    5Adams
+
+    5Adams
+
+    5Brown
+
+    5Brown
+
+    8Campbell
+
+    5Dixon
+
+    5Estes
+
+!!
+? fill eaa05_b.tes 
+!!
+    5Adams	      7.500
+
+    5Dixon	      9.400
+
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* set autocommit on;\g
+<<
+>>
+* drop eaa05_a,eaa05_b;\g
+<<
+~
+>>
+* create table eaa05_b(name char(12) with null,rating float with null) 
+<<
+>>
+*	with duplicates, page_size=2048;\g
+<<
+>>
+* copy eaa05_b(name= varchar(0)tab with null(']^NULL^['), 
+<<
+>>
+*	rating= c0nl with null(']^NULL^['),nl= d1)
+<<
+>>
+*	from 'eaa05_b.tes';\g
+<<
+(2 rows)
+>>
+* create table eaa05_a(name char(12) with null) with duplicates, page_size=2048;\g
+<<
+>>
+* copy eaa05_a(name= varchar(0)nl with null(']^NULL^['),nl= d1)
+<<
+>>
+*	from 'eaa05_a.tes';\g
+<<
+(7 rows)
+>>
+* select * from eaa05_a;\g
+<<
++------------+
+|name        |
++------------+
+|Adams       |
+|Adams       |
+|Brown       |
+|Brown       |
+|Campbell    |
+|Dixon       |
+|Estes       |
++------------+
+(7 rows)
+>>
+* select * from eaa05_b;\g
+<<
++------------+-----------+
+|name        |rating     |
++------------+-----------+
+|Adams       |      7.500|
+|Dixon       |      9.400|
++------------+-----------+
+(2 rows)
+>>
+* select eaa05_a.name, eaa05_b.rating 
+<<
+>>
+*	from eaa05_a , eaa05_b
+<<
+>>
+*	where eaa05_a.name = eaa05_b.name   
+<<
+>>
+*	union 
+<<
+>>
+* select eaa05_a.name, 0.0 
+<<
+>>
+*	from eaa05_a 
+<<
+>>
+*	where not exists 
+<<
+>>
+*		(select * from eaa05_b 
+<<
+>>
+*			where eaa05_b.name = eaa05_a.name) 
+<<
+>>
+* order by name;\g
+<<
++------------+-----------+
+|name        |rating     |
++------------+-----------+
+|Adams       |      7.500|
+|Brown       |      0.000|
+|Campbell    |      0.000|
+|Dixon       |      9.400|
+|Estes       |      0.000|
++------------+-----------+
+(5 rows)
+>>
+* select eaa05_a.name, eaa05_b.rating 
+<<
+>>
+*	from eaa05_a , eaa05_b   
+<<
+>>
+*	where eaa05_a.name = eaa05_b.name 
+<<
+>>
+* union all 
+<<
+>>
+* select eaa05_a.name, 0.0 
+<<
+>>
+*	from eaa05_a 
+<<
+>>
+*	where not exists 
+<<
+>>
+*		(select * from eaa05_b 
+<<
+>>
+*			where eaa05_b.name = eaa05_a.name) 
+<<
+>>
+* order by name;\g
+<<
++------------+-----------+
+|name        |rating     |
++------------+-----------+
+|Adams       |      7.500|
+|Adams       |      7.500|
+|Brown       |      0.000|
+|Brown       |      0.000|
+|Campbell    |      0.000|
+|Dixon       |      9.400|
+|Estes       |      0.000|
++------------+-----------+
+(7 rows)
+>>
+* drop eaa05_a,eaa05_b;\g
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: 28-MAY-1992 11:24:44

@@ -1,0 +1,457 @@
+/*
+	Test Name: sga08.sep
+	Time: 24-AUG-1992 15:12:02
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : SGA08
+	Module  : STAR
+	Filename: SGA08.SEP
+	Purpose	: Test STAR INSERT, DELETE, and UPDATE commands using
+		SUBSELECTs
+	Input Files  : none
+	Output Files : none
+	Database     : STARDDB1
+	Tables       : qpr_spj[1..7], qpr_s1, qpr_s5, qpr_sp3
+
+	Synopsis     : Drops and recreates table SGA08 and
+		view v_SGA08; INSERTS into table select * from 
+		the view. Inserts, updates, deletes using some 
+		simple, some compound subselect conditions.  Repeat
+		the series as 2 multi-statement transactions.
+
+
+	Requires SEPPARAM_DDB defined as 'starddb1/star'
+
+	Expects standard 7-node STAR "phase 1" setup.
+
+	Does NOT use 2 phase-commit.
+
+	Runs single-threaded; takes about 10 minutes on SWIFT/VMS
+
+	Table SGA08 is actually created at SNODE7, in LDB7; be sure the
+	DBMS there will permit you to create tables via INGRES.
+
+
+ History: 24-AUG-1992	simutis		Created
+
+          24-AUG-1992	simutis		check in maintenance mode
+
+          24-AUG-1992	simutis		fix typos, re-run
+
+	  16-09-93     barbh
+		       Changed SEPPARAM_DDB to SEPPARAMDB. This makes the
+		       star test consistent with testkit standards.
+*/
+
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* drop table SGA08; \g
+<<
+>>
+<<
+E_US0AC1 DROP: 'sga08' does not exist or is not owned by you.
+    (24-AUG-1992 15:29:06)
+
+>>
+* drop view v_SGA08; \g
+<<
+E_US0AC1 DROP: 'v_sga08' does not exist or is not owned by you.
+    (24-AUG-1992 15:29:37)
+
+>>
+* create table SGA08 as select * from qpr_spj7; \g
+<<
+(24 rows)
+>>
+* delete from SGA08; \g 
+<<
+(24 rows)
+>>
+* insert into SGA08 select * from qpr_spj1 where jno in (select jno from qpr_j5); \g
+<<
+(24 rows)
+>>
+* commit; \g
+<<
+>>
+* delete from SGA08; \g 
+<<
+(24 rows)
+>>
+* insert into SGA08 select * from qpr_spj1; \g
+<<
+(24 rows)
+>>
+* commit; \g
+<<
+>>
+* create view v_SGA08 as select * from qpr_spj7 union all select * from qpr_spj2; \g
+<<
+>>
+* insert into SGA08 select * from v_SGA08; \g
+<<
+(48 rows)
+>>
+* commit; \g
+<<
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s1) and sno = '-
+s1'; \g
+<<
+(6 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s2) and sno = '-
+s2'; \g
+<<
+(24 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s3) and sno = '-
+s3'; \g
+<<
+(6 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s4) and sno = '-
+s4'; \g
+<<
+(6 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s5) and sno = '-
+s5'; \g
+<<
+(30 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s6) and sno = '-
+s6'; \g
+<<
+(0 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s7) and sno = '-
+s7'; \g
+<<
+(0 rows)
+>>
+* commit; \g
+<<
+>>
+* update SGA08 set qty = qty - 100 where sno in (select sno from qpr_s5) and sno <> -
+'s5'; \g
+<<
+(42 rows)
+>>
+* commit; \g
+<<
+>>
+* update SGA08 set qty = qty - 100 where sno in (select sno from qpr_s5) and sno <> -
+'s5' OR sno in (select sno from qpr_s1) and sno <> 's1' OR sno in (select sno from q-
+pr_sp3) and sno <> 's3'; \g
+<<
+(72 rows)
+>>
+* commit; \g
+<<
+>>
+* select count (sno) from SGA08; \g
+<<
++-------------+
+|col1         |
++-------------+
+|           72|
++-------------+
+(1 row)
+>>
+* commit; \g
+<<
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s5 where  sno <-
+> 's5') OR sno in (select sno from qpr_s1 where sno <> 's1') OR sno in (select sno f-
+rom qpr_sp3 where sno <> 's3'); \g
+<<
+(72 rows)
+>>
+* commit; \g
+<<
+>>
+* update SGA08 set qty = qty - 100 where sno in (select sno from qpr_s5 where  sno =-
+  's5') OR sno in (select sno from qpr_s1 where sno = 's1') OR sno in (select sno fr-
+om qpr_sp3 where sno ='s3'); \g
+<<
+(42 rows)
+>>
+* commit; \g
+<<
+>>
+* select * from SGA08 where sno in (select sno from qpr_s5 where  sno =  's5') OR sn-
+o in (select sno from qpr_s1 where sno = 's1') OR sno in (select sno from qpr_sp3 wh-
+ere sno ='s3'); \g
+<<
++------+------+------+------+
+|sno   |pno   |jno   |qty   |
++------+------+------+------+
+|s1    |p1    |j1    |   100|
+|s1    |p1    |j1    |   100|
+|s1    |p1    |j1    |   100|
+|s1    |p1    |j4    |   600|
+|s1    |p1    |j4    |   600|
+|s1    |p1    |j4    |   600|
+|s3    |p3    |j1    |   100|
+|s3    |p3    |j1    |   100|
+|s3    |p3    |j1    |   100|
+|s3    |p4    |j2    |   400|
+|s3    |p4    |j2    |   400|
+|s3    |p4    |j2    |   400|
+|s5    |p1    |j4    |   100|
+|s5    |p1    |j4    |   100|
+|s5    |p1    |j4    |   100|
+|s5    |p2    |j2    |   200|
+|s5    |p2    |j2    |   200|
+|s5    |p2    |j2    |   200|
+|s5    |p2    |j4    |   100|
+|s5    |p2    |j4    |   100|
+|s5    |p2    |j4    |   100|
+|s5    |p3    |j4    |   200|
+|s5    |p3    |j4    |   200|
+|s5    |p3    |j4    |   200|
+|s5    |p4    |j4    |   800|
+|s5    |p4    |j4    |   800|
+|s5    |p4    |j4    |   800|
+|s5    |p5    |j4    |   400|
+|s5    |p5    |j4    |   400|
+|s5    |p5    |j4    |   400|
+|s5    |p5    |j5    |   500|
+|s5    |p5    |j5    |   500|
+|s5    |p5    |j5    |   500|
+|s5    |p5    |j7    |   100|
+|s5    |p5    |j7    |   100|
+|s5    |p5    |j7    |   100|
+|s5    |p6    |j2    |   200|
+|s5    |p6    |j2    |   200|
+|s5    |p6    |j2    |   200|
+|s5    |p6    |j4    |   500|
+|s5    |p6    |j4    |   500|
+|s5    |p6    |j4    |   500|
++------+------+------+------+
+(42 rows)
+>>
+* commit; \g
+<<
+>>
+* delete from SGA08 where qty < 0 and sno in (select sno from qpr_s5 where  sno =  '-
+s5') OR sno in (select sno from qpr_s1 where sno = 's1') OR sno in (select sno from -
+qpr_sp3 where sno ='s3'); \g
+<<
+(12 rows)
+>>
+* commit; \g
+<<
+>>
+* insert into SGA08 select * from qpr_spj6 where sno in (select sno from qpr_s5 wher-
+e  sno =  's5') OR sno in (select sno from qpr_s1 where sno = 's1') OR sno in (selec-
+t sno from qpr_sp3 where sno ='s3'); \g
+<<
+(14 rows)
+>>
+* commit; \g
+<<
+>>
+* drop table SGA08; \g
+<<
+>>
+* drop view v_SGA08; \g
+<<
+>>
+* commit; \g
+<<
+>>
+* set autocommit off; \g
+<<
+>>
+* drop table SGA08; \g
+<<
+>>
+<<
+E_US0AC1 DROP: 'sga08' does not exist or is not owned by you.
+    (24-AUG-1992 15:34:22)
+
+>>
+* drop view v_SGA08; \g
+<<
+>>
+<<
+E_US0AC1 DROP: 'v_sga08' does not exist or is not owned by you.
+    (24-AUG-1992 15:34:32)
+
+>>
+* create table SGA08 as select * from qpr_spj7; \g
+<<
+(24 rows)
+>>
+* delete from SGA08; \g 
+<<
+(24 rows)
+>>
+* insert into SGA08 select * from qpr_spj1; \g
+<<
+(24 rows)
+>>
+* create view v_SGA08 as select * from qpr_spj7 union all select * from qpr_spj2; \g
+<<
+>>
+* insert into SGA08 select * from v_SGA08; \g
+<<
+(48 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s1) and sno = '-
+s1'; \g
+<<
+(6 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s2) and sno = '-
+s2'; \g
+<<
+(24 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s3) and sno = '-
+s3'; \g
+<<
+(6 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s4) and sno = '-
+s4'; \g
+<<
+(6 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s5) and sno = '-
+s5'; \g
+<<
+(30 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s6) and sno = '-
+s6'; \g
+<<
+(0 rows)
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s7) and sno = '-
+s7'; \g
+<<
+(0 rows)
+>>
+* update SGA08 set qty = qty - 100 where sno in (select sno from qpr_s5) and sno <> -
+'s5'; \g
+<<
+(42 rows)
+>>
+* update SGA08 set qty = qty - 100 where sno in (select sno from qpr_s5) and sno <> -
+'s5' OR sno in (select sno from qpr_s1) and sno <> 's1' OR sno in (select sno from q-
+pr_sp3) and sno <> 's3'; \g
+<<
+(72 rows)
+>>
+* select count (sno) from SGA08; \g
+<<
++-------------+
+|col1         |
++-------------+
+|           72|
++-------------+
+(1 row)
+>>
+* commit; \g
+<<
+>>
+* update SGA08 set qty = qty + 100 where sno in (select sno from qpr_s5 where  sno <-
+> 's5') OR sno in (select sno from qpr_s1 where sno <> 's1') OR sno in (select sno f-
+rom qpr_sp3 where sno <> 's3'); \g
+<<
+(72 rows)
+>>
+* update SGA08 set qty = qty - 100 where sno in (select sno from qpr_s5 where  sno =-
+  's5') OR sno in (select sno from qpr_s1 where sno = 's1') OR sno in (select sno fr-
+om qpr_sp3 where sno ='s3'); \g
+<<
+(42 rows)
+>>
+* select * from SGA08 where sno in (select sno from qpr_s5 where  sno =  's5') OR sn-
+o in (select sno from qpr_s1 where sno = 's1') OR sno in (select sno from qpr_sp3 wh-
+ere sno ='s3'); \g
+<<
++------+------+------+------+
+|sno   |pno   |jno   |qty   |
++------+------+------+------+
+|s1    |p1    |j1    |   100|
+|s1    |p1    |j1    |   100|
+|s1    |p1    |j1    |   100|
+|s1    |p1    |j4    |   600|
+|s1    |p1    |j4    |   600|
+|s1    |p1    |j4    |   600|
+|s3    |p3    |j1    |   100|
+|s3    |p3    |j1    |   100|
+|s3    |p3    |j1    |   100|
+|s3    |p4    |j2    |   400|
+|s3    |p4    |j2    |   400|
+|s3    |p4    |j2    |   400|
+|s5    |p1    |j4    |   100|
+|s5    |p1    |j4    |   100|
+|s5    |p1    |j4    |   100|
+|s5    |p2    |j2    |   200|
+|s5    |p2    |j2    |   200|
+|s5    |p2    |j2    |   200|
+|s5    |p2    |j4    |   100|
+|s5    |p2    |j4    |   100|
+|s5    |p2    |j4    |   100|
+|s5    |p3    |j4    |   200|
+|s5    |p3    |j4    |   200|
+|s5    |p3    |j4    |   200|
+|s5    |p4    |j4    |   800|
+|s5    |p4    |j4    |   800|
+|s5    |p4    |j4    |   800|
+|s5    |p5    |j4    |   400|
+|s5    |p5    |j4    |   400|
+|s5    |p5    |j4    |   400|
+|s5    |p5    |j5    |   500|
+|s5    |p5    |j5    |   500|
+|s5    |p5    |j5    |   500|
+|s5    |p5    |j7    |   100|
+|s5    |p5    |j7    |   100|
+|s5    |p5    |j7    |   100|
+|s5    |p6    |j2    |   200|
+|s5    |p6    |j2    |   200|
+|s5    |p6    |j2    |   200|
+|s5    |p6    |j4    |   500|
+|s5    |p6    |j4    |   500|
+|s5    |p6    |j4    |   500|
++------+------+------+------+
+(42 rows)
+>>
+* delete from SGA08 where qty < 0 and sno in (select sno from qpr_s5 where  sno =  '-
+s5') OR sno in (select sno from qpr_s1 where sno = 's1') OR sno in (select sno from -
+qpr_sp3 where sno ='s3'); \g
+<<
+(12 rows)
+>>
+* insert into SGA08 select * from qpr_spj6 where sno in (select sno from qpr_s5 wher-
+e  sno =  's5') OR sno in (select sno from qpr_s1 where sno = 's1') OR sno in (selec-
+t sno from qpr_sp3 where sno ='s3'); \g
+<<
+(14 rows)
+>>
+* commit; \g
+<<
+>>
+* drop table SGA08; \g
+<<
+>>
+* drop view v_SGA08; \g
+<<
+>>
+* commit; \g
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: 24-AUG-1992 16:04:57

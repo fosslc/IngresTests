@@ -1,0 +1,275 @@
+/*
+	Test Name: dt40.sep
+	Time: Mon Apr 23 16:44:03 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : dt40.sep 
+	Module  : be/datatypes
+	Filename: dt40.sep
+	Purpose	: To test the maximum size of 32K for character data types.
+	Input Files  : longvar.sc
+	Output Files : longvar.exe
+	Database     : datatypedb2 
+	Tables       : dt40_table
+	Synopsis     : This sep test is to test the character data type 
+                       'long varchar' with the maximum size of 32K bytes 
+                       column. And using various string functions to retrieve 
+                       the data from the table. 
+
+ History: 23-Apr-2001	(wu$ca01)	Created
+          05-Jun-2001	(wu$ca01) Test will fail on NT platform. See issue
+                        10928220. Once the issue is fixed, the 
+                        <<IF (NT_GENERIC)>> CANON can be remove from this test.
+	  20-Jul-2001	(wu$ca01) Remove NT_GENERIC canon due to issue 10928220
+                        resolved.
+*/
+? fill longvar.sc 
+!!
+/* This program is to test the 'long varchar' character data type with the
+** maximum size of 32K bytes per column, and the retrieval of the data using
+** various string functions.
+*/
+
+#include <stdio.h>
+exec sql include sqlca;
+
+exec sql begin declare section;
+        char   *dbname;
+        varchar struct {
+            short       buf_size;
+            char        buf[32010];
+        } vch;
+
+        varchar struct {
+            short       buf_size;
+            char        buf[32010];
+        } vch2;
+
+exec sql end declare section;
+
+short  lenval[] = { 31998, 31999, 32000, 32001, 32002, 0 };
+
+main(int argc, char* argv[])
+{
+    int     i;
+    short   curlen;
+
+    exec sql whenever sqlerror call sqlprint;
+
+    dbname = argv[1];
+
+    exec sql connect :dbname;
+    /* Ignore errors from drop table */
+    exec sql whenever sqlerror continue;
+    exec sql drop table dt40_table;
+
+    exec sql whenever sqlerror call sqlprint;
+    exec sql create table dt40_table(col_longvar long varchar);
+
+    for (i = 0; (curlen=lenval[i]) != 0; i++)
+    {
+       exec sql delete from dt40_table;
+
+       /* To set all the bytes in a block of memory with the character '^' */
+       memset(vch.buf, '^', curlen);
+       vch.buf_size = curlen;
+       /* Replace the first character with 'L' */
+       memset(vch.buf, 'L', 1);
+       /* Replace the last character with '3' */
+       memset(vch.buf+curlen-1, '3', 1);
+
+       exec sql insert into dt40_table values (:vch);
+
+       exec sql select col_longvar into :vch2 from dt40_table;
+
+    /* If the table is successfully created,
+    /* test various string functions. Otherwise, print failure. */
+    /* Some string functions are enclosed by varchar() function due */
+    /* to the reason that these functions cannot accept the 'long varchar' */
+    /* character data type. Therefore, it first need to coerce the column */
+    /* to an acceptable data type. In this case, it is convert to */
+    /* 'varchar' data type. */
+       printf("Buffer size %d ... ", curlen);
+       if (vch.buf_size == vch2.buf_size &&
+           memcmp(vch.buf, vch2.buf, curlen) == 0)
+          printf("Success!!!\n");
+       else
+          printf("Failure!!!\n");
+    }
+
+    printf("Test the left() function.\n");
+    printf("Query:select left(col_longvar, 10) from dt40_table.\n");
+    exec sql select left(col_longvar, 10) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the right()function.\n");
+    printf("Query:select right(col_longvar, 10) from dt40_table.\n");
+    exec sql select right(col_longvar, 10) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the locate() function.\n");
+    printf("Query:select varchar(locate(varchar(col_longvar),'L'),60) from dt40_table.\n");
+    exec sql select varchar(locate(varchar(col_longvar), 'L'),60) into :vch2.buf from dt40_table;
+    printf("The first occurrence of 'L' is in location: %s\n", vch2.buf);
+    printf("Query:select varchar(locate(varchar(col_longvar),'^'),60) from dt40_table.\n");
+    exec sql select varchar(locate(varchar(col_longvar), '^'),60) into :vch2.buf from dt40_table;
+    printf("The first occurrence of '^' is in location: %s\n", vch2.buf);
+    printf("Query:select varchar(locate(varchar(col_longvar),'3'),60) from dt40_table.\n");
+    exec sql select varchar(locate(varchar(col_longvar), '3'),60) into :vch2.buf from dt40_table;
+    printf("The first occurrence of '3' is in location: %s\n", vch2.buf);
+
+    printf("Test the shift() function.\n");
+    printf("Query:select varchar(shift(left(varchar(col_longvar),5),2),60) from dt40_table.\n");
+    exec sql select varchar(shift(left(varchar(col_longvar),5),2),60) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+    printf("Query:select varchar(shift(left(varchar(col_longvar),5),-1),60) from dt40_table.\n");
+    exec sql select varchar(shift(left(varchar(col_longvar),5),-1),60) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the charextract() function.\n");
+    printf("Query:select charextract(varchar(col_longvar),32000) from dt40_table.\n");
+    exec sql select charextract(varchar(col_longvar), 32000) into :vch2.buf from dt40_table;
+    printf("The 32000th character is: %s\n", vch2.buf);
+
+    printf("Test the concat() function.\n");
+    printf("Query:select concat(left(col_longvar,3), right(col_longvar, 2)) from dt40_table.\n");
+    exec sql select concat(left(col_longvar,3), right(col_longvar, 2)) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the length() function.\n");
+    printf("Query:select varchar(length(col_longvar),60) from dt40_table.\n");
+    exec sql select varchar(length(col_longvar),60) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the pad() function.\n");
+    printf("Query:select varchar(length(pad(varchar(col_longvar)))) from dt40_table.\n");
+    exec sql select varchar(length(pad(varchar(col_longvar)))) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the lowercase() function.\n");
+    printf("Query:select lowercase(left(col_longvar,10)) from dt40_table.\n");
+    exec sql select lowercase(left(col_longvar,10)) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the uppercase() function.\n");
+    printf("Query:select uppercase(left(col_longvar,10)) from dt40_table.\n");
+    exec sql select uppercase(left(col_longvar,10)) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the size() function.\n");
+    printf("Query:select varchar(size(col_longvar),60) from dt40_table.\n");
+    exec sql select varchar(size(col_longvar),60) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the soundex() function.\n");
+    printf("Query:select soundex(varchar(col_longvar)) from dt40_table.\n");
+    exec sql select soundex(varchar(col_longvar)) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the squeeze() function.\n");
+    printf("Query:select varchar(squeeze(varchar(col_longvar)),60) from dt40_table.\n");
+    exec sql select varchar(squeeze(varchar(col_longvar)),60) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("Test the trim() function.\n");
+    printf("Query:select varchar(trim(varchar(col_longvar)),60) from dt40_table.\n");
+    exec sql select varchar(trim(varchar(col_longvar)),60) into :vch2.buf from dt40_table;
+    printf("%s\n", vch2.buf);
+
+    printf("End Testing.\n");
+    exec sql disconnect;
+}
+!!
+? esqlc longvar.sc 
+<<
+~
+>>
+? sepcc longvar 
+<<
+~
+>>
+? seplnk longvar 
+<<
+~
+>>
+? run longvar.exe SEPPARAMDB 
+<<
+Buffer size 31998 ... Success!!!
+Buffer size 31999 ... Success!!!
+Buffer size 32000 ... Success!!!
+Buffer size 32001 ... Success!!!
+Buffer size 32002 ... Success!!!
+Test the left() function.
+Query:select left(col_longvar, 10) from dt40_table.
+L^^^^^^^^^
+Test the right()function.
+Query:select right(col_longvar, 10) from dt40_table.
+^^^^^^^^^3
+Test the locate() function.
+Query:select varchar(locate(varchar(col_longvar),'L'),60) from dt40_table.
+The first occurrence of 'L' is in location: 1
+Query:select varchar(locate(varchar(col_longvar),'^'),60) from dt40_table.
+The first occurrence of '^' is in location: 2
+Query:select varchar(locate(varchar(col_longvar),'3'),60) from dt40_table.
+The first occurrence of '3' is in location: 32001
+Test the shift() function.
+Query:select varchar(shift(left(varchar(col_longvar),5),2),60) from dt40_table.
+  L^^^^
+Query:select varchar(shift(left(varchar(col_longvar),5),-1),60) from dt40_table.
+^^^^
+Test the charextract() function.
+Query:select charextract(varchar(col_longvar),32000) from dt40_table.
+The 32000th character is: ^
+Test the concat() function.
+Query:select concat(left(col_longvar,3), right(col_longvar, 2)) from dt40_table.
+L^^^3
+Test the length() function.
+Query:select varchar(length(col_longvar),60) from dt40_table.
+32002
+Test the pad() function.
+Query:select varchar(length(pad(varchar(col_longvar)))) from dt40_table.
+32000
+Test the lowercase() function.
+Query:select lowercase(left(col_longvar,10)) from dt40_table.
+l^^^^^^^^^
+Test the uppercase() function.
+Query:select uppercase(left(col_longvar,10)) from dt40_table.
+L^^^^^^^^^
+Test the size() function.
+Query:select varchar(size(col_longvar),60) from dt40_table.
+0
+Test the soundex() function.
+Query:select soundex(varchar(col_longvar)) from dt40_table.
+L000
+Test the squeeze() function.
+Query:select varchar(squeeze(varchar(col_longvar)),60) from dt40_table.
+L^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Test the trim() function.
+Query:select varchar(trim(varchar(col_longvar)),60) from dt40_table.
+L^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+End Testing.
+>>
+? delete longvar.sc 
+<<
+~
+>>
+? delete longvar.c 
+<<
+~
+>>
+? delete longvar.o 
+<<
+~
+>>
+? delete longvar.obj 
+<<
+~
+>>
+? delete longvar.exe 
+<<
+~
+>>
+
+
+Ending at: Mon Jun 04 14:48:19 2001

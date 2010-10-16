@@ -1,0 +1,279 @@
+/*     
+	Test Name: eba16.sep
+	Time:  9-OCT-1992 09:41:58
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : eba16
+	Module  : SQL
+	Filename: eba16.sep
+	Purpose	: test the fix of bug 43205 -- e_us1250 during delete from
+		   where exists (select ... )
+	Input Files  : none
+	Output Files : tables eba16 & eba16_tmp
+	Database     : SEPPARAMDB -- QATESTDB on Swift and Cuckoo
+	Tables       : eba16, eba16_tmp
+	Synopsis     : sql "+Y" SEPPARAMDB (becuase altering a system table),
+			drop table eba16, create table eba16, insert records,
+			drop table eba16_tmp, create table eba16_tmp,
+			create index on eba16, update iirelation to fake more
+			records in the table eba16, select where exists 
+			(select ... ), delete where exists (select ... ).
+			The select was working correctly, but the delete would
+			return the error "e_us1250 Ambiguous replace error".
+
+
+ History:  9-OCT-1992	(Author) Jeremy Brown	Created: 9-OCT-1992
+           8-FEB-1993	(jeremyb)
+			Modified the header area to reflect the bug number 
+			tested by this script.  The bug number had been 
+			over written by a global search and replace.
+          20-Jun-1995	(ciodi01)
+			Modified "select cust_id, ..." statement by adding
+			"order by cust_id;" so that changes to the optimizer
+			(which affect ordering but not content of the result)
+			will not cause the test to diff.
+	  25-March-1999  (kamra01) modified VPG_SZ to 2048
+*/
+? sql "+Y" SEPPARAMDB 
+<<
+~
+>>
+* drop table eba16\p\g 
+<<
+~
+>>
+* commit\p\g 
+<<
+~
+>>
+* create table eba16 (cust_id integer4,canvass_code c6, canvass_year smallint,contra-
+ct_no smallint, xact_no smallint) with page_size=2048\p\g 
+<<
+~
+>>
+* commit\p\g 
+<<
+~
+>>
+* insert into eba16 values (12666134,'C27',90,1,12)\p\g 
+<<
+~
+>>
+* insert into eba16 values (22067005,'C27',91,1,11)\p\g 
+<<
+~
+>>
+* insert into eba16 values (25336132,'C96',92,1,25)\p\g 
+<<
+~
+>>
+* insert into eba16 values (21404999,'C71',91,1,45)\p\g 
+<<
+~
+>>
+* insert into eba16 values (12397172,'C29',92,1,6)\p\g 
+<<
+~
+>>
+* insert into eba16 values (12355241,'C81',92,1,13)\p\g 
+<<
+~
+>>
+* insert into eba16 values (12355241,'C81',92,1,14)\p\g 
+<<
+~
+>>
+* insert into eba16 values (12355241,'C81',92,1,15)\p\g 
+<<
+~
+>>
+* insert into eba16 values (16035026,'C92',92,1,14)\p\g 
+<<
+~
+>>
+* insert into eba16 values (90428118,'C81',92,1,15)\p\g 
+<<
+~
+>>
+* insert into eba16 values (14762726,'C53',91,1,14)\p\g 
+<<
+~
+>>
+* commit\p\g 
+<<
+~
+>>
+* drop table eba16_tmp\p\g 
+<<
+~
+>>
+* create table eba16_tmp as select * from eba16 with page_size=2048\p\g 
+<<
+~
+>>
+* commit\p\g 
+<<
+~
+>>
+* create index eba16_idx on eba16 (cust_id) with structure = btree with page_size=2048\p\g 
+<<
+~
+>>
+* commit\p\g 
+<<
+~
+>>
+* update iirelation set relpages=126105,reltups=2134510 where relid='eba16'\p\g 
+<<
+~
+>>
+* commit\p\g 
+<<
+~
+>>
+* select cust_id, 
+<<
+~
+>>
+* canvass_code, 
+<<
+~
+>>
+* canvass_year, 
+<<
+~
+>>
+* contract_no, 
+<<
+~
+>>
+* xact_no from eba16 
+<<
+~
+>>
+* where exists 
+<<
+~
+>>
+* (select * from eba16_tmp 
+<<
+~
+>>
+* where eba16.cust_id = eba16_tmp.cust_id and 
+<<
+~
+>>
+* eba16.canvass_code = eba16_tmp.canvass_code and 
+<<
+~
+>>
+* eba16.canvass_year = eba16_tmp.canvass_year and 
+<<
+~
+>>
+* eba16.contract_no = eba16_tmp.contract_no and 
+<<
+~
+>>
+* eba16.xact_no = eba16_tmp.xact_no)
+<<
+~
+>>
+* order by cust_id;\p\g
+<<
+ 
+ select cust_id, 
+ canvass_code, 
+ canvass_year, 
+ contract_no, 
+ xact_no from eba16 
+ where exists 
+ (select * from eba16_tmp 
+ where eba16.cust_id = eba16_tmp.cust_id and 
+ eba16.canvass_code = eba16_tmp.canvass_code and 
+ eba16.canvass_year = eba16_tmp.canvass_year and 
+ eba16.contract_no = eba16_tmp.contract_no and 
+ eba16.xact_no = eba16_tmp.xact_no)
+ order by cust_id;
+Executing . . .
+
+
++-------------+------+------+------+------+
+|cust_id      |canvas|canvas|contra|xact_n|
++-------------+------+------+------+------+
+|     12355241|C81   |    92|     1|    13|
+|     12355241|C81   |    92|     1|    14|
+|     12355241|C81   |    92|     1|    15|
+|     12397172|C29   |    92|     1|     6|
+|     12666134|C27   |    90|     1|    12|
+|     14762726|C53   |    91|     1|    14|
+|     16035026|C92   |    92|     1|    14|
+|     21404999|C71   |    91|     1|    45|
+|     22067005|C27   |    91|     1|    11|
+|     25336132|C96   |    92|     1|    25|
+|     90428118|C81   |    92|     1|    15|
++-------------+------+------+------+------+
+(11 rows)
+continue
+* 
+>>
+* commit\p\g 
+<<
+~
+>>
+* delete from eba16 
+<<
+~
+>>
+* where exists 
+<<
+~
+>>
+* (select * from eba16_tmp 
+<<
+~
+>>
+* where eba16.cust_id = eba16_tmp.cust_id and 
+<<
+~
+>>
+* eba16.canvass_code = eba16_tmp.canvass_code and 
+<<
+~
+>>
+* eba16.canvass_year = eba16_tmp.canvass_year and 
+<<
+~
+>>
+* eba16.contract_no = eba16_tmp.contract_no and 
+<<
+~
+>>
+* eba16.xact_no = eba16_tmp.xact_no)\p\g 
+<<
+ 
+ delete from eba16 
+ where exists 
+ (select * from eba16_tmp 
+ where eba16.cust_id = eba16_tmp.cust_id and 
+ eba16.canvass_code = eba16_tmp.canvass_code and 
+ eba16.canvass_year = eba16_tmp.canvass_year and 
+ eba16.contract_no = eba16_tmp.contract_no and 
+ eba16.xact_no = eba16_tmp.xact_no)
+Executing . . .
+
+(11 rows)
+* 
+>>
+* commit\p\g 
+<<
+~
+>>
+* \q 
+<<
+~
+>>
+
+
+Ending at: Tue Jun 20 16:24:38 1995

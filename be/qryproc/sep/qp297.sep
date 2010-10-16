@@ -1,0 +1,138 @@
+/*
+        Test Name: qp297.sep
+        Time: Fri May 11 13:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp297.sep
+        Module  : be/qryproc
+        Filename: qp297.sep
+        Purpose : To test the new feature row producing procedure. 
+        Input Files  : rp1.sql, rp1.sc
+        Output Files : rp1.exe
+        Database     : qryprocdb
+        Tables       : qp297_table1
+        Synopsis     : This is to test the row producing procedure with BLOB
+		       (data type of long varchar) from within an embedded C
+		       program.
+
+ History: 11-May-2001   (wu$ca01)       Created
+**
+**  ROW PRODUCING PROCEDURE
+**
+**  - BLOB COLUMN in RESULT
+**
+**  Known Problems:
+**  1) Currently fails with 10922176. (RESOLVED)
+**
+**      15-May-2001  (sarjo01)
+*/
+? fill setup.sql 
+!!
+\i cleanup.sql
+create table qp297_table1 (a1 int, a2 long varchar)\g
+insert into qp297_table1 values (10, 'ABCDE')\g
+insert into qp297_table1 values (11, 'VWXYZ')\g
+insert into qp297_table1 values (12, 'This is a long varchar value')\g
+insert into qp297_table1 values (13, '******* This is a long varchar value *******')\g
+!!
+? fill cleanup.sql 
+!!
+drop table qp297_table1\g
+drop procedure qp297_rp1\g
+!!
+? fill rp1.sql 
+!!
+create procedure qp297_rp1
+        result row(int, long varchar)
+as declare
+   v1 int;
+   v2 long varchar;
+   v3 char(10) not null;
+begin
+   for select a1, a2 into :v1, :v2 from qp297_table1 do
+      return row (:v1, :v2);
+   endfor;
+end;\g
+!!
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* \i rp1.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? fill rp1.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char* argv[])
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+        char      *dbname;
+        int       v1;
+        char      v2[64];
+    EXEC SQL END DECLARE SECTION;
+    int       i;
+    EXEC SQL WHENEVER SQLERROR call sqlprint;
+    dbname = argv[1];
+    EXEC SQL connect :dbname;
+
+    EXEC SQL execute procedure qp297_rp1 result row (:v1, :v2);
+    EXEC SQL begin;
+       printf("Row received: %d, '%s'\n", v1, v2);
+    EXEC SQL end;
+    EXEC SQL disconnect;
+}
+!!
+? esqlc rp1.sc 
+<<
+~
+>>
+? sepcc rp1.c 
+<<
+~
+>>
+? seplnk rp1 
+<<
+~
+>>
+? run rp1.exe SEPPARAMDB 
+<<
+Row received: 10, 'ABCDE'
+Row received: 11, 'VWXYZ'
+Row received: 12, 'This is a long varchar value'
+Row received: 13, '******* This is a long varchar value *******'
+>>
+? delete rp1.c 
+<<
+~
+>>
+? delete rp1.o 
+<<
+~
+>>
+? delete rp1.obj 
+<<
+~
+>>
+? delete rp1.exe 
+<<
+~
+>>
+
+
+Ending at: Tue May 15 17:20:11 2001

@@ -1,0 +1,326 @@
+/*
+	Test Name: sca01
+	Time: 31-JUL-1989 10:39:27
+	User Name: testenv      
+ 
+	Test ID : eha00 (formerly ag007)
+	Module  : be/qryproc/aggregates
+	Filename: eha00.sep
+	Purpose	:
+	Input Files  : s.dat, p.dat, sp.dat
+	Output Files :
+	Database     : betstdb1
+	Tables       : s, p, sp
+	Synopsis     :
+		aggregates
+	History	: 
+              --------- claire l. created.
+		mar 28/89 sgp modified to add to test suite.
+		jul 31/89 lah converted to sep format
+		7-may-1990 mod for STAR by jds
+			drop FILL, create
+			change to sepparam_ddb
+		9-May-1991 modified by Stever
+			sepparam_ddb -> SEPPARAM_DDB
+			add ORDER BY clause to queries.
+			removed apparently duplicate ALTERNATE canons.
+			removed incorrect cannons.
+			fixed canon for the \q command.
+	  16-09-93     barbh
+		       Changed SEPPARAM_DDB to SEPPARAMDB. This makes the
+		       star test consistent with testkit standards.
+	   4-Nov-1999	(vande02) Added empty canon to confirm db sql connection
+	26-Jun-2001	(rogch01)
+		Update row orders.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from qpr_p1 order by pno;\g\r
+<<
++------+--------------------+------+------+---------------+
+|pno   |pname               |color |weight|city           |
++------+--------------------+------+------+---------------+
+|p1    |nut                 |red   |    12|London         |
+|p2    |bolt                |green |    17|Paris          |
+|p3    |screw               |blue  |    17|Rome           |
+|p4    |screw               |red   |    14|London         |
+|p5    |cam                 |blue  |    12|Paris          |
+|p6    |cog                 |red   |    19|London         |
++------+--------------------+------+------+---------------+
+(6 rows)
+>>
+* select * from qpr_s1 order by sno;\g\r
+<<
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s1    |Smith               |    20|London         |
+|s2    |Jones               |    10|Paris          |
+|s3    |Blake               |    30|Paris          |
+|s4    |Clark               |    20|London         |
+|s5    |Adams               |    30|Athens         |
++------+--------------------+------+---------------+
+(5 rows)
+>>
+* select * from qpr_sp1 order by sno, pno;\g\r
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select count(*) from qpr_s1;\g\r
+<<
+
++-------------+
+|col1         |
++-------------+
+|            5|
++-------------+
+(1 row)
+>>
+* select count(distinct sno) from qpr_sp1;\g\r
+<<
+
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select count(*) from qpr_sp1 where pno = 'p2';\g\r
+<<
+
++-------------+
+|col1         |
++-------------+
+|            4|
++-------------+
+(1 row)
+>>
+* select distinct pno from qpr_sp1 spx where 1 < ( select count(*) from -
+qpr_sp1 spy where spy.pno = spx.pno ) order by 1;\g\r
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select pno from qpr_sp1 group by pno having count(*) > 1 order by 1;\g\r
+/*
+ get part numbers for all parts supplied by more than one supplier 
+*/
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select pno, sum(qty) from qpr_sp1 where pno = 'p2';\g\r
+<<
+E_US0B63 line 1, The columns in the SELECT clause must be contained in the
+    GROUP BY clause.
+    ( 7-MAY-1990 09:31:52)
+
+>>
+* select pno, sum(qty) from qpr_sp1 group by pno order by 1;\g\r
+<<
+
++------+-------------+
+|pno   |col2         |
++------+-------------+
+|p1    |          600|
+|p2    |         1000|
+|p3    |          400|
+|p4    |          500|
+|p5    |          500|
+|p6    |          100|
++------+-------------+
+(6 rows)
+>>
+* select pno, sum(qty) from qpr_sp1 where sno <> 's1' group by pno order by -
+1;\g\r
+<<
+
++------+-------------+
+|pno   |col2         |
++------+-------------+
+|p1    |          300|
+|p2    |          800|
+|p4    |          300|
+|p5    |          400|
++------+-------------+
+(4 rows)
+>>
+* select pno from qpr_p1 px where px.weight * 3 >any 	( select sum( weight ) 	  from-
+ qpr_p1 py 	  where py.city > px.city 	  or py.color > px.color );\g\r
+<<
+
++------+
+|pno   |
++------+
+|p6    |
++------+
+(1 row)
+>>
+* select sno from qpr_s1 where status < ( select max(status) from qpr_s1 );\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s2    |
+|s4    |
++------+
+(3 rows)
+>>
+* select sno from qpr_s1 where status > ( select min(status) from qpr_s1 );\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s3    |
+|s4    |
+|s5    |
++------+
+(4 rows)
+>>
+* select sno, status, city from qpr_s1 sx where status >= 	( select avg(status) 	  f-
+rom qpr_s1 sy 	  where sy.city = sx.city ) order by sno;\g\r
+<<
+
++------+------+---------------+
+|sno   |status|city           |
++------+------+---------------+
+|s1    |    20|London         |
+|s3    |    30|Paris          |
+|s4    |    20|London         |
+|s5    |    30|Athens         |
++------+------+---------------+
+(4 rows)
+>>
+* select * from qpr_s1 sx where status >any 	( select avg(status) 	  from qpr_s1 sy -
+	  where sy.city = sx.city );\g\r
+<<
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s3    |Blake               |    30|Paris          |
++------+--------------------+------+---------------+
+(1 row)
+>>
+* select distinct pno from qpr_sp4 spx where 1 < ( select count(*) from -
+qpr_sp5 spy where spy.pno = spx.pno ) order by 1;\g\r
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select pno from qpr_p2 px where px.weight * 3 >any 	( select sum( weight ) 	  from-
+ qpr_p3 py 	  where py.city > px.city 	  or py.color > px.color );\g\r
+<<
+
++------+
+|pno   |
++------+
+|p6    |
++------+
+(1 row)
+>>
+* select sno from qpr_s2 where status < ( select max(status) from qpr_s4 );\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s2    |
+|s4    |
++------+
+(3 rows)
+>>
+* select sno from qpr_s3 where status > ( select min(status) from qpr_s5 );\g\r
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s3    |
+|s4    |
+|s5    |
++------+
+(4 rows)
+>>
+* select sno, status, city from qpr_s4 sx where status >= 	( select avg(status) 	  f-
+rom qpr_s5 sy 	  where sy.city = sx.city ) order by sno;\g\r
+<<
+
++------+------+---------------+
+|sno   |status|city           |
++------+------+---------------+
+|s1    |    20|London         |
+|s3    |    30|Paris          |
+|s4    |    20|London         |
+|s5    |    30|Athens         |
++------+------+---------------+
+(4 rows)
+>>
+* select * from qpr_s2 sx where status >any 	( select avg(status) 	  from qpr_s3 sy -
+	  where sy.city = sx.city );\g\r
+<<
+
++------+--------------------+------+---------------+
+|sno   |sname               |status|city           |
++------+--------------------+------+---------------+
+|s3    |Blake               |    30|Paris          |
++------+--------------------+------+---------------+
+(1 row)
+>>
+* \q
+<<
+>>
+
+
+Ending at: 10-DEC-1990 09:57:03

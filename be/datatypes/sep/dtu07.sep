@@ -1,0 +1,335 @@
+/*
+	Test Name: dtu07.sep
+	Time: Fri Nov  9 23:08:43 2001
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : dtu07.sep
+	Module  : be/datatypes
+	Filename: dtu07.sep
+	Purpose	: To test the new unicode data types first available with
+                  II 2.6/0106 and later releases.
+	Input Files  : dtu07.sc
+	Output Files : dtu07.exe
+	Database     : unidb
+	Tables       : test_nchar, test_nchar2, test_nchar3, test_nvarchar,
+                       test_nvarchar2, test_lnvarchar, test_lnvarchar2
+	Synopsis     : This test is to create indexes and join indexes on base
+                       table with unicode datatypes.
+
+ History:  9-Nov-2001	(wu$ca01)	Created
+          16-Dec-2001	(devjo01)	Corrected incorrect results for hash
+          28-May-2002   (sarjo01) Change %ls to %S, modularize canon.
+*/
+? fill dtu07.sc 
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i1;
+  wchar_t wc1[9], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, k2;
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "|===============================================================-
+==============|\n";
+
+void print_trailer()
+{
+  printf(ln);
+}
+void print_header(char *s)
+{
+  printf("%s\n%s", s, ln);
+}
+
+int main(int argc, char *argv[])
+{
+   int testid;
+
+   dbname = argv[1];
+   testid = atoi(argv[2]);
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint; 
+
+   switch (testid)
+   {
+      case 1:
+         print_header("Creating indexes...");
+
+         EXEC SQL create index nchix1 on test_nchar2 (col2)
+            with structure = hash;
+         EXEC SQL create index nchix2 on test_nvarchar2 (col2)
+            with structure = hash;
+         EXEC SQL create index nchix3 on test_nchar2 (col2)
+            with structure = btree;
+         EXEC SQL create index nchix4 on test_nvarchar2 (col2)
+            with structure = btree;
+         break;
+
+      case 2:
+         print_header("Nchar = nchar(hash)...");
+         EXEC SQL SELECT test_nchar.col1, nchix1.col2
+         INTO :i1, :wc1
+         FROM test_nchar, nchix1 WHERE test_nchar.col2 = nchix1.col2
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|\n", i1, wc1);
+         EXEC SQL END;
+         break;
+
+      case 3:
+         print_header("Nvarchar = nvarchar(hash)...");
+         EXEC SQL SELECT test_nvarchar.col1, nchix2.col2
+         INTO :i1, :wc1
+         FROM test_nvarchar, nchix2 WHERE test_nvarchar.col2 = nchix2.col2
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|\n", i1, wc1);
+         EXEC SQL END;
+         break;
+      case 4:
+         print_header("Nchar = nchar(btree)...");
+         EXEC SQL SELECT test_nchar.col1, nchix3.col2
+         INTO :i1, :wc1
+         FROM test_nchar, nchix3 WHERE test_nchar.col2 = nchix3.col2
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|\n", i1, wc1);
+         EXEC SQL END;
+         break;
+
+      case 5:
+         print_header("Nvarchar = nvarchar(btree)...");
+         EXEC SQL SELECT test_nvarchar.col1, nchix4.col2
+         INTO :i1, :wc1
+         FROM test_nvarchar, nchix4 WHERE test_nvarchar.col2 = nchix4.col2
+         order by 1;
+         EXEC SQL BEGIN;
+            printf("|%3d|%S|\n", i1, wc1);
+         EXEC SQL END;
+         break;
+
+      case 6:
+         print_header("Dropping indexes...");
+         EXEC SQL drop index nchix1;
+         EXEC SQL drop index nchix2;
+         EXEC SQL drop index nchix3;
+         EXEC SQL drop index nchix4;
+         break;
+   }
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc dtu07.sc 
+<<
+~
+>>
+? sepcc dtu07 
+<<
+~
+>>
+? seplnk dtu07 
+<<
+~
+>>
+? run dtu07.exe SEPPARAMDB3 1
+<<
+Creating indexes...
+|=============================================================================|
+|=============================================================================|
+>>
+? run dtu07.exe SEPPARAMDB3 2 
+<<
+Nchar = nchar(hash)...
+|=============================================================================|
+|  0|ABC     |
+|  0|ABC     |
+|  0|ABC     |
+|  0|ABC     |
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF     |
+|  2|DEF     |
+|  2|DEF     |
+|  2|DEF     |
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI     |
+|  4|GHI     |
+|  4|GHI     |
+|  4|GHI     |
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  7|Z       |
+|  7|Z       |
+|  7|Z       |
+|  7|Z       |
+|=============================================================================|
+>>
+? run dtu07.exe SEPPARAMDB3 3 
+<<
+Nvarchar = nvarchar(hash)...
+|=============================================================================|
+|  0|ABC|
+|  0|ABC|
+|  0|ABC|
+|  0|ABC|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF|
+|  2|DEF|
+|  2|DEF|
+|  2|DEF|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI|
+|  4|GHI|
+|  4|GHI|
+|  4|GHI|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE|
+|  6|ABCDE|
+|  6|ABCDE|
+|  6|ABCDE|
+|  7|Z|
+|  7|Z|
+|  7|Z|
+|  7|Z|
+|=============================================================================|
+>>
+? run dtu07.exe SEPPARAMDB3 4 
+<<
+Nchar = nchar(btree)...
+|=============================================================================|
+|  0|ABC     |
+|  0|ABC     |
+|  0|ABC     |
+|  0|ABC     |
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF     |
+|  2|DEF     |
+|  2|DEF     |
+|  2|DEF     |
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI     |
+|  4|GHI     |
+|  4|GHI     |
+|  4|GHI     |
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  7|Z       |
+|  7|Z       |
+|  7|Z       |
+|  7|Z       |
+|=============================================================================|
+>>
+? run dtu07.exe SEPPARAMDB3 5 
+<<
+Nvarchar = nvarchar(btree)...
+|=============================================================================|
+|  0|ABC|
+|  0|ABC|
+|  0|ABC|
+|  0|ABC|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  1|STUVWXYZ|
+|  2|DEF|
+|  2|DEF|
+|  2|DEF|
+|  2|DEF|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  3|stuvwxyz|
+|  4|GHI|
+|  4|GHI|
+|  4|GHI|
+|  4|GHI|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  5|LMNOPQRS|
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  6|ABCDE   |
+|  7|Z   |
+|  7|Z   |
+|  7|Z   |
+|  7|Z   |
+|=============================================================================|
+>>
+? run dtu07.exe SEPPARAMDB3 6 
+<<
+Dropping indexes...
+|=============================================================================|
+|=============================================================================|
+>>
+? delete dtu07.c 
+<<
+~
+>>
+? delete dtu07.o 
+<<
+~
+>>
+? delete dtu07.obj 
+<<
+~
+>>
+? delete dtu07.exe 
+<<
+~
+>>
+
+
+Ending at: Sun Dec 16 17:40:41 2001

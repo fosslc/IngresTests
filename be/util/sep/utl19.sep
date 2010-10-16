@@ -1,0 +1,170 @@
+/*
+Copyright (c) 2004 Ingres Corporation
+
+
+	Test Name: b74050.sep
+	Time: Thu Jan 18 14:54:08 1996
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl19
+	Module  : /be/db-utilities
+	Filename: utl19.sep
+	Purpose	: It tests for bug # b74050 -- "unique" not allowed error
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : utl19
+	Synopsis     :
+
+ History: 18-Jan-1996	(seran01)	Created
+          11-Nov-1996	(Author)
+	  24-Mar-1999   (vande02) Hard-coded VPG_SZ to 8K
+	  12-Feb-1999	(kamra01) added comment that path diffs can be ignored
+          29-Mar-2001	(BOIJA02) Didn't test for the bug, used an unneccessary
+			alternate db, had non-descriptive object names. Fixed 
+			those problems, added some cleanup.
+          29-MAR-2000	(BOIJA02) VMS tokenises directory only, NT directory +
+			filename, so we need alt vms canons for the copy.*
+			commands.
+          25-May-2001	(BOIJA02) 2.5 specific update to oping20 XIP
+          24-Aug-2001   (BOIJA02) Xing to main +2.6 specific tweaks
+          30-Jan-2003   (hanch04) Updated canons to match Ingres 2.6/0303
+                        Service Pack 2
+          04-Feb-2003   (hanch04) update to run again 2.6/0303 and previous SP
+          23-Jun-2004	(wu$ca01) Correct the table name from t1 to utl19 in
+                        the create table command. As a result of the above
+                        correction, update all CANONs in this test. Replace
+                        utildb with SEPPARAMDB. Remove the extra copydb canon.
+           8-Oct-2004	(vande02) Copydb now displays information on sequence
+			objects.  Replacing copydb canon with r3 results.
+			See issue 13707841 and change 470386
+           5-Aug-2005	(vande02) Backing out above change from 8-Oct-2004. Fix
+			to bug 114150 means sequences are no longer generated
+			by copydb when a table name has been passed to copydb
+			from the command line.  This is expected in some 2.6
+			patches but not in r3 yet.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+	04-Feb-2007	(smeke01) b118877
+		Added -n flag to verifydb because testenv does not have write
+		permissions to the II_CONFIG directory.
+
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table utl19\g 
+<<
+~
+>>
+* create table utl19 (f1 integer) with page_size=8192;\g 
+<<
+
+>>
+* modify utl19 to btree unique on f1 with page_size=8192;\g 
+<<
+(0 rows)
+>>
+* insert into utl19 (f1) values (4)\g 
+<<
+(1 row)
+>>
+* insert into utl19 (f1) values (6)\g 
+<<
+(1 row)
+>>
+* \q 
+<<
+
+>>
+? verifydb -n -mrun -sdbname "SEPPARAMDB" -otable "utl19" 
+<<
+S_DU17FC_TABLE_PATCH_WARNING	WARNING:
+
+   VERIFYDB operation TABLE (or XTABLE) can result in loss of user data when
+   run in any mode except REPORT.  It will also modify the table to a heap
+   and remove all secondary indices on the table.  This program is designed as
+   a last-ditch attempt to recover a user table.  It is intended only for use
+   by Computer Associates technical support representatives.
+   It is NOT supported.  You assume all risk if you use the program.
+
+   If you do use the TABLE or XTABLE operation, it is recommended that you
+   backup the table's disk file before continuing. 
+S_DU04CB_START_TABLE_OP	VERIFYDB: beginning TABLE/XTABLE operation on table
+ utl19 from database utildb. 
+S_DU04CC_TABLE_OP_DONE	VERIFYDB: TABLE/XTABLE operation on table
+ utl19, database utildb is complete. 
+>>
+? copydb SEPPARAMDB utl19 
+<<
+INGRES COPYDB Copyright 2004 Ingres Corporation
+Unload directory is '/qa1/output/Q2/be/util'.
+Reload directory is '/qa1/output/Q2/be/util'.
+There is one table owned by user 'testenv'.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i copy.out
+<<
+set autocommit on
+set lockmode session where readlock=nolock
+set session with privileges=all
+copy utl19 () into 'C:/tst_output/be/util/utl19.testenv'
+(2 rows)
+>>
+* drop table utl19;commit\g
+<<
+
+>>
+* \i copy.in
+<<
+set autocommit on
+set nojournaling
+set session with privileges=all
+
+	/* TABLES */
+
+create table utl19(
+	f1 integer
+)
+with duplicates,
+nojournaling,
+	page_size = 8192,
+location = (ii_database),
+security_audit=(table,norow)
+;
+modify utl19 to heap
+with extend = 16,
+	allocation = 4,
+	page_size = 8192
+(0 rows)
+copy utl19 () from 'C:/tst_output/be/util/utl19.testenv'
+with row_estimate = 2
+(2 rows)
+set journaling on utl19
+>>
+* drop table utl19\g
+<<
+
+>>
+* \q
+<<
+>>
+? delete utl19.testenv 
+<<
+file was deleted
+>>
+? delete copy.in 
+<<
+file was deleted
+>>
+? delete copy.out 
+<<
+file was deleted
+>>
+
+
+Ending at: Fri Oct  8 17:10:14 2004

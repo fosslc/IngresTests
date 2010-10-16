@@ -1,0 +1,599 @@
+/*
+	Test Name: dca00
+	Time:  6-JUL-1989 16:46:48
+	User Name: qatest      
+ 
+	Test ID : dca00
+	Module  : be/qrymod
+	Filename: dca00.sep
+	Purpose	: test grant priveleges
+	Input Files  : dca00.dat
+	Output Files : (same as above)
+	Database     : SEPPARAMDB
+	Tables       : dca00a, dca00b, dca00c
+	Synopsis     : create a few tables, set permits on them, change
+			name to pvusr1 and try to do things to tables
+       		     # uses the qasetid command which sep doesn't seem to
+			know.
+	History	: 24-APR-1988	Created		Dave Lo		Author
+		  07-JUL-1989   Converted	larryh
+
+                  7/90            Test modified to conform to Test Case/
+                                  Portability Standards. (Brought to you by
+                                  the devils of correction)
+
+          16-Nov-1993	(garys) Updated canon to accept 65 GRANT error messages.
+**        19-Nov-1993 (vijay)
+**		Updated canon to accept the latest 65 GRANT error messages.
+           6-Jan-1994	(judi)  Accept new canons for INGRES 6.5 on a grant 
+                        statement that is performed on the table that does not 
+                        exist. 
+		
+           1-Feb-1995	(oertel)  Added 3rd alternate canon for select *
+                         from dca00a_view1 - ordered differently.
+	22-mar-1999     (yu$pe02) Hard code page size to 8K.
+	4-oct-2001	(devjo01) Change canons to reflect lifting of 
+			keyword restrictions.
+*/
+? fill dca00.dat 
+!!
+-127	0	0	0	0	0		-127
+127	0	0	0	0	0		127
+0	-32767	0	0	0	0		-32767
+0	32767	0	0	0	0		32767
+0	0	-2147483647	0	0	0		-2147483647
+0	0	2147483647	0	0	0		2147483647
+0	0	0	-10.0e+37	-10.0e+37	0		-10,0+37
+0	0	0	10.0e+37	10.0e+37	0		10.0e+37
+0	0	0	0	0	9999999999.99		9.99
+0	0	0	0	0	-9999999999.99		-999.99
+0	0	0	0	0	0	1-jan-1582	1-jan-1582
+0	0	0	0	0	0	31-dec-2382	31-dec-2382
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* select dbmsinfo('username');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|testenv                         |
++--------------------------------+
+(1 row)
+>>
+* drop table dca00a;\g
+<<
+~
+>>
+* drop table dca00b;\g
+<<
+~
+>>
+* drop table dca00c;\g
+<<
+~
+>>
+* drop table dca00t; \g
+<<
+~
+>>
+* create table dca00t (i1 integer1, i2 integer2, i4 integer4, f4 float4,
+<<
+>>
+*	f8 float8, money money, date date, char30 vchar(30)) with page_size=8192; \g
+<<
+>>
+* copy table dca00t (i1=vchar(0)tab, i2=vchar(0)tab, i4=vchar(0)tab,
+<<
+>>
+*	f4=vchar(0)tab, f8=vchar(0)tab, money=vchar(0)tab, 
+<<
+>>
+*	date=vchar(0)tab, char30=vchar(0)nl) from 'dca00.dat'; \g
+<<
+(12 rows)
+>>
+* create table dca00a as select * from dca00t with page_size=8192;\g
+<<
+(12 rows)
+>>
+* create table dca00b as select * from dca00t with page_size=8192;\g
+<<
+(12 rows)
+>>
+* grant update on dca00a, dca00b to public;\g
+<<
+>>
+* grant select on dca00a, dca00b to public;\g
+<<
+>>
+* drop grant on dca00a all;\g
+<<
+E_US0AC1 DROP: 'grant' does not exist or is not owned by you.
+    (Fri Oct  5 09:15:38 2001)
+
+>>
+* drop grant on dca00b all;\g
+<<
+E_US0AC1 DROP: 'grant' does not exist or is not owned by you.
+    (Fri Oct  5 09:15:45 2001)
+
+>>
+* drop permit on dca00a all;\g
+<<
+>>
+* drop permit on dca00b all;\g
+<<
+>>
+* grant all on dca00a, dca00b, dca00c to public;\g
+/*
+destructive - table dca00c doesn't exist yet
+*/
+<<
+E_US0845 Table 'dca00c' does not exist or is not owned by you.
+    (Mon Apr 30 09:49:45 1990)
+
+>>
+* grant update on dca00a to public;\g
+<<
+>>
+* grant delete on dca00b to public;\g
+<<
+>>
+* grant insert on dca00c to public;\g
+<<
+E_US0845 Table 'dca00c' does not exist or is not owned by you.
+    (Mon Apr 30 09:50:14 1990)
+
+>>
+* drop permit on dca00a all;\g
+<<
+>>
+* drop grant on dca00a all;\g
+<<
+E_US0AC1 DROP: 'grant' does not exist or is not owned by you.
+    (Fri Oct  5 09:15:56 2001)
+
+>>
+* grant update (i1,i2) on dca00a to qatest;\g
+<<
+>>
+* grant update (i1,i2,f4,f8,i4,char30,money,date) on dca00b to qatest;\g
+<<
+>>
+* drop grant on dca00a all;\g
+/*
+**   permission for subsequent usage **	dca00a - update,insert to pvusr1
+**	dca00a_view1 - select to public
+**	dca00a_view2 - select to qatests
+**	dca00c - all to qatests
+*/
+<<
+E_US0AC1 DROP: 'grant' does not exist or is not owned by you.
+    (Fri Oct  5 09:15:59 2001)
+
+>>
+* grant update (i1),select, insert on dca00a to pvusr1;\g
+/*
+ view 
+*/
+<<
+>>
+* create view dca00a_view1 as select * from dca00a;\g
+<<
+>>
+* grant select on dca00a_view1 to public;\g
+<<
+>>
+* create view dca00a_view2 as select i1 from dca00a_view1;\g
+<<
+>>
+* grant select on dca00a_view2 to qatests;\g
+<<
+>>
+* create table dca00c as select * from dca00t with page_size=8192;\g
+<<
+(12 rows)
+>>
+* grant all on dca00c to qatests;\g
+<<
+>>
+* commit;\g
+<<
+>>
+* \q
+<<
+>>
+? sleep 15 
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB 
+<<
+>>
+* select * from dca00a;\g
+<<
+
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+|i1    |i2    |i4           |f4         |f8         |money               |date      -
+               |char30                        |
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+|  -127|     0|            0|      0.000|      0.000|               $0.00|          -
+               |-127                          |
+|   127|     0|            0|      0.000|      0.000|               $0.00|          -
+               |127                           |
+|     0|-32767|            0|      0.000|      0.000|               $0.00|          -
+               |-32767                        |
+|     0| 32767|            0|      0.000|      0.000|               $0.00|          -
+               |32767                         |
+|     0|     0|  -2147483647|      0.000|      0.000|               $0.00|          -
+               |-2147483647                   |
+|     0|     0|   2147483647|      0.000|      0.000|               $0.00|          -
+               |2147483647                    |
+|     0|     0|            0|-10.000e+37|-10.000e+37|               $0.00|          -
+               |-10,0+37                      |
+|     0|     0|            0| 10.000e+37| 10.000e+37|               $0.00|          -
+               |10.0e+37                      |
+|     0|     0|            0|      0.000|      0.000|      $9999999999.99|          -
+               |9.99                          |
+|     0|     0|            0|      0.000|      0.000|     $-9999999999.99|          -
+               |-999.99                       |
+|     0|     0|            0|      0.000|      0.000|               $0.00|01-jan-158-
+2              |1-jan-1582                    |
+|     0|     0|            0|      0.000|      0.000|               $0.00|31-dec-238-
+2              |31-dec-2382                   |
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+(12 rows)
+>>
+<<
+
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+|i1    |i2    |i4           |f4         |f8         |money               |date      -
+               |char30                        |
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+|  -127|     0|            0|      0.000|      0.000|               $0.00|          -
+               |-127                          |
+|   127|     0|            0|      0.000|      0.000|               $0.00|          -
+               |127                           |
+|     0|-32767|            0|      0.000|      0.000|               $0.00|          -
+               |-32767                        |
+|     0| 32767|            0|      0.000|      0.000|               $0.00|          -
+               |32767                         |
+|     0|     0|  -2147483647|      0.000|      0.000|               $0.00|          -
+               |-2147483647                   |
+|     0|     0|   2147483647|      0.000|      0.000|               $0.00|          -
+               |2147483647                    |
+|     0|     0|            0|-1.000e+038|-1.000e+038|               $0.00|          -
+               |-10,0+37                      |
+|     0|     0|            0| 1.000e+038| 1.000e+038|               $0.00|          -
+               |10.0e+37                      |
+|     0|     0|            0|      0.000|      0.000|      $9999999999.99|          -
+               |9.99                          |
+|     0|     0|            0|      0.000|      0.000|     $-9999999999.99|          -
+               |-999.99                       |
+|     0|     0|            0|      0.000|      0.000|               $0.00|01-jan-158-
+2              |1-jan-1582                    |
+|     0|     0|            0|      0.000|      0.000|               $0.00|31-dec-238-
+2              |31-dec-2382                   |
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+(12 rows)
+>>
+* insert into dca00a (i1) values (100);\g
+<<
+(1 row)
+>>
+* update dca00a set i1=1 where i1=127;\g
+/*
+update
+*/
+<<
+(1 row)
+>>
+* update dca00a set f8=1 where i1=0;\g
+/*
+should fail here
+*/
+<<
+E_US0DAE UPDATE on table dca00a: no GRANT or GRANT compatible permit
+    exists.
+    ( 7-JUL-1989 14:35:01)
+
+>>
+* select * from dca00a_view1;\g
+/*
+dca00a_view1, dca00a_view2
+*/
+<<
+
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+|i1    |i2    |i4           |f4         |f8         |money               |date      -
+               |char30                        |
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+|  -127|     0|            0|      0.000|      0.000|               $0.00|          -
+               |-127                          |
+|     1|     0|            0|      0.000|      0.000|               $0.00|          -
+               |127                           |
+|     0|-32767|            0|      0.000|      0.000|               $0.00|          -
+               |-32767                        |
+|     0| 32767|            0|      0.000|      0.000|               $0.00|          -
+               |32767                         |
+|     0|     0|  -2147483647|      0.000|      0.000|               $0.00|          -
+               |-2147483647                   |
+|     0|     0|   2147483647|      0.000|      0.000|               $0.00|          -
+               |2147483647                    |
+|     0|     0|            0|-10.000e+37|-10.000e+37|               $0.00|          -
+               |-10,0+37                      |
+|     0|     0|            0| 10.000e+37| 10.000e+37|               $0.00|          -
+               |10.0e+37                      |
+|     0|     0|            0|      0.000|      0.000|      $9999999999.99|          -
+               |9.99                          |
+|     0|     0|            0|      0.000|      0.000|     $-9999999999.99|          -
+               |-999.99                       |
+|     0|     0|            0|      0.000|      0.000|               $0.00|01-jan-158-
+2              |1-jan-1582                    |
+|     0|     0|            0|      0.000|      0.000|               $0.00|31-dec-238-
+2              |31-dec-2382                   |
+|   100|      |             |           |           |                    |          -
+               |                              |
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+(13 rows)
+>>
+<<
+
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+|i1    |i2    |i4           |f4         |f8         |money               |date      -
+               |char30                        |
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+|  -127|     0|            0|      0.000|      0.000|               $0.00|          -
+               |-127                          |
+|     1|     0|            0|      0.000|      0.000|               $0.00|          -
+               |127                           |
+|     0|-32767|            0|      0.000|      0.000|               $0.00|          -
+               |-32767                        |
+|     0| 32767|            0|      0.000|      0.000|               $0.00|          -
+               |32767                         |
+|     0|     0|  -2147483647|      0.000|      0.000|               $0.00|          -
+               |-2147483647                   |
+|     0|     0|   2147483647|      0.000|      0.000|               $0.00|          -
+               |2147483647                    |
+|     0|     0|            0|-1.000e+038|-1.000e+038|               $0.00|          -
+               |-10,0+37                      |
+|     0|     0|            0| 1.000e+038| 1.000e+038|               $0.00|          -
+               |10.0e+37                      |
+|     0|     0|            0|      0.000|      0.000|      $9999999999.99|          -
+               |9.99                          |
+|     0|     0|            0|      0.000|      0.000|     $-9999999999.99|          -
+               |-999.99                       |
+|     0|     0|            0|      0.000|      0.000|               $0.00|01-jan-158-
+2              |1-jan-1582                    |
+|     0|     0|            0|      0.000|      0.000|               $0.00|31-dec-238-
+2              |31-dec-2382                   |
+|   100|      |             |           |           |                    |          -
+               |                              |
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+(13 rows)
+>>
+<<
+
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+|i1    |i2    |i4           |f4         |f8         |money               |date      -
+               |char30                        |
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+|  -127|     0|            0|      0.000|      0.000|               $0.00|          -
+               |-127                          |
+|     0|-32767|            0|      0.000|      0.000|               $0.00|          -
+               |-32767                        |
+|     0| 32767|            0|      0.000|      0.000|               $0.00|          -
+               |32767                         |
+|     0|     0|  -2147483647|      0.000|      0.000|               $0.00|          -
+               |-2147483647                   |
+|     0|     0|   2147483647|      0.000|      0.000|               $0.00|          -
+               |2147483647                    |
+|     0|     0|            0|-1.000e+038|-1.000e+038|               $0.00|          -
+               |-10,0+37                      |
+|     0|     0|            0| 1.000e+038| 1.000e+038|               $0.00|          -
+               |10.0e+37                      |
+|     0|     0|            0|      0.000|      0.000|      $9999999999.99|          -
+               |9.99                          |
+|     0|     0|            0|      0.000|      0.000|     $-9999999999.99|          -
+               |-999.99                       |
+|     0|     0|            0|      0.000|      0.000|               $0.00|01-jan-158-
+2              |1-jan-1582                    |
+|     0|     0|            0|      0.000|      0.000|               $0.00|31-dec-238-
+2              |31-dec-2382                   |
+|   100|      |             |           |           |                    |          -
+               |                              |
+|     1|     0|            0|      0.000|      0.000|               $0.00|          -
+               |127                           |
++------+------+-------------+-----------+-----------+--------------------+-----------
+---------------+------------------------------+
+(13 rows)
+>>
+* select * from dca00a_view2;\g
+/*
+pvusr1 not allowed, only qatests allowed
+*/
+<<
+E_US0DAE SELECT on table dca00a_view2: no GRANT or GRANT compatible permit
+    exists.
+    ( 7-JUL-1989 14:35:48)
+
+>>
+* update dca00a_view1 set i1=102 where i1=0;\g
+<<
+E_US0DAE UPDATE on table dca00a_view1: no GRANT or GRANT compatible permit
+    exists.
+    ( 7-JUL-1989 14:35:57)
+
+>>
+* delete from dca00a_view1;\g
+<<
+E_US0DAE DELETE on table dca00a_view1: no GRANT or GRANT compatible permit
+    exists.
+    ( 7-JUL-1989 14:36:04)
+
+>>
+* delete from dca00a_view2;\g
+<<
+E_US0DAE DELETE on table dca00a_view2: no GRANT or GRANT compatible permit
+    exists.
+    ( 7-JUL-1989 14:36:12)
+
+>>
+* select * from dca00c;\g
+/*
+dca00c - pvusr1 may not select, only qatests is allowed
+*/
+<<
+E_US0DAE SELECT on table dca00c: no GRANT or GRANT compatible permit
+    exists.
+    ( 7-JUL-1989 14:36:22)
+
+>>
+* select * from dca00c where i1=0;\g
+<<
+E_US0DAE SELECT on table dca00c: no GRANT or GRANT compatible permit
+    exists.
+    ( 7-JUL-1989 14:36:31)
+
+>>
+* select * from dca00c where i1=101;\g
+<<
+E_US0DAE SELECT on table dca00c: no GRANT or GRANT compatible permit
+    exists.
+    ( 7-JUL-1989 14:36:37)
+
+>>
+* update dca00c set i1=101 where i1=0;\g
+<<
+E_US0DAE SELECT, UPDATE on table dca00c: no GRANT or GRANT compatible
+    permit exists.
+    (Tue Nov 16 10:02:06 1993)
+
+>>
+* select * from dca00c where i1=101;\g
+<<
+E_US0DAE SELECT on table dca00c: no GRANT or GRANT compatible permit
+    exists.
+    ( 7-JUL-1989 14:36:53)
+
+>>
+* delete from dca00c;\g
+<<
+E_US0DAE DELETE on table dca00c: no GRANT or GRANT compatible permit
+    exists.
+    ( 7-JUL-1989 14:37:00)
+
+>>
+* drop dca00c;\p\g
+<<
+ drop dca00c;
+E_US0AC1 DROP: 'dca00c' does not exist or is not owned by you.
+    ( 7-JUL-1989 14:37:08)
+
+>>
+* grant all on dca00a_view1 to public;\g
+<<
+E_PS0560 GRANT ALL [PRIVILEGES]: You may not grant any privileges on 
+    table/view 'dca00a_view1' owned by 'testenv' because 
+    you possess no grantable privileges on it.
+    (Tue Nov 16 10:02:10 1993)
+
+>>
+* grant all on dca00c, dca00b, dca00a to public;\g
+<<
+E_PS0560 GRANT ALL [PRIVILEGES]: You may not grant any privileges on 
+    table/view 'dca00a' owned by 'testenv' because 
+    you possess no grantable privileges on it.
+    (Thu Jan  6 13:53:24 1994)
+
+E_PS0560 GRANT ALL [PRIVILEGES]: You may not grant any privileges on 
+    table/view 'dca00b' owned by 'testenv' because 
+    you possess no grantable privileges on it.
+    (Thu Jan  6 13:53:24 1994)
+
+E_US088E GRANT: Schema 'testenv' does not contain  
+    table 'dca00c' or you lack privileges on that table  
+    which are required in order to execute this statement.
+    (Thu Jan  6 13:53:24 1994)
+
+>>
+* grant update on dca00a to public;\g
+<<
+E_PS0551 GRANT: 'UPDATE' on 'dca00a' owned by 'testenv' 
+    must have been granted to you WITH GRANT OPTION in order 
+    for you to grant these privilege(s) to other users.
+    (Tue Nov 16 10:02:13 1993)
+
+>>
+* grant delete on dca00a to public;\g
+<<
+E_PS0551 GRANT: 'DELETE' on 'dca00a' owned by 'testenv' 
+    must have been granted to you WITH GRANT OPTION in order 
+    for you to grant these privilege(s) to other users.
+    (Tue Nov 16 10:02:15 1993)
+
+>>
+* grant insert on dca00c to public;\g
+<<
+E_US088E GRANT: Schema 'testenv' does not contain  
+    table 'dca00c' or you lack privileges on that table  
+    which are required in order to execute this statement.
+    (Thu Jan  6 13:53:49 1994)
+
+>>
+* commit;\g
+<<
+>>
+* \q
+<<
+>>
+? sleep 15 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select dbmsinfo('username');\g
+<<
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|testenv                         |
++--------------------------------+
+(1 row)
+>>
+* drop table dca00a;\g
+<<
+>>
+* drop table dca00b;\g
+<<
+>>
+* drop table dca00c;\g
+<<
+>>
+* drop table dca00t;\g
+<<
+>>
+*\q
+<<
+>>
+
+
+Ending at: Fri Oct  5 09:16:48 2001

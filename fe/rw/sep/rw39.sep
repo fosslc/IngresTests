@@ -1,0 +1,283 @@
+/*
+	Test Name   : CER-102
+	Time        : 23-JUL-1990 11:11:11
+	User Name   : testenv
+
+	Test ID     : wia12
+	Module      : REPORT and SREPORT
+	Filename    : wia12.sep
+	Purpose     : Certification Test
+	Input Files : xwia12.rw
+	Output Files: xwia12.rw
+	Database    : SEPPARAMDB
+	Tables      : wia12_customer, wia12_account, wia12_transact
+	Synopsis    :
+	History     : 23-jul-1990	edt	Created
+	03-jul-1991	dufour	Removed table drops and creates required for 
+				initialization to a separate initilization 
+				script in basis/fe.
+        13-Jan-1993       victor the cleaner
+                      Removed altcanons for sreport and added ignore results
+                      since sreport is already tested in this suite.
+        04-Aug-1993       daniel lee
+		      changed canons to reflect changes in 6.5
+		      - inserted a space between commands and param#
+			(ex. NL2 -> NL 2)
+********************************************************************************
+				     Notes
+1.	The ingtest!basis!fe!mkrwing.sep script for the Report Writer tests 
+	must be run prior to execution of this script.
+2.	A SEPPARAMDB logical/variable must be assigned.
+3.	It is recommended that all additions and/or modifications to this 
+	script use Open SQL syntax and data types where feasible.
+********************************************************************************
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -report wia12a 
+<<
+~
+>>
+? fill xwia12.rw 
+!!
+.NAME	wia12a
+.SREM	RW Manual 6.4 Appendix B "account"
+.LONGREMARK
+The ACCOUNT report shows a fairly complex report that could be written for
+some accounting data.  For each account, the report prints the name and
+address of a customer, followed by a listing of transactions in an account.
+Deposits are listed in one column, withdrawals in another, and a running
+ablance is listed in a third.
+.ENDREMARK
+.FORMFEEDS
+.QUERY
+        select c.name, c.address, c.city, c.state, c.zip,
+                a.acctnum, a.balance, t.transnum, t.tdate,
+                withdrawal = t.amount * t.type,
+                deposit = t.amount * (1 - t.type),
+                amt = (t.amount * (1 - t.type)) - (t.amount * t.type)
+        from wia12_transact t, wia12_account a, wia12_customer c
+        where a.acctnum = t.acctnum and c.name = a.name
+.SORT name, acctnum, tdate, transnum
+.FORMAT acctnum(" nn\-nnnnnn\-n "), tdate(d"01/02/03"),
+        withdrawal, deposit, amt, balance ("   $$$,$$$,$$$.zz")
+.HEAD name
+        .NEWPAGE 1 .NL 3
+        .PR name .NL
+        .PR address .NL
+        .PR city(c0), " ", state(c0), " ", zip("nnnnn") .NL 4
+.FOOT name
+        .NL 3 .PR "End of accounts for: ", name .NL
+.HEAD acctnum
+        .NL 3
+        .P "Account: ", acctnum .RT amt .P "Opening balance:", balance .NL 2
+        .UL .CE acctnum .P "Account" .CE tdate .P "Date" .CE transnum
+                .P "Transaction"
+                .RT deposit .P "Deposit" .RT withdrawal .P "Withdrawal" .RT amt
+                .P "Balance" .NL
+        .NOU
+        .TFORMAT acctnum("  nn\-nnnnnn\-n   ")
+.FOOT acctnum
+        .NL 2
+        .PR "Account", acctnum, "totals." .T deposit .P sum(deposit)
+                .T withdrawal .P sum(withdrawal)
+        .NL 2 .RT amt .P "Closing balance:", sum(amt, balance) .NL
+.HEAD tdate
+        .TFORMAT tdate(d"01/02/03        ")
+.DETAIL
+        .PR acctnum(b16), tdate(b16), .T+8 .P transnum("nnnn"), deposit,
+                withdrawal .T+5 .P cum(acctnum) sum(amt, balance) .NL
+.HEAD page
+        .NL 2
+        .PR "Customer: ", name
+                .CE .P "Date: ", current_date(d"03-Feb-1901"),
+                .RT .PR "Page ", page_number .NL 4
+.FOOT page
+        .NL 3
+!!
+? sreport SEPPARAMDB xwia12.rw 
+<<
+~
+>>
+? report SEPPARAMDB wia12a -fxwia12a.out 
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres CorporationReading report specific-
+ations and preparing query . . .
+Retrieving data . . .
+>>
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres CorporationReading report specific-
+ations and preparing query . . .
+Retrieving data . . .
+>>
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+? type xwia12a.out 
+<<
+
+
+Customer: Big Daddy                       Date: 07-May-1991                         -
+     Page      1
+
+
+
+
+
+
+Big Daddy
+1 Bestview Lane
+Topofthehill NJ 05436
+
+
+
+
+
+
+Account:  74-902543-6                                              Opening balance: -
+     $234,657.00
+
+   _______        ____               ___________      _______       __________      -
+         _______   Account        Date               Transaction      Deposit      -
+ Withdrawal               Balance
+  74-902543-6   81/07/01                0101      $100,000.00                       -
+     $334,657.00
+                                        0102                        $50,500.00      -
+     $284,157.00
+                                        0103                            $24.56      -
+     $284,132.44
+                                        0104                        $10,100.00      -
+     $274,032.44
+                81/07/15                0105       $50,000.00                       -
+     $324,032.44
+                81/07/17                0106                        $10,143.54      -
+     $313,888.90
+                                        0107                           $243.56      -
+     $313,645.34
+                81/07/22                0108                           $100.00      -
+     $313,545.34
+                81/07/23                0109                        $25,000.00      -
+     $288,545.34
+                                        0110      $100,000.00                       -
+     $388,545.34
+
+
+Account 74-902543-6 totals.                       $250,000.00       $96,111.66
+
+                                                                   Closing balance: -
+     $388,545.34
+
+
+
+End of accounts for: Big Daddy
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Customer: Fast Sally                      Date: 07-May-1991                         -
+     Page      1
+
+
+
+
+
+
+Fast Sally
+1234 71st St
+Big City NY 01234
+
+
+
+
+
+
+Account:  48-821908-2                                              Opening balance: -
+       $1,245.00
+
+   _______        ____               ___________      _______       __________      -
+         _______   Account        Date               Transaction      Deposit      -
+ Withdrawal               Balance
+  48-821908-2   81/05/25                0101                           $200.00      -
+       $1,045.00
+                81/07/03                0102          $250.00                       -
+       $1,295.00
+                81/07/05                0103                           $320.34      -
+         $974.66
+                                        0104           $65.23                       -
+       $1,039.89
+                81/07/08                0105                           $100.00      -
+         $939.89
+                81/07/10                0106                            $56.32      -
+         $883.57
+                81/07/16                0107                            $24.71      -
+         $858.86
+                81/07/20                0108                           $120.00      -
+         $738.86
+                81/07/25                0109                            $31.16      -
+         $707.70
+
+
+Account 48-821908-2 totals.                           $315.23          $852.53
+
+                                                                   Closing balance: -
+         $707.70
+
+
+
+End of accounts for: Fast Sally
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>
+? delete xwia12a.out 
+<<
+file was deleted
+>>
+? delobj SEPPARAMDB -report wia12a 
+<<
+~
+>>
+
+
+Ending at:  7-MAY-1991 11:28:28

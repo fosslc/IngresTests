@@ -1,0 +1,592 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: utl48.sep
+	Time: Tue Mar 25 12:40:09 2003
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl48.sep 
+	Module  : be/util
+	Filename: utl48.sep
+	Purpose	: To test the new copydb flag -with_sequences first available
+		  with Ingres II 2.6 SP2 and later releases.
+	Input Files  : copy.in
+	Output Files : copy.out
+	Database     : utl48_db1, utl48_db2
+	Tables       : utl48_table1, utl48_table2
+	Synopsis     : Test the new copydb -with_sequences flag.
+		       When this flag is specified, it will copy the
+		       sequence(s) defined in the database from which
+		       it will be copied.
+
+ History: 25-Mar-2003	(shafa01) Created
+          02-May-2003	(shafa01) The test needed to be revised as development
+				  had made changes that affected messages that
+				  were put out by copydb in the copy.in file and
+				  a help on sequences gave more information than
+				  it did before. Earlier, sql dbname < copy.out
+				  would produce tablename.ing files and now it
+				  creates tablename.username files and uses them
+				  in the copy.in file. If sequences are created
+				  with min and max values specified, then the
+				  help on sequence will now display that
+				  information properly. Respectively the canons
+ 				  had to be update with the latest expected
+				  results.
+          19-May-2003	(shafa01) Updated the test to create its own databases
+                                  utl48_db1 and utl48_db2 so that it does not
+				  have to use utildb3 and utildb4.
+          14-Sep-2004	(shafa01) Updating test with new canons because	the 
+				  behavior changed. Earlier when a sequence was
+				  copied using copydb it would reset the
+				  minvalue.  Now, when a sequence is copied out
+				  it begins at its next value when it is
+				  reloaded. See issue 12610520 which was an
+				  enhancement request describing this new
+				  behavior.
+          14-Mar-2005	(vande02) Updated canon for copydb.in output as it now
+				  includes 'minpages=10' when modifying the
+				  table to hash.  See issue 14006341 where
+				  Development agrees this is expected behavior.
+				  Aligned history comments.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+          12-Jun-2006   (hanal04) create table statements are terminated with a
+				  GO statement not a semi-colon after change
+                        	  for bug 116045.
+          21-Mar-2007	(vande02) Updated canon for copydb.in output. As of
+				  2006r2, the order of objects has changed.
+				  Sequences come before tables, see issue 115404
+				  Updated copyright.
+          14-Apr-2008   (hanal04) Update canon to include SET statements
+                                  added in SIR 120242.
+          20-Jun-2008   (vande02) Added setting of II_MONEY_FORMAT for Windows
+                                  for the duration of this test.
+*/
+.if (NT_GENERIC)
+? setenv II_MONEY_FORMAT L:$
+<<
+environment variable was defined
+>>
+.else
+.endif
+? fill utl48_drop.sql 
+!!
+drop table utl48_table1\g
+drop table utl48_table2\g
+drop sequence utl48_intseq\g
+drop sequence utl48_decseq\g
+!!
+? fill utl48a.in 
+!!
+drop table utl48_table1\p\g
+drop sequence utl48_intseq\g
+create sequence utl48_intseq\g
+create table utl48_table1(col1 int, col2 varchar(3), col3 int)\p\g
+insert into utl48_table1 values(next value for utl48_intseq, 'ABC', 7)\p\g
+insert into utl48_table1 values(next value for utl48_intseq, 'CBS', 2)\p\g
+insert into utl48_table1 values(next value for utl48_intseq, 'FOX', 12)\p\g
+insert into utl48_table1 values(next value for utl48_intseq, 'NBC', 5)\p\g
+drop table utl48_table2\p\g
+drop sequence utl48_decseq\g
+create sequence utl48_decseq as decimal\g
+create table utl48_table2(col1 decimal, col2 varchar(4), col3 decimal(6,2))\p\g
+insert into utl48_table2 values(next value for utl48_decseq, 'WABC', 780.5)\p\g
+insert into utl48_table2 values(next value for utl48_decseq, 'WCBS', 200.75)\p\g
+insert into utl48_table2 values(next value for utl48_decseq, 'WFOX', 1204.5)\p\g
+insert into utl48_table2 values(next value for utl48_decseq, 'WNBC', 500.35)\p\g
+!!
+? fill utl48b.in 
+!!
+insert into utl48_table1 values(utl48_intseq.currval, 'HBO', 18)\p\g
+insert into utl48_table1 values(utl48_intseq.nextval, 'TNT', 12)\p\g
+insert into utl48_table1 values(utl48_intseq.nextval, 'BET', 75)\p\g
+insert into utl48_table1 values(utl48_intseq.nextval, 'CNN', 20)\p\g
+insert into utl48_table2 values(utl48_decseq.currval, 'WHBO', 180.5)\p\g
+insert into utl48_table2 values(utl48_decseq.nextval, 'WTNT', 120.75)\p\g
+insert into utl48_table2 values(utl48_decseq.nextval, 'WBET', 7500.5)\p\g
+insert into utl48_table2 values(utl48_decseq.nextval, 'WCNN', 200.35)\p\g
+!!
+? destroydb utl48_db1 
+<<
+~
+>>
+? destroydb utl48_db2 
+<<
+~
+>>
+? createdb utl48_db1 
+<<
+Creating database 'utl48_db1' . . .
+ 
+  Creating DBMS System Catalogs . . . 
+  Modifying DBMS System Catalogs . . . 
+  Creating Standard Catalog Interface . . . 
+  Creating Front-end System Catalogs . . . 
+
+Creation of database 'utl48_db1' completed successfully.
+ 
+>>
+? createdb utl48_db2 
+<<
+Creating database 'utl48_db2' . . .
+ 
+  Creating DBMS System Catalogs . . . 
+  Modifying DBMS System Catalogs . . . 
+  Creating Standard Catalog Interface . . . 
+  Creating Front-end System Catalogs . . . 
+
+Creation of database 'utl48_db2' completed successfully.
+ 
+>>
+? sql -s utl48_db1 
+<<
+
+>>
+* \i utl48a.in
+<<
+~
+>>
+* select * from utl48_table1 order by 1,2,3\p\g
+<<
+select * from utl48_table1 order by 1,2,3
+
++-------------+------+-------------+
+|col1         |col2  |col3         |
++-------------+------+-------------+
+|            1|ABC   |            7|
+|            2|CBS   |            2|
+|            3|FOX   |           12|
+|            4|NBC   |            5|
++-------------+------+-------------+
+(4 rows) 
+>>
+* modify utl48_table1 to hash\p\g 
+<<
+ 
+modify utl48_table1 to hash
+(4 rows)
+>>
+* select * from utl48_table2 order by 1,2,3\p\g
+<<
+select * from utl48_table2 order by 1,2,3
+
++------+------+---------+
+|col1  |col2  |col3     |
++------+------+---------+
+|     1|WABC  |   780.50|
+|     2|WCBS  |   200.75|
+|     3|WFOX  |  1204.50|
+|     4|WNBC  |   500.35|
++------+------+---------+
+(4 rows) 
+>>
+* modify utl48_table2 to hash\p\g 
+<<
+ 
+modify utl48_table2 to hash
+(4 rows)
+>>
+* \q 
+<<
+
+>>
+? copydb utl48_db1 -with_tables -with_modify -with_data -with_sequences -relpath -noin-
+t -c 
+<<
+~
+>>
+? sql -s utl48_db1 
+<<
+
+>>
+* \i copy.out 
+<<
+~
+>>
+* \q 
+<<
+
+>>
+? sql -s utl48_db2 
+<<
+
+>>
+* \i utl48_drop.sql 
+<<
+~
+>>
+* commit\p\g
+<<
+~
+>>
+* \i copy.in 
+<<
+set autocommit on
+set nojournaling
+set session with privileges=all
+set decimal '.'
+set date_format 'us'
+set money_format 'L:$'
+set money_prec '2'
+
+	/* SEQUENCES */
+create sequence utl48_decseq as decimal(5)
+    start with 5 increment by 1
+    minvalue 1 maxvalue 99999
+    cache 20 no cycle no order
+create sequence utl48_intseq as integer
+    start with 5 increment by 1
+    minvalue 1 maxvalue 2147483647
+    cache 20 no cycle no order
+
+	/* TABLES */
+create table utl48_table1(
+	col1 integer,
+	col2 varchar(3),
+	col3 integer
+)
+with duplicates,
+nojournaling,
+location = (ii_database),
+security_audit=(table,norow)
+modify utl48_table1 to hash on
+	col1
+with minpages = 10,
+	fillfactor = 50,
+	extend = 16
+(0 rows)
+copy utl48_table1(
+	col1= c0tab with null(']^NULL^['),
+	col2= varchar(0)tab with null(']^NULL^['),
+	col3= c0nl with null(']^NULL^['),
+	nl= d0nl)
+from 'utl48_table1.testenv'
+with minpages = 10,
+	allocation = 4,
+	row_estimate = 4
+(4 rows)
+create table utl48_table2(
+	col1 decimal(5,0),
+	col2 varchar(4),
+	col3 decimal(6,2)
+)
+with duplicates,
+nojournaling,
+location = (ii_database),
+security_audit=(table,norow)
+modify utl48_table2 to hash on
+	col1
+with minpages = 10,
+	fillfactor = 50,
+	extend = 16
+(0 rows)
+copy utl48_table2(
+	col1= varchar(0)tab with null(']^NULL^['),
+	col2= varchar(0)tab with null(']^NULL^['),
+	col3= varchar(0)nl with null(']^NULL^['),
+	nl= d0nl)
+from 'utl48_table2.testenv'
+with minpages = 10,
+	allocation = 4,
+	row_estimate = 4
+(4 rows)
+>>
+* help table utl48_table1\p\g 
+<<
+ help table utl48_table1
+Name:                 utl48_table1
+Owner:                testenv
+Created:              01-may-2003 10:47:32     
+Location:             ii_database
+Type:                 user table
+Version:              II2.6
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 16
+Row width:            16
+Number of rows:       4
+Storage structure:    hash
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      18
+Overflow data pages:  0
+Journaling:           disabled
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             integer         4  yes    null     1 
+col2                             varchar         3  yes    null       
+col3                             integer         4  yes    null       
+
+Secondary indexes:    none
+
+
+
+>>
+* help table utl48_table2\p\g
+<<
+ 
+ help table utl48_table2
+Name:                 utl48_table2
+Owner:                testenv
+Created:              01-may-2003 10:47:33     
+Location:             ii_database
+Type:                 user table
+Version:              II2.6
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 16
+Row width:            16
+Number of rows:       4
+Storage structure:    hash
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      18
+Overflow data pages:  0
+Journaling:           disabled
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+col1                             decimal         5  yes    null     1 
+col2                             varchar         4  yes    null       
+col3                             decimal         6  yes    null       
+
+Secondary indexes:    none
+
+
+
+>>
+* help sequence utl48_intseq\p\g
+<<
+ help sequence utl48_intseq
+Sequence:             utl48_intseq
+Owner:                testenv
+
+Sequence Definition:
+Create sequence testenv.utl48_intseq as integer start with 5          
+     increment by 1 minvalue 1 maxvalue 2147483647                    
+     cache 20 no cycle no order                                       
+
+
+
+>>
+* help sequence utl48_decseq\p\g
+<<
+ help sequence utl48_decseq
+Sequence:             utl48_decseq
+Owner:                testenv
+
+Sequence Definition:
+Create sequence testenv.utl48_decseq as decimal(5) start with 5       
+     increment by 1 minvalue 1 maxvalue 99999                         
+     cache 20 no cycle no order                                       
+
+
+
+>>
+* select * from utl48_table1 order by 1,2,3\p\g
+<<
+select * from utl48_table1 order by 1,2,3
+
++-------------+------+-------------+
+|col1         |col2  |col3         |
++-------------+------+-------------+
+|            1|ABC   |            7|
+|            2|CBS   |            2|
+|            3|FOX   |           12|
+|            4|NBC   |            5|
++-------------+------+-------------+
+(4 rows) 
+>>
+* select * from utl48_table2 order by 1,2,3\p\g
+<<
+select * from utl48_table2 order by 1,2,3
+
++------+------+---------+
+|col1  |col2  |col3     |
++------+------+---------+
+|     1|WABC  |   780.50|
+|     2|WCBS  |   200.75|
+|     3|WFOX  |  1204.50|
+|     4|WNBC  |   500.35|
++------+------+---------+
+(4 rows) 
+>>
+/*
+	The sequence objects utl48_intseq and utl48_decseq are
+	recreated as part of the copydb process to the new database,
+	which means that the current value for both the sequences
+	will be the value defined as the start value for the sequences.
+	In this case the start value for both the sequence objects is
+	1. In order to view the current value, the objects need to be
+	initialized and that is done by first executing a nextval. Autocommit
+	needs to be off when using currval singly within a SQL statement.
+*/
+* set autocommit off\g
+<<
+>>
+* select utl48_intseq.nextval\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            5|
++-------------+
+(1 row)
+>>
+* select utl48_intseq.currval\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            5|
++-------------+
+(1 row)
+>>
+* select utl48_decseq.nextval\g
+<<
+
++------+
+|col1  |
++------+
+|     5|
++------+
+(1 row)
+>>
+* select utl48_decseq.currval\g
+<<
+
++------+
+|col1  |
++------+
+|     5|
++------+
+(1 row)
+>>
+/*
+	In this step four rows are being inserted into tables
+	utl48_table1 and utl48_table2.
+*/
+*\i utl48b.in
+<<
+insert into utl48_table1 values(utl48_intseq.currval, 'HBO', 18)
+(1 row)
+insert into utl48_table1 values(utl48_intseq.nextval, 'TNT', 12)
+(1 row)
+insert into utl48_table1 values(utl48_intseq.nextval, 'BET', 75)
+(1 row)
+insert into utl48_table1 values(utl48_intseq.nextval, 'CNN', 20)
+(1 row)
+insert into utl48_table2 values(utl48_decseq.currval, 'WHBO', 180.5)
+(1 row)
+insert into utl48_table2 values(utl48_decseq.nextval, 'WTNT', 120.75)
+(1 row)
+insert into utl48_table2 values(utl48_decseq.nextval, 'WBET', 7500.5)
+(1 row)
+insert into utl48_table2 values(utl48_decseq.nextval, 'WCNN', 200.35)
+(1 row)
+>>
+* select * from utl48_table1 order by 1,2,3\g
+<<
+
++-------------+------+-------------+
+|col1         |col2  |col3         |
++-------------+------+-------------+
+|            1|ABC   |            7|
+|            2|CBS   |            2|
+|            3|FOX   |           12|
+|            4|NBC   |            5|
+|            5|HBO   |           18|
+|            6|TNT   |           12|
+|            7|BET   |           75|
+|            8|CNN   |           20|
++-------------+------+-------------+
+(8 rows)
+>>
+* select * from utl48_table2 order by 1,2,3\g
+<<
+
++------+------+--------+
+|col1  |col2  |col3    |
++------+------+--------+
+|     1|WABC  |  780.50|
+|     2|WCBS  |  200.75|
+|     3|WFOX  | 1204.50|
+|     4|WNBC  |  500.35|
+|     5|WHBO  |  180.50|
+|     6|WTNT  |  120.75|
+|     7|WBET  | 7500.50|
+|     8|WCNN  |  200.35|
++------+------+--------+
+(8 rows)
+>>
+* \i utl48_drop.sql 
+<<
+
+>>
+* \q 
+<<
+
+>>
+? sql -s utl48_db1 
+<<
+
+>>
+* \i utl48_drop.sql
+<<
+
+>>
+* \q 
+<<
+
+>>
+? delete utl48_table1.testenv 
+<<
+file was deleted
+>>
+? delete utl48_table2.testenv 
+<<
+file was deleted
+>>
+? delete copy.in 
+<<
+file was deleted
+>>
+? delete copy.out 
+<<
+file was deleted
+>>
+? destroydb utl48_db1 
+<<
+Destroying database 'utl48_db1' . . .
+ 
+
+Destruction of database 'utl48_db1' completed successfully.
+ 
+>>
+? destroydb utl48_db2 
+<<
+Destroying database 'utl48_db2' . . .
+ 
+
+Destruction of database 'utl48_db2' completed successfully.
+ 
+>>
+
+
+Ending at: Mon Mar 14 15:45:01 2005

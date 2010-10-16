@@ -1,0 +1,704 @@
+/*
+Copyright (c) 2005 Ingres Corporation
+
+
+	Test Name: utl42.sep
+	Time: Fri Aug 03 11:21:15 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl42.sep
+	Module  : be/util 
+	Filename: utl42.sep
+	Purpose	: To test the new copydb flags first available with Ingres
+                  II 2.6/0106 and later releases.
+	Input Files  : copy.in
+	Output Files : copy.out
+	Database     : utl42db1, utl42db2
+	Tables       : utl42_table
+	Synopsis     : To test the new copydb -parallel flag. This test will 
+                       create its own databases(utl42db1, utl42db2), five 
+                       locations(data01...data05). The databases will extend 
+                       to these five locations. It will create a table and three
+                       indexes in multiple locations in database utl42db1, then
+                       copy the table and indexes from utl42db1 to utl42db2.
+                       Verify the table and indexes are created in multiple
+                       locations in database utl42db2 with help query.
+
+ History: 03-Aug-2001	(wu$ca01) Created
+	  06-Aug-2002	(wu$ca01) Add 'destroydb utl42db1/utl42db2' at the end
+				  of the test to cleanup the databases.
+           8-May-2003	(wu$ca01) Updated test due to schema has changed
+				  ('utl42_table.tes' to 'utl42_table.testenv').
+           9-May-2005	(vande02) Updated test by adding final cleanup to drop
+				  test locations data01 - data05, remove their
+				  corresponding directories, and removed need
+				  for one-time used fill files and folded SQL
+				  statements into the test.
+
+				  Added  NT_GENERIC scripts utl42mkloc.bat
+				  utl42delloc.bat.   This removes the dependency
+				  on MKS toolkit or Cygwin. 
+
+				  Added echo if VMS because this test requires
+				  some specific changes to make it portable to
+				  VMS.
+          19-May-2005	(sinra04) Modified sep to add create3.com file to create
+				  locations(data01...data05) on VMS. Removed
+				  command to skip sep execution on VMS.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+          31-Oct-2006   (vande02) Updated data type date to ingresdate in the
+				  help table and help index output.
+*/
+.if (UNIX) 
+? fill create.sql 
+!!
+echo "create location data01 with area ='" > utl42.sql ; env \
+| grep II_SYSTEM | awk -F= '{print $2}' >> utl42.sql \
+; echo "/data01', usage=(database);commit;\p\g" >> utl42.sql ; \
+echo "" >> utl42.sql ; \
+echo "create location data02 with area ='" >> utl42.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> utl42.sql ; \
+echo "/data02', usage=(database);commit;\p\g" >> utl42.sql ; \
+echo "" >> utl42.sql ; \
+echo "create location data03 with area ='" >> utl42.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> utl42.sql ; \
+echo "/data03', usage=(database);commit;\p\g" >> utl42.sql ; \
+echo "" >> utl42.sql ; \
+echo "create location data04 with area ='" >> utl42.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> utl42.sql ; \
+echo "/data04', usage=(database);commit;\p\g" >> utl42.sql ; \
+echo "" >> utl42.sql ; \
+echo "create location data05 with area ='" >> utl42.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> utl42.sql ; \
+echo "/data05', usage=(database);commit;\p\g" >> utl42.sql ;
+!!
+? run chmod u+x create.sql 
+<<
+~
+>>
+? run create.sql 
+<<
+~
+>>
+.endif 
+.if (NT_GENERIC) 
+? fill create2.bat 
+!!
+echo create location data01 with area='%II_SYSTEM%\data01', usage=(database); commit-
+; \p\g > utl42.sql
+echo create location data02 with area='%II_SYSTEM%\data02', usage=(database); commit-
+; \p\g >> utl42.sql
+echo create location data03 with area ='%II_SYSTEM%\data03', usage=(database);commit-
+; \p\g >> utl42.sql
+echo create location data04 with area ='%II_SYSTEM%\data04', usage=(database);commit-
+; \p\g >> utl42.sql
+echo create location data05 with area ='%II_SYSTEM%\data05', usage=(database);commit-
+; \p\g >> utl42.sql
+!!
+? run create2.bat 
+<<
+~
+>>
+.endif
+.if (VMS)
+? fill create3.com
+!! 
+$! create3.com:used in conjunction with utl42.sep to create the multiple 
+$!		DB locations.
+$!
+$! History:
+$!
+$! 19-May-05:	sinra04:  created.
+$!
+$!
+$!*****************************************************************************
+$ set noon
+$ echo ="write sys$output"
+$!
+$!clean the old locations
+$!
+$ i=0
+$ CLEANLOOP:
+$ i=i+1
+$!
+$ if i .gt.2 then goto DONE
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.data01...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.data02...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.data03...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.data04...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.data05...]*.*;*
+$ goto CLEANLOOP
+$ DONE:
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000]loc*.*;*
+$!
+$!create the new locations
+$!
+$ create/dir ii_system:[000000.data01.ingres.data] 
+$ create/dir ii_system:[000000.data02.ingres.data]
+$ create/dir ii_system:[000000.data03.ingres.data]
+$ create/dir ii_system:[000000.data04.ingres.data]
+$ create/dir ii_system:[000000.data05.ingres.data]
+$!
+$!parse II_SYSTEM, define the area logicals pointing to row device locations:
+$!
+$ disk=f$extract(0,f$length(f$trnlnm("II_SYSTEM"))-1,f$trnlnm("II_SYSTEM"))
+$ i= f$locate(":", disk)
+$ disk1=f$extract(0, i, disk)
+$ disk2=f$extract(i+2, f$length("''disk'"), disk)
+$!
+$ if (f$trnlnm("''disk1'") .eqs. "")
+$ then
+$       dev=disk
+$ else
+$       if (disk2 .eqs. "") 
+$       then
+$               dev=f$extract(0,f$length(f$trnlnm("''disk1'"))-1,-
+                    f$trnlnm("''disk1'"))   
+$       else
+$               dev=f$extract(0,f$length(f$trnlnm("''disk1'"))-1,-
+                    f$trnlnm("''disk1'")) + "''disk2'" 
+$       endif
+$ endif
+$!
+$ dev1="''dev'"+"data01.]"
+$ dev2="''dev'"+"data02.]"
+$ dev3="''dev'"+"data03.]"
+$ dev4="''dev'"+"data04.]"
+$ dev5="''dev'"+"data05.]"
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area1 'dev1
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area2 'dev2
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area3 'dev3
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area4 'dev4
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area5 'dev5
+$ exit
+!!
+? qasetuser testenv @create3.com
+<<
+>>
+? fill utl42.sql
+!!
+create location data01 with area='area1', usage=(database);commit;\g
+create location data02 with area='area2', usage=(database);commit;\g
+create location data03 with area ='area3',usage=(database);commit;\g
+create location data04 with area ='area4',usage=(database);commit;\g
+create location data05 with area ='area5',usage=(database);commit;\g
+!!
+.endif
+? destroydb utl42db1 
+<<
+~
+>>
+? destroydb utl42db2 
+<<
+~
+>>
+? createdb utl42db1 
+<<
+~
+>>
+? createdb utl42db2 
+<<
+~
+>>
+.if (UNIX)
+? qasetuser ingres rm -r @file(ii_system,data01) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,data02) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,data03) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,data04) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,data05) 
+<<
+~
+>>
+? qasetuser ingres mkdir -p @file(ii_system,data01,ingres,data,default) 
+<<
+~
+>>
+? qasetuser ingres mkdir -p @file(ii_system,data02,ingres,data,default) 
+<<
+~
+>>
+? qasetuser ingres mkdir -p @file(ii_system,data03,ingres,data,default) 
+<<
+~
+>>
+? qasetuser ingres mkdir -p @file(ii_system,data04,ingres,data,default) 
+<<
+~
+>>
+? qasetuser ingres mkdir -p @file(ii_system,data05,ingres,data,default) 
+<<
+~
+>>
+.endif
+.if NT_GENERIC
+? fill utl42mkloc.bat
+!!
+qasetuser ingres rd /S /Q %II_SYSTEM%\data01
+qasetuser ingres rd /S /Q %II_SYSTEM%\data02
+qasetuser ingres rd /S /Q %II_SYSTEM%\data03
+qasetuser ingres rd /S /Q %II_SYSTEM%\data04
+qasetuser ingres rd /S /Q %II_SYSTEM%\data05
+qasetuser ingres md "%II_SYSTEM%\data01\ingres\data\default"
+qasetuser ingres md "%II_SYSTEM%\data02\ingres\data\default"
+qasetuser ingres md "%II_SYSTEM%\data03\ingres\data\default"
+qasetuser ingres md "%II_SYSTEM%\data04\ingres\data\default"
+qasetuser ingres md "%II_SYSTEM%\data05\ingres\data\default"
+!!
+? run utl42mkloc.bat
+<<
+~
+>>
+? delete utl42mkloc.bat
+<<
+file was deleted
+>>
+.endif
+? sql -s -uingres iidbdb 
+<<
+
+>>
+* drop location data01\g
+<<
+~
+>>
+* drop location data02\g
+<<
+~
+>>
+* drop location data03\g
+<<
+~
+>>
+* drop location data04\g
+<<
+~
+>>
+* drop location data05\g
+<<
+~
+>>
+* \i utl42.sql
+<<
+~
+>>
+* execute procedure iiqef_add_location(database_name='utl42db1', location_name='data-
+01',access=8, need_dbdir_flg=0)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='utl42db1', location_name='data-
+02',access=8, need_dbdir_flg=0)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='utl42db1', location_name='data-
+03',access=8, need_dbdir_flg=0)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='utl42db1', location_name='data-
+04',access=8, need_dbdir_flg=0)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='utl42db1', location_name='data-
+05',access=8, need_dbdir_flg=0)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='utl42db2', location_name='data-
+01',access=8, need_dbdir_flg=0)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='utl42db2', location_name='data-
+02',access=8, need_dbdir_flg=0)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='utl42db2', location_name='data-
+03',access=8, need_dbdir_flg=0)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='utl42db2', location_name='data-
+04',access=8, need_dbdir_flg=0)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='utl42db2', location_name='data-
+05',access=8, need_dbdir_flg=0)\g
+<<
+>>
+* \q
+<<
+>>
+? sql -s utl42db1 
+<<
+
+>>
+* drop table utl42_table\g
+<<
+~
+>>
+* drop index utl42_idx1\g
+<<
+~
+>>
+* drop index utl42_idx2\g
+<<
+~
+>>
+* drop index utl42_idx3\g
+<<
+~
+>>
+* create table utl42_table(name varchar(10) not null , state c(2), city char(15), ad-
+dress text(30), zip int, DOB date not null, gender byte, age decimal(3,0),
+<<
+>>
+* status byte varying(10), id float, height float(4), weight smallint, class integer-
+1, industry long byte, title long varchar, salary money, type blob) with duplicates,-
+ location=(data01, data02)\g
+<<
+>>
+* insert into utl42_table values('bebe', 'IL', 'chicago', '111 michigan avenue',
+<<
+>>
+* 60611, '01-11-1971', 'f', 30, 'single',109, 160.6, 120, 111, 'business', 'accounta-
+nt', 32000, 'abcdefghijklmnopqrstuvwxyz')\g
+<<
+(1 row)
+>>
+* create index (utl42_idx1 on utl42_table(name) with structure=hash, persistence, lo-
+cation=(data02, data04)),
+<<
+>>
+* (utl42_idx2 on utl42_table(address) with structure=isam, nopersistence, location=(-
+data03, data05)), (utl42_idx3 on utl42_table(DOB) unique with structure=isam, compre-
+ssion, location=(data01))\g
+<<
+(1 row)
+>>
+* commit\g
+<<
+~
+>>
+* \q
+<<
+>>
+? copydb -parallel utl42db1 
+<<
+~
+>>
+? sql -s utl42db1 
+<<
+
+>>
+* \i copy.out
+<<
+~
+>>
+* \q
+<<
+>>
+? sql -s utl42db2 
+<<
+
+>>
+* drop table utl42_table\g
+<<
+~
+>>
+* \i copy.in
+<<
+~
+>>
+* help table utl42_table\g
+<<
+Name:                 utl42_table
+Owner:                testenv
+Created:              07-aug-2001 12:26:51     
+Location:             data01,
+                      data02
+Type:                 user table
+Version:              II2.6
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 226
+Row width:            226
+Number of rows:       1
+Storage structure:    heap
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      4
+Overflow data pages:  1
+Journaling:           enabled after the next checkpoint
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: none
+
+Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+name                             varchar        10   no      no       
+state                            c               2  yes    null       
+city                             char           15  yes    null       
+address                          vchar          30  yes    null       
+zip                              integer         4  yes    null       
+dob                              ingresdate          no      no       
+gender                           byte            1  yes    null       
+age                              decimal         3  yes    null       
+status                           byte varyi     10  yes    null       
+id                               float           8  yes    null       
+height                           float           4  yes    null       
+weight                           integer         2  yes    null       
+class                            integer         1  yes    null       
+industry                         long byte          yes    null       
+title                            long varch         yes    null       
+salary                           money              yes    null       
+type                             long byte          yes    null       
+
+Secondary indexes:
+Index Name                       Structure  Keyed On
+utl42_idx1                             hash       name
+utl42_idx2                             isam       address
+utl42_idx3                             isam       dob
+
+
+
+>>
+* help index utl42_idx1\g
+<<
+Name:                 utl42_idx1
+Owner:                testenv
+Created:              07-aug-2001 12:26:51     
+Location:             data02,
+                      data04
+Type:                 secondary index on utl42_table
+Version:              II2.6
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 16
+Row width:            16
+Number of rows:       1
+Storage structure:    hash
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      18
+Overflow data pages:  0
+Journaling:           enabled if journaling on the base table is enabled
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: will use any existing statistics on the base table
+
+Index Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+name                             varchar        10   no      no     1 
+tidp                             integer         4   no      no       
+
+
+
+
+>>
+* help index utl42_idx2\g
+<<
+Name:                 utl42_idx2
+Owner:                testenv
+Created:              07-aug-2001 12:26:51     
+Location:             data03,
+                      data05
+Type:                 secondary index on utl42_table
+Version:              II2.6
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 37
+Row width:            37
+Number of rows:       1
+Storage structure:    isam
+Compression:          none
+Duplicate Rows:       allowed
+Number of pages:      4
+Overflow data pages:  0
+Journaling:           enabled if journaling on the base table is enabled
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: will use any existing statistics on the base table
+
+Index Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+address                          vchar          30  yes    null     1 
+tidp                             integer         4   no      no     2 
+
+
+
+
+>>
+* help index utl42_idx3\g
+<<
+Name:                 utl42_idx3
+Owner:                testenv
+Created:              07-aug-2001 12:26:51     
+Location:             data01
+Type:                 secondary index on utl42_table
+Version:              II2.6
+Page size:            2048
+Cache priority:       0
+Alter table version:  0
+Alter table totwidth: 16
+Row width:            16
+Number of rows:       1
+Storage structure:    isam with unique keys
+Compression:          data
+Duplicate Rows:       not allowed
+Number of pages:      4
+Overflow data pages:  0
+Journaling:           enabled if journaling on the base table is enabled
+Base table for view:  no
+Permissions:          none
+Integrities:          none
+Optimizer statistics: will use any existing statistics on the base table
+
+Index Column Information:
+                                                                  Key
+Column Name                      Type       Length Nulls Defaults Seq
+dob                              ingresdate          no      no     1 
+tidp                             integer         4   no      no       
+
+
+
+
+>>
+* \q
+<<
+>>
+? delete copy.in 
+<<
+~
+>>
+? delete copy.out 
+<<
+~
+>>
+? delete utl42_table.testenv 
+<<
+~
+>>
+? delete utl42.sql 
+<<
+~
+>>
+? destroydb utl42db1 
+<<
+~
+>>
+? destroydb utl42db2 
+<<
+~
+>>
+? sql -s -uingres iidbdb 
+<<
+>>
+* drop location data01\g
+<<
+>>
+* drop location data02\g
+<<
+>>
+* drop location data03\g
+<<
+>>
+* drop location data04\g
+<<
+>>
+* drop location data05\g
+<<
+>>
+* \q
+<<
+>>
+.if (UNIX)
+? qasetuser ingres rm -r @file(ii_system,data01) 
+<<
+>>
+? qasetuser ingres rm -r @file(ii_system,data02) 
+<<
+>>
+? qasetuser ingres rm -r @file(ii_system,data03) 
+<<
+>>
+? qasetuser ingres rm -r @file(ii_system,data04) 
+<<
+>>
+? qasetuser ingres rm -r @file(ii_system,data05) 
+<<
+>>
+.endif
+.if (NT_GENERIC)
+? fill utl42delloc.bat
+!!
+qasetuser ingres rd /S /Q %II_SYSTEM%\data01
+qasetuser ingres rd /S /Q %II_SYSTEM%\data02
+qasetuser ingres rd /S /Q %II_SYSTEM%\data03
+qasetuser ingres rd /S /Q %II_SYSTEM%\data04
+qasetuser ingres rd /S /Q %II_SYSTEM%\data05
+!!
+? run utl42delloc.bat
+<<
+~
+>>
+? delete utl42delloc.bat
+<<
+file was deleted
+>>
+.endif
+
+
+Ending at: Mon May  9 15:44:13 2005

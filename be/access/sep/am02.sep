@@ -1,0 +1,516 @@
+/*
+	Copyright (c) 2007 Ingres Corporation
+
+	Test Name    : am02.sep	(formerly caa02.sep and fe016.sep)
+	Time         :  5-JUL-1989 15:36:37
+	User Name    : testenv      
+ 
+	Test ID      : caa02
+	Module       : be/qryproc
+	Filename     : caa02.sep
+	Purpose	     : Test of modify from old backend tests
+	Input Files  : fe012a.dat
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : caa02_t1
+	Synopsis     : modify a table to various forms.  modify with
+			indices.  bad modify syntax.  does not test what
+			happens when you try to modify a table you don't
+			own.
+	History	     : xx-xxx-1989	Created				Author
+	  06-JUL-1989   (larryh)  Converted	
+          23-Feb-1993	(camacho) Edited test to reflect changes in 
+                                  help table.
+          10-Mar-1993	(daniel)  Help table changes for 6.5
+          13-Aug-1993	(garys)   Updated canon to accept correct # of 
+                                  overflow pages for 65.
+          11-Oct-1993   (judi)    When create a table in 6.5 journaling is 
+                                  now automatically enabled.  Therefore, all 
+                                  the help table canons were updated.
+	  23-Mar-1995   (gauje01) Updated canons to contain current Ingres
+				  version (OPING1.2)
+           7-May-1996	(huami01) Changed canons because of
+			          different message from help command.
+           8-Oct-1996	(clate01) Updating and adding OI 2.0 tests
+          07-May-1997	(seran01) Changed canons because help table command
+                                  changed for OI 2.0
+	  07-Jan-1999	(hanch04) Replace table version with TBL_VER
+	  18-Mar-1999	(vande02) Hard-coded VPG_SZ 2K and removed TBL_VER
+				  (grammar.lex masks table version)
+           4-Oct-2001	(devjo01) Updated canons to reflect lifting of SQL
+				  keyword restrictions.
+           4-May-2004	(Sinra04) Updated text message, sep recanonized.
+			          This change is for Ingres 3 behavior and 
+				  going forward.
+	   9-Aug-2006	(rogch01) Recanonise for changes to error message due
+				  to clustered btree tables.  See change 481902.
+	  26-Sep-2007   (kibro01) b119081 Updated US1586 error message
+          13-Dec-2007   (vande02) Changing 'help table' commands to a query of
+                                  iitables checking the storage_structure and
+                                  num_rows after copy/modify table. See issue
+                                  122073.  This will avoid insignificant table
+                                  structure differences as seen in II 9.3.0.
+				  Minor header cleanup.
+*/
+? fill fe012a.dat 
+!!
+1	central processor	pink	10	1
+2	memory	gray	20	32
+3	disk drive	black	685	2
+4	tape drive	black	450	4
+5	tapes	gray	1	250
+6	line printer	yellow	578	3
+7	l-p paper	white	15	95
+8	terminals	blue	19	15
+13	paper tape reader	black	107	0
+14	paper tape punch	black	147	0
+9	terminal paper	white	2	350
+10	byte-soap	clear	0	143
+11	card reader	gray	327	0
+12	card punch	gray	427	0
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop caa02_t1;\g 
+<<
+~
+>>
+* create table caa02_t1 (pnum integer2, pname vchar(20), color vchar(8), weight inte-
+ger2, qoh integer2, vol integer1, dept vchar(2)) with page_size=2048;\g 
+<<
+>>
+* copy table caa02_t1 (pnum=vchar(0)tab, pname=vchar(0)tab, color=vchar(0)tab, weigh-
+t=vchar(0)tab, qoh=vchar(0)nl) from 'fe012a.dat';\g 
+<<
+(14 rows)
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where -
+table_name='caa02_t1';\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|caa02_t1                        |HEAP            |           14|N     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* select * from caa02_t1 order by pnum;\g 
+<<
++------+--------------------+--------+------+------+------+------+
+|pnum  |pname               |color   |weight|qoh   |vol   |dept  |
++------+--------------------+--------+------+------+------+------+
+|     1|central processor   |pink    |    10|     1|      |      |
+|     2|memory              |gray    |    20|    32|      |      |
+|     3|disk drive          |black   |   685|     2|      |      |
+|     4|tape drive          |black   |   450|     4|      |      |
+|     5|tapes               |gray    |     1|   250|      |      |
+|     6|line printer        |yellow  |   578|     3|      |      |
+|     7|l-p paper           |white   |    15|    95|      |      |
+|     8|terminals           |blue    |    19|    15|      |      |
+|     9|terminal paper      |white   |     2|   350|      |      |
+|    10|byte-soap           |clear   |     0|   143|      |      |
+|    11|card reader         |gray    |   327|     0|      |      |
+|    12|card punch          |gray    |   427|     0|      |      |
+|    13|paper tape reader   |black   |   107|     0|      |      |
+|    14|paper tape punch    |black   |   147|     0|      |      |
++------+--------------------+--------+------+------+------+------+
+(14 rows)
+>>
+* modify caa02_t1 to isam on qoh with page_size=2048;\g 
+<<
+(14 rows)
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where -
+table_name='caa02_t1';\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|caa02_t1                        |ISAM            |           14|N     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* select * from caa02_t1 order by pnum;\g 
+<<
++------+--------------------+--------+------+------+------+------+
+|pnum  |pname               |color   |weight|qoh   |vol   |dept  |
++------+--------------------+--------+------+------+------+------+
+|     1|central processor   |pink    |    10|     1|      |      |
+|     2|memory              |gray    |    20|    32|      |      |
+|     3|disk drive          |black   |   685|     2|      |      |
+|     4|tape drive          |black   |   450|     4|      |      |
+|     5|tapes               |gray    |     1|   250|      |      |
+|     6|line printer        |yellow  |   578|     3|      |      |
+|     7|l-p paper           |white   |    15|    95|      |      |
+|     8|terminals           |blue    |    19|    15|      |      |
+|     9|terminal paper      |white   |     2|   350|      |      |
+|    10|byte-soap           |clear   |     0|   143|      |      |
+|    11|card reader         |gray    |   327|     0|      |      |
+|    12|card punch          |gray    |   427|     0|      |      |
+|    13|paper tape reader   |black   |   107|     0|      |      |
+|    14|paper tape punch    |black   |   147|     0|      |      |
++------+--------------------+--------+------+------+------+------+
+(14 rows)
+>>
+* modify caa02_t1 to hash on pname with page_size=2048;\g 
+<<
+(14 rows)
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where -
+table_name='caa02_t1';\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|caa02_t1                        |HASH            |           14|N     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* select * from caa02_t1 order by pnum;\g 
+<<
+
++------+--------------------+--------+------+------+------+------+
+|pnum  |pname               |color   |weight|qoh   |vol   |dept  |
++------+--------------------+--------+------+------+------+------+
+|     1|central processor   |pink    |    10|     1|      |      |
+|     2|memory              |gray    |    20|    32|      |      |
+|     3|disk drive          |black   |   685|     2|      |      |
+|     4|tape drive          |black   |   450|     4|      |      |
+|     5|tapes               |gray    |     1|   250|      |      |
+|     6|line printer        |yellow  |   578|     3|      |      |
+|     7|l-p paper           |white   |    15|    95|      |      |
+|     8|terminals           |blue    |    19|    15|      |      |
+|     9|terminal paper      |white   |     2|   350|      |      |
+|    10|byte-soap           |clear   |     0|   143|      |      |
+|    11|card reader         |gray    |   327|     0|      |      |
+|    12|card punch          |gray    |   427|     0|      |      |
+|    13|paper tape reader   |black   |   107|     0|      |      |
+|    14|paper tape punch    |black   |   147|     0|      |      |
++------+--------------------+--------+------+------+------+------+
+(14 rows)
+>>
+* modify caa02_t1 to heap with page_size=2048;\g 
+<<
+(14 rows)
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where -
+table_name='caa02_t1';\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|caa02_t1                        |HEAP            |           14|N     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* select * from caa02_t1 order by pnum;\g 
+<<
+
++------+--------------------+--------+------+------+------+------+
+|pnum  |pname               |color   |weight|qoh   |vol   |dept  |
++------+--------------------+--------+------+------+------+------+
+|     1|central processor   |pink    |    10|     1|      |      |
+|     2|memory              |gray    |    20|    32|      |      |
+|     3|disk drive          |black   |   685|     2|      |      |
+|     4|tape drive          |black   |   450|     4|      |      |
+|     5|tapes               |gray    |     1|   250|      |      |
+|     6|line printer        |yellow  |   578|     3|      |      |
+|     7|l-p paper           |white   |    15|    95|      |      |
+|     8|terminals           |blue    |    19|    15|      |      |
+|     9|terminal paper      |white   |     2|   350|      |      |
+|    10|byte-soap           |clear   |     0|   143|      |      |
+|    11|card reader         |gray    |   327|     0|      |      |
+|    12|card punch          |gray    |   427|     0|      |      |
+|    13|paper tape reader   |black   |   107|     0|      |      |
+|    14|paper tape punch    |black   |   147|     0|      |      |
++------+--------------------+--------+------+------+------+------+
+(14 rows)
+>>
+* modify caa02_t1 to cisam on qoh with page_size=2048;\g 
+<<
+(14 rows)
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where -
+table_name='caa02_t1';\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|caa02_t1                        |ISAM            |           14|Y     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* select * from caa02_t1 order by pnum;;\g 
+<<
+
++------+--------------------+--------+------+------+------+------+
+|pnum  |pname               |color   |weight|qoh   |vol   |dept  |
++------+--------------------+--------+------+------+------+------+
+|     1|central processor   |pink    |    10|     1|      |      |
+|     2|memory              |gray    |    20|    32|      |      |
+|     3|disk drive          |black   |   685|     2|      |      |
+|     4|tape drive          |black   |   450|     4|      |      |
+|     5|tapes               |gray    |     1|   250|      |      |
+|     6|line printer        |yellow  |   578|     3|      |      |
+|     7|l-p paper           |white   |    15|    95|      |      |
+|     8|terminals           |blue    |    19|    15|      |      |
+|     9|terminal paper      |white   |     2|   350|      |      |
+|    10|byte-soap           |clear   |     0|   143|      |      |
+|    11|card reader         |gray    |   327|     0|      |      |
+|    12|card punch          |gray    |   427|     0|      |      |
+|    13|paper tape reader   |black   |   107|     0|      |      |
+|    14|paper tape punch    |black   |   147|     0|      |      |
++------+--------------------+--------+------+------+------+------+
+(14 rows)
+>>
+* modify caa02_t1 to chash on pname with page_size=2048;\g 
+<<
+(14 rows)
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where -
+table_name='caa02_t1';\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|caa02_t1                        |HASH            |           14|Y     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* select * from caa02_t1 order by pnum;;\g 
+<<
+
++------+--------------------+--------+------+------+------+------+
+|pnum  |pname               |color   |weight|qoh   |vol   |dept  |
++------+--------------------+--------+------+------+------+------+
+|     1|central processor   |pink    |    10|     1|      |      |
+|     2|memory              |gray    |    20|    32|      |      |
+|     3|disk drive          |black   |   685|     2|      |      |
+|     4|tape drive          |black   |   450|     4|      |      |
+|     5|tapes               |gray    |     1|   250|      |      |
+|     6|line printer        |yellow  |   578|     3|      |      |
+|     7|l-p paper           |white   |    15|    95|      |      |
+|     8|terminals           |blue    |    19|    15|      |      |
+|     9|terminal paper      |white   |     2|   350|      |      |
+|    10|byte-soap           |clear   |     0|   143|      |      |
+|    11|card reader         |gray    |   327|     0|      |      |
+|    12|card punch          |gray    |   427|     0|      |      |
+|    13|paper tape reader   |black   |   107|     0|      |      |
+|    14|paper tape punch    |black   |   147|     0|      |      |
++------+--------------------+--------+------+------+------+------+
+(14 rows)
+>>
+* modify caa02_t1 to cheap with page_size=2048;\g 
+<<
+(14 rows)
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where -
+table_name='caa02_t1';\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|caa02_t1                        |HEAP            |           14|Y     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+*  select * from caa02_t1 order by pnum;\g 
+<<
+
++------+--------------------+--------+------+------+------+------+
+|pnum  |pname               |color   |weight|qoh   |vol   |dept  |
++------+--------------------+--------+------+------+------+------+
+|     1|central processor   |pink    |    10|     1|      |      |
+|     2|memory              |gray    |    20|    32|      |      |
+|     3|disk drive          |black   |   685|     2|      |      |
+|     4|tape drive          |black   |   450|     4|      |      |
+|     5|tapes               |gray    |     1|   250|      |      |
+|     6|line printer        |yellow  |   578|     3|      |      |
+|     7|l-p paper           |white   |    15|    95|      |      |
+|     8|terminals           |blue    |    19|    15|      |      |
+|     9|terminal paper      |white   |     2|   350|      |      |
+|    10|byte-soap           |clear   |     0|   143|      |      |
+|    11|card reader         |gray    |   327|     0|      |      |
+|    12|card punch          |gray    |   427|     0|      |      |
+|    13|paper tape reader   |black   |   107|     0|      |      |
+|    14|paper tape punch    |black   |   147|     0|      |      |
++------+--------------------+--------+------+------+------+------+
+(14 rows)
+>>
+* drop temp;\g 
+<<
+~
+>>
+* modify temp to isam on key1 with page_size=2048;\g 
+/*
+    relation does not exist
+*/
+<<
+E_US0845 Table 'temp' does not exist or is not owned by you.
+    (4-MAR-1991 15:43:34)
+
+>>
+* modify caa02_t1 to heap on pnum with page_size=2048;\g 
+/*
+    may not provide keys on a relation
+*/
+<<
+E_US157E MODIFY caa02_t1: you may not provide key columns for the HEAP
+    structure.
+    (Tue May  4 11:35:05 2004)
+
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where -
+table_name='caa02_t1';\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|caa02_t1                        |HEAP            |           14|Y     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* modify caa02_t1 to hash on color, color with page_size=2048;\g 
+/*
+    test go block termination via bad modify
+    too many keys provided: duplicate key
+*/
+<<
+E_US1583 MODIFY caa02_t1: duplicate key 'color'.
+    (6-JUL-1989 08:34:53)
+
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where -
+table_name='caa02_t1';\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|caa02_t1                        |HEAP            |           14|Y     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* modify caa02_t1 to hisam on qoh with page_size=2048;\g 
+/*
+	bad storage structure
+*/
+<<
+E_US1586 MODIFY: Invalid option 'hisam'. 
+    Try one of the following: 
+       [C]ISAM, [C]HASH, [C]HEAP, [C]HEAPSORT, [C]BTREE, CLUSTERED, MERGE,
+       TRUNCATED, REORGANIZE, REORGANISE, RELOCATE, [NO]PERSISTENCE
+    (6-JUL-1989 08:35:51)
+
+>>
+* modify caa02_t1 to hash on bad with page_size=2048;\g 
+/*
+    bad attribute name
+*/
+<<
+E_US1587 MODIFY caa02_t1: bad column name 'bad'.
+    (6-JUL-1989 08:36:22)
+
+>>
+* drop index1;\g 
+<<
+E_US0AC1 DROP: 'index1' does not exist or is not owned by you.
+    (6-JUL-1989 08:36:50)
+
+>>
+* create index index1 on caa02_t1 (pnum) with page_size=2048;\g 
+<<
+(14 rows)
+>>
+* modify caa02_t1 to cheap with page_size=2048;\g 
+/*
+	modify primary relation destroys secondary indices
+*/
+<<
+(14 rows)
+>>
+* select * from index1;\g 
+/*
+	modify primary relation destroys secondary indices
+*/
+<<
+E_US0845 Table 'index1' does not exist or is not owned by you.
+    (4-MAR-1991 15:44:59)
+
+>>
+* modify caa02_t1 heap with page_size=2048;\g 
+<<
+(14 rows)
+>>
+* modify caa02_t1 to isam pnum with page_size=2048;\g 
+<<
+E_US09CF line 1, Syntax error on 'pnum'.  The correct syntax is: 
+    MODIFY table TO storage-structure [UNIQUE] 
+       [ON column [ASC|DESC] {, ... }] 
+   [with_clause]
+    (6-JUL-1989 08:37:15)
+
+>>
+* modify caa02_t1 to hash on (pname) with page_size=2048;\g 
+<<
+E_US09CF line 1, Syntax error on '('.  The correct syntax is: 
+    MODIFY table TO storage-structure [UNIQUE] 
+       [ON column [ASC|DESC] {, ... }] 
+   [with_clause]
+    (6-JUL-1989 08:37:23)
+
+>>
+* modify caa02_t1 to isam on pnum with page_size=2048,;\g 
+<<
+E_US09CF line 1, Syntax error on 'EOF'.  The correct syntax is: 
+    MODIFY table TO storage-structure [UNIQUE] 
+       [ON column [ASC|DESC] {, ... }] 
+   [with_clause]
+    (6-JUL-1989 08:37:30)
+
+>>
+* modify to hash caa02_t1 on pname with page_size=2048;\g 
+<<
+E_US0845 Table 'to' does not exist or is not owned by you.
+    (Thu Oct  4 11:37:01 2001)
+
+>>
+* modify caa02_t1 (isam on pnum) with page_size=2048;\g 
+<<
+E_US09CF line 1, Syntax error on '('.  The correct syntax is: 
+    MODIFY table TO storage-structure [UNIQUE] 
+       [ON column [ASC|DESC] {, ... }] 
+   [with_clause]
+    (6-JUL-1989 08:37:44)
+
+>>
+* select table_name, storage_structure, num_rows, is_compressed from iitables where -
+table_name='caa02_t1';\g
+<<
+
++--------------------------------+----------------+-------------+------+
+|table_name                      |storage_structur|num_rows     |is_com|
++--------------------------------+----------------+-------------+------+
+|caa02_t1                        |HEAP            |           14|N     |
++--------------------------------+----------------+-------------+------+
+(1 row)
+>>
+* drop table caa02_t1\g
+<<
+~
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Thu Dec 13 17:09:46 2007

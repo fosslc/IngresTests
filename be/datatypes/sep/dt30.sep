@@ -1,0 +1,217 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name: dt30.sep     
+	Time:
+	User Name: testenv      
+ 
+	Test ID : dt30
+	Module  : be/datatypes
+	Filename: dt30.sep
+	Purpose	: Basic tests on NULL data type.
+	Input Files  : none
+	Output Files : none
+	Database     : datatypedb2
+	Tables       : hh030
+	Synopsis     : Basic tests on NULL data type.
+
+	History	: 06-july-1989	Created		Author
+                                  converted by :dennisk             
+                 7/90             Test modified to conform to Test Case/
+                                  Portability Standards.
+	  11-Aug-1993	(sandhya) changed "rows=count(*)" to "numrows=count(*)
+				  since rows is a keyword in 6.5.  Accepted
+				  new canons for an int/float4 as the number
+				  of 0's returned in the decimal place has
+				  changed for 6.5.  This may be platform
+				  specific in which case this test needs to be
+				  run with the float flag.
+           1-Dec-1995	(gauje02) took alternate canon where the output order
+				  of a select has changed a bit.
+	  23-Mar-1999   (vande02) Hard-coded VPG_SZ to 8K and added
+                                  empty canon after 'sql SEPPARAMDB1 -s'
+                                  if the test db does not exist, you
+                                  will see the msg."TM could not connect
+	  24-Jun-2001	(rogch01) Update row orders.
+           4-Oct-2001	(devjo01) Add alternate canon for different tuple
+				  return order.
+          25-Jun-2004   (vande02) Cleaning up and aligning history comments.
+          25-Nov-2004	(legru01) Added order by clauses to select statements 
+                                  then removed the duplicate canon for those 
+                                  statements. Added the "distinct" 
+                                  keyword to remove duplicate tuples.
+                                  Added the id=ifnull(id,NULL) statement to
+                                  check that null values in an int col are
+                                  represented as NULL.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+          18-Jun-2007   (vande02) Replaced canon for decimal and division test
+                                  case due to new decimal precision max being
+                                  (39) as of 2006r3.  The new 2006r3 result
+                                  has 8 more digits right of the decimal.
+                                  Tracked by QA issue 119135. Updated copyright.
+*/
+? sql SEPPARAMDB2 -s 
+<<
+
+>>
+* drop table hh030 \g
+<<
+>>
+<<
+E_US0AC1 DROP: 'hh030' does not exist or is not owned by you.
+    (10-AUG-1989 09:02:31)
+
+>>
+* create table hh030 ( n varchar(10) not null not default,stat c5,id i4 )with page_s-
+ize=8192 \g
+<<
+>>
+* insert into hh030 values ('Albertson','dead',1) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('Prinz','dead',1) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('Backus',NULL,2) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('Klemperer',NULL,3) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('Banner','dead',3) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('Denver','alive',2) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('Bixby','alive',NULL) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('Gwynn','alive',4) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('De Carlo',NULL,4) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('Lewis','alive',4) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('Crane','dead',3) \g
+<<
+(1 row)
+>>
+* insert into hh030 values ('Cullen',NULL,NULL) \g
+<<
+(1 row)
+>>
+* select n,stat=ifnull(stat,'NULL'),id=ifnull(id,NULL) from hh030 order by n \g
+<<
+
++----------+------+-------------+
+|n         |stat  |id           |
++----------+------+-------------+
+|Albertson |dead  |            1|
+|Backus    |NULL  |            2|
+|Banner    |dead  |            3|
+|Bixby     |alive |             |
+|Crane     |dead  |            3|
+|Cullen    |NULL  |             |
+|De Carlo  |NULL  |            4|
+|Denver    |alive |            2|
+|Gwynn     |alive |            4|
+|Klemperer |NULL  |            3|
+|Lewis     |alive |            4|
+|Prinz     |dead  |            1|
++----------+------+-------------+
+(12 rows)
+>>
+* select numrows=count(*),stats=count(stat),ids=count(id) from hh030 \g
+<<
+
++-------------+-------------+-------------+
+|numrows      |stats        |ids          |
++-------------+-------------+-------------+
+|           12|            8|           10|
++-------------+-------------+-------------+
+(1 row)
+>>
+* select distinct id,p5=id+5,m5=id-5,d5=id/5.0,t5=id*5 from hh030 group by id \g
+<<
+
++-------------+-------------+-------------+------------------------------------------
++-------------+
+|id           |p5           |m5           |d5                                       -
+|t5           |
++-------------+-------------+-------------+------------------------------------------
++-------------+
+|            1|            6|           -4|            0.200000000000000000000000000-
+|            5|
+|            2|            7|           -3|            0.400000000000000000000000000-
+|           10|
+|            3|            8|           -2|            0.600000000000000000000000000-
+|           15|
+|            4|            9|           -1|            0.800000000000000000000000000-
+|           20|
+|             |             |             |                                         -
+|             |
++-------------+-------------+-------------+------------------------------------------
++-------------+
+(5 rows)
+>>
+* select count(stat),count(*),stat from hh030 group by stat order by stat\g
+<<
+
++-------------+-------------+------+
+|col1         |col2         |stat  |
++-------------+-------------+------+
+|            4|            4|alive |
+|            4|            4|dead  |
+|            0|            4|      |
++-------------+-------------+------+
+(3 rows)
+>>
+* select a.n from hh030 a, hh030 b where ifnull(a.stat,'zzz')=ifnull(b.stat,'zzz') a-
+nd b.n='De Carlo' order by n\g
+<<
+
++----------+
+|n         |
++----------+
+|Backus    |
+|Cullen    |
+|De Carlo  |
+|Klemperer |
++----------+
+(4 rows)
+>>
+* select comp1=ifnull(log(ifnull(sum(ifnull(id,10)),100)),-4), comp2=ifnull(ifnull(i-
+fnull(id,1),2),3) from hh030 group by id order by 1\g
+<<
+
++-----------+-------------+
+|comp1      |comp2        |
++-----------+-------------+
+|      0.693|            1|
+|      1.386|            2|
+|      2.197|            3|
+|      2.485|            4|
+|      2.996|            1|
++-----------+-------------+
+(5 rows)
+>>
+* \q
+<<
+>>
+
+
+Ending at: Mon Jun 18 18:11:38 2007

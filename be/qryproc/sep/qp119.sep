@@ -1,0 +1,204 @@
+/*
+	Test Name: eha01.sep
+	Time: 31-JUL-1989 10:55:22
+	User Name: testenv      
+ 
+	Test ID : eha01 (formerly ag008)
+	Module  : be/qryproc/aggregates 
+	Filename: eha01.sep
+	Purpose	: Test Aggregates in the SELECT target list, with GROUP BY
+			and HAVING.
+	Input Files  : s.dat, sp.dat
+	Output Files : 
+	Database     : SEPPARAMDB
+	Tables       : s, sp
+	Synopsis     : Aggregates in the SELECT target list, with GROUP BY
+			and HAVING.
+	History	:
+		--------- claire l. created.
+		mar 28/89 sgp modified to add to test suite.
+		11-26-91 Converted to using setup test/
+	Setup Test   : eaa00.sep
+
+	23-Mar-1999  (vande02) Changed 'sql -s SEPPARAMDB' canon to be empty,
+                                in order to catch the msg. "TM could not connect
+                                ..." if the test database did not exist.
+	16-Jun-2001	(rogch01)
+		Update row orders.
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from s;\g
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s5    |adams |    30|athens    |
+|s3    |blake |    30|paris     |
+|s4    |clark |    20|london    |
+|s2    |jones |    10|paris     |
+|s1    |smith |    20|london    |
++------+------+------+----------+
+(5 rows)
+>>
+* select * from sp;\g
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select sum(qty), avg(qty) from sp 
+<<
+>>
+*	where pno = 'p2';\g
+<<
+
++-------------+-----------+
+|col1         |col2       |
++-------------+-----------+
+|         1000|    250.000|
++-------------+-----------+
+(1 row)
+>>
+* select pno from sp where qty >= 400 group by pno;\g
+/*
+ no aggregate function so GROUP BY maps to DISTINCT 
+*/
+<<
+
++------+
+|pno   |
++------+
+|p2    |
+|p3    |
+|p5    |
++------+
+(3 rows)
+>>
+* select pno, sum(qty) from sp group by pno order by 1;\g
+/*
+  GROUP BY becomes a BY clause in the aggregate function 
+*/
+<<
+
++------+-------------+
+|pno   |col2         |
++------+-------------+
+|p1    |          600|
+|p2    |         1000|
+|p3    |          400|
+|p4    |          500|
+|p5    |          500|
+|p6    |          100|
++------+-------------+
+(6 rows)
+>>
+* select pno, sum(qty) from sp where sno != 's1' group by pno order by 1;\g
+<<
+
++------+-------------+
+|pno   |col2         |
++------+-------------+
+|p1    |          300|
+|p2    |          800|
+|p4    |          300|
+|p5    |          400|
++------+-------------+
+(4 rows)
+>>
+* select pno, sum(qty) from sp group by pno having count(sno) > 1 order by 1;\g
+/*
+  HAVING maps to a WHERE clause that does *NOT* have to be included in
+    aggregate functions in the target list  
+*/
+<<
+
++------+-------------+
+|pno   |col2         |
++------+-------------+
+|p1    |          600|
+|p2    |         1000|
+|p4    |          500|
+|p5    |          500|
++------+-------------+
+(4 rows)
+>>
+* select max(qty), min(qty) from sp having avg(qty) > 300;\g
+<<
+
++------+------+
+|col1  |col2  |
++------+------+
++------+------+
+(0 rows)
+>>
+* select pno from sp 
+<<
+>>
+*	where qty in 
+<<
+>>
+*	 (select avg(qty) from sp 
+<<
+>>
+*		where qty > 100 group by pno having count(sno) > 1);\g
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p1    |
+|p4    |
++------+
+(3 rows)
+>>
+* select * from s 
+<<
+>>
+*	where status >any 
+<<
+>>
+*	 (select avg(status) from s 
+<<
+>>
+*		where city='rome');\g
+/*
+ If the argument set is empty, COUNT gives zero in both SQL and QUEL,
+   but the other aggregate functions give null in SQL, zero in QUEL.
+   In this query, if STATUS is always > 0 and the AVG is taken over the
+   empty set, IBM SQL will return an empty result on the following query,
+   while QUEL will return the set of all suppliers. 
+*/
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
++------+------+------+----------+
+(0 rows)
+>>
+* \q
+<<
+>>
+
+
+Ending at: 18-AUG-1989 16:33:31

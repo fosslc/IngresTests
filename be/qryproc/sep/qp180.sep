@@ -1,0 +1,422 @@
+/*
+	Test Name: ela05.sep
+	Time: Wed May 23 15:50:40 1990
+	User Name: testenv
+ 
+	Test ID : ela05
+	Module  : 
+	Filename: ela05.sep
+	Purpose	: Test that multiple sessions see other sessions tables,
+		  procs, and rules.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : graph_3
+	Synopsis     : Connect with multiple sessions. Define table,
+			procedure, rule as session 1, commit. Trigger
+			rule that does procedure on table as session 2.
+			Show effects. Rollback as Session 2 and see 
+			old data as session 1.
+	Setup        : ela00.sep
+
+	History	: xx-xxx-1989	Created				Author
+		  7-MAR-1997    (vissu01) Modified for NT
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverelstub.h) driverelstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,rulesh.sc) rulesh.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,rulestest.sc) rulestest.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,ingclude.sc) ingclude.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverel.c) driverel.c 
+<<
+>>
+? fill ela05.sc 
+!!
+/*
+**	ela05.sc
+*/
+
+#define ELA05
+
+#include "driverelstub.h"
+
+#include <stdio.h>
+
+exec sql include 'rulesh.sc';
+
+exec sql begin declare section;
+
+extern	char	*db_name_ptr;
+
+exec sql end declare section;
+
+/***********/
+/* ela05() */
+/***********/
+
+ela05()
+{
+	printf("ela05: confuse w/ multiple sessions.\n");
+	printf("\n");
+	printf("  see if opening multiple sessions\n");
+	printf("  and doing different things confuses\n");
+	printf("  whether something is there or not.\n");
+	printf("\n");
+	printf("  locking is set to readlock = nolock,\n");
+	printf("  otherwise deadlock correctly occurs\n");
+	printf("  where expected.\n");
+	printf("\n");
+
+	printf("  1: open 1, open 2, delete in 2 w/ no commit,\n");
+	printf("     switch to 1 and see if data is locked.\n");
+	printf("\n");
+
+	printf("  connecting session 1...\n");
+	exec sql connect :db_name_ptr session 1;
+	exec sql set lockmode session where readlock = nolock;
+
+	printf("  connecting session 2...\n");
+	exec sql connect :db_name_ptr session 2;
+	exec sql set lockmode session where readlock = nolock;
+
+	printf("  switching to session 1...\n");
+	exec sql set_ingres ( session = 1 );
+
+	build_tables("graph_3");
+	print_tables(GRAPH_3);
+
+	create_grclean3_proc();
+
+	cr_graph_3_dc_rule();
+
+	exec sql commit;
+
+	printf("  switching to session 2...\n");
+	exec sql set_ingres ( session = 2 );
+
+	printf("  delete from graph_3 from_node 1...\n");
+	exec sql delete from graph_3 where from_node = 1;
+	printf("\n");
+
+	printf("  should look empty...\n");
+	print_tables(GRAPH_3);
+
+	printf("  switching to session 1...\n");
+	exec sql set_ingres ( session = 1 );
+
+	printf("  should also look empty...\n");
+	print_tables(GRAPH_3);
+
+	printf("  switching to session 2...\n");
+	exec sql set_ingres ( session = 2 );
+
+	printf("  rollback...\n");
+	exec sql rollback;
+
+	printf("  switching to session 1...\n");
+	exec sql set_ingres ( session = 1 );
+
+	printf("  should be full...\n");
+	print_tables(GRAPH_3);
+
+	printf("  disconnecting session 1...\n");
+	exec sql set_ingres ( session = 1 );
+	drop_tables("graph_3");
+	exec sql commit;
+	exec sql disconnect session 1;
+
+	printf("  disconnecting session 2...\n");
+	exec sql set_ingres ( session = 2 );
+	exec sql disconnect session 2;
+
+} /* ela05() */
+!!
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc ela05.sc 
+<<
+ESQL ela05.sc:
+>>
+? sepcc ela05.c 
+<<
+>>
+<<
+ela05.c
+>>
+? sepesqlc rulestest.sc 
+<<
+ESQL rulestest.sc:
+>>
+? sepcc rulestest.c 
+<<
+>>
+<<
+rulestest.c
+>>
+? sepcc driverel.c 
+<<
+>>
+<<
+driverel.c
+>>
+? seplnk driver driverel rulestest ela05 
+<<
+>>
+? sql SEPPARAMDB -s
+<<
+~
+>>
+* drop table graph_3, dull, log;\g
+<<
+~
+>>
+* drop procedure logger;\g
+<<
+~
+>>
+* drop procedure grclean3;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tela05 -o 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+rules tests
+
+the tests will open the database(s)...
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   ela05
+XX-----------------XX
+
+
+XX running test ela05 XX
+
+ela05: confuse w/ multiple sessions.
+
+  see if opening multiple sessions
+  and doing different things confuses
+  whether something is there or not.
+
+  locking is set to readlock = nolock,
+  otherwise deadlock correctly occurs
+  where expected.
+
+  1: open 1, open 2, delete in 2 w/ no commit,
+     switch to 1 and see if data is locked.
+
+  connecting session 1...
+  connecting session 2...
+  switching to session 1...
+  dropping graph_3 table...
+E_US0AC1 DROP: 'graph_3' does not exist or is not owned by you.
+    (Wed May 22 17:40:08 1991)
+  creating graph_3 table...
+contents of graph_3:
+--------------------
+ from_node = 1, to_node = 2
+ from_node = 1, to_node = 3
+ from_node = 1, to_node = 4
+ from_node = 2, to_node = 5
+ from_node = 2, to_node = 6
+ from_node = 3, to_node = 7
+ from_node = 3, to_node = 8
+ from_node = 4, to_node = 9
+ from_node = 4, to_node = 10
+ from_node = 4, to_node = 11
+ from_node = 5, to_node = 12
+ from_node = 6, to_node = 13
+ from_node = 6, to_node = 14
+ from_node = 7, to_node = 14
+ from_node = 8, to_node = 9
+ from_node = 8, to_node = 15
+ from_node = 8, to_node = 16
+ from_node = 9, to_node = 17
+ from_node = 11, to_node = 18
+ from_node = 11, to_node = 19
+ from_node = 11, to_node = 20
+ from_node = 17, to_node = 4
+--------------------
+  drop and create grclean3 db proc...
+E_US0965 Procedure 'grclean3' not found.
+    (Wed May 22 17:40:10 1991)
+
+  drop and create rule graph_3_dc:
+  (rule may not exist)
+E_US189D DROP RULE: Rule 'graph_3_dc' does not exist.
+    (Wed May 22 17:40:10 1991)
+  switching to session 2...
+  delete from graph_3 from_node 1...
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 2
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 5
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 12
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 6
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 13
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 14
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 3
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 7
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 14
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 8
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 15
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 16
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 9
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 17
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 4
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 9
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 10
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 11
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 18
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 19
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 20
+MESSAGE 0: cascade delete from graph_3 where graph_3.from_node = 4
+
+  should look empty...
+contents of graph_3:
+--------------------
+--------------------
+  switching to session 1...
+  should also look empty...
+contents of graph_3:
+--------------------
+--------------------
+  switching to session 2...
+  rollback...
+  switching to session 1...
+  should be full...
+contents of graph_3:
+--------------------
+ from_node = 1, to_node = 2
+ from_node = 1, to_node = 3
+ from_node = 1, to_node = 4
+ from_node = 2, to_node = 5
+ from_node = 2, to_node = 6
+ from_node = 3, to_node = 7
+ from_node = 3, to_node = 8
+ from_node = 4, to_node = 9
+ from_node = 4, to_node = 10
+ from_node = 4, to_node = 11
+ from_node = 5, to_node = 12
+ from_node = 6, to_node = 13
+ from_node = 6, to_node = 14
+ from_node = 7, to_node = 14
+ from_node = 8, to_node = 9
+ from_node = 8, to_node = 15
+ from_node = 8, to_node = 16
+ from_node = 9, to_node = 17
+ from_node = 11, to_node = 18
+ from_node = 11, to_node = 19
+ from_node = 11, to_node = 20
+ from_node = 17, to_node = 4
+--------------------
+  disconnecting session 1...
+  dropping graph_3 table...
+  disconnecting session 2...
+
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driverelstub.h 
+<<
+~
+>>
+? delete driverel.c 
+<<
+~
+>>
+? delete driverel.o 
+<<
+~
+>>
+? delete driverel.obj 
+<<
+~
+>>
+? delete ingclude.sc 
+<<
+~
+>>
+? delete ingclude.c 
+<<
+~
+>>
+? delete rulesh.sc 
+<<
+~
+>>
+? delete rulesh.c 
+<<
+~
+>>
+? delete rulestest.sc 
+<<
+~
+>>
+? delete rulestest.c 
+<<
+~
+>>
+? delete rulestest.o 
+<<
+~
+>>
+? delete rulestest.obj 
+<<
+~
+>>
+? delete ela05.c 
+<<
+~
+>>
+? delete ela05.o 
+<<
+~
+>>
+? delete ela05.obj 
+<<
+~
+>>
+
+
+Ending at: Thu Aug 29 12:27:50 1991

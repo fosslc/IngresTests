@@ -1,0 +1,1217 @@
+/*
+	Test name: c2log02.sep
+	Time: Thu Jan 12 11:07:35 1995
+	User name: testenv
+	Terminal type: septerm
+ 
+	Test ID : 	c2log02.sep
+	Module  : 	be/c2secure
+	Filename:	c2log02.sep
+	Purpose	:	To test security audit logging with ENABLE
+			SECURITY_AUDIT options
+	Input Files  :	initusers.qry
+			disa.qry
+			iidbdball.qry
+			sepdball.qry
+			log[p,t].qry
+			state.qry
+	Output Files :	NONE
+	Database     :	iidbdb, securedb
+	Tables       :	log02log
+			log02tab
+	Synopsis     :	This test will check that logging behavior 
+			responds properly to the various states of
+			security auditing set (individually) by the
+			ENABLE SECURITY_AUDIT command.
+
+ History: 12-Jan-1995   (holla02) Created
+          13-Jan-1995	(holla02) Took canons
+          13-Feb-1995	(holla02) New canons after fix for #66267
+          01-Mar-1995   (holla02) Modified for portability; alt canon added
+          12-Dec-1995	(raora02) Accepted alternate canon to show
+			output in correct order.
+          19-May-1997	(raora02) Accepted alternate canon to show different
+			output: extra entry if trace point is set.
+	   3-Mar-1998   (vissu01) With security auditing switched on, audit.1 
+			is used as default security audit log. Therefore you 
+			cannot alter security_audit to use this file. The file 
+			will be in use and contains audit records. So I changed
+			the sep to use audit.3 instead of audit.1
+	  01-Jul-1998	(vande02) Added alternate canon on seventh occurrence
+			of select with logp.qry to avoid dif due to row when
+			trace point DM 716 is set.
+          12-Aug-1998	(popri01) Add another alternate canon when TRACE PT. 716
+			 not set.
+          07-Jan-1999   (hanch04) update results
+	  23-Mar-1999	(vande02) Hard-coded VPG_SZ to 8K
+          15-Dec-1998  (ngutr03) added VMS specific instructions in canons when
+			using audit.1
+	  25-mar-1999  (yu$pe02) Hard code page size to 4K.
+          07-Sep-1999  (madsu02) x-integrating handoffqa and main. There is a
+			conflict due to the page-sizes. 4k will be ignored and
+			8k will be kept.
+           9-Jun-2000	(vande02) Adding alternate results for logp.qry canons
+			with no iirule records.  This is due to new 2.5 locking
+			behavior changes. A table level locking escalation is
+			not happening and this is good.  See Issue #8914457.
+          19-Sep-2000	(BOIJA02) removing alt canon for trace point, should
+			never have been in canons as not present in test.
+          20-SEP-2000	(BOIJA02) Obj column pulls back batch on most unix, tna
+                        number on VMS and tty# on some unixes. stopped selecting
+			this column
+          21-Sep-2000	(BOIJA02) stopped selecting table level escalations as 
+			too system specific, delete audit file while auditing
+			stopped, as restarting defaults to correct file (1st in
+			list on CBF) w/o awkward platform specific stuff.
+	  25-Apr-2001   (BOIJA02) Xing above changes from oping20 to main
+*/
+? fill initusers.qry 
+!!
+set session with privileges=all;\g
+alter user testenv with default_privileges=all, 
+   nosecurity_audit;\g
+alter user pvusr1 with privileges=(createdb,trace,security,operator,
+   maintain_locations,maintain_users,maintain_audit,auditor),
+   default_privileges=all, 
+   nosecurity_audit;\g
+!!
+? fill disa.qry 
+!!
+set autocommit on;\g
+disable security_audit all;\g
+!!
+? fill iidbdball.qry 
+!!
+create user log02user;\g
+alter user log02user with privileges=(trace,createdb,security);\g
+create group log02group;\g
+alter group log02group add users (log02user);\g
+alter group log02group drop all;\g
+create location log02loc with area='/tmp', nousage;\g
+alter location log02loc with usage=(checkpoint);\g
+create role log02role with nopassword;\g
+alter role log02role with password='log02password';\g
+drop role log02role;\g
+drop location log02loc;\g
+drop group log02group;\g
+drop user log02user;\g
+!!
+? fill sepdball.qry 
+!!
+set autocommit on;\g
+create table log02tab (num i4) with page_size=8192;\g
+create security_alarm on log02tab;\g
+create view log02view (value)
+  as select * from log02tab where num>10;\g
+create synonym log02syn for log02tab;\g
+create procedure log02proc (val int not null) as
+  begin
+    insert into log02tab values (:val);
+  end;\g
+execute procedure log02proc (val=999);\g
+create dbevent log02event;\g
+raise dbevent log02event with noshare;\g
+create rule log02rule 
+  after insert into log02tab where new.num<1000
+  execute procedure log02proc (val=1000);\g
+insert into log02tab values (9);\g
+register table log02reg (
+     real_name char(32) not null,
+     database  char(32) not null)
+  as import from 'current'
+  with dbms=sxa;\g
+
+remove table log02reg;\g
+drop rule log02rule;\g
+drop dbevent log02event;\g
+drop procedure log02proc;\g
+drop synonym log02syn;\g
+drop view log02view;\g
+drop security_alarm on log02tab all;\g
+drop table log02tab;\g
+!!
+? fill logt.qry 
+!!
+select db,name,desc,event from log02log 
+  where name='testenv' and
+    (db='iidbdb' or db='securedb')
+  and desc not like '%ESCALATE%' 
+  and desc not like '%lockmode%';\g
+!!
+? fill logp.qry 
+!!
+select db,name,desc,event from log02log 
+  where name='pvusr1' and
+    (db='iidbdb' or db='securedb')
+  and desc not like '%ESCALATE%' 
+  and desc not like '%lockmode%';\g
+!!
+? fill state.qry 
+!!
+select * from iisecurity_state
+where state='E';\g
+!!
+? sql -s iidbdb 
+<<
+>>
+* alter security_audit stop;\g
+<<
+>>
+* \q
+<<
+>>
+.if (UNIX) 
+? qasetuser ingres rm @file(ii_system,ingres,files,audit.1) 
+<<
+>>
+.else 
+? delete @file(ii_system,ingres,files,audit.1) 
+<<
+~
+>>
+/*
+to make NT use audit.1 BOIJA02 22 sep 2000
+*/
+? delete @file(ii_system,ingres,files,audit.2)
+<<
+~
+>>
+.endif 
+? sql -s iidbdb 
+<<
+>>
+* set autocommit on;\g
+<<
+>>
+* \i initusers.qry
+<<
+>>
+* alter security_audit restart;\g
+<<
+>>
+* select dbmsinfo('security_audit_state');\g
+<<
++--------------------------------+
+|col1                            |
++--------------------------------+
+|ACTIVE                          |
++--------------------------------+
+(1 row)
+>>
+* \i disa.qry
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
++----------------+--------------------------------+------+-------------+
+(0 rows)
+>>
+* \q
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* set autocommit on;\g
+<<
+>>
+* select user_name, audit_all, audit_query_text from iiusers
+<<
+>>
+*    where user_name='testenv' or user_name='pvusr1';\g
+<<
++--------------------------------+------+------+
+|user_name                       |audit_|audit_|
++--------------------------------+------+------+
+|pvusr1                          |N     |N     |
+|testenv                         |N     |N     |
++--------------------------------+------+------+
+(2 rows)
+>>
+* \i iidbdball.qry
+<<                                                     
+>>
+* \q
+<<
+>>
+? sql -s securedb 
+<<
+>>
+* set autocommit on;\g
+<<
+>>
+* remove table log02log;\g
+<<
+~
+>>
+* register table log02log (
+<<
+>>
+*    db           char(8) not null is 'database',
+<<
+>>
+*    name         char(8) not null is 'user_name',
+<<
+>>
+*    obj          char(10) not null is 'objectname',
+<<
+>>
+*    desc         char(32) not null is 'description',
+<<
+>>
+*    event        char(7) not null is 'auditevent')
+<<
+>>
+*  as import from 'current' with dbms=sxa; \g
+<<
+>>
+* grant all on log02log to pvusr1;\g
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logp.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
++--------+--------+--------------------------------+-------+
+(0 rows)
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit database;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Database                        |E     |            1|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logt.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
++--------+--------+--------------------------------+-------+
+(0 rows)
+>>
+* \q
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit role;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Role                            |E     |            2|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>   
+* \i logp.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|securedb|pvusr1  |Attempt to access a DATABASE.   |CONNECT|
++--------+--------+--------------------------------+-------+
+(1 row)
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit procedure;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Procedure                       |E     |            3|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logt.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|iidbdb  |testenv |Attempt to access a DATABASE.   |CONNECT|
++--------+--------+--------------------------------+-------+
+(1 row)
+>>
+* \q
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit table;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Table                           |E     |            4|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logp.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|securedb|pvusr1  |Attempt to access a DATABASE.   |CONNECT|
+|securedb|pvusr1  |Attempt to create DATABASE PROCE|CREATE |
+|securedb|pvusr1  |Attempt to access a DATABASE PRO|EXECUTE|
+|securedb|pvusr1  |Attempt to drop a DATABASE PROCE|DROP   |
++--------+--------+--------------------------------+-------+
+(4 rows)
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit location;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Location                        |E     |            5|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logt.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|iidbdb  |testenv |Attempt to access a DATABASE.   |CONNECT|
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to define a TABLE.      |CREATE |
+|securedb|testenv |Attempt to create a SECURITY_ALA|CONTROL|
+|securedb|testenv |Attempt to CREATE SYNONYM for ta|CONTROL|
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to REGISTER a gateway ta|REGISTE|
+|securedb|testenv |Attempt to REMOVE a gateway tabl|REMOVE |
+|securedb|testenv |Attempt to DROP SYNONYM on table|CONTROL|
+|securedb|testenv |Attempt to drop a SECURITY_ALARM|CONTROL|
+|securedb|testenv |Attempt to drop a TABLE.        |DROP   |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
++--------+--------+--------------------------------+-------+
+(16 rows)
+>>
+* \q
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit view;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |View                            |E     |            6|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logp.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|securedb|pvusr1  |Attempt to access a DATABASE.   |CONNECT|
+|securedb|pvusr1  |Attempt to create DATABASE PROCE|CREATE |
+|securedb|pvusr1  |Attempt to access a DATABASE PRO|EXECUTE|
+|securedb|pvusr1  |Attempt to drop a DATABASE PROCE|DROP   |
+|iidbdb  |pvusr1  |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |pvusr1  |Attempt to define a new LOCATION|CREATE |
+|iidbdb  |pvusr1  |Attempt to alter a LOCATION.    |ALTER  |
+|iidbdb  |pvusr1  |Attempt to drop a LOCATION.     |DROP   |
++--------+--------+--------------------------------+-------+
+(8 rows)
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit row\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Row                             |E     |            7|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logt.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|iidbdb  |testenv |Attempt to access a DATABASE.   |CONNECT|
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to define a TABLE.      |CREATE |
+|securedb|testenv |Attempt to create a SECURITY_ALA|CONTROL|
+|securedb|testenv |Attempt to CREATE SYNONYM for ta|CONTROL|
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to REGISTER a gateway ta|REGISTE|
+|securedb|testenv |Attempt to REMOVE a gateway tabl|REMOVE |
+|securedb|testenv |Attempt to DROP SYNONYM on table|CONTROL|
+|securedb|testenv |Attempt to drop a SECURITY_ALARM|CONTROL|
+|securedb|testenv |Attempt to drop a TABLE.        |DROP   |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a VIEW.       |SELECT |
+|securedb|testenv |Attempt to access a VIEW.       |SELECT |
+|securedb|testenv |Attempt to define a VIEW.       |CREATE |
+|securedb|testenv |Attempt to remove a VIEW.       |DROP   |
++--------+--------+--------------------------------+-------+
+(20 rows)
+>>
+* \q
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit security;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Security                        |E     |            8|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logp.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|securedb|pvusr1  |Attempt to access a DATABASE.   |CONNECT|
+|securedb|pvusr1  |Attempt to create DATABASE PROCE|CREATE |
+|securedb|pvusr1  |Attempt to access a DATABASE PRO|EXECUTE|
+|securedb|pvusr1  |Attempt to drop a DATABASE PROCE|DROP   |
+|iidbdb  |pvusr1  |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |pvusr1  |Attempt to define a new LOCATION|CREATE |
+|iidbdb  |pvusr1  |Attempt to alter a LOCATION.    |ALTER  |
+|iidbdb  |pvusr1  |Attempt to drop a LOCATION.     |DROP   |
+|iidbdb  |pvusr1  |Attempt to access a VIEW.       |SELECT |
++--------+--------+--------------------------------+-------+
+(9 rows)
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit user;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |User                            |E     |            9|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logt.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|iidbdb  |testenv |Attempt to access a DATABASE.   |CONNECT|
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to define a TABLE.      |CREATE |
+|securedb|testenv |Attempt to create a SECURITY_ALA|CONTROL|
+|securedb|testenv |Attempt to CREATE SYNONYM for ta|CONTROL|
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to REGISTER a gateway ta|REGISTE|
+|securedb|testenv |Attempt to REMOVE a gateway tabl|REMOVE |
+|securedb|testenv |Attempt to DROP SYNONYM on table|CONTROL|
+|securedb|testenv |Attempt to drop a SECURITY_ALARM|CONTROL|
+|securedb|testenv |Attempt to drop a TABLE.        |DROP   |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a VIEW.       |SELECT |
+|securedb|testenv |Attempt to access a VIEW.       |SELECT |
+|securedb|testenv |Attempt to define a VIEW.       |CREATE |
+|securedb|testenv |Attempt to remove a VIEW.       |DROP   |
+|iidbdb  |testenv |Attempt to ENABLE SECURITY_AUDIT|CREATE |
+|iidbdb  |testenv |Attempt to define a new USER.   |CREATE |
+|iidbdb  |testenv |Attempt to alter a USER.        |ALTER  |
+|iidbdb  |testenv |Attempt to define new GROUP.    |CREATE |
+|iidbdb  |testenv |Attempt to add new member to gro|ALTER  |
+|iidbdb  |testenv |Attempt to remove member from, o|ALTER  |
+|iidbdb  |testenv |Attempt to GRANT access to ROLE |CONTROL|
+|iidbdb  |testenv |Attempt to define new ROLE.     |CREATE |
+|iidbdb  |testenv |Attempt to alter a ROLE.        |ALTER  |
+|iidbdb  |testenv |Attempt to REVOKE access to ROLE|CONTROL|
+|iidbdb  |testenv |Attempt to remove a ROLE.       |DROP   |
+|iidbdb  |testenv |Attempt to remove a GROUP.      |DROP   |
+|iidbdb  |testenv |Attempt to remove a USER.       |DROP   |
+|securedb|testenv |Security Audit Log Registered   |REGISTE|
+|securedb|testenv |Attempt to REMOVE an audit log r|REMOVE |
++--------+--------+--------------------------------+-------+
+(35 rows)
+>>
+* \q
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit alarm;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Alarm                           |E     |           11|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logp.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|securedb|pvusr1  |Attempt to access a DATABASE.   |CONNECT|
+|securedb|pvusr1  |Attempt to create DATABASE PROCE|CREATE |
+|securedb|pvusr1  |Attempt to access a DATABASE PRO|EXECUTE|
+|securedb|pvusr1  |Attempt to drop a DATABASE PROCE|DROP   |
+|iidbdb  |pvusr1  |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |pvusr1  |Attempt to define a new LOCATION|CREATE |
+|iidbdb  |pvusr1  |Attempt to alter a LOCATION.    |ALTER  |
+|iidbdb  |pvusr1  |Attempt to drop a LOCATION.     |DROP   |
+|iidbdb  |pvusr1  |Attempt to access a VIEW.       |SELECT |
+|iidbdb  |pvusr1  |Attempt to DISABLE SECURITY_AUDI|DROP   |
+|iidbdb  |pvusr1  |User connection to database term|TERMINA|
+|securedb|pvusr1  |Attempt to authorize USER.      |AUTHENT|
+|securedb|pvusr1  |User connection to database term|TERMINA|
++--------+--------+--------------------------------+-------+
+(13 rows)
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit rule;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Rule                            |E     |           12|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logt.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|iidbdb  |testenv |Attempt to access a DATABASE.   |CONNECT|
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to define a TABLE.      |CREATE |
+|securedb|testenv |Attempt to create a SECURITY_ALA|CONTROL|
+|securedb|testenv |Attempt to CREATE SYNONYM for ta|CONTROL|
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to REGISTER a gateway ta|REGISTE|
+|securedb|testenv |Attempt to REMOVE a gateway tabl|REMOVE |
+|securedb|testenv |Attempt to DROP SYNONYM on table|CONTROL|
+|securedb|testenv |Attempt to drop a SECURITY_ALARM|CONTROL|
+|securedb|testenv |Attempt to drop a TABLE.        |DROP   |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a VIEW.       |SELECT |
+|securedb|testenv |Attempt to access a VIEW.       |SELECT |
+|securedb|testenv |Attempt to define a VIEW.       |CREATE |
+|securedb|testenv |Attempt to remove a VIEW.       |DROP   |
+|iidbdb  |testenv |Attempt to ENABLE SECURITY_AUDIT|CREATE |
+|iidbdb  |testenv |Attempt to define a new USER.   |CREATE |
+|iidbdb  |testenv |Attempt to alter a USER.        |ALTER  |
+|iidbdb  |testenv |Attempt to define new GROUP.    |CREATE |
+|iidbdb  |testenv |Attempt to add new member to gro|ALTER  |
+|iidbdb  |testenv |Attempt to remove member from, o|ALTER  |
+|iidbdb  |testenv |Attempt to GRANT access to ROLE |CONTROL|
+|iidbdb  |testenv |Attempt to define new ROLE.     |CREATE |
+|iidbdb  |testenv |Attempt to alter a ROLE.        |ALTER  |
+|iidbdb  |testenv |Attempt to REVOKE access to ROLE|CONTROL|
+|iidbdb  |testenv |Attempt to remove a ROLE.       |DROP   |
+|iidbdb  |testenv |Attempt to remove a GROUP.      |DROP   |
+|iidbdb  |testenv |Attempt to remove a USER.       |DROP   |
+|securedb|testenv |Security Audit Log Registered   |REGISTE|
+|securedb|testenv |Attempt to REMOVE an audit log r|REMOVE |
+|iidbdb  |testenv |Attempt to authorize USER.      |AUTHENT|
+|securedb|testenv |Alarm signaled for TABLE.       |INSERT |
+|securedb|testenv |Alarm signaled for TABLE.       |INSERT |
+|securedb|testenv |Alarm signaled for TABLE.       |INSERT |
++--------+--------+--------------------------------+-------+
+(39 rows)
+>>
+* \q
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit dbevent;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |DbEvent                         |E     |           13|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logp.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|securedb|pvusr1  |Attempt to access a DATABASE.   |CONNECT|
+|securedb|pvusr1  |Attempt to create DATABASE PROCE|CREATE |
+|securedb|pvusr1  |Attempt to access a DATABASE PRO|EXECUTE|
+|securedb|pvusr1  |Attempt to drop a DATABASE PROCE|DROP   |
+|iidbdb  |pvusr1  |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |pvusr1  |Attempt to define a new LOCATION|CREATE |
+|iidbdb  |pvusr1  |Attempt to alter a LOCATION.    |ALTER  |
+|iidbdb  |pvusr1  |Attempt to drop a LOCATION.     |DROP   |
+|iidbdb  |pvusr1  |Attempt to access a VIEW.       |SELECT |
+|iidbdb  |pvusr1  |Attempt to DISABLE SECURITY_AUDI|DROP   |
+|iidbdb  |pvusr1  |User connection to database term|TERMINA|
+|securedb|pvusr1  |Attempt to authorize USER.      |AUTHENT|
+|securedb|pvusr1  |User connection to database term|TERMINA|
+|securedb|pvusr1  |Attempt to create a RULE.       |CREATE |
+|securedb|pvusr1  |Attempt to access a RULE.       |EXECUTE|
+|securedb|pvusr1  |Attempt to drop a RULE.         |DROP   |
++--------+--------+--------------------------------+-------+
+(16 rows)
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit resource;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Resource                        |E     |           16|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logt.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|iidbdb  |testenv |Attempt to access a DATABASE.   |CONNECT|
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to define a TABLE.      |CREATE |
+|securedb|testenv |Attempt to create a SECURITY_ALA|CONTROL|
+|securedb|testenv |Attempt to CREATE SYNONYM for ta|CONTROL|
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to REGISTER a gateway ta|REGISTE|
+|securedb|testenv |Attempt to REMOVE a gateway tabl|REMOVE |
+|securedb|testenv |Attempt to DROP SYNONYM on table|CONTROL|
+|securedb|testenv |Attempt to drop a SECURITY_ALARM|CONTROL|
+|securedb|testenv |Attempt to drop a TABLE.        |DROP   |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a VIEW.       |SELECT |
+|securedb|testenv |Attempt to access a VIEW.       |SELECT |
+|securedb|testenv |Attempt to define a VIEW.       |CREATE |
+|securedb|testenv |Attempt to remove a VIEW.       |DROP   |
+|iidbdb  |testenv |Attempt to ENABLE SECURITY_AUDIT|CREATE |
+|iidbdb  |testenv |Attempt to define a new USER.   |CREATE |
+|iidbdb  |testenv |Attempt to alter a USER.        |ALTER  |
+|iidbdb  |testenv |Attempt to define new GROUP.    |CREATE |
+|iidbdb  |testenv |Attempt to add new member to gro|ALTER  |
+|iidbdb  |testenv |Attempt to remove member from, o|ALTER  |
+|iidbdb  |testenv |Attempt to GRANT access to ROLE |CONTROL|
+|iidbdb  |testenv |Attempt to define new ROLE.     |CREATE |
+|iidbdb  |testenv |Attempt to alter a ROLE.        |ALTER  |
+|iidbdb  |testenv |Attempt to REVOKE access to ROLE|CONTROL|
+|iidbdb  |testenv |Attempt to remove a ROLE.       |DROP   |
+|iidbdb  |testenv |Attempt to remove a GROUP.      |DROP   |
+|iidbdb  |testenv |Attempt to remove a USER.       |DROP   |
+|securedb|testenv |Security Audit Log Registered   |REGISTE|
+|securedb|testenv |Attempt to REMOVE an audit log r|REMOVE |
+|iidbdb  |testenv |Attempt to authorize USER.      |AUTHENT|
+|securedb|testenv |Alarm signaled for TABLE.       |INSERT |
+|securedb|testenv |Alarm signaled for TABLE.       |INSERT |
+|securedb|testenv |Alarm signaled for TABLE.       |INSERT |
+|securedb|testenv |Attempt to create a DBEVENT.    |CREATE |
+|securedb|testenv |RAISE of DBEVENT                |RAISE  |
+|securedb|testenv |Attempt to drop a DBEVENT.      |DROP   |
++--------+--------+--------------------------------+-------+
+(42 rows)
+>>
+* \q
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit query_text;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Query_text                      |E     |           17|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logp.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|securedb|pvusr1  |Attempt to access a DATABASE.   |CONNECT|
+|securedb|pvusr1  |Attempt to create DATABASE PROCE|CREATE |
+|securedb|pvusr1  |Attempt to access a DATABASE PRO|EXECUTE|
+|securedb|pvusr1  |Attempt to drop a DATABASE PROCE|DROP   |
+|iidbdb  |pvusr1  |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |pvusr1  |Attempt to define a new LOCATION|CREATE |
+|iidbdb  |pvusr1  |Attempt to alter a LOCATION.    |ALTER  |
+|iidbdb  |pvusr1  |Attempt to drop a LOCATION.     |DROP   |
+|iidbdb  |pvusr1  |Attempt to access a VIEW.       |SELECT |
+|iidbdb  |pvusr1  |Attempt to DISABLE SECURITY_AUDI|DROP   |
+|iidbdb  |pvusr1  |User connection to database term|TERMINA|
+|securedb|pvusr1  |Attempt to authorize USER.      |AUTHENT|
+|securedb|pvusr1  |User connection to database term|TERMINA|
+|securedb|pvusr1  |Attempt to create a RULE.       |CREATE |
+|securedb|pvusr1  |Attempt to access a RULE.       |EXECUTE|
+|securedb|pvusr1  |Attempt to drop a RULE.         |DROP   |
++--------+--------+--------------------------------+-------+
+(16 rows)
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* enable security_audit alarm;\g
+<<
+>>
+* \i state.qry
+<<
++----------------+--------------------------------+------+-------------+
+|type            |name                            |state |number       |
++----------------+--------------------------------+------+-------------+
+|Event           |Alarm                           |E     |           11|
++----------------+--------------------------------+------+-------------+
+(1 row)
+>>
+* \i iidbdball.qry
+<<
+>>
+* \q
+<<
+>>
+? sql -upvusr1 -s securedb 
+<<
+>>
+* \i sepdball.qry
+<<
+(1 row)
+>>
+* \i logt.qry
+<<
+
++--------+--------+--------------------------------+-------+
+|db      |name    |desc                            |event  |
++--------+--------+--------------------------------+-------+
+|iidbdb  |testenv |Attempt to access a DATABASE.   |CONNECT|
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|securedb|testenv |Attempt to define a TABLE.      |CREATE |
+|securedb|testenv |Attempt to create a SECURITY_ALA|CONTROL|
+|securedb|testenv |Attempt to CREATE SYNONYM for ta|CONTROL|
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to access a TABLE.      |INSERT |
+|securedb|testenv |Attempt to REGISTER a gateway ta|REGISTE|
+|securedb|testenv |Attempt to REMOVE a gateway tabl|REMOVE |
+|securedb|testenv |Attempt to DROP SYNONYM on table|CONTROL|
+|securedb|testenv |Attempt to drop a SECURITY_ALARM|CONTROL|
+|securedb|testenv |Attempt to drop a TABLE.        |DROP   |
+|securedb|testenv |Attempt to access a TABLE.      |SELECT |
+|iidbdb  |testenv |Attempt to access a VIEW.       |SELECT |
+|securedb|testenv |Attempt to access a VIEW.       |SELECT |
+|securedb|testenv |Attempt to define a VIEW.       |CREATE |
+|securedb|testenv |Attempt to remove a VIEW.       |DROP   |
+|iidbdb  |testenv |Attempt to ENABLE SECURITY_AUDIT|CREATE |
+|iidbdb  |testenv |Attempt to define a new USER.   |CREATE |
+|iidbdb  |testenv |Attempt to alter a USER.        |ALTER  |
+|iidbdb  |testenv |Attempt to define new GROUP.    |CREATE |
+|iidbdb  |testenv |Attempt to add new member to gro|ALTER  |
+|iidbdb  |testenv |Attempt to remove member from, o|ALTER  |
+|iidbdb  |testenv |Attempt to GRANT access to ROLE |CONTROL|
+|iidbdb  |testenv |Attempt to define new ROLE.     |CREATE |
+|iidbdb  |testenv |Attempt to alter a ROLE.        |ALTER  |
+|iidbdb  |testenv |Attempt to REVOKE access to ROLE|CONTROL|
+|iidbdb  |testenv |Attempt to remove a ROLE.       |DROP   |
+|iidbdb  |testenv |Attempt to remove a GROUP.      |DROP   |
+|iidbdb  |testenv |Attempt to remove a USER.       |DROP   |
+|securedb|testenv |Security Audit Log Registered   |REGISTE|
+|securedb|testenv |Attempt to REMOVE an audit log r|REMOVE |
+|iidbdb  |testenv |Attempt to authorize USER.      |AUTHENT|
+|securedb|testenv |Alarm signaled for TABLE.       |INSERT |
+|securedb|testenv |Alarm signaled for TABLE.       |INSERT |
+|securedb|testenv |Alarm signaled for TABLE.       |INSERT |
+|securedb|testenv |Attempt to create a DBEVENT.    |CREATE |
+|securedb|testenv |RAISE of DBEVENT                |RAISE  |
+|securedb|testenv |Attempt to drop a DBEVENT.      |DROP   |
++--------+--------+--------------------------------+-------+
+(42 rows)
+>>
+* \q
+<<
+>>
+? sql -s securedb 
+<<
+>>
+* remove table log02log;\g
+<<
+>>
+* \q
+<<
+>>
+? sql -s iidbdb 
+<<
+>>
+* \i disa.qry
+<<
+>>
+* \q
+<<
+>>
+
+
+Ending at: Thu Sep 21 14:50:57 2000

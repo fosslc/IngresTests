@@ -1,0 +1,344 @@
+/*
+Copyright (c) 2006 Ingres Corporation.
+
+        Test Name: qp287.sep
+        Time: Fri May 11 13:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp287.sep
+        Module  : be/qryproc
+        Filename: qp287.sep
+        Purpose : To test the new feature row producing procedure.
+        Input Files  : rp1.sc
+        Output Files : rp1.exe
+        Database     : qryprocdb
+        Tables       : qp287_table1
+        Synopsis     : This is to test the valid and invalid SQL syntax and
+                       basic functionality of row producing procedures within an
+                       embedded sql program.  This feature first became
+                       available with Ingres II 2.6/0106.
+
+ History: 11-May-2001   (wu$ca01) Created
+          14-May-2001   (Author)
+           2-Nov-2006	(vande02) Update canons where expected procedure syntax
+                                  errors E_US09C4 or E_USOF23 now give correct
+                                  line in error, align history, add Copyright.
+**
+**
+**  ROW PRODUCING PROCEDURE
+**
+**  - SYNTAX, BASIC FUNCTION (ESQLC)
+**
+**  Known Problems
+**  1) Basically same failures as rpp1.sep (RESOLVED)
+**  2) Procedure 7: see issue 10872364. (RESOLVED)
+*/
+? fill setup.sql 
+!!
+\i cleanup.sql
+create table qp287_table1 (a1 int, a2 char(10), a3 date)\g
+insert into qp287_table1 values(100, 'abcd', 'now')\g
+insert into qp287_table1 values(101, 'xyz', 'now')\g
+insert into qp287_table1 values(102, 'xxx', 'now')\g
+insert into qp287_table1 values(103, 'qqqqq', 'now')\g
+insert into qp287_table1 values(104, 'junk', 'now')\g
+!!
+? fill cleanup.sql 
+!!
+drop table qp287_table1\g
+drop procedure qp287_rp1\g
+!!
+? fill rp1.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+void p_err();
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+   EXEC SQL END DECLARE SECTION;
+
+   int       i;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+
+/*--------------------------------------------*
+   BAD SYNTAX: too few columns in result row
+*/
+printf("Procedure 1\n");
+   EXEC SQL
+create procedure qp287_rp1
+       result row(int, char(10))
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp287_table1 order by 1 do
+      return row(:v1, :v2, :v3);
+   endfor;
+end;
+
+/*--------------------------------------------*
+   BAD SYNTAX: too few columns in return row
+*/
+printf("Procedure 2\n");
+   EXEC SQL
+
+create procedure qp287_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp287_table1 order by 1 do
+      return row(:v1, :v2);
+   endfor;
+end;
+
+/*--------------------------------------------*
+   BAD SYNTAX: missing result row  
+*/
+printf("Procedure 3\n");
+   EXEC SQL
+
+create procedure qp287_rp1
+
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp287_table1 order by 1 do
+      return row(:v1, :v2, :v3);
+   endfor;
+end;
+
+/*--------------------------------------------*
+   BAD SYNTAX: missing SELECT statement 
+*/
+printf("Procedure 4\n");
+   EXEC SQL
+
+create procedure qp287_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for do
+      return row(:v1, :v2, :v3);
+   endfor;
+end;
+
+/*--------------------------------------------*
+   BAD SYNTAX: missing ENDFOR statement
+*/
+printf("Procedure 5\n");
+   EXEC SQL
+
+create procedure qp287_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp287_table1 order by 1 do
+      return row(:v1, :v2, :v3);
+end;
+
+/*--------------------------------------------*
+   BAD SYNTAX: empty FOR loop 
+*/
+printf("Procedure 6\n");
+   EXEC SQL
+
+create procedure qp287_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp287_table1 order by 1 do
+   endfor;
+end;
+
+/*--------------------------------------------*
+   BAD SYNTAX: Mismatching number of result columns 
+*/
+printf("Procedure 7\n");
+   EXEC SQL
+
+create procedure qp287_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp287_table1 order by 1 do
+      return row(:v1, :v2, :v3);
+   endfor;
+end;
+
+   EXEC SQL
+
+execute procedure qp287_rp1;
+
+   EXEC SQL
+
+drop procedure qp287_rp1;
+
+/*---------------------------------------------*
+   GOOD SYNTAX: test execute
+*/
+printf("Procedure 8\n");
+   EXEC SQL
+
+create procedure qp287_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp287_table1 order by 1 do
+      message 'IN THE LOOP'; 
+   endfor;
+end;
+
+   EXEC SQL
+
+execute procedure qp287_rp1;
+
+   EXEC SQL
+
+drop procedure qp287_rp1;
+
+/*--------------------------------------------*
+   GOOD SYNTAX: test execute, read host variables
+*/
+printf("Procedure 9\n");
+   EXEC SQL
+
+create procedure qp287_rp1
+       result row(int, char(10), date)
+as declare
+   v1 int;
+   v2 char(10);
+   v3 date;
+   buf char(80) not null;
+begin
+   for select a1, a2, a3 into :v1, :v2, :v3 from qp287_table1 order by 1 do
+      buf = varchar(:v1);
+      message :buf;
+   endfor;
+end;
+
+   EXEC SQL
+
+execute procedure qp287_rp1;
+
+   EXEC SQL
+
+drop procedure qp287_rp1;
+
+   EXEC SQL DISCONNECT;
+}
+!!
+? esqlc rp1.sc 
+<<
+~
+>>
+? sepcc rp1.c 
+<<
+~
+>>
+? seplnk rp1 
+<<
+~
+>>
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? run rp1.exe SEPPARAMDB 
+<<
+Procedure 1
+E_US098E The number of entries in a RETURN ROW list must match the number
+    of  entries in the corresponding RESULT ROW declaration.
+    (Thu Nov  2 12:00:21 2006)
+Procedure 2
+E_US098E The number of entries in a RETURN ROW list must match the number
+    of  entries in the corresponding RESULT ROW declaration.
+    (Thu Nov  2 12:00:21 2006)
+Procedure 3
+E_US098D A RETURN ROW statement can only be issued from a database
+    procedure with a corresponding RESULT ROW declaration.
+    (Thu Nov  2 12:00:21 2006)
+Procedure 4
+E_US0F23 line 11, Syntax error on 'do'.  The correct syntax is: 
+    FOR subselect DO 
+   other procedure statements 
+ ENDFOR;
+    (Thu Nov  2 12:00:21 2006)
+Procedure 5
+E_US09C4 Syntax error on line 14.  Last symbol read was: 'end'.
+    (Thu Nov  2 12:00:21 2006)
+Procedure 6
+E_US0979 Empty statement blocks are not allowed.
+    (Thu Nov  2 12:00:21 2006)
+Procedure 7
+E_LQ003C Mismatching number of result columns and program variables.
+    There are 3 result columns and 0 program variables.
+Procedure 8
+Procedure 9
+>>
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? delete rp1.c 
+<<
+~
+>>
+? delete rp1.o 
+<<
+~
+>>
+? delete rp1.obj 
+<<
+~
+>>
+? delete rp1.exe 
+<<
+~
+>>
+
+
+Ending at: Thu Nov  2 12:00:59 2006

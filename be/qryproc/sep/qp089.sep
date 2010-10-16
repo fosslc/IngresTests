@@ -1,0 +1,388 @@
+/*
+	Test Name: efa18.sep
+	Time: Tue May  8 19:28:28 1990
+	User Name: testenv
+ 
+	Test ID : efa18
+	Module  : 
+	Filename: efa18.sep
+	Purpose	: Test the aggregrate functions in embedded C.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : dept
+	Synopsis     : Create a dbproc that displays values of aggregate
+			on fields of dept table. First dbproc loads all
+			the values into variables in one statement and
+			displays them. The second dbproc loads each
+			value sepparately into a variable and displays it 
+			before it moves to the next value.
+
+	Setup   : efa00.sep
+
+	History	: xx-xxx-1989	Created				Author
+	   	  7-MAR-1997    (vissu01) Modified for NT
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa18.sc 
+!!
+/*
+**	efa18.sc
+**
+**	select: aggregates
+**
+**	history:
+**		oct 16/89 sgp
+**			- created.
+*/
+
+#define EFA18
+
+#include "driverefstub.h"
+
+#include <stdio.h>
+
+exec sql include 'dbph.sc';
+exec sql include sqlca;
+
+/************/
+/* efa18() */
+/************/
+
+efa18()
+{
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa18: aggregates\n");
+	drop_tables(DEPT_TABLE);
+	build_tables(DEPT_TABLE);
+
+	/**********/
+	/* test 1 */
+	/**********/
+
+	printf("\n    test 1: create, execute, drop, execute proc\n");
+
+	/* drop the message */
+	exec sql drop procedure efa18_01;
+
+	/* create the message */
+	printf("      creating procedure efa18_01...\n");
+
+	exec sql create procedure efa18_01 as
+	declare
+		mesg_buf	varchar(100)	not null with default;
+		avg_res		float		not null with default;
+		count_res	float		not null with default;
+		max_res		float		not null with default;
+		min_res		float		not null with default;
+		sum_res		float		not null with default;
+	begin
+
+		select
+				avg(sales),
+				count(dname),
+				max(sales),
+				min(sales),
+				sum(sales)
+			into
+				:avg_res,
+				:count_res,
+				:max_res,
+				:min_res,
+				:sum_res
+			from	dept;
+
+		mesg_buf = 'avg sales for all rows: ' + varchar(avg_res);
+		message mesg_buf;
+
+		mesg_buf = 'count of rows: ' + varchar(count_res);
+		message mesg_buf;
+
+		mesg_buf = 'max sale: ' + varchar(max_res);
+		message mesg_buf;
+
+		mesg_buf = 'min sale: ' + varchar(min_res);
+		message mesg_buf;
+
+		mesg_buf = 'sum of sales: ' + varchar(sum_res);
+		message mesg_buf;
+
+	end;
+
+	/* run the message */
+	printf("      executing procedure efa18_01...\n");
+	exec sql execute procedure efa18_01;
+
+	/**********/
+	/* test 2 */
+	/**********/
+
+	printf("\n    test 2: create, execute, drop, execute proc\n");
+
+	/* drop the message */
+	exec sql drop procedure efa18_02;
+
+	/* create the message */
+	printf("      creating procedure efa18_02...\n");
+
+	exec sql create procedure efa18_02 as
+	declare
+		mesg_buf	varchar(100)	not null with default;
+		avg_res		float		not null with default;
+		count_res	float		not null with default;
+		max_res		float		not null with default;
+		min_res		float		not null with default;
+		sum_res		float		not null with default;
+	begin
+
+		select
+				avg(sales)
+			into
+				:avg_res
+			from	dept;
+
+		mesg_buf = 'avg sales for all rows: ' + varchar(avg_res);
+		message mesg_buf;
+
+		select
+				count(dname)
+			into
+				:count_res
+			from	dept;
+
+		mesg_buf = 'count of rows: ' + varchar(count_res);
+		message mesg_buf;
+
+		select
+				max(sales)
+			into
+				:max_res
+			from	dept;
+
+		mesg_buf = 'max sale: ' + varchar(max_res);
+		message mesg_buf;
+
+		select
+				min(sales)
+			into
+				:min_res
+			from	dept;
+
+		mesg_buf = 'min sale: ' + varchar(min_res);
+		message mesg_buf;
+
+		select
+				sum(sales)
+			into
+				:sum_res
+			from	dept;
+
+		mesg_buf = 'sum of sales: ' + varchar(sum_res);
+		message mesg_buf;
+
+	end;
+
+	/* run the message */
+	printf("      executing procedure efa18_02...\n");
+	exec sql execute procedure efa18_02;
+
+} /* efa18() */
+!!
+? sepesqlc efa18.sc 
+<<
+ESQL efa18.sc:
+>>
+? sepcc efa18.c 
+<<
+>>
+<<
+efa18.c
+>>
+? sepesqlc driver.sc
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa18
+<<
+>>
+? sql SEPPARAMDB -s
+<<
+~
+>>
+* drop table dept;\g
+<<
+~
+>>
+* drop procedure efa18_01;\g
+<<
+~
+>>
+* drop procedure efa18_02;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa18 
+<<
+TEST DRIVER
+source : driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa18
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa18 XX
+
+  efa18: aggregates
+  dropping dept table...
+E_US0AC1 DROP: 'dept' does not exist or is not owned by you.
+    (Fri Jun  8 22:46:57 1990)
+  creating dept table...
+
+    test 1: create, execute, drop, execute proc
+E_US0965 Procedure 'efa18_01' not found.
+    (Fri Jun  8 22:46:58 1990)
+      creating procedure efa18_01...
+      executing procedure efa18_01...
+MESSAGE 0: avg sales for all rows: 53636.364
+MESSAGE 0: count of rows: 11.000
+MESSAGE 0: max sale: 200000.000
+MESSAGE 0: min sale: 0.000
+MESSAGE 0: sum of sales: 590000.000
+
+    test 2: create, execute, drop, execute proc
+E_US0965 Procedure 'efa18_02' not found.
+    (Fri Jun  8 22:46:59 1990)
+      creating procedure efa18_02...
+      executing procedure efa18_02...
+MESSAGE 0: avg sales for all rows: 53636.364
+MESSAGE 0: count of rows: 11.000
+MESSAGE 0: max sale: 200000.000
+MESSAGE 0: min sale: 0.000
+MESSAGE 0: sum of sales: 590000.000
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~  
+>>
+? delete driver.obj
+<<
+~  
+>>
+? delete driver.o
+<<
+~
+>>
+? delete driver.c
+<<
+~  
+>>
+? delete driver.sc
+<<
+~  
+>>
+? delete driverefstub.h 
+<<
+~  
+>>
+? delete driveref.c 
+<<
+~  
+>>
+? delete driveref.obj
+<<
+~  
+>>
+? delete driveref.o
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~  
+>>
+? delete dbph.c 
+<<
+~  
+>>
+? delete dbpmisc.sc 
+<<
+~  
+>>
+? delete dbpmisc.c 
+<<
+~  
+>>
+? delete dbpmisc.obj
+<<
+~  
+>>
+? delete dbpmisc.o
+<<
+~
+>>
+? delete efa18.c 
+<<
+~  
+>>
+? delete efa18.obj
+<<
+~  
+>>
+? delete efa18.o
+<<
+~
+>>
+
+
+Ending at: Fri Jun  8 22:47:09 1990

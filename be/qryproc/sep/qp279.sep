@@ -1,0 +1,302 @@
+/*
+	Test Name: qp279.sep
+	Time: Thu Feb 20 12:07:03 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :	runme.sc, setup.sc, myprint.sc, drop.sc
+	Output Files :	*.c, *.o, *exe
+	Database     :	SEPPARAMDB
+	Tables       :	t1, t2
+	Synopsis     :	In a create rule execute clause, one do not 
+			have to include all of the parameters appearing 
+			in the definition of the invoked procedure.
+			ESQL version of qp270.sep.
+
+ History: 20-Feb-1997	(cheis01)	Created
+          15-Sep-1998   (kinte01)
+                        Add delete for files left around after test completes
+	  23-Mar-1999  (vande02)  Hard-coded VPG_SZ to 8K 
+	  13-Dec-2007 (kibro01) b119609 - Prevent infinite loop
+*/
+? fill runme.sc 
+!!
+#include <stdio.h>
+
+exec sql include sqlca;
+exec sql include 'setup.sc';
+exec sql include 'myprint.sc';
+exec sql include 'drop.sc';
+
+main(argc, argv)
+int argc;
+char **argv;
+{
+	exec sql begin declare section;
+	char	dbname[20];
+	exec sql end declare section;
+
+	strcpy(dbname, argv[1]);
+	exec sql connect :dbname;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	drop();
+        setup();
+
+	printf("/* STATEMENT level rule */\n");
+	printf("create rule r1 after insert into t1 for each statement\n");
+	printf("execute procedure p1 (enum=new.enum, dept=new.dept);\n\n");
+	exec sql create rule r1 after insert into t1 for each statement
+	execute procedure p1 (enum=new.enum, dept=new.dept);
+
+	printf("insert into t1 values (1, 'development', 30000);\n\n");
+	exec sql insert into t1 values (1, 'development', 30000);
+	myprint();
+
+	printf("drop rule r1;\n\n");
+	exec sql drop rule r1;
+
+	printf("/* ROW level rule */\n");
+	printf("create rule r1 after insert into t1\n");
+	printf("execute procedure p1 (enum=new.enum, dept=new.dept);\n\n");
+	exec sql create rule r1 after insert into t1
+		execute procedure p1 (enum=new.enum, dept=new.dept);
+
+	printf("insert into t1 values (2, 'accouting', 32000);\n");
+	exec sql insert into t1 values (2, 'accouting', 32000);
+	/* this'll fail with E_US098A row level rule calling set of ... */
+
+	printf("\ndrop rule r1;\n\n");
+	exec sql drop rule r1;
+
+	printf("create rule r1 after insert into t1\n");
+	printf("execute procedure p2 (enum=new.enum, dept=new.dept);\n\n");
+	exec sql create rule r1 after insert into t1
+		execute procedure p2 (enum=new.enum, dept=new.dept);
+
+	printf("insert into t1 values (2, 'accouting', 32000);\n\n");
+	exec sql insert into t1 values (2, 'accouting', 32000);
+
+	myprint();
+	drop();
+
+	exec sql commit;
+	exec sql disconnect;
+}
+!!
+? fill setup.sc 
+!!
+void setup()
+{
+exec sql whenever sqlerror call sqlprint;
+exec sql whenever sqlmessage call sqlprint;
+
+printf("\ncreate table t1(enum int, dept varchar(15), salary int) ");
+printf("with page_size=8192;\n");
+printf("create table t2 as select * from t1;\n\n");
+exec sql create table t1(enum int, dept varchar(15), salary int)
+	with page_size=8192;
+exec sql create table t2 as select * from t1;
+
+printf("create procedure p1 ");
+printf("(p_t1 set of (enum int, dept varchar(10), salary int)) as\n");
+printf("begin insert into t2 select * from p_t1; end;\n\n");
+exec sql create procedure p1
+	(p_t1 set of (enum int, dept varchar(10), salary int)) as
+begin insert into t2 select * from p_t1; end;
+
+printf("create procedure p2 (p_t1 set of (dept varchar(10), salary int)) as\n");
+printf("begin insert into t2 select * from p_t1; end;\n");
+/* this should fail */
+exec sql create procedure p2 (p_t1 set of (dept varchar(10), salary int)) as
+begin insert into t2 select * from p_t1; end;
+
+printf("\ncreate procedure p2 (enum int, dept varchar(10), salary int) as\n");
+printf("begin insert into t2 values (:enum, :dept, :salary); end;\n\n");
+exec sql create procedure p2 (enum int, dept varchar(10), salary int) as
+begin insert into t2 values (:enum, :dept, :salary); end;
+}
+!!
+? fill myprint.sc 
+!!
+void myprint()
+{
+        exec sql begin declare section;
+	int	e_num=0;
+        char    dept[15];
+        int     salary=0;
+        exec sql end declare section;
+ 
+        exec sql whenever sqlerror call sqlprint;
+        exec sql whenever sqlmessage call sqlprint;
+ 
+        exec sql declare c1 cursor for select * from t1;
+        exec sql declare c2 cursor for select * from t2;
+
+        exec sql open c1 for readonly;
+        printf("select * from t1;\n");
+        printf("--------------------------------------\n");
+        printf("   enum       dept        salary\n");
+        printf("--------------------------------------\n");
+	/* Allow -40202, which is "E_LQ000E No null indicator supplied" */
+        while (sqlca.sqlcode == 0 || sqlca.sqlcode == -40202) {
+           exec sql fetch c1 into :e_num, :dept, :salary;
+           if (sqlca.sqlcode != 100)
+	   	printf("%5d\t%10s\t%7d\n", e_num, dept, salary);
+        }
+        exec sql close c1;
+        printf("\n");
+
+	e_num=0;
+	salary=0;
+
+        exec sql open c2 for readonly;
+        printf("select * from t2;\n");
+        printf("-------------------------------------\n");
+        printf("   enum       dept        salary\n");
+        printf("-------------------------------------\n");
+	/* Allow -40202, which is "E_LQ000E No null indicator supplied" */
+        while (sqlca.sqlcode == 0 || sqlca.sqlcode == -40202) {
+           exec sql fetch c2 into :e_num, :dept, :salary;
+           if (sqlca.sqlcode != 100)
+		printf("%5d\t%10s\t%7d\n", e_num, dept, salary);
+        }
+        exec sql close c2;
+        printf("\n");
+}
+!!
+? fill drop.sc 
+!!
+void drop()
+{
+exec sql drop rule r1; 
+exec sql drop procedure p1; 
+exec sql drop procedure p2; 
+exec sql drop t1, t2;
+}
+!!
+? sepesqlc runme 
+<<
+ESQL runme.sc:
+>>
+? sepcc runme 
+<<
+>>
+<<
+runme.c
+>>
+? seplnk runme 
+<<
+>>
+? run runme.exe SEPPARAMDB 
+<<
+E_US189D DROP RULE: Rule 'r1' does not exist.
+    (Tue May 27 11:19:01 1997)
+E_US0965 Procedure 'p1' not found.
+    (Tue May 27 11:19:01 1997)
+E_US0965 Procedure 'p2' not found.
+    (Tue May 27 11:19:01 1997)
+E_US0AC1 DROP: 't1' does not exist or is not owned by you.
+    (Tue May 27 11:19:01 1997)
+
+create table t1(enum int, dept varchar(15), salary int) with page_size=8192;
+create table t2 as select * from t1;
+
+create procedure p1 (p_t1 set of (enum int, dept varchar(10), salary int)) as
+begin insert into t2 select * from p_t1; end;
+
+create procedure p2 (p_t1 set of (dept varchar(10), salary int)) as
+begin insert into t2 select * from p_t1; end;
+E_US0AD8 INSERT: number of target columns must equal the number of target
+    list elements in the specified subselect.
+    (Tue May 27 11:19:03 1997)
+
+create procedure p2 (enum int, dept varchar(10), salary int) as
+begin insert into t2 values (:enum, :dept, :salary); end;
+
+/* STATEMENT level rule */
+create rule r1 after insert into t1 for each statement
+execute procedure p1 (enum=new.enum, dept=new.dept);
+
+insert into t1 values (1, 'development', 30000);
+
+select * from t1;
+--------------------------------------
+   enum       dept        salary
+--------------------------------------
+    1	development	  30000
+
+select * from t2;
+-------------------------------------
+   enum       dept        salary
+-------------------------------------
+E_LQ000E No null indicator supplied with program variable.
+    Null data from column 3 can not be converted.
+    1	developmen	      0
+
+drop rule r1;
+
+/* ROW level rule */
+create rule r1 after insert into t1
+execute procedure p1 (enum=new.enum, dept=new.dept);
+
+insert into t1 values (2, 'accouting', 32000);
+E_US098A Row level rule is calling SET OF procedure 'r1'. Must be
+    statement level rule.
+    (Tue May 27 11:19:03 1997)
+
+drop rule r1;
+
+create rule r1 after insert into t1
+execute procedure p2 (enum=new.enum, dept=new.dept);
+
+insert into t1 values (2, 'accouting', 32000);
+
+select * from t1;
+--------------------------------------
+   enum       dept        salary
+--------------------------------------
+    1	development	  30000
+    2	 accouting	  32000
+
+select * from t2;
+-------------------------------------
+   enum       dept        salary
+-------------------------------------
+E_LQ000E No null indicator supplied with program variable.
+    Null data from column 3 can not be converted.
+    1	developmen	      0
+E_LQ000E No null indicator supplied with program variable.
+    Null data from column 3 can not be converted.
+    2	 accouting	      0
+
+>>
+? run rm runme* setup* myprint* drop* 
+<<
+~
+>>
+? delete runme.*
+<<
+~
+>>
+? delete setup.*
+<<
+~
+>>
+? delete myprint.*
+<<
+~
+>>
+? delete drop.*
+<<
+~
+>>
+
+
+Ending at: Fri Aug 15 14:18:54 1997

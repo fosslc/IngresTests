@@ -1,0 +1,456 @@
+/*
+        Test Name: qp308.sep
+        Time: Wed Feb 26 15:58:22 2003
+        User Name: testenv
+        Terminal type: septerm
+ 
+        Test ID : qp308
+        Module  : BE/QRYPROC
+        Filename: qp308.sep
+        Purpose : To test use of default decimal type sequences
+        Input Files  :
+        Output Files :
+        Database     : SEPPARAMDB
+        Tables       : None
+        Synopsis     : This test will verify use of decimal sequences
+                       using various values and boundaries for each
+                       parameter of the sequence. It will also contain
+                       some destructive tests as well. This test is
+                       similar to qp307.sep except that it uses decimal
+                       sequences only and tests maximum boundaries of
+                       the default decimal (decimal(5)) values. 
+
+** Error-handling test cases:
+**
+**   Error if sequence has reached boundary and NOCYCLE is set
+**   Error if CACHE is set to 0
+**
+** NOTE: Test cases contain a mixture of both ANSI (2 word) and Oracle
+**        (1 word) options such as the following:
+**
+**      ANSI                            ORACLE
+**
+**      no minvalue                     nominvalue
+**      no maxvalue                     nomaxvalue
+**      no cache                        nocache
+**      no cycle                        nocycle
+**      no order                        no order
+**
+**      next value for seq_name         seq_name.nextval
+**
+ History: 26-Feb-2003   (marwi08) Created
+          24-Mar-2003   (vande02) Changing pre-drop object canons to ignore.
+                                  Testing 'drop sequence' syntax in qp304.sep.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+/*
+        First make sure sequences don't already exist
+*/
+* drop sequence qp308_decseq1\g 
+<<
+~
+>>
+* drop sequence qp308_decseq2\g 
+<<
+~
+>>
+* drop sequence qp308_decseq3\g 
+<<
+~
+>>
+* drop sequence qp308_decseq4\g 
+<<
+~
+>>
+* drop sequence qp308_decseq5\g 
+<<
+~
+>>
+* drop sequence qp308_decseq6\g 
+<<
+~
+>>
+/*
+        Create first sequence with START value = MAXVALUE
+        with NOCYCLE
+*/
+* create sequence qp308_decseq1 as decimal start with -99998 increment by 1 minva-
+lue -99999 maxvalue -99998 no cache no cycle no order\g 
+<<
+>>
+/*
+        Check NEXTVAL - should equal START, which equals MAXVALUE
+        This will also increment sequence #
+*/
+* select next value for qp308_decseq1\g 
+<<
+
++------+
+|col1  |
++------+
+|-99998|
++------+
+(1 row)
+>>
+/*
+        Now try select again - should fail because MAXVALUE has been
+        reached and NOCYCLE is set.
+*/
+* select qp308_decseq1.nextval\g 
+<<
+E_US1915 The ending value of Sequence 'qp308_decseq1' has been reached.
+    (Wed Feb 26 16:01:31 2003)
+
+>>
+/*
+        Try it again to make sure it is still at end of cycle
+*/
+* select next value for qp308_decseq1\g 
+<<
+E_US1915 The ending value of Sequence 'qp308_decseq1' has been reached.
+    (Wed Feb 26 16:01:36 2003)
+
+>>
+/*
+        Now attempt to create second sequence with an invalid integer
+        (0) value for cache - should fail.
+*/
+* create sequence qp308_decseq2 as decimal start with -99999 increment by 1 minvalue-
+ -99999 maxvalue 99998 cache 0 nocycle noorder\g 
+<<
+E_US18AC CREATE/ALTER SEQUENCE: An integer value must be specified for the
+    'CACHE' option.
+    (Wed Feb 26 16:02:07 2003)
+
+>>
+/*
+        Now create second sequence with START set to 2 less than default
+        MAXVALUE, INCREMENT BY set to 3, and with CYCLE
+*/
+* create sequence qp308_decseq2 as decimal start with 99997 increment by 3 nocache c-
+ycle noorder\g 
+<<
+>>
+/*
+        Verify NEXTVAL equals START and increment sequence #
+*/
+* select qp308_decseq2.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+| 99997|
++------+
+(1 row)
+>>
+/*
+        Verify that sequence # has started new cycle after reaching
+        MAXVALUE
+*/
+* select next value for qp308_decseq2\g 
+<<
+
++------+
+|col1  |
++------+
+|     1|
++------+
+(1 row)
+>>
+/*
+        Verify that NEXTVAL has incremented by 3.
+*/
+* select next value for qp308_decseq2\g 
+<<
+
++------+
+|col1  |
++------+
+|     4|
++------+
+(1 row)
+>>
+/*
+        Another verify of NEXTVAL increment.
+*/
+* select qp308_decseq2.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+|     7|
++------+
+(1 row)
+>>
+/*
+        Now create third sequence with START = -99996, default
+        MINVALUE (-99999) & MAXVALUE (-1), and INCREMENT BY = -3
+        CACHE 10, CYCLE
+*/
+* create sequence qp308_decseq3 as decimal start with -99996 increment by -3 cache 1-
+0 cycle no order\g 
+<<
+>>
+/*
+        Verify NEXTVAL = START and decrement sequence #
+*/
+* select next value for qp308_decseq3\g 
+<<
+
++------+
+|col1  |
++------+
+|-99996|
++------+
+(1 row)
+>>
+/*
+        Verify NEXTVAL has decremented - now equals MINVALUE
+*/
+* select qp308_decseq3.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+|-99999|
++------+
+(1 row)
+>>
+/*
+        Verify that sequence # is recycled because MINVALUE was reached
+*/
+* select next value for qp308_decseq3\g 
+<<
+
++------+
+|col1  |
++------+
+|    -1|
++------+
+(1 row)
+>>
+/*
+        Verify that NEXTVAL decremented again
+*/
+* select qp308_decseq3.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+|    -4|
++------+
+(1 row)
+>>
+/*
+        Now create fourth sequence with START = -99996, INCREMENT BY
+        = -3, default MINVALUE/MAXVALUE, no CACHE, and CYCLE
+*/
+* create sequence qp308_decseq4 as decimal start with -99996 increment by -3 nocache-
+ cycle noorder\g 
+<<
+>>
+/*
+        Verify NEXTVAL = START and decrement sequence #
+*/
+* select qp308_decseq4.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+|-99996|
++------+
+(1 row)
+>>
+/*
+        Verify NEXTVAL has decremented - now equals MINVALUE
+*/
+* select next value for qp308_decseq4\g 
+<<
+
++------+
+|col1  |
++------+
+|-99999|
++------+
+(1 row)
+>>
+/*
+        Verify that sequence # is recycled because MINVALUE was reached
+*/
+* select qp308_decseq4.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+|    -1|
++------+
+(1 row)
+>>
+/*
+        Verify that NEXTVAL decremented again
+*/
+* select next value for qp308_decseq4\g 
+<<
+
++------+
+|col1  |
++------+
+|    -4|
++------+
+(1 row)
+>>
+/*
+        Now create fifth sequence with START = -99996, default
+        MINVALUE, NOMAXVALUE, INCREMENT BY = -3, no CACHE, and CYCLE
+*/
+* create sequence qp308_decseq5 as decimal start with -99996 increment by -3 nomaxva-
+lue no cache cycle no order\g 
+<<
+>>
+/*
+        Verify NEXTVAL = START and decrement sequence #
+*/
+* select next value for qp308_decseq5\g 
+<<
+
++------+
+|col1  |
++------+
+|-99996|
++------+
+(1 row)
+>>
+/*
+        Verify NEXTVAL has decremented - now equals MINVALUE
+*/
+* select qp308_decseq5.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+|-99999|
++------+
+(1 row)
+>>
+/*
+        Verify that sequence # is recycled because MINVALUE was reached
+*/
+* select next value for qp308_decseq5\g 
+<<
+
++------+
+|col1  |
++------+
+|    -1|
++------+
+(1 row)
+>>
+/*
+        Verify that NEXTVAL decremented again
+*/
+* select qp308_decseq5.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+|    -4|
++------+
+(1 row)
+>>
+/*
+        Now create sixth sequence with START = -99996, INCREMENT BY
+        = -3, default MINVALUE, MAXVALUE = 10000, no CACHE, and CYCLE
+*/
+* create sequence qp308_decseq6 as decimal start with -99996 increment by -3 maxvalu-
+e 10000 nocache cycle noorder\g 
+<<
+>>
+/*
+        Verify NEXTVAL = START and decrement sequence #
+*/
+* select qp308_decseq6.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+|-99996|
++------+
+(1 row)
+>>
+/*
+        Verify NEXTVAL has decremented - now equals MINVALUE
+*/
+* select next value for qp308_decseq6\g 
+<<
+
++------+
+|col1  |
++------+
+|-99999|
++------+
+(1 row)
+>>
+/*
+        Verify that sequence # is recycled because MINVALUE was reached
+*/
+* select qp308_decseq6.nextval\g 
+<<
+
++------+
+|col1  |
++------+
+| 10000|
++------+
+(1 row)
+>>
+/*
+        Verify that NEXTVAL decremented again
+*/
+* select next value for qp308_decseq6\g 
+<<
+
++------+
+|col1  |
++------+
+|  9997|
++------+
+(1 row)
+>>
+/*
+        Cleanup database by dropping sequences
+*/
+* drop sequence qp308_decseq1\g 
+<<
+>>
+* drop sequence qp308_decseq2\g 
+<<
+>>
+* drop sequence qp308_decseq3\g 
+<<
+>>
+* drop sequence qp308_decseq4\g 
+<<
+>>
+* drop sequence qp308_decseq5\g 
+<<
+>>
+* drop sequence qp308_decseq6\g 
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Wed Feb 26 16:10:50 2003

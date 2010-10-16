@@ -1,0 +1,417 @@
+/*
+        Test Name    : qp319.sep
+        Time         : Thu Jan 30 15:50:40 2003
+        User Name    : testenv
+
+        Test ID      : qp319
+        Module       :
+        Filename     : qp319.sep
+        Purpose      : Testing Ingres 2.6 SP2 'Lock Timeout of NOWAIT' 
+        Input Files  : none
+        Output Files : none
+        Database     : SEPPARAMDB
+        Tables       : qp319_tbl1, qp319_tbl2 
+        Synopsis     : Test that 'Lockmode Timeout NOWAIT' prevents a query
+                       waiting when it attempts to update a locked table 
+                       from within an MQT.
+        	       Method:- lock a resource in one session and then request 
+		       the same resource as part of an MQT in a second session. 
+                       Locking Level = SYSTEM. 
+        Setup        :
+
+        History:  27-Feb-2003 (sykga01)  Created.
+	  14-Jun-2004   (sinra04) Replaced esqlc command with sepesqlc command
+			to make tests when run on VMS use same canon as that
+			of  Unix & Windows.
+/*
+
+/*
+** Define the SQL script to create
+** and populate the test tables (qp319_tbl1 and qp319_tbl2)
+*/
+
+? fill setup.sql
+!!
+create table qp319_tbl1 (lname char(24), fname char(24), telephone char(14))\p\g
+insert into qp319_tbl1 values ('Davis', 'Steven', '(516) 735-4647')\p\g
+insert into qp319_tbl1 values ('Davidson', 'Mary', '(516) 735-8181')\p\g
+insert into qp319_tbl1 values ('Davidson', 'John', '(516) 735-8181')\p\g
+insert into qp319_tbl1 values ('Smith', 'William', '(631) 442-5242')\p\g
+insert into qp319_tbl1 values ('Johnson', 'James', '(516) 675-6154')\p\g
+insert into qp319_tbl1 values ('Walsh', 'Joan', '(516) 331-2365')\p\g
+insert into qp319_tbl1 values ('Williams', 'Charles', '(212) 599-1001')\p\g
+insert into qp319_tbl1 values ('Andrews', 'Alison', '(212) 664-3001')\p\g
+create table qp319_tbl2 (lname char(24), fname char(24), telephone char(14))\p\g
+insert into qp319_tbl2 values ('Bush', 'George', '(516) 735-4647')\p\g
+insert into qp319_tbl2 values ('Blair', 'Tony', '(516) 735-8181')\p\g
+insert into qp319_tbl2 values ('Hussain', 'Saddam', '(516) 735-8181')\p\g
+!!
+
+/*
+** Define the main C executable
+*/ 
+
+? fill qp319.sc 
+!!
+/*
+** Standard C Runtime header file
+*/
+
+    #include <stdio.h>
+
+/*
+**  SQLCA required by Ingres LIBQ runtime for Ingres error handling
+*/
+
+    EXEC SQL INCLUDE sqlca;   
+
+/*
+**  Local variable: program syntax message 
+*/
+
+    char  *syntax = "\nSyntax:  qp319.sep, dbname: qryprocdb\n";
+
+/*
+** The main() program
+*/
+
+main(int argc, char *argv[])
+{
+/*
+**  Declare host language variables used in queries.
+*/
+   EXEC SQL BEGIN DECLARE SECTION;
+        char   *dbname;
+        char   qp1[72];
+        char   qp2[72];
+        char   err_msg[101];
+   EXEC SQL END DECLARE SECTION;
+
+
+/*
+**  Checks that 2 arguments were specified on the command
+**  line that launched the program (1 arg plus the program name).
+**  If not enough args, then print a message and exit. 
+*/
+   if (argc < 2)
+   {
+      printf(syntax);
+      exit(-1);
+   }
+/*
+**  Set local variables: dbname is the database passed in at the 
+**  command line.
+*/
+   dbname = argv[1];
+
+/*
+** Connect to Session 1
+*/
+
+   printf("\nConnecting to Session 1\n");
+
+   EXEC SQL CONNECT :dbname session 1;
+
+   printf("\n");
+
+
+/*
+**  Update and lock the qp319_tbl1 table;
+*/
+
+   printf("\nUpdating the qp319_tbl1 table in Session 1\n");
+
+   EXEC SQL UPDATE 
+                qp319_tbl1
+            SET 
+                fname='SYSTEM' 
+            WHERE 
+                lname='Davis'; 
+
+/*
+** Connect to Session 2 and test 'Lockmode Timeout NOWAIT'
+** within an MQT. Locking level SYSTEM.
+*/
+
+   printf("\nConnecting to Session 2\n");
+
+   EXEC SQL CONNECT :dbname session 2;
+
+
+/*
+**  Set the error handler to 
+**  call an error routine but continue program execution. 
+*/
+
+    EXEC SQL WHENEVER NOT FOUND CONTINUE;
+
+        EXEC SQL WHENEVER SQLWARNING CONTINUE;
+        EXEC SQL WHENEVER SQLERROR goto ERR; 
+    EXEC SQL COMMIT;
+
+    START:
+
+/*
+** Set lockmode session timeout to NOWAIT and select from the 
+** 'locked' qp319_tbl1 table (Level=SYSTEM). 
+*/
+
+   printf("\n");
+
+   printf("\nSetting Lockmode Timeout NOWAIT (Level=SYSTEM)\n");
+
+   EXEC SQL SET LOCKMODE SESSION WHERE LEVEL=SYSTEM, TIMEOUT=NOWAIT;
+
+/*
+**  Start MQT
+**  Update the qp319_tbl2 table 
+*/
+
+   printf("\nUPDATE the qp319_tbl2 table in Session 2\n");
+
+   EXEC SQL UPDATE 
+                qp319_tbl2 
+            SET 
+                fname='SESSION'; 
+
+/*
+** Check the qp319_tbl2 table has UPDATED 
+*/
+
+   printf("\nSELECT from qp319_tbl2 table to check UPDATE\n");
+
+   printf("\n");
+
+   EXEC SQL SELECT 
+                fname 
+            INTO 
+                :qp2 
+            FROM 
+                qp319_tbl2 
+            ORDER BY fname ASC; 
+   EXEC SQL BEGIN;
+      printf("%s\n", qp2);
+   EXEC SQL END;
+
+/*
+**  Query the locked qp319_tbl1 table 
+**  The query will not wait for locks to be released and will
+**  return an error invoking the error routine
+*/
+
+   printf("\n");
+
+   printf("\nSELECT from qp319_tbl1 table in Session 2\n");
+
+   printf("\n");
+
+   EXEC SQL SELECT 
+                TRIM(lname) + ', ' + TRIM(fname) + ' ' + telephone
+            INTO 
+                :qp1
+            FROM 
+                qp319_tbl1
+            ORDER BY lname, fname, telephone;
+   EXEC SQL BEGIN;
+      printf("%s\n", qp1);
+   EXEC SQL END;
+
+
+  EXEC SQL COMMIT;
+
+/*
+** End of MQT
+*/
+
+      goto END;
+
+/*
+** ERROR ROUTINE: 
+** Return an error message and roll back the MQT
+*/
+
+   ERR:
+       EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+           if (sqlca.sqlcode != 0) 
+              { 
+               EXEC SQL inquire_sql (:err_msg=ERRORTEXT);
+               printf("\n%s\n", err_msg);
+               EXEC SQL ROLLBACK; 
+   	       printf("\nLock Timeout - MQT Rolled back\n");
+              }
+
+   END:
+
+/*
+** Check the qp319_tbl2 table has been rolled back as a result
+** of the timeout.
+*/
+
+   printf("\nSELECT from qp319_tbl2 table to check ROLLBACK\n");
+
+   printf("\n");
+
+   EXEC SQL SELECT 
+                fname
+            INTO 
+                :qp2 
+            FROM 
+                qp319_tbl2 
+            ORDER BY fname ASC;
+   EXEC SQL BEGIN;
+      printf("%s\n", qp2);
+   EXEC SQL END;
+
+/*
+** Disconnect from Session 2
+*/
+
+   printf("\nDisconnecting from Session 2\n");
+
+   EXEC SQL DISCONNECT session 2;
+
+/*  
+**  Disconnect from Session 1.
+*/
+
+   printf("\nDisconnecting from Session 1\n");
+
+   EXEC SQL disconnect session 1;
+
+/*
+**  END OF EXEC SQL Script. 
+*/
+}
+!!
+
+/*
+** End of main C executable definition
+*/
+
+/* 
+** Preprocess, Compile and Link EXEC SQL Script
+*/
+
+? sepesqlc qp319.sc 
+<<
+ESQL qp319.sc:
+>>
+? sepcc qp319 
+<<
+~
+>>
+? seplnk qp319 
+<<
+>>
+
+/*
+** Create and populate qp319_tbl1 table
+*/
+
+? sql -s SEPPARAMDB
+<<
+
+>>
+* drop table qp319_tbl1; \g
+<<
+~
+>>
+* drop table qp319_tbl2; \g
+<<
+~
+>>
+* \i setup.sql
+<<
+create table qp319_tbl1 (lname char(24), fname char(24), telephone char(14))
+insert into qp319_tbl1 values ('Davis', 'Steven', '(516) 735-4647')
+(1 row)
+insert into qp319_tbl1 values ('Davidson', 'Mary', '(516) 735-8181')
+(1 row)
+insert into qp319_tbl1 values ('Davidson', 'John', '(516) 735-8181')
+(1 row)
+insert into qp319_tbl1 values ('Smith', 'William', '(631) 442-5242')
+(1 row)
+insert into qp319_tbl1 values ('Johnson', 'James', '(516) 675-6154')
+(1 row)
+insert into qp319_tbl1 values ('Walsh', 'Joan', '(516) 331-2365')
+(1 row)
+insert into qp319_tbl1 values ('Williams', 'Charles', '(212) 599-1001')
+(1 row)
+insert into qp319_tbl1 values ('Andrews', 'Alison', '(212) 664-3001')
+(1 row)
+create table qp319_tbl2 (lname char(24), fname char(24), telephone char(14))
+insert into qp319_tbl2 values ('Bush', 'George', '(516) 735-4647')
+(1 row)
+insert into qp319_tbl2 values ('Blair', 'Tony', '(516) 735-8181')
+(1 row)
+insert into qp319_tbl2 values ('Hussain', 'Saddam', '(516) 735-8181')
+(1 row)
+>>
+* \q
+<<
+~
+>>
+
+/*
+** Run the EXEC SQL Script
+*/
+
+? run qp319.exe SEPPARAMDB 
+<<
+Connecting to Session 1
+
+
+Updating the qp319_tbl1 table in Session 1
+
+Connecting to Session 2
+
+
+Setting Lockmode Timeout NOWAIT (Level=SYSTEM)
+
+UPDATE the qp319_tbl2 table in Session 2
+
+SELECT from qp319_tbl2 table to check UPDATE
+
+SESSION
+SESSION
+SESSION
+
+
+SELECT from qp319_tbl1 table in Session 2
+
+
+E_US125E Timeout occurred on lock request (see SET LOCKMODE command).
+    (Fri Mar 14 14:01:12 2003)
+
+Lock Timeout - MQT Rolled back
+
+SELECT from qp319_tbl2 table to check ROLLBACK
+
+George
+Saddam
+Tony
+
+Disconnecting from Session 2
+
+Disconnecting from Session 1
+>>
+? delete qp319.c 
+<<
+~
+>>
+? delete qp319.obj 
+<<
+~
+>>
+? delete qp319.o 
+<<
+~
+>>
+? delete qp319.exe 
+<<
+~
+>>
+
+
+Ending at: Wed Mar 22 17:31:02 2000

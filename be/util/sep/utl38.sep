@@ -1,0 +1,331 @@
+/*
+	Test Name: utl38.sep
+	Time: Tue Oct 16 12:53:08 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl38.sep
+	Module  : be/util
+	Filename: utl38.sep
+	Purpose	: To test new xml utilities(genxml, xmlimport), first available
+                  with Ingres 2.6/0106 and later releases.
+	Input Files  : utl38.in
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : utl38_table
+        Synopsis     : Test the genxml -dtdfile, -internal, and -referred_dtd
+                       flags. The default ingres.dtd file can be name 
+                       differently when the -dtdfile flag is specified. Genxml
+                       will not generate the ingres.dtd file when using the 
+                       -internal flag. If the -referred_dtd flag is used, 
+                       it references to the ingres.dtd file under 
+                       $II_SYSTEM/ingres/files instead of the current generated
+                       ingres.dtd file.
+
+ History: 16-Oct-2001	(wu$ca01)	Created
+          26-Apr-2002	(wu$ca01) Canonized the genxml/xmlimport output.
+           8-May-2003	(wu$ca01) Updated test due to new behavior('nl=d1' to
+                        'nl=d0nl'). Added a drop statement to clean out the
+                        database. Removed the 'Known Problem' section in the 
+                        test due to the issue has been resolved in II 2.6/0207.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+          12-Jun-2006   (hanal04) create table statements are terminated
+                        with a GO statement not a semi-colon after change
+                        for bug 116045.
+*/
+? fill utl38.in 
+!!
+drop table utl38_table\p\g
+drop index utl38_idx\p\g
+create table utl38_table(c1 int, c2 char(3), c3 varchar(5))\p\g
+create index utl38_idx on utl38_table(c1) with structure=btree, 
+nopersistence \p\g
+insert into utl38_table values(111, 'aaa', 'AAAAA')\p\g
+insert into utl38_table values(222, 'bbb', 'BBBBB')\p\g
+insert into utl38_table values(333, 'ccc', 'CCCCC')\p\g
+insert into utl38_table values(444, 'ddd', 'DDDDD')\p\g
+insert into utl38_table values(0, 'zzz', 'ZZZZZ')\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i utl38.in
+<<
+~
+>>
+* \q 
+<<
+
+>>
+? genxml SEPPARAMDB -dtdfile=test.dtd -title_doctype=test utl38_table 
+<<
+INGRES Genxml Copyright 2001 Ingres Corporation
+Unload directory is '/home/install/CW/wuca01/xml'.
+Reload directory is '/home/install/CW/wuca01/xml'.
+There is one table owned by user 'testenv'.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table utl38_table\p\g 
+<<
+/* SQL Startup File */
+drop table utl38_table
+>>
+* \q 
+<<
+
+>>
+? xmlimport SEPPARAMDB xmlout.xml 
+<<
+INGRES Impxml Copyright 2001 Ingres Corporation
+Unload directory is '/tmp/7ac'.
+Reload directory is '/tmp/7ac'.
+INGRES TERMINAL MONITOR Copyright 2001 Ingres Corporation
+/* SQL Startup File */
+create table utl38_table(
+	c1 integer,
+	c2 char(3),
+	c3 varchar(5)
+)
+with duplicates,
+nojournaling,
+location = (ii_database)
+modify utl38_table to heap
+(0 rows)
+copy utl38_table(
+	c1= c0tab with null(']^NULL^['),
+	c2= varchar(0)tab with null(']^NULL^['),
+	c3= varchar(0)nl with null(']^NULL^['),
+	nl= d0nl)
+from '/tmp/7ac/utl38_table.tes'
+with row_estimate = 5
+(5 rows)
+create index utl38_idx on utl38_table (
+	c1)
+with structure = btree,
+	nocompression,
+	key = (c1)
+(5 rows)
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from utl38_table order by c1\p\g 
+<<
+/* SQL Startup File */
+select * from utl38_table order by c1
+
++-------------+------+-------+
+|c1           |c2    |c3     |
++-------------+------+-------+
+|            0|zzz   |ZZZZZ  |
+|          111|aaa   |AAAAA  |
+|          222|bbb   |BBBBB  |
+|          333|ccc   |CCCCC  |
+|          444|ddd   |DDDDD  |
++-------------+------+-------+
+(5 rows)
+>>
+* select c1 from utl38_idx order by c1\p\g 
+<<
+ 
+select c1 from utl38_idx order by c1
+
++-------------+
+|c1           |
++-------------+
+|            0|
+|          111|
+|          222|
+|          333|
+|          444|
++-------------+
+(5 rows)
+>>
+* modify utl38_table to isam\p\g
+<<
+modify utl38_table to isam
+(5 rows)
+>>
+* select c1 from utl38_idx order by c1\p\g
+<<
+select c1 from utl38_idx order by c1
+
+E_US0845 Table 'utl38_idx' does not exist or is not owned by you.
+    (Wed Dec 12 12:42:22 2001)
+
+
+>>
+* \q 
+<<
+
+>>
+? delete test.dtd 
+<<
+file was deleted 
+>>
+? genxml SEPPARAMDB -internal_dtd utl38_table 
+<<
+INGRES Genxml Copyright 2001 Ingres Corporation
+Unload directory is '/home/install/CW/wuca01/xml'.
+Reload directory is '/home/install/CW/wuca01/xml'.
+There is one table owned by user 'testenv'.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table utl38_table\p\g
+<<
+/* SQL Startup File */
+drop table utl38_table
+>>
+* \q
+<<
+
+>>
+? xmlimport SEPPARAMDB xmlout.xml 
+<<
+INGRES Impxml Copyright 2001 Ingres Corporation
+Unload directory is '/tmp/7b7'.
+Reload directory is '/tmp/7b7'.
+INGRES TERMINAL MONITOR Copyright 2001 Ingres Corporation
+/* SQL Startup File */
+create table utl38_table(
+	c1 integer,
+	c2 char(3),
+	c3 varchar(5)
+)
+with duplicates,
+nojournaling,
+location = (ii_database)
+modify utl38_table to isam on
+	c1
+(0 rows)
+copy utl38_table(
+	c1= c0tab with null(']^NULL^['),
+	c2= varchar(0)tab with null(']^NULL^['),
+	c3= varchar(0)nl with null(']^NULL^['),
+	nl= d0nl)
+from '/tmp/7b7/utl38_table.tes'
+with row_estimate = 5
+(5 rows)
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from utl38_table order by c1\p\g
+<<
+/* SQL Startup File */
+select * from utl38_table order by c1
+
++-------------+------+------+
+|c1           |c2    |c3    |
++-------------+------+------+
+|            0|zzz   |ZZZZZ |
+|          111|aaa   |AAAAA |
+|          222|bbb   |BBBBB |
+|          333|ccc   |CCCCC |
+|          444|ddd   |DDDDD |
++-------------+------+------+
+(5 rows)
+>>
+* \q
+<<
+
+>>
+? delete ingres.dtd 
+<<
+file was not found
+>>
+? genxml SEPPARAMDB -referred_dtd utl38_table 
+<<
+INGRES Genxml Copyright 2001 Ingres Corporation
+Unload directory is '/home/install/CW/wuca01/xml'.
+Reload directory is '/home/install/CW/wuca01/xml'.
+There is one table owned by user 'testenv'.
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table utl38_table\p\g
+<<
+/* SQL Startup File */
+drop table utl38_table
+>>
+* \q
+<<
+
+>>
+? delete ingres.dtd 
+<<
+file was deleted
+>>
+? xmlimport SEPPARAMDB xmlout.xml 
+<<
+INGRES Impxml Copyright 2001 Ingres Corporation
+Unload directory is '/tmp/beaf4'.
+Reload directory is '/tmp/beaf4'.
+INGRES TERMINAL MONITOR Copyright 2001 Ingres Corporation
+/* SQL Startup File */
+create table utl38_table(
+    c1 integer,
+    c2 char(3),
+    c3 varchar(5)
+)
+with duplicates,
+nojournaling,
+location = (ii_database)
+modify utl38_table to isam on
+    c1
+(0 rows)
+copy utl38_table(
+    c1= c0tab with null(']^NULL^['),
+    c2= varchar(0)tab with null(']^NULL^['),
+    c3= varchar(0)nl with null(']^NULL^['),
+    nl= d0nl)
+from '/tmp/beaf4/utl38_table.tes'
+with row_estimate = 5
+(5 rows)
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select * from utl38_table order by c1\p\g
+<<
+/* SQL Startup File */
+ select * from utl38_table order by c1
+
++-------------+------+------+
+|c1           |c2    |c3    |
++-------------+------+------+
+|            0|zzz   |ZZZZZ |
+|          111|aaa   |AAAAA |
+|          222|bbb   |BBBBB |
+|          333|ccc   |CCCCC |
+|          444|ddd   |DDDDD |
++-------------+------+------+
+(5 rows)
+>>
+* drop table utl38_table\p\g
+<<
+ drop table utl38_table
+>>
+* \q
+<<
+
+>>
+? delete xmlout.xml 
+<<
+file was deleted
+>>
+
+
+Ending at: Wed Mar 13 14:26:32 2002

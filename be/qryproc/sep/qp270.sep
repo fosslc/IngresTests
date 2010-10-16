@@ -1,0 +1,190 @@
+/*
+	Test Name: qp270.sep
+	Time: Thu Feb 20 12:07:03 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :
+	Output Files :
+	Database     :	SEPPARAMDB
+	Tables       :	tt1, tt2
+	Synopsis     :	In a create rule execute clause, one do not 
+			have to include all of the parameters appearing 
+			in the definition of the invoked procedure.
+
+ History: 20-Feb-1997	(cheis01)	Created
+*/
+? fill in.sql 
+!!
+create table tt1(enum int, dept varchar(15), salary money) with page_size=2048\p\g
+create table tt2 as select * from tt1\p\g
+
+create procedure p1 (p_tt1 set of (enum int, dept varchar(10), salary money))
+as begin
+insert into tt2 select * from p_tt1;
+end \p\g
+
+create procedure p2 (p_tt1 set of (dept varchar(10), salary money))
+as begin
+insert into tt2 select * from p_tt1;
+end \p\g
+
+create procedure p2 (enum int, dept varchar(10), salary money)
+as begin
+insert into tt2 values (:enum, :dept, :salary);
+end \p\g
+!!
+? fill in2.sql 
+!!
+create rule r1 after insert into tt1 for each statement
+execute procedure p1 (enum=new.enum, dept=new.dept)\p\g
+!!
+? fill in3.sql 
+!!
+create rule r1 after insert into tt1
+execute procedure p1 (enum=new.enum, dept=new.dept)\p\g
+
+drop rule r1\p\g
+
+create rule r1 after insert into tt1
+execute procedure p2 (enum=new.enum, dept=new.dept)\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop rule r1\g 
+<<
+~
+>>
+* drop procedure p1\g 
+<<
+~
+>>
+* drop procedure p2\g 
+<<
+~
+>>
+* drop tt1, tt2\g 
+<<
+~
+>>
+* \i in.sql
+<<
+ 
+ create table tt1(enum int, dept varchar(15), salary money) with page_size=2048
+create table tt2 as select * from tt1
+(0 rows)
+
+create procedure p1 (p_tt1 set of (enum int, dept varchar(10), salary money))
+as begin
+insert into tt2 select * from p_tt1;
+end 
+
+create procedure p2 (p_tt1 set of (dept varchar(10), salary money))
+as begin
+insert into tt2 select * from p_tt1;
+end 
+E_US0AD8 INSERT: number of target columns must equal the number of target
+    list elements in the specified subselect.
+    (Wed Apr  9 10:42:51 1997)
+
+
+create procedure p2 (enum int, dept varchar(10), salary money)
+as begin
+insert into tt2 values (:enum, :dept, :salary);
+end 
+>>
+* \i in2.sql
+/*
+statemenet level rule
+*/
+<<
+create rule r1 after insert into tt1 for each statement
+execute procedure p1 (enum=new.enum, dept=new.dept)
+>>
+* insert into tt1 values (1, 'development', 30000)\g
+<<
+(1 row)
+>>
+* select * from tt1\g
+<<
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|development    |           $30000.00|
++-------------+---------------+--------------------+
+(1 row)
+>>
+* select * from tt2\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|developmen     |                    |
++-------------+---------------+--------------------+
+(1 row)
+>>
+* drop rule r1\g
+<<
+>>
+* \i in3.sql
+/*
+row level rule
+*/
+<<
+create rule r1 after insert into tt1
+execute procedure p1 (enum=new.enum, dept=new.dept)
+
+drop rule r1
+
+create rule r1 after insert into tt1
+execute procedure p2 (enum=new.enum, dept=new.dept)
+>>
+* insert into tt1 values (2, 'accouting', 32000)\g 
+<<
+(1 row)
+>>
+* select * from tt1\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|development    |           $30000.00|
+|            2|accouting      |           $32000.00|
++-------------+---------------+--------------------+
+(2 rows)
+>>
+* select * from tt2\g
+<<
+
++-------------+---------------+--------------------+
+|enum         |dept           |salary              |
++-------------+---------------+--------------------+
+|            1|developmen     |                    |
+|            2|accouting      |                    |
++-------------+---------------+--------------------+
+(2 rows)
+>>
+* drop rule r1\g
+<<
+>>
+* drop procedure p1\g
+<<
+>>
+* drop procedure p2\g
+<<
+>>
+* drop tt1, tt2\g\q
+<<
+
+>>
+
+
+Ending at: Wed Apr  9 10:47:02 1997

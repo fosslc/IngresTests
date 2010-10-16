@@ -1,0 +1,430 @@
+/*
+	Test Name: eea21.sep
+	Time: 
+	User Name: testenv
+ 
+	Test ID : eea21
+	Module  : cursors
+	Filename: eea21.sep
+	Purpose	: To test that we can't update columns through a view that 
+		are not updateable through a cursor.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : 
+	Synopsis     : Create cursor that has an updateable list of columns 
+		c1, c2, and c3. Then try to update a column that is not in
+		the list. Then try an update on 2 columns, 1 which is in the 
+		list and one that is not in the list. Last update the columns
+		c1, c2, and c3 through the cursor.
+
+	History	: 8-Dec-1993 (camacho) created from script that 
+			andre created.
+          25-Mar-1994	(vijay)
+		Fixed canon. Missed a couple of lines which are printed by
+		eea21.exe.
+          12-Mar-1997	(vissu01)	Modified for NT
+	  25-March-1999  (kamra01) modified VPG_SZ to 8192
+	11-jun-2003 (abbjo03)
+		Add includes and other changes to avoid warnings on VMS.
+*/
+? fill eea21.sc 
+!!
+#include <stdio.h>
+#include <stdlib.h>
+
+main(argc, argv)
+int	argc;
+char	*argv[];
+{
+
+exec sql include sqlca;
+
+exec sql begin declare section;
+	int   v1, v2, v3, v4, v5, v6, cnt;
+	char  *dbname;
+exec sql end declare section;
+
+if (argc != 2)
+    {
+        printf("ERROR : program requires 1 arguments.");
+        printf(" %d arguments given\n", (argc - 1));
+        exit(-1);
+    }
+
+dbname = argv[1];
+
+/********* Connecting to database *************/
+
+exec sql whenever sqlerror stop;
+exec sql connect :dbname;
+exec sql whenever sqlerror call sqlprint;
+
+exec sql drop eea21_table1;
+exec sql drop eea21_view1;
+
+
+/********* Creating Objects ******************/
+
+exec sql create table eea21_table1(c1 i, c2 i, c3 i, c4 i, c5 i) with page_size=8192-
+;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Failure trying to create table eea21_table1\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+    
+exec sql create view eea21_view1 as
+	select c1, c2, c3, c4, c5, 
+		c1+c2 as c1_plus_c2, c2+c3 as c2_plus_c3,
+		c1+c3 as c1_plus_c3 from eea21_table1;
+    if (sqlca.sqlcode!=0)
+    {
+ 	printf("Failure trying to create view eea21_view1\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+    
+/********** Populating Table eea21_table1 ********/
+
+exec sql insert into eea21_table1 values(1,2,3,4,5);
+exec sql insert into eea21_table1 values(11,12,13,14,15);
+exec sql insert into eea21_table1 values(21,22,23,24,25);
+exec sql insert into eea21_table1 values(31,32,33,34,35);
+exec sql insert into eea21_table1 values(41,42,43,44,45);
+
+exec sql select count(*) into :cnt from eea21_table1;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Error trying to count rows in eea21_table1\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+    else if (cnt != 5)
+    {
+	printf("eea21_table1 contains %d rows - should be 5\n", cnt);
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+
+exec sql commit;
+
+/******************************************************************
+** Declare cursor that will be used to read rows of eea21_table1 in a
+** certain order to minimize test diffs
+*******************************************************************/
+exec sql declare ordered cursor for
+	select * from eea21_table1 order by c1,c2,c3,c4,c5;
+
+/* display contents of the table before we start messing with it */
+
+printf("\nDumping table eea21_table1 \n");
+printf("------------------------------------\n");
+printf("C1\tC2\tC3\tC4\tC5\n");
+printf("------------------------------------\n");
+
+exec sql open ordered;
+
+for (cnt = 0; cnt < 5; cnt++)
+    {
+	exec sql fetch ordered into :v1, :v2, :v3, :v4, :v5;
+	if (sqlca.sqlcode < 0)
+	{
+	    printf("Failure trying to read eea21_table1 using a cursor\n");
+	    printf("sqlcode = %d; skip the rest of the tests\n", sqlca.sqlcode);
+	    exit(-1);
+	}
+	else if (sqlca.sqlcode==100)
+	{
+	    printf("ran out of rows to read after row # %d; will continue\n", cnt);
+	    break;
+	}
+	
+	printf("%d\t%d\t%d\t%d\t%d\n", v1, v2, v3, v4, v5);
+    }
+    exec sql close ordered;
+
+
+/*******************************************************************
+** Test Case:
+**	Verify that if a cursor is being declared over a view, then FOR
+**	UPDATE list may not contain columns which are not "simple" columns
+*******************************************************************/
+    printf("\n\nEEA21:\n\n");
+    
+    printf("\n***\tTHIS WAS MEANT TO FAIL\n");
+    printf("***\tTrying to declare a cursor on non-simple ");
+    printf("columns of a view.\n\n");
+
+    exec sql declare bad_cursor3 cursor for select c1 from eea21_view1
+	for update of c1, c2_plus_c3;
+
+    exec sql open bad_cursor3;
+
+    if (sqlca.sqlcode == 0)
+    {
+	printf("ERROR: We were able to open a cursor declared for\n");
+	printf("UPDATE of a non-simple column\n");
+    }
+
+    printf("\n\n***\tTHIS WAS MEANT TO FAIL\n");
+    printf("***\tCursor shouldn't be open. \n\n");
+
+    exec sql close bad_cursor3;
+
+
+    exec sql declare cursor3 cursor for select c1 from eea21_view1
+	for update of c1, c2, c3;
+
+    exec sql open cursor3;
+
+    for (cnt = 0; cnt < 5; cnt++)
+    {
+	exec sql fetch cursor3 into :v1;
+
+	if (sqlca.sqlcode < 0)
+	{
+	    printf("Failure trying to read eea21_view1 using a cursor\n");
+	    printf("sqlcode = %d; skip the rest of test 3\n", sqlca.sqlcode);
+	    break;
+	}
+	else if (sqlca.sqlcode==100)
+	{
+	    printf("ran out of rows to read after row # %d;\n", cnt);
+	    printf("skip the rest of test 3\n");
+	    break;
+	}
+
+	printf("\n Cursor returned : %d\n\n",v1);
+	
+	/* do the error cases only for the first 2 iterations */
+	if (cnt < 2)
+	{
+	    /*******************************************************************
+	    ** first try to update a column that is not in the FOR UPDATE list
+	    *******************************************************************/
+	    printf("\n\n***\tTHIS WAS MEANT TO FAIL\n");
+            printf("***\tColumn c2_plus_c3 not in update list of Cursor3.\n\n");
+
+	    exec sql update eea21_view1 set c2_plus_c3=c1_plus_c2
+		 where current of cursor3;
+
+	    if (sqlca.sqlcode == 0)
+	    {
+		printf("ERROR: We were able to update a column which \n");
+		printf("did not appear in the FOR UPDATE list\n");
+	    }
+
+	    /*******************************************************************
+	    ** now try to update a column which was in the list and a column
+	    ** which was not in the list
+	    *******************************************************************/
+	    printf("\n\n***\tTHIS WAS MEANT TO FAIL\n");
+            printf("***\tc2_plus_c3 not in update list of Cursor3.\n\n");
+
+	    exec sql update eea21_view1
+		set c1=c1+1, c2_plus_c3=c1_plus_c2 where current of cursor3;
+	    if (sqlca.sqlcode == 0)
+	    {
+		printf("ERROR: we were able to update a column which \n");
+                printf("did not appear in the FOR UPDATE list along with \n");
+                printf("a column that was\n");
+	    }
+	}
+	
+	/*******************************************************************
+	** finally, update columns which were mentioned in the FOR UPDATE list
+	*******************************************************************/
+	exec sql update eea21_view1
+	    set c1 = -c1, c2 = -2*c2, c3 = -3*c3
+		where current of cursor3;
+	
+	if (sqlca.sqlcode < 0)
+	{
+	    printf("ERROR: We were UNABLE to update columns \n");
+            printf("mentioned in the FOR UPDATE list;");
+            printf(" sqlcode = %d\n", sqlca.sqlcode);
+	}
+    }
+    exec sql close cursor3;
+
+printf("\nDumping table eea21_table1 \n");
+printf("------------------------------------\n");
+printf("C1\tC2\tC3\tC4\tC5\n");
+printf("------------------------------------\n");
+
+exec sql open ordered;
+
+for (cnt = 0; cnt < 5; cnt++)
+    {
+	exec sql fetch ordered into :v1, :v2, :v3, :v4, :v5;
+	if (sqlca.sqlcode < 0)
+	{
+	    printf("Failure trying to read eea21_table1 using a cursor\n");
+	    printf("sqlcode = %d; skip the rest of the tests\n", sqlca.sqlcode);
+	    exit(-1);
+	}
+	else if (sqlca.sqlcode==100)
+	{
+	    printf("ran out of rows to read after row # %d; will continue\n", cnt);
+	    break;
+	}
+	
+	printf("%d\t%d\t%d\t%d\t%d\n", v1, v2, v3, v4, v5);
+    }
+    exec sql close ordered;
+
+end_of_test3:
+
+/****************************************************
+*
+*     ROLLING BACK TRANSACTION. Still need to drop
+*     table eea21_table1 to finish cleanup!
+*
+*****************************************************/
+
+    exec sql rollback;
+
+    exec sql whenever sqlerror continue;
+    exec sql drop eea21_table1;
+
+    printf("\n\nDisconnecting....\n\n");
+    exec sql disconnect;
+
+}
+
+!!
+? sepesqlc eea21.sc 
+<<
+ESQL eea21.sc:
+>>
+? sepcc eea21.c 
+<<
+>>
+<< IF (NT_GENERIC)
+eea21.c
+>>
+? seplnk eea21 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop table eea21_table1
+<<
+~
+>>
+* \q 
+<<
+>>
+? run eea21.exe SEPPARAMDB 
+<<
+E_US0AC1 DROP: 'eea21_table1' does not exist or is not owned by you.
+    (Fri Mar 25 13:30:58 1994)
+E_US0AC1 DROP: 'eea21_view1' does not exist or is not owned by you.
+    (Fri Mar 25 13:30:58 1994)
+
+Dumping table eea21_table1 
+------------------------------------
+C1	C2	C3	C4	C5
+------------------------------------
+1	2	3	4	5
+11	12	13	14	15
+21	22	23	24	25
+31	32	33	34	35
+41	42	43	44	45
+
+
+EEA21:
+
+
+***	THIS WAS MEANT TO FAIL
+***	Trying to declare a cursor on non-simple columns of a view.
+
+E_US08B0 line 1, 'for update' clause in cursor 'bad_cursor3' contains
+    nonupdatable column 'c2_plus_c3'.
+    (Fri Mar 25 13:30:59 1994)
+
+
+***	THIS WAS MEANT TO FAIL
+***	Cursor shouldn't be open. 
+
+E_LQ0058 Cursor 'bad_cursor3' not open for 'close' command.
+
+ Cursor returned : 1
+
+
+
+***	THIS WAS MEANT TO FAIL
+***	Column c2_plus_c3 not in update list of Cursor3.
+
+E_US089F line 1, Column 'c2_plus_c3' in cursor 'cursor3' is not updatable.
+    (Fri Mar 25 13:30:59 1994)
+
+
+***	THIS WAS MEANT TO FAIL
+***	c2_plus_c3 not in update list of Cursor3.
+
+E_US089F line 1, Column 'c2_plus_c3' in cursor 'cursor3' is not updatable.
+    (Fri Mar 25 13:30:59 1994)
+
+ Cursor returned : 11
+
+
+
+***	THIS WAS MEANT TO FAIL
+***	Column c2_plus_c3 not in update list of Cursor3.
+
+E_US089F line 1, Column 'c2_plus_c3' in cursor 'cursor3' is not updatable.
+    (Fri Mar 25 13:30:59 1994)
+
+
+***	THIS WAS MEANT TO FAIL
+***	c2_plus_c3 not in update list of Cursor3.
+
+E_US089F line 1, Column 'c2_plus_c3' in cursor 'cursor3' is not updatable.
+    (Fri Mar 25 13:30:59 1994)
+
+ Cursor returned : 21
+
+
+ Cursor returned : 31
+
+
+ Cursor returned : 41
+
+
+Dumping table eea21_table1 
+------------------------------------
+C1	C2	C3	C4	C5
+------------------------------------
+-41	-84	-129	44	45
+-31	-64	-99	34	35
+-21	-44	-69	24	25
+-11	-24	-39	14	15
+-1	-4	-9	4	5
+
+
+Disconnecting....
+
+>>
+? delete eea21.exe 
+<<
+~
+>>
+? delete eea21.c 
+<<
+~
+>>
+? delete eea21.obj 
+<<
+~
+>>
+? delete eea21.o 
+<<
+~
+>>
+
+
+Ending at: Wed Mar 12 06:54:15 1997

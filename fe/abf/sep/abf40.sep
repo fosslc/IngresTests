@@ -1,0 +1,2348 @@
+/*
+	Copyright (c) 2008 Ingres Corporation
+
+	Test Name: abf40.sep, formerly oda36.sep
+	Time: 14-SEP-1990 16:05:09
+	User Name: testenv
+ 
+	Test ID : abf40
+	Module  : abf
+	Filename: abf40.sep
+	Purpose	: in-depth test to test library procedures and link option files
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : bldg
+	Synopsis     : create a library procedure without specifying the link
+		       option file, try to run the application and verify error,
+		       change the library procedure to a regular procedure and
+		       also specify a link option file, try to run the appli
+		       cation and also verify error, then change the procedure
+		       back to library procedure and run again, should run ok
+	Port Note    : Change source path in link options file, link908.opt
+
+	History	: 14-sep-1990	Created				Author: saundra
+                  23-Nov-1993    (jpark)
+                        moved over to sep directory.  
+                        currently only a vms only test.
+                  18-Mar-1994    (scotts)
+                        Updated canons for application menuitem keystrokes.
+                        This test was very old and not updated for OpenINGRES
+                        release.
+                  NOTE: BECAUSE OF BUG 57253, THIS TEST WILL DIFF WHEN 
+                        TRYING TO EXECUTE A C PROCEDURE USING A PROCEDURE
+                        LIBRARY DEFINED TO ABF. THE DIFFS SHOULD SHOW 
+                        THE "UNAVAILABLE PROCEDURE" FRAME WHEN TRYING TO 
+                        EXECUTE THE PROCEDURE. IT IS NOT BEING FOUND EVEN
+                        THOUGH THE LINK OPTIONS FILE IS DEFINED CORRECTLY
+                        AND ABF KNOWS THAT A LIBRARY IS BEING USED.
+                        NEW CANONS WILL NEED TO CAPTURED FOR THE "GO" 
+                        MENUITEMS WHEN THE BUG IS FIXED.
+          15-Dec-1994	(motje01) Take conditional canons for Unix abort
+          10-Apr-1996	(clate01) Take conditional canons for NT abort
+          17-Oct-1998   (kinte01) update link option file with new location
+                        of objects - ING_TST:[OUTPUT.FE.LOCAL.ABF]
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+           4-MAR-2008	(rogch01)
+		Fixed up the 'create application' canon.  This has diffed since
+		at least II 2.0 and can't ever have been correct.  Actually
+		added the copyright notice.  Updated the options file to remove
+		the multiple definitions.  Took into account the fact that bug
+		57523 was fixed over 13 years ago.  Took out the pointless diff
+		that this test doesn't yet run anywhere except on VMS, because
+		it's never going to.
+*/
+.if (VMS) 
+? delobj SEPPARAMDB -form bldgform 
+<<
+~
+>>
+? delobj SEPPARAMDB -application app908 
+<<
+~
+>>
+? fill cproc908.sc 
+!!
+cproc908 ()
+{
+   exec sql begin declare section;
+      char bldg[3];
+      char st_adr[30];
+      char city[15];
+      char state[3];
+      char zip[6];
+   exec sql end declare section;
+
+   exec sql include sqlca;
+
+   exec sql whenever sqlerror stop;
+
+   exec frs forminit bldgformtbl;
+   exec frs display bldgformtbl update;
+
+   exec frs initialize;
+
+   exec frs activate menuitem 'BldgInfo';
+   exec frs begin;
+      exec sql declare cursor1 cursor for
+         select bldg, st_adr, city, state, zip from bldg;
+      exec sql open cursor1;
+      exec sql whenever not found goto cursor1_done;
+
+      exec sql fetch cursor1 into :bldg, :st_adr, :city, :state, :zip;
+      exec frs putrow bldgformtbl bldg 1 (bldg = :bldg, st_adr = :st_adr,
+          city = :city, state = :state, zip = :zip);
+      /* loop indefinitely */
+      while (1)
+      {
+         exec sql fetch cursor1 into :bldg, :st_adr, :city, :state, :zip;
+         exec frs insertrow bldgformtbl bldg (bldg = :bldg, st_adr = :st_adr,
+             city = :city, state = :state, zip = :zip);
+      }
+   cursor1_done:
+      exec sql close cursor1;
+   exec frs end;
+
+   exec frs activate menuitem 'Quit';
+   exec frs begin;
+      exec frs breakdisplay;
+   exec frs end;
+
+   return;
+} 
+!!
+? fill link908.opt 
+!!
+sys$library:vaxcrtl.olb/library
+!!
+? fill bldgformtbl.frm 
+!!
+COPYFORM:	6.0	1989_08_09 23:34:33 GMT  
+FORM:	bldgformtbl		
+	80	25	0	0	1	0	1	7	0	0	0	0	0	0	0	6
+FIELD:
+	0	bldg	0	16	0	5	20	65	2	7	1	3	0		0	0	0	33	0	0	0					1	0
+	0	bldg	-20	3	0	2	1	4	0	1	2	0	1	Bldg	1	1	0	0	0	0	0		c2			2	1
+	1	st_adr	-20	31	0	30	1	30	0	6	30	0	6	St Adr	6	1	0	0	0	0	0		c30			2	2
+	2	city	-20	16	0	15	1	15	0	37	15	0	37	City	37	1	0	0	0	0	0		c15			2	3
+	3	state	-20	3	0	2	1	5	0	53	2	0	53	State	53	1	0	0	0	0	0		c2			2	4
+	4	zip	-20	6	0	5	1	5	0	59	5	0	59	Zip	59	1	0	0	0	0	0		c5			2	5
+TRIM:
+	0	0	BLDG TABLE(S):	0	0	0	0
+!!
+? copyform -i -r SEPPARAMDB bldgformtbl.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1998 Ingres Corporation
+Copied form 'bldgformtbl' to database.
+Encoding forms into database . . .
+>>
+? esqlc cproc908 
+<<
+>>
+? cc cproc908.c 
+<<
+>>
+? delobj SEPPARAMDB -application app908 
+<<
+~
+>>
+? abf -e SEPPARAMDB 
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ create`CR'app908`CR'application for abf in-depth test`ESC'
+<<
+
+%% MENU RESPONSE: Create
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Go  Utilities  Help  >
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Create"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Create an Application                                                     |
+|                                                                                |
+|  Name: _                                        Created: 04-mar-2008 10:42:25   |
+|                                                                                |
+| Owner: testenv                                Modified:                        |
+|                                                                                |
+| Short Remark:                                                                  |
+|     Language: SQL                                                              |
+|                                                                                |
+| Source Directory: TST_ROOT_OUTPUT:[FE.LOCAL.ABF]                               |
+|                                                                                |
+|                                                                                |
+|  Long Remark:                                                                  |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|  OK  Cancel  ListChoices  Help                                                 |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Name:
+##
+__________________________________________________________________________________
+|ABF - Create an Application                                                     |
+|                                                                                |
+|  Name: app908_                                  Created: 04-mar-2008 10:42:25   |
+|                                                                                |
+| Owner: testenv                                Modified:                        |
+|                                                                                |
+| Short Remark:                                                                  |
+|     Language: SQL                                                              |
+|                                                                                |
+| Source Directory: TST_ROOT_OUTPUT:[FE.LOCAL.ABF]                               |
+|                                                                                |
+|                                                                                |
+|  Long Remark:                                                                  |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|  OK  Cancel  ListChoices  Help                                                 |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Create an Application                                                     |
+|                                                                                |
+|  Name: app908                                  Created: 04-mar-2008 10:42:25   |
+|                                                                                |
+| Owner: testenv                                Modified:                        |
+|                                                                                |
+| Short Remark: _                                                                 |
+|     Language: SQL                                                              |
+|                                                                                |
+| Source Directory: TST_ROOT_OUTPUT:[FE.LOCAL.ABF]                               |
+|                                                                                |
+|                                                                                |
+|  Long Remark:                                                                  |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|  OK  Cancel  ListChoices  Help                                                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Short Remark:
+##
+__________________________________________________________________________________
+|ABF - Create an Application                                                     |
+|                                                                                |
+|  Name: app908                                  Created: 04-mar-2008 10:42:25   |
+|                                                                                |
+| Owner: testenv                                Modified:                        |
+|                                                                                |
+| Short Remark: application for abf in-depth test_                                |
+|     Language: SQL                                                              |
+|                                                                                |
+| Source Directory: TST_ROOT_OUTPUT:[FE.LOCAL.ABF]                               |
+|                                                                                |
+|                                                                                |
+|  Long Remark:                                                                  |
+| +---------------------------------------------------------------------------+  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| |                                                                           |  |
+| +---------------------------------------------------------------------------+  |
+|  OK  Cancel  ListChoices  Help                                                 |
+__________________________________________________________________________________
+@@
+>>
+^^ ok`CR'`ESC'
+<<
+
+%% MENU RESPONSE: OK
+%% MENU:   OK  Cancel  ListChoices  Help
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "OK"
+
+%% Saving Application 'app908' . . .
+%% Retrieving Application catalogs . . .
+%% Retrieving Application catalogs . . .
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: app908                           Default Start:                         |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ create`CR'p`CR'c`CR'cproc908`ESC'
+<<
+~
+>>
+^^ ok`CR'`TAB'yes`CR'none`CR'`ESC'
+<<
+
+%% MENU RESPONSE: OK
+%% MENU:   OK  Cancel  ListChoices  Help
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "OK"
+
+%% Saving Procedure 'cproc908' . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark:                                                                  |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: _cproc908                          Library: no                 |
+|     Source File: cproc908.sc                                                   |
+|     Return Type: integer                                                       |
+|        Nullable: no                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:02:41  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:02:41     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark:                                                                  |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: cproc908                          Library: _no                 |
+|     Source File: cproc908.sc                                                   |
+|     Return Type: integer                                                       |
+|        Nullable: no                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:02:41  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:02:41     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Library:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark:                                                                  |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: cproc908                          Library: ye_s                |
+|     Source File: cproc908.sc                                                   |
+|     Return Type: integer                                                       |
+|        Nullable: no                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:02:41  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:02:41     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark:                                                                  |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: cproc908                          Library: yes                |
+|     Source File: <none>                                                        |
+|     Return Type: _integer                                                       |
+|        Nullable: no                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:02:41  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:02:41     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Return Type:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark:                                                                  |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: cproc908                          Library: yes                |
+|     Source File: <none>                                                        |
+|     Return Type: none_ger                                                       |
+|        Nullable: no                                                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:02:41  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:02:41     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark: _                                                                 |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: cproc908                          Library: yes                |
+|     Source File: <none>                                                        |
+|     Return Type: none                                                          |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:02:41  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:02:41     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'`ESC'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >
+%% MENU AT POSITION `9' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `9' is "End"
+
+%% Saving Procedure 'cproc908' . . .
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: app908                           Default Start:                         |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_ cproc908               |C Procedure  |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ defaults`CR'`TAB'`TAB'`TAB'`TAB'cproc908`ESC'
+<<
+
+%% MENU RESPONSE: Defaults
+%% MENU:   Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "Defaults"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF -+-------------------------------------------------------------------------+|
+|     |Application Defaults                                                     ||
+|  Nam|                                                                         ||
+|     | Enter values for the following defaults that you wish to use:           ||
+|+----|                                                                         ||
+||Fram|       Source-Code Directory:                                            ||
+||----|       _ING_TST:[OUTPUT.FE.LOCAL.ABF]                                ||
+||cpro|                                                                         ||
+||    |                                                                         ||
+||    |                                                                         ||
+||    | Link-options filename:                                                  ||
+||    |    Default image name:                                                  ||
+||    |                                                                         ||
+||    |     Default start frame:                                                ||
+||    | Default start procedure:                                                ||
+||    |                                                                         ||
+||    |        Application role:                                                ||
+||    |                                                                         ||
+||    |                 Always use compiled forms: yes                          ||
+|+----|                                                                         ||
+|     |                                                                         ||
+|     |                                                                         ||
+|     +-------------------------------------------------------------------------+|
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF -+-------------------------------------------------------------------------+|
+|     |Application Defaults                                                     ||
+|  Nam|                                                                         ||
+|     | Enter values for the following defaults that you wish to use:           ||
+|+----|                                                                         ||
+||Fram|       Source-Code Directory:                                            ||
+||----|       ING_TST:[OUTPUT.FE.LOCAL.ABF]                                   ||
+||cpro|                                                                         ||
+||    |                                                                         ||
+||    |                                                                         ||
+||    | Link-options filename: _                                                 ||
+||    |    Default image name:                                                  ||
+||    |                                                                         ||
+||    |     Default start frame:                                                ||
+||    | Default start procedure:                                                ||
+||    |                                                                         ||
+||    |        Application role:                                                ||
+||    |                                                                         ||
+||    |                 Always use compiled forms: yes                          ||
+|+----|                                                                         ||
+|     |                                                                         ||
+|     |                                                                         ||
+|     +-------------------------------------------------------------------------+|
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF -+-------------------------------------------------------------------------+|
+|     |Application Defaults                                                     ||
+|  Nam|                                                                         ||
+|     | Enter values for the following defaults that you wish to use:           ||
+|+----|                                                                         ||
+||Fram|       Source-Code Directory:                                            ||
+||----|       ING_TST:[OUTPUT.FE.LOCAL.ABF]                                   ||
+||cpro|                                                                         ||
+||    |                                                                         ||
+||    |                                                                         ||
+||    | Link-options filename:                                                  ||
+||    |    Default image name:                                                  ||
+||    |                                                                         ||
+||    |     Default start frame:                                                ||
+||    | Default start procedure: _                                               ||
+||    |                                                                         ||
+||    |        Application role:                                                ||
+||    |                                                                         ||
+||    |                 Always use compiled forms: yes                          ||
+|+----|                                                                         ||
+|     |                                                                         ||
+|     |                                                                         ||
+|     +-------------------------------------------------------------------------+|
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Default start procedure:
+##
+__________________________________________________________________________________
+|ABF -+-------------------------------------------------------------------------+|
+|     |Application Defaults                                                     ||
+|  Nam|                                                                         ||
+|     | Enter values for the following defaults that you wish to use:           ||
+|+----|                                                                         ||
+||Fram|       Source-Code Directory:                                            ||
+||----|       ING_TST:[OUTPUT.FE.LOCAL.ABF]                                   ||
+||cpro|                                                                         ||
+||    |                                                                         ||
+||    |                                                                         ||
+||    | Link-options filename:                                                  ||
+||    |    Default image name:                                                  ||
+||    |                                                                         ||
+||    |     Default start frame:                                                ||
+||    | Default start procedure: cproc908_                                       ||
+||    |                                                                         ||
+||    |        Application role:                                                ||
+||    |                                                                         ||
+||    |                 Always use compiled forms: yes                          ||
+|+----|                                                                         ||
+|     |                                                                         ||
+|     |                                                                         ||
+|     +-------------------------------------------------------------------------+|
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+>>
+^^ ok`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ edit`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Edit
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Go  Utilities  Help  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Edit"
+
+%% Retrieving Application catalogs . . .
+%% Retrieving Application catalogs . . .
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: app908                           Default Start: cproc908                |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_cproc908                |C Procedure  |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ go`CR'`CR'y`ESC'
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "Go"
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Warning: Running host-language procedure.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: app908                           Default Start: cproc908                |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||cproc908                |C Procedure  |                                       ||
+||                        |             |                                       ||
+||                      +-------------------------------+                       ||
+||                      |Do you really want to continue?|                       ||
+||                      |-------------------------------|                       ||
+||                      |_No           |Quit             |                       ||
+||                      |Yes          |Continue         |                       ||
+||                      +-------------------------------+                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Select  Cancel  Help                                                          |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: app908                           Default Start: cproc908                |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||cproc908                |C Procedure  |                                       ||
+||                        |             |                                       ||
+||                      +-------------------------------+                       ||
+||                      |Do you really want to continue?|                       ||
+||                      |-------------------------------|                       ||
+||                      |No           |Quit             |                       ||
+||                      |_Yes          |Continue         |                       ||
+||                      +-------------------------------+                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Select  Cancel  Help                                                          |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ select`CR'`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Select
+%% MENU:   Select  Cancel  Help
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Select"
+
+%% 
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app908'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app908'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app908'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app908'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app908'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app908'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Linking host language procedures . . .                                        ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app908'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Linking host language procedures . . .                                        ||
+||%LINK-W-NUDFSYMS, 1 undefined symbol:                                         ||
+||%LINK-I-UDFSYM,         CPROC908                                              ||
+||%LINK-W-USEUNDEF, undefined symbol CPROC908 referenced                        ||
+||                                                                              ||
+||        in psect ING_IIAB_EXTRACT offset %X00000004                           ||
+||                                                                              ||
+||        in module IIAB_EXTRACT file                                           ||
+||II_SYSTEM:[INGRES.ABF.abfdb1.app908]ABEXTRACT.OBJ;2                           ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Link failed  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% 
+DISPLAYING ERROR MESSAGE VIA IIFDERROR.
+
+%% 
+SHORT ERROR MESSAGE IS:
+
+%% Severe compilation failures.  ... 
+
+%% 
+END OF SHORT ERROR MESSAGE.
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+|_Building application 'app908'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Linking host language procedures . . .                                        ||
+||%LINK-W-NUDFSYMS, 1 undefined symbol:                                         ||
+||%LINK-I-UDFSYM,         CPROC908                                              ||
+||%LINK-W-USEUNDEF, undefined symbol CPROC908 referenced                        ||
+||                                                                              ||
+||        in psect ING_IIAB_EXTRACT offset %X00000004                           ||
+||                                                                              ||
+||        in module IIAB_EXTRACT file                                           ||
+||II_SYSTEM:[INGRES.ABF.abfdb1.app908]ABEXTRACT.OBJ;2                           ||
+||                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|Choose 'End' to end the build session.                                          |
+|                                                                                |
+|                                                                                |
+__________________________________________________________________________________
+@@
+
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|Building application 'app908'                                                   |
+|                                                                                |
+|+------------------------------------------------------------------------------+|
+||Checking dates . . .                                                          ||
+||                                                                              ||
+||Compiling extract file . . .                                                  ||
+||Compilation succeeded.                                                        ||
+||                                                                              ||
+||Linking host language procedures . . .                                        ||
+||%LINK-W-NUDFSYMS, 1 undefined symbol:                                         ||
+||%LINK-I-UDFSYM,         CPROC908                                              ||
+||%LINK-W-USEUNDEF, undefined symbol CPROC908 referenced                        ||
+||                                                                              ||
+||        in psect ING_IIAB_EXTRACT offset %X00000004                           ||
+||                                                                              ||
+||        in module IIAB_EXTRACT file                                           ||
+||II_SYSTEM:[INGRES.ABF.abfdb1.app908]ABEXTRACT.OBJ;2                           ||
+||_                                                                              ||
+||                                                                              ||
+||                                                                              ||
+|+------------------------------------------------------------------------------+|
+|Choose 'End' to end the build session.                                          |
+|                                                                                |
+|  Errors  WriteFile  Help  End                                                  |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ edit`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Edit
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Go  Utilities  Help  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Edit"
+
+%% Retrieving Application catalogs . . .
+%% Retrieving Application catalogs . . .
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: app908                           Default Start: cproc908                |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_cproc908                |C Procedure  |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ edit`CR'`TAB'no`CR'cproc908.sc`ESC'
+<<
+
+%% MENU RESPONSE: Edit
+%% MENU:   Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Edit"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark:                                                                  |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: _cproc908                          Library: yes                |
+|     Source File: <none>                                                        |
+|     Return Type: none                                                          |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:38:37  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:38:38     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark:                                                                  |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: cproc908                          Library: _yes                |
+|     Source File: <none>                                                        |
+|     Return Type: none                                                          |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:38:37  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:38:38     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Library:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark:                                                                  |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: cproc908                          Library: no_s                |
+|     Source File: <none>                                                        |
+|     Return Type: none                                                          |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:38:37  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:38:38     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark:                                                                  |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: cproc908                          Library: no                 |
+|     Source File: _                                                              |
+|     Return Type: none                                                          |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:38:37  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:38:38     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Source File:
+##
+__________________________________________________________________________________
+|ABF - Edit a C Procedure Definition                                             |
+|                                                                                |
+|  Procedure Name: cproc908                                                      |
+|                                                                                |
+| Short Remark:                                                                  |
+|                                                                                |
+| Source Language: C                                                             |
+|          Symbol: cproc908                          Library: no                 |
+|     Source File: cproc908.sc_                                                   |
+|     Return Type: none                                                          |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|       Created: 04-mar-2008 11:38:37  Owner: testenv                            |
+|                                                                                |
+| Last Modified: 04-mar-2008 11:38:38     By: testenv                            |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >                 |
+__________________________________________________________________________________
+@@
+>>
+^^ end`CR'`ESC'
+<<
+
+%% MENU RESPONSE: End
+%% MENU:   NewEdit  Go  Edit  Compile  LongRemark  Print  ListChoices  >
+%% MENU AT POSITION `9' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `9' is "End"
+
+%% Saving Procedure 'cproc908' . . .
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: app908                           Default Start: cproc908                |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_cproc908                |C Procedure  |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ defaults`CR'`TAB'link908.opt`ESC'
+<<
+
+%% MENU RESPONSE: Defaults
+%% MENU:   Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >
+%% MENU AT POSITION `6' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `6' is "Defaults"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF -+-------------------------------------------------------------------------+|
+|     |Application Defaults                                                     ||
+|  Nam|                                                                         ||
+|     | Enter values for the following defaults that you wish to use:           ||
+|+----|                                                                         ||
+||Fram|       Source-Code Directory:                                            ||
+||----|       _ING_TST:[OUTPUT.FE.LOCAL.ABF]                                ||
+||cpro|                                                                         ||
+||    |                                                                         ||
+||    |                                                                         ||
+||    | Link-options filename:                                                  ||
+||    |    Default image name:                                                  ||
+||    |                                                                         ||
+||    |     Default start frame:                                                ||
+||    | Default start procedure: cproc908                                       ||
+||    |                                                                         ||
+||    |        Application role:                                                ||
+||    |                                                                         ||
+||    |                 Always use compiled forms: yes                          ||
+|+----|                                                                         ||
+|     |                                                                         ||
+|     |                                                                         ||
+|     +-------------------------------------------------------------------------+|
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|ABF -+-------------------------------------------------------------------------+|
+|     |Application Defaults                                                     ||
+|  Nam|                                                                         ||
+|     | Enter values for the following defaults that you wish to use:           ||
+|+----|                                                                         ||
+||Fram|       Source-Code Directory:                                            ||
+||----|       ING_TST:[OUTPUT.FE.LOCAL.ABF]                                   ||
+||cpro|                                                                         ||
+||    |                                                                         ||
+||    |                                                                         ||
+||    | Link-options filename: _                                                 ||
+||    |    Default image name:                                                  ||
+||    |                                                                         ||
+||    |     Default start frame:                                                ||
+||    | Default start procedure: cproc908                                       ||
+||    |                                                                         ||
+||    |        Application role:                                                ||
+||    |                                                                         ||
+||    |                 Always use compiled forms: yes                          ||
+|+----|                                                                         ||
+|     |                                                                         ||
+|     |                                                                         ||
+|     +-------------------------------------------------------------------------+|
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Link-options filename:
+##
+__________________________________________________________________________________
+|ABF -+-------------------------------------------------------------------------+|
+|     |Application Defaults                                                     ||
+|  Nam|                                                                         ||
+|     | Enter values for the following defaults that you wish to use:           ||
+|+----|                                                                         ||
+||Fram|       Source-Code Directory:                                            ||
+||----|       ING_TST:[OUTPUT.FE.LOCAL.ABF]                                   ||
+||cpro|                                                                         ||
+||    |                                                                         ||
+||    |                                                                         ||
+||    | Link-options filename: link908.opt_                                      ||
+||    |    Default image name:                                                  ||
+||    |                                                                         ||
+||    |     Default start frame:                                                ||
+||    | Default start procedure: cproc908                                       ||
+||    |                                                                         ||
+||    |        Application role:                                                ||
+||    |                                                                         ||
+||    |                 Always use compiled forms: yes                          ||
+|+----|                                                                         ||
+|     |                                                                         ||
+|     |                                                                         ||
+|     +-------------------------------------------------------------------------+|
+|  OK  Cancel  Help                                                              |
+__________________________________________________________________________________
+@@
+>>
+^^ ok`CR'`ESC'
+<<
+
+%% MENU RESPONSE: OK
+%% MENU:   OK  Cancel  Help
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "OK"
+
+%% Saving Application 'app908' . . .
+%% BROWSE loop:
+##
+__________________________________________________________________________________
+|ABF - Edit an Application                                                       |
+|                                                                                |
+|  Name: app908                           Default Start: cproc908                |
+|                                        Query Language: SQL                     |
+|+------------------------------------------------------------------------------+|
+||Frame/Procedure Name    |Type         |Short Remark                           ||
+||------------------------+-------------+---------------------------------------||
+||_cproc908                |C Procedure  |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+||                        |             |                                       ||
+|+------------------------------------------------------------------------------+|
+|                                                                                |
+|           Place cursor on row and select desired operation from menu.          |
+|                                                                                |
+|  Create  Destroy  Edit  Rename  Go  Globals  Defaults  Errors  >               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ end`CR'`ESC'
+<<
+~
+>>
+^^ go`CR'`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Go
+%% MENU:   Create  Destroy  Edit  Rename  MoreInfo  Go  Utilities  Help  >
+%% MENU AT POSITION `5' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `5' is "Go"
+
+%%
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||Processing procedure 'cproc908' . . .                                         ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||Processing procedure 'cproc908' . . .                                         ||
+
+||Forcing compilation to create object file.                                    ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||Processing procedure 'cproc908' . . .                                         ||
+
+||Forcing compilation to create object file.                                    ||
+
+||Compiling 'cproc908.sc' . . .                                                 ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||Processing procedure 'cproc908' . . .                                         ||
+
+||Forcing compilation to create object file.                                    ||
+
+||Compiling 'cproc908.sc' . . .                                                 ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||Processing procedure 'cproc908' . . .                                         ||
+
+||Forcing compilation to create object file.                                    ||
+
+||Compiling 'cproc908.sc' . . .                                                 ||
+
+||Compilation succeeded.                                                        ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||Processing procedure 'cproc908' . . .                                         ||
+
+||Forcing compilation to create object file.                                    ||
+
+||Compiling 'cproc908.sc' . . .                                                 ||
+
+||Compilation succeeded.                                                        ||
+
+||                                                                              ||
+
+||Compiling extract file . . .                                                  ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||Processing procedure 'cproc908' . . .                                         ||
+
+||Forcing compilation to create object file.                                    ||
+
+||Compiling 'cproc908.sc' . . .                                                 ||
+
+||Compilation succeeded.                                                        ||
+
+||                                                                              ||
+
+||Compiling extract file . . .                                                  ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||Processing procedure 'cproc908' . . .                                         ||
+
+||Forcing compilation to create object file.                                    ||
+
+||Compiling 'cproc908.sc' . . .                                                 ||
+
+||Compilation succeeded.                                                        ||
+
+||                                                                              ||
+
+||Compiling extract file . . .                                                  ||
+
+||Compilation succeeded.                                                        ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||Processing procedure 'cproc908' . . .                                         ||
+
+||Forcing compilation to create object file.                                    ||
+
+||Compiling 'cproc908.sc' . . .                                                 ||
+
+||Compilation succeeded.                                                        ||
+
+||                                                                              ||
+
+||Compiling extract file . . .                                                  ||
+
+||Compilation succeeded.                                                        ||
+
+||                                                                              ||
+
+||Linking host language procedures . . .                                        ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|                                                                                |
+
+|                                                                                |
+
+|                                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+%% FORM REDISPLAYED
+##
+__________________________________________________________________________________
+
+|_Building application 'app908'
+ |
+|                                                                                |
+
+|+------------------------------------------------------------------------------+|
+
+||Checking dates . . .                                                          ||
+
+||                                                                              ||
+
+||Processing procedure 'cproc908' . . .                                         ||
+
+||Forcing compilation to create object file.                                    ||
+
+||Compiling 'cproc908.sc' . . .                                                 ||
+
+||Compilation succeeded.                                                        ||
+
+||                                                                              ||
+
+||Compiling extract file . . .                                                  ||
+
+||Compilation succeeded.                                                        ||
+
+||                                                                              ||
+
+||Linking host language procedures . . .                                        ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+||                                                                              ||
+
+|+------------------------------------------------------------------------------+|
+
+|
+%%
+%% INSERT loop:
+##
+__________________________________________________________________________________
+
+|BLDG TABLE(S):                                                                  |
+
+|                                                                                |
+
+|       +---------------------------------------------------------------+        |
+
+|       |Bldg|St Adr                        |City           |State|Zip  |        |
+
+|       |----+------------------------------+---------------+-----+-----|        |
+
+|       |_    |                              |               |     |     |
+ |
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       |    |                              |               |     |     |        |
+
+|       +---------------------------------------------------------------+        |
+
+|                                                                                |
+
+|  BldgInfo  Quit                                                                |
+
+__________________________________________________________________________________
+
+@@
+
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ bldginfo`CR'`ESC'
+<<
+
+%% MENU RESPONSE: BldgInfo
+%% MENU:   BldgInfo  Quit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "BldgInfo"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|BLDG TABLE(S):                                                                  |
+|                                                                                |
+|       +---------------------------------------------------------------+        |
+|       |Bldg|St Adr                        |City           |State|Zip  |        |
+|       |----+------------------------------+---------------+-----+-----|        |
+|       |A   |1000 University Ave           |Berkeley       |CA   |94000|        |
+|       |B   |1800 Shattuck Ave             |Berkeley       |CA   |94100|        |
+|       |C   |900 Lake Shore Blvd           |Chicago        |IL   |60080|        |
+|       |D   |24130 Pennsylvania Ave        |Washington     |DC   |20198|        |
+|       |E   |42318 Woodsay Blvd            |Houston        |TX   |77009|        |
+|       |_F   |1585 Eye St                   |Washington     |DC   |20199|        |
+|       |    |                              |               |     |     |        |
+|       |    |                              |               |     |     |        |
+|       |    |                              |               |     |     |        |
+|       |    |                              |               |     |     |        |
+|       |    |                              |               |     |     |        |
+|       |    |                              |               |     |     |        |
+|       |    |                              |               |     |     |        |
+|       |    |                              |               |     |     |        |
+|       |    |                              |               |     |     |        |
+|       |    |                              |               |     |     |        |
+|       +---------------------------------------------------------------+        |
+|                                                                                |
+|  BldgInfo  Quit                                                                |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ quit`CR'
+<<
+~
+>>
+^^ `ESC'
+<<
+~
+>>
+^^ quit`CR'
+<<
+~
+>>
+? delobj SEPPARAMDB -form bldgform 
+<<
+~
+>>
+? delobj SEPPARAMDB -application app908 
+<<
+~
+>>
+? delete cproc908.c 
+<<
+~
+>>
+? delete cproc908.obj 
+<<
+~
+>>
+.endif 
+
+
+Ending at: Wed Apr 10 11:16:42 1996
+
+

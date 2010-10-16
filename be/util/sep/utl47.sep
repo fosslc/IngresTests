@@ -1,0 +1,132 @@
+/*
+	Copyright (c) 2006 Ingres Corporation
+
+	Test Name: utl47.sep
+	Time: Sat Jan 12 08:39:20 2002
+	User Name: testenv
+	Terminal type: septerm
+ 
+   Test ID : utl47
+   Module  : BE/UTIL
+   Filename: utl47.sep
+   Purpose  : To test auditdb -table=tablename -file
+   Input Files  : utl47_1.sql, utl47_2.sql
+   Output Files : utl47_tbl1.trl
+   Database     : SEPPARAMDB
+   Tables       : utl47_tbl1, utl47_tbl2
+   Synopsis     : This test is virtually the same as utl45.sep except that it
+                  is designed strictly for Ingres II 2.6 and beyond. This
+                  test will verify that auditdb with the -expand_lobjs option
+                  (not available before 2.6) succeeds. If it succeeds, all
+                  CANONs/RESULTs should match. An error with auditdb will
+                  cause a mismatch in results.
+
+ History: 31-Jan-2002   (marwi08)   Created
+          01-Sep-2005   (sinra04) Added -wait with auditdb command to wait until
+			journals are current before starting the audit. 
+			This test used to fail on faster machines.
+	26-Sep-2006	(rogch01)
+		Add +w to ckpdb in case the database is momentarily unavailable
+		following the previous command.  For some reason, auditdb can
+		fail to find the table on the first invocation if it follows
+		straight on from the table creation.  Added a sleep.
+*/
+? ckpdb +j +w SEPPARAMDB 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop utl47_tbl1;\g 
+<<
+~
+>>
+* create table utl47_tbl1 (col1 char(10), col2 long varchar)\g 
+<<
+
+>>
+* commit\g 
+<<
+
+>>
+* insert into utl47_tbl1 values ('a1', 'a1')\g 
+<<
+(1 row)
+>>
+* commit\g 
+<<
+
+>>
+* update utl47_tbl1 set col2='b1'\g 
+<<
+(1 row)
+>>
+* commit\g 
+<<
+
+>>
+* \q 
+<<
+
+>>
+? sleep 1
+<<
+>>
+? auditdb SEPPARAMDB -expand_lobjs -table=utl47_tbl1 -file -wait
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop utl47_tbl2;\g 
+<<
+~
+>>
+* create table utl47_tbl2 (date date not null with default, -
+username char(32) not null with default, -
+operation char(8) not null with default, -
+tranid1 integer not null with default, tranid2 integer not null with default, -
+table_id1 integer not null with default, -
+table_id2 integer not null with default, col1 char(10), col2 long varchar)\g 
+<<
+
+>>
+* commit\g 
+<<
+
+>>
+* copy table utl47_tbl2 () from 'utl47_tbl1.trl'\g 
+<<
+(3 rows)
+>>
+* select operation, col1, col2 from utl47_tbl2\g 
+<<
+
++--------+----------+--------------------------------+
+|operatio|col1      |col2                            |
++--------+----------+--------------------------------+
+|append  |a1        |a1                              |
+|repold  |a1        |a1                              |
+|repnew  |a1        |b1                              |
++--------+----------+--------------------------------+
+(3 rows)
+>>
+* drop utl47_tbl1, utl47_tbl2;\g 
+<<
+~
+>>
+* \q 
+<<
+
+>>
+? delete utl47_tbl1.trl 
+<<
+file was deleted
+>>
+
+
+Ending at: Sat Jan 12 08:47:38 2002

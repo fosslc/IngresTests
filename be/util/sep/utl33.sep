@@ -1,0 +1,176 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name: utl33.sep
+	Time: Tue Apr 10 14:05:08 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl33.sep
+	Module  : be/util
+	Filename: utl33.sep
+	Purpose	: To test the new copydb utility first available with Ingres
+                  II 2.6/0106 and later releases.
+	Input Files  : blob.in
+	Output Files : blob.out
+	Database     : utildb3, utildb4
+	Tables       : util_blob_table
+	Synopsis     : This test is to create a table that is includes only the
+                       blob datatype column selecting from the util_copydb_table
+                       in database utildb3. Then copy this table into database
+                       utildb4. 
+
+ History: 10-Apr-2001	(wu$ca01) Created
+           9-Aug-2001	(wu$ca01) Added commands to cleanup temporary test
+                        files at the end. Clarified the Purpose text.
+           8-May-2003	(wu$ca01) Updated test due to schema has changed - 
+                        'util_blob_table.tes' to 'util_blob_table.testenv'.
+           5-Feb-2007	(vande02) Added -journal flag to copydb statement and
+			ckpdb/rollforwarddb to check the 'set journaling' was
+			honored.
+           8-May-2007	(vande02) Added temporary file cleanup, header cleanup.
+          12-Sep-2007	(vande02) Added SQL quit command/canon (dropped off by
+			mistake) and added +w to ckpdb to avoid timing problems.
+*/
+? fill utl33_drop.sql 
+!!
+drop table util_copydb_table\g
+drop table util_alongtablenameforingres\g
+drop table util_alongtablename\g
+commit\g
+!!
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* drop table util_blob_table\g
+<<
+~
+>>
+* create table util_blob_table as select type from util_copydb_table\g 
+<<
+(10 rows)
+>>
+* select count(*) from util_blob_table\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* \q 
+<<
+
+>>
+? copydb utildb3 -journal -add_drop -with_tables -with_data -infile=blob.in -outfile=blob.out -noint util_blob_table 
+<<
+~
+>>
+? sql -s SEPPARAMDB3 
+<<
+
+>>
+* \i blob.out 
+<<
+~
+>>
+* \q 
+<<
+
+>>
+? ckpdb +w SEPPARAMDB4
+<<
+~
+>>
+? sql -s SEPPARAMDB4 
+<<
+
+>>
+* \i utl33_drop.sql
+<<
+~
+>>
+/*
+	Here is where 'set gautocommit on' and 'set journaling'
+	are enabled on utildb4 - the database which blob.in is
+	used.
+*/
+* \i blob.in 
+<<
+~
+>>
+* select count(*) from util_blob_table\g
+<<
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* delete from util_blob_table\g
+<<
+(10 rows)
+>>
+* select count(*) from util_blob_table\g
+<<
++-------------+
+|col1         |
++-------------+
+|            0|
++-------------+
+(1 row)
+>>
+* \q 
+<<
+>>
+? ckpdb +w +j SEPPARAMDB4
+<<
+~
+>>
+? rollforwarddb +w +j SEPPARAMDB4
+<<
+~
+>>
+? sql -s SEPPARAMDB4 
+<<
+
+>>
+* select count(*) from util_blob_table\g
+<<
++-------------+
+|col1         |
++-------------+
+|            0|
++-------------+
+(1 row)
+>>
+* \q
+<<
+>>
+? delete blob.in
+<<
+~
+>>
+? delete blob.out
+<<
+~
+>>
+? delete util_blob_table.testenv
+<<
+~
+>>
+? delete util_alongtablename.testenv
+<<
+~
+>>
+? delete util_alongtablenameforingres.testenv
+<<
+~
+>>
+
+
+Ending at: Tue Apr 10 16:56:47 2001

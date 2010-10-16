@@ -1,0 +1,360 @@
+/*
+	Test Name: eea30.sep
+	Time: 
+	User Name: testenv
+ 
+	Test ID : eea30
+	Module  : cursors
+	Filename: eea30.sep
+	Purpose	: Can't update a non-updateable cursor. 
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : eea30_table1
+	Synopsis     : Verify that a cursor declared without specifying 
+		FOR UPDATE, FOR READONLY, or ORDER BY will NOT support 
+		UPDATE or DELETE if the <query expression> contained in 
+		the <cursor specification> is not updatable (i.e. involves 
+		UNION, DISTINCT, AGGREGATES, GROUP BY or HAVING)
+
+	History	: 8-Dec-1993 (camacho) created from script that 
+			andre created.
+	  	  7-MAR-1997    (vissu01) Modified for NT
+		 23-Mar-1999   (vande02) Hard-coded VPG_SZ to 2K/changed 'sql -s
+                                SEPPARAMDB' canon to be empty, in order to catch
+                                the msg. "TM could not connect ..." if the test
+                                database did not exist.
+*/
+? fill eea30.sc 
+!!
+#include <stdio.h>
+
+main(argc, argv)
+int	argc;
+char	*argv[];
+{
+
+exec sql include sqlca;
+
+exec sql begin declare section;
+	int   v1, v2, v3, v4, v5, v6, cnt;
+	int   v7, v8, v9, v10, v11, v12;
+	char  *dbname;
+exec sql end declare section;
+
+if (argc != 2)
+    {
+        printf("ERROR : program requires 1 arguments.");
+        printf(" %d arguments given\n", (argc - 1));
+        exit(-1);
+    }
+
+dbname = argv[1];
+
+/********* Connecting to database *************/
+
+exec sql whenever sqlerror stop;
+exec sql connect :dbname;
+exec sql whenever sqlerror call sqlprint;
+
+/********* Creating Objects ******************/
+
+exec sql drop eea30_table1;
+exec sql drop eea30_view1;
+
+exec sql create table eea30_table1(c1 i not null, c2 i, c3 i, c4 i, c5 i) with page_size=2048;
+    if (sqlca.sqlcode!=0)
+    {
+	printf("Failure trying to create table eea30_table1\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+    
+exec sql create view eea30_view1 as
+	select c1, c2, c3, c4, c5, 
+		c1+c2 as c1_plus_c2, c2+c3 as c2_plus_c3,
+		c1+c3 as c1_plus_c3 from eea30_table1;
+    if (sqlca.sqlcode!=0)
+    {
+ 	printf("Failure trying to create view eea30_view1\n");
+	printf("will skip the remainder of the tests\n");
+	exit(-1);
+    }
+    
+exec sql insert into eea30_table1 values(1,2,3,4,5);
+
+exec sql commit;
+
+/***********************************************************************
+** Test Case:
+**      Verify that a cursor declared without specifying FOR UPDATE,
+**	FOR READONLY, or ORDER BY will NOT support UPDATE or DELETE if the
+**	<query expression> contained in the <cursor specification> is not
+**	updatable (i.e. involves UNION, DISTINCT, AGGREGATES, GROUP BY or
+**	HAVING)
+***********************************************************************/
+
+printf("\n\nEEA30:\n");
+
+printf("\n\nTest A:\n");
+
+exec sql declare cursor13a cursor for
+	select c1 from eea30_table1 union
+	select c2 from eea30_view1;
+
+exec sql open cursor13a;
+
+exec sql fetch cursor13a into :v1;
+
+printf("\n Cursor returned : %d\n\n",v1);
+
+printf("***\tTHIS WAS MEANT TO FAIL\n");
+printf("***\tCursor definition contains a UNION.\n");
+printf("***\tCursor should not be open.\n\n");
+
+exec sql update eea30_table1 set c1=c2 where current of cursor13a;
+    if (sqlca.sqlcode == 0)
+    {
+	printf("ERROR: We were able to update a column through a \n");
+	printf("cursor whose <cursor specification> contained UNION\n");
+    }
+
+exec sql close cursor13a;
+
+printf("\n\nTest B:\n");
+
+exec sql declare cursor13b cursor for
+	select distinct c1 from eea30_table1;
+
+exec sql open cursor13b;
+
+exec sql fetch cursor13b into :v1;
+
+printf("\n Cursor returned : %d\n\n",v1);
+
+printf("\n***\tTHIS WAS MEANT TO FAIL\n");
+printf("***\tCursor definition contains a DISTINCT.\n");
+printf("***\tCursor should not be open.\n\n");
+
+exec sql update eea30_table1 set c1=c2 where current of cursor13b;
+    if (sqlca.sqlcode == 0)
+    {
+	printf("ERROR: We were able to update a column through a \n");
+	printf("cursor whose <cursor specification> contained DISTINCT\n");
+    }
+
+exec sql close cursor13b;
+
+printf("\n\nTest C:\n");
+
+exec sql declare cursor13c cursor for
+	select sum(c1) from eea30_table1;
+
+exec sql open cursor13c;
+
+exec sql fetch cursor13c into :v1;
+
+printf("\n Cursor returned : %d\n\n",v1);
+
+printf("\n***\tTHIS WAS MEANT TO FAIL\n");
+printf("***\tCursor definition contains a AGGREGATE.\n");
+printf("***\tCursor should not be open.\n\n");
+
+exec sql update eea30_table1 set c1=c2 where current of cursor13c;
+    if (sqlca.sqlcode == 0)
+    {
+	printf("ERROR: We were able to update a column through a \n");
+	printf("cursor whose <cursor specification> contained an AGGREGATE\n");
+    }
+
+exec sql close cursor13c;
+
+printf("\n\nTest D:\n");
+
+exec sql declare cursor13d cursor for
+	select c1 from eea30_table1 group by c1;
+
+exec sql open cursor13d;
+
+exec sql fetch cursor13d into :v1;
+
+printf("\n Cursor returned : %d\n\n",v1);
+
+printf("\n***\tTHIS WAS MEANT TO FAIL\n");
+printf("***\tCursor definition contains a GROUP BY.\n");
+printf("***\tCursor should not be open.\n\n");
+
+exec sql update eea30_table1 set c1=c2 where current of cursor13d;
+    if (sqlca.sqlcode == 0)
+    {
+	printf("ERROR: We were able to update a column through a \n");
+	printf("cursor whose <cursor specification> contained GROUP BY.\n");
+    }
+
+exec sql close cursor13d;
+
+printf("\n\nTest E:\n");
+
+exec sql declare cursor13e cursor for
+	select c1 from eea30_table1 group by c1 having c1 < 5;
+
+exec sql open cursor13e;
+
+exec sql fetch cursor13e into :v1;
+
+printf("\n Cursor returned : %d\n\n",v1);
+
+printf("\n***\tTHIS WAS MEANT TO FAIL\n");
+printf("***\tCursor definition contains a HAVING.\n");
+printf("***\tCursor should not be open.\n\n");
+
+exec sql update eea30_table1 set c1=c2 where current of cursor13e;
+    if (sqlca.sqlcode == 0)
+    {
+	printf("ERROR: We were able to update a column through a \n");
+	printf("cursor whose <cursor specification> contained HAVING.\n");
+    }
+
+exec sql close cursor13e;
+    
+end_of_test13:
+
+/****************************************************
+*
+*     ROLLING BACK TRANSACTION. Still need to drop
+*     table eea30_table1 to finish cleanup!
+*
+*****************************************************/
+
+    exec sql rollback;
+
+    exec sql whenever sqlerror continue;
+    exec sql drop eea30_table1;
+
+    printf("\n\nDisconnecting....\n\n");
+    exec sql disconnect;
+
+
+}
+!!
+? sepesqlc eea30.sc 
+<<
+ESQL eea30.sc:
+>>
+? sepcc eea30.c 
+<<
+>>
+<<
+eea30.c
+>>
+? seplnk eea30 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table eea30_table1
+<<
+~
+>>
+* \q 
+<<
+>>
+? run eea30.exe SEPPARAMDB 
+<<
+E_US0AC1 DROP: 'eea30_table1' does not exist or is not owned by you.
+    (Wed Jan 26 16:29:26 1994)
+E_US0AC1 DROP: 'eea30_view1' does not exist or is not owned by you.
+    (Wed Jan 26 16:29:26 1994)
+
+
+EEA30:
+
+
+Test A:
+
+ Cursor returned : 1
+
+***	THIS WAS MEANT TO FAIL
+***	Cursor definition contains a UNION.
+***	Cursor should not be open.
+
+E_US08A9 Cursor 'cursor13a' has not been opened for update.
+    (Wed Jan 26 16:29:27 1994)
+
+
+Test B:
+
+ Cursor returned : 1
+
+
+***	THIS WAS MEANT TO FAIL
+***	Cursor definition contains a DISTINCT.
+***	Cursor should not be open.
+
+E_US08A9 Cursor 'cursor13b' has not been opened for update.
+    (Wed Jan 26 16:29:27 1994)
+
+
+Test C:
+
+ Cursor returned : 1
+
+
+***	THIS WAS MEANT TO FAIL
+***	Cursor definition contains a AGGREGATE.
+***	Cursor should not be open.
+
+E_US08A9 Cursor 'cursor13c' has not been opened for update.
+    (Wed Jan 26 16:29:27 1994)
+
+
+Test D:
+
+ Cursor returned : 1
+
+
+***	THIS WAS MEANT TO FAIL
+***	Cursor definition contains a GROUP BY.
+***	Cursor should not be open.
+
+E_US08A9 Cursor 'cursor13d' has not been opened for update.
+    (Wed Jan 26 16:29:27 1994)
+
+
+Test E:
+
+ Cursor returned : 1
+
+
+***	THIS WAS MEANT TO FAIL
+***	Cursor definition contains a HAVING.
+***	Cursor should not be open.
+
+E_US08A9 Cursor 'cursor13e' has not been opened for update.
+    (Wed Jan 26 16:29:27 1994)
+
+
+Disconnecting....
+
+>>
+? delete eea30.exe 
+<<
+~
+>>
+? delete eea30.c 
+<<
+~
+>>
+? delete eea30.obj 
+<<
+~
+>>
+? delete eea30.o 
+<<
+~
+>>
+
+
+Ending at: Wed Jan 26 16:29:28 1994

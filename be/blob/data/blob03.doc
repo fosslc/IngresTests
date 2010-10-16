@@ -1,0 +1,477 @@
+4
+Test Name: blob03.sep
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : be/blob
+	Filename: blob03.sep
+	Purpose	: Tests fastload utility on tables with blob columns.
+	Input Files  : none.
+	Output Files : none.
+	Database     : SEPPARAMDB
+	Tables       : blob03
+	Synopsis     : This test tests the fastload utility on tables with
+		       blob columns.
+
+ History: 26-Feb-1999	(somsa01) Created.
+	  22-mar-1999	(walro03) Removed -v"|" from sql statement; it caused
+				  diffs.  Renamed table book to blob03. Create
+				  and delete required table.
+	  07-apr-1999	(vande02) Hard-coded VPG_SZ to 8K.
+          26-Mar-2001   (hanch04) Update test for Ingres 2.6 add defines for
+				  CL calls.
+	   4-Nov-2003   (vande02) Replace SIprintfs by printfs. Limit number of
+				  command line arguments to VMS maximum based
+				  upon (abbjo03) suggestion.  Dropping two
+				  arguments, printf.doc and read.doc, so this
+				  will also run on VMS has resulted in accepting
+				  new canons as the row count in the blob tables
+				  will be 200 and not 280 similar to blob01.sep.
+
+				  Put empty canon to confirm sql connections to
+				  database, and lined up history comments for
+				  easy reading.
+          25-Jun-2004	(vande02) Updating canon from fastload results with new
+				  text for expected warning message as of Ingres
+				  r3.  Aligned history comments.
+
+? fill create.sql 
+!!
+create table blob03 (bid integer, bname char(32), btext long varchar) with page_size-
+=8192;\p\g
+modify blob03 to hash on bid, bname;\p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table blob03;\p\g
+<<
+~
+>>
+* \i create.sql 
+<<
+create table blob03 (bid integer, bname char(32), btext long varchar) with page_size-
+=8192;
+modify blob03 to hash on bid, bname;
+(0 rows)
+>>
+* \q 
+<<
+
+>>
+? fill blob_insert.sc 
+!!
+#include    <stdio.h>
+#define MEfill(n,v,s) memset(s,v,n)
+#define STcopy(a,b)   strcpy(b,a)
+
+EXEC SQL include sqlca;
+
+#define OK 0
+#define FAIL 1
+
+/*
+**  Name: blob_insert.sc
+**
+**  Description:
+**	This program:
+**	    a) loops 40 times, inserting into a table containing a
+**	    long varchar field.
+**	or
+**	    b) loads a blob table from given data files.
+**
+**	Several segments are inserted via a PUT datahandler.
+**
+**  History:
+**	12-feb-1999 (somsa01)
+**	    Created.
+**	19-feb-1999 (somsa01)
+**	    Changed prototypes so that it would compile on all UNIX machines.
+*/
+
+int Times = 40;
+
+void read_book(char chr);
+void read_book2(FILE *fp);
+void ins_book(int chr);
+void ins_book2(char *bookname);
+
+main(int argc, char *argv[])
+{
+    EXEC SQL begin declare section;
+    char	dbname[32];
+    EXEC SQL end declare section;
+    int		i, insert_type;
+
+    if (argc < 3)
+    {
+	printf("Usage:\nblob_insert <database name> 1 <char as int>\n");
+	printf("blob_insert <database name> 2 <at least 3 textfile names>\n");
+	PCexit(FAIL);
+    }
+
+    CVan(argv[2], &insert_type);
+    if ((insert_type == 2) && (argc < 5))
+    {
+	printf("You must supply at least 3 textfile names.\n");
+	PCexit(FAIL);
+    }
+
+    srand(getpid() * 17);
+    STcopy(argv[1], dbname);
+
+    EXEC SQL whenever sqlerror stop;
+    printf("Connecting to database ...\n");
+    EXEC SQL connect :dbname;
+
+    EXEC SQL whenever sqlerror call sqlprint;
+
+    printf("Inserting blobs ...\n");
+
+    if (insert_type == 1)
+    {
+	int	chr;
+
+	Times = 40;
+	CVan(argv[3], &chr);
+	while (Times--)
+	{
+	    for (i = 0; i < 7; i++)
+		ins_book(chr);
+	}
+    }
+    else
+    {
+	Times = 20;
+	while (Times--)
+	{
+	    for (i = 0; i < argc - 3; i++)
+		ins_book2(argv[3 + i]);
+	}
+    }
+
+    printf("Done.\n");
+    EXEC SQL disconnect;
+
+    PCexit(OK);
+}
+
+void
+ins_book(int chr)
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+    int		newnum;
+    char	bname[32];
+    EXEC SQL END DECLARE SECTION;
+
+    newnum = rand();
+    IISTprintf(bname, "CONSTANT%d", getpid());
+    EXEC SQL INSERT INTO blob03 VALUES( :newnum, :bname,
+				      DATAHANDLER(read_book(chr)) );
+   
+    if (sqlca.sqlcode != 0)
+    {
+	printf( "Error %d while inserting blob, will rollback\n",
+		sqlca.sqlcode );
+	EXEC SQL rollback;
+	if (sqlca.sqlcode != 0)
+	    printf("    Error rolling back after error.\n");
+    }
+    else
+    { 
+	EXEC SQL commit;
+	if (sqlca.sqlcode != 0)
+	    printf("    Error commiting after insert.\n");
+    }
+}
+
+void
+ins_book2(char *bookname)
+{
+    EXEC SQL begin declare section;
+    int		newnum;
+    char	*book = bookname;
+    EXEC SQL end declare section;
+    FILE	*fp;
+
+    if ((fp = fopen(book, "r")) == NULL)
+    {
+	printf("Cannot open %s\n", book);
+	EXEC SQL disconnect;
+	PCexit(FAIL);
+    }
+
+    /* Get the next available id num. */
+    newnum = Times * 20;
+
+    EXEC SQL insert into blob03 values (:newnum, :book,
+				      DATAHANDLER(read_book2(fp)));
+
+    if (sqlca.sqlcode != 0)
+    {
+	printf("Error %d while inserting blob, will rollback\n",
+		 sqlca.sqlcode);
+	EXEC SQL rollback;
+	if (sqlca.sqlcode != 0)
+	    printf("	Error rolling back after error!\n");
+    }
+    else
+    {
+	EXEC SQL commit;
+	if (sqlca.sqlcode != 0)
+	    printf("	Error commiting after insert!\n");
+    }
+
+    fclose(fp);
+}
+
+void
+read_book(char chr)
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+    char	segment[936];
+    int		seglen;
+    EXEC SQL END DECLARE SECTION;
+
+    seglen = sizeof(segment);
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob A\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob B\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob C\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0);
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 0 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob D\n", sqlca.sqlcode);
+
+    MEfill(seglen, chr, segment);
+    EXEC SQL PUT DATA ( SEGMENT = :segment, SEGMENTLENGTH = :seglen,
+			DATAEND = 1 );
+
+    if (sqlca.sqlcode != 0)
+	printf("Error %d while PUTing blob E\n", sqlca.sqlcode);
+}
+
+void
+read_book2(FILE *fp)
+{
+    EXEC SQL begin declare section;
+    char	segment[936];
+    int		seglen;
+    int		data_end;
+    EXEC SQL end declare section;
+    int bytes;
+
+    while ((bytes = fread(segment, 1, sizeof segment, fp)) > 0)
+    {
+#ifdef DEBUG
+	printf("read %d bytes ERR=%d  EOF=%d\n", bytes, ferror(fp), feof(fp));
+#endif
+
+	data_end = (bytes != sizeof segment);
+	seglen = bytes;
+	EXEC SQL put data ( segment = :segment, segmentlength = :seglen,
+			    dataend = :data_end );
+	if (sqlca.sqlcode != 0)
+	{
+	    printf("Error %d while PUTing blob.\n", sqlca.sqlcode);
+	}
+    }
+
+    if (ferror(fp) || ! feof(fp))
+    {
+	printf("AFTER %d bytes ERR=%d  EOF=%d\n", bytes, ferror(fp),
+		 feof(fp));
+    }
+}
+!!
+? esqlc blob_insert.sc 
+<<
+ESQL blob_insert.sc:
+>>
+<<
+>>
+? sepcc blob_insert.c 
+<<
+>>
+<< IF (NT_GENERIC)
+blob_insert.c
+>>
+? seplnk blob_insert 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select count(*) from blob03\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|          200|
++-------------+
+(1 row)
+>>
+* copy blob03() into 'blob_copy.dat'\g 
+<<
+(200 rows)
+>>
+* commit\g 
+<<
+
+>>
+* set nologging\g 
+<<
+
+>>
+* delete from blob03\g 
+<<
+(200 rows)
+>>
+* commit\g 
+<<
+
+>>
+* set logging\g 
+<<
+
+>>
+* \q 
+<<
+
+>>
+? fastload SEPPARAMDB -file=blob_copy.dat -table=blob03 
+<<
+
+WARNING: Cannot determine record size of input file:
+fastload expects this file to be in binary format and contain
+records of variable length.  Fastload will load data from the file into
+successive table columns.  A bad file format will result in corrupted
+data being loaded into the table.
+
+Begin load...
+Load finished
+Row size   : 71
+Rows loaded: 200
+Total bytes (excluding variable length data): 14200
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* select count(*) from blob03\g 
+<<
+
++-------------+
+|col1         |
++-------------+
+|          200|
++-------------+
+(1 row)
+>>
+* \q 
+<<
+
+>>
+? delete blob_copy.dat 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table blob03;\p\g
+<<
+~
+>>
+* \q
+<<
+
+>>
+? delete blob_insert.c 
+<<
+~
+>>
+? delete blob_insert.exe 
+<<
+~
+>>
+.if (NT_GENERIC || VMS) 
+? delete blob_insert.obj 
+<<
+~
+>>
+.else 
+.if (UNIX) 
+? delete blob_insert.o 
+<<
+~
+>>
+.endif 
+.endif 
+4

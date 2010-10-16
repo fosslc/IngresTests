@@ -1,0 +1,282 @@
+/*
+	Test Name: ega06.sep
+	Time: Wed May 23 15:45:49 1990
+	User Name: testenv
+ 
+	Test ID : ega06
+	Module  : 
+	Filename: ega06.sep
+	Purpose	: To test for bug 41989.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : ega06_t1
+	Synopsis     : Create table, insert 1 row. Dump the table.
+		Do a repeated delete to delete the one row. Dump
+		the table again.
+	History	: 
+          19-Mar-1992	(Author)
+          21-May-1992	(Author)
+	   7-MAR-1997   (vissu01) Modified for NT
+	   25-March-1999  (kamra01) modified VPG_SZ to 4096 
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,egstub.h) egstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,drivereg.c) drivereg.c 
+<<
+>>
+? fill ega06.sc 
+!!
+/*
+**	ega06.sc
+*/
+
+#define EGA06
+
+#include "egstub.h"
+
+#include <stdio.h>
+
+
+/***********/
+/* ega06() */
+/***********/
+
+ega06()
+{
+exec sql include sqlca;
+exec sql whenever sqlerror call sqlprint;
+
+exec sql begin declare section;
+	int	x;
+	int	rowcnt;
+	char	txt[257];
+	int	cccsid;
+	int	phase;
+	int	screen_number;
+exec sql end declare section;
+	
+exec sql drop table ega06_t1;
+	
+exec sql create table ega06_t1 (
+		cccsid		integer,
+		phase		integer,
+		screen_number	integer
+	) with page_size=4096;
+	
+exec sql modify ega06_t1 to btree on cccsid,phase,screen_number;
+	
+exec sql commit;
+	
+exec sql insert into ega06_t1 (
+		cccsid,	phase, screen_number) 
+		values (100001,1,1);
+	
+exec sql commit;
+	
+	printf("table dump:\n");
+	printf("-----------\n");
+exec sql select cccsid,	phase, screen_number
+		into :cccsid, :phase, :screen_number
+		from ega06_t1;
+exec sql begin;
+
+	printf("   cccsid %d, phase %d, screen_number %d\n",
+		cccsid,phase,screen_number );
+
+exec sql end;
+	printf("-----------\n");
+	
+	printf("do delete...\n");
+exec sql repeated delete from ega06_t1 
+		where cccsid=:cccsid 
+		  and ( phase = 0 or ( phase = 1 and screen_number < 10 ) ); 
+
+exec sql inquire_ingres (:rowcnt = rowcount);
+	printf ("Number of rows deleted: %d\n",rowcnt);
+
+exec sql select count(*) into :x from ega06_t1;
+	printf("table dump:\n");
+	printf("-----------\n");
+exec sql select cccsid,	phase, screen_number
+		into :cccsid, :phase,  :screen_number
+		from ega06_t1;
+exec sql begin;
+	printf("   cccsid %d, phase %d, screen_number %d\n",
+		cccsid,	phase, screen_number);
+exec sql end;
+	printf("-----------\n");
+	
+	printf ("Number of rows in table: %d\n",x);
+
+exec sql commit;
+}
+!!
+? sepesqlc ega06.sc 
+<<
+ESQL ega06.sc:
+>>
+? sepcc ega06.c 
+<<
+>>
+<<
+ega06.c
+>>
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepcc drivereg.c 
+<<
+>>
+<<
+drivereg.c
+>>
+? seplnk driver drivereg ega06 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+>>
+* drop table ega06_t1;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tega06 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+REPEATE QUERIES
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   ega06
+XX-----------------XX
+
+connecting with database...
+
+XX running test ega06 XX
+
+E_US0AC1 DROP: 'ega06_t1' does not exist or is not owned by you.
+    (Thu May 21 16:52:23 1992)
+table dump:
+-----------
+   cccsid 100001, phase 1, screen_number 1
+-----------
+do delete...
+Number of rows deleted: 1
+table dump:
+-----------
+-----------
+Number of rows in table: 0
+
+disconnecting with database...
+>>
+? sql SEPPARAMDB -s 
+<<
+>>
+* drop table ega06_t1
+<<
+~
+>>
+* \q
+<<
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete egstub.h 
+<<
+~
+>>
+? delete drivereg.c 
+<<
+~
+>>
+? delete drivereg.obj 
+<<
+~
+>>
+? delete drivereg.o 
+<<
+~
+>>
+? delete ingclude.sc 
+<<
+~
+>>
+? delete ingclude.c 
+<<
+~
+>>
+? delete rulesh.sc 
+<<
+~
+>>
+? delete rulesh.c 
+<<
+~
+>>
+? delete rulestest.sc 
+<<
+~
+>>
+? delete rulestest.c 
+<<
+~
+>>
+? delete rulestest.obj 
+<<
+~
+>>
+? delete rulestest.o 
+<<
+~
+>>
+? delete ega06.c 
+<<
+~
+>>
+? delete ega06.obj 
+<<
+~
+>>
+? delete ega06.o 
+<<
+~
+>>
+
+
+Ending at: Thu May 21 16:52:42 1992

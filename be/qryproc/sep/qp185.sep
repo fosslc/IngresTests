@@ -1,0 +1,1864 @@
+/*
+Copyright (c) 2006 Ingres Corporation
+
+	Test Name: qp185.sep (formerly ela10.sep)
+	Time: Wed May 23 18:07:54 1990
+	User Name: testenv
+ 
+	Test ID : qp185.sep
+	Module  : 
+	Filename: qp185.sep
+	Purpose	: Test a bunch of rules of type business referential 
+		integrity.
+	Input Files  : none 
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : dept, emp, bldg
+	Synopsis     : Define a bunch of rules and then try to do
+                        things that trigger the rules and look
+                        at the result.
+	Setup        : ela00.sep
+
+	History	: xx-xxx-1989	  Created
+	   7-MAR-1997	(vissu01) Modified for NT
+           6-Nov-2006	(vande02) Updated canon due to PRINTRULES display
+				  format does not have dashed line separators
+				  between 'Executing procedure' and 'Rule/
+				  procedure depth' information, header cleanup.
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverelstub.h) driverelstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,rulesh.sc) rulesh.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,rulestest.sc) rulestest.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,ingclude.sc) ingclude.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverel.c) driverel.c 
+<<
+>>
+? fill ela10.sc 
+!!
+/*
+**	ela10.sc
+*/
+
+#define ELA10
+
+#include "driverelstub.h"
+
+#include <stdio.h>
+
+exec sql include 'ingclude.sc';
+exec sql include 'rulesh.sc';
+
+/***********/
+/* ela10() */
+/***********/
+
+ela10()
+{
+	printf("ela10: business integrity.\n");
+	printf("\n");
+	printf("  business integrity style rules on the\n");
+	printf("  world famous bldg/emp/dept database.\n");
+	printf("\n");
+
+	exec sql set printrules;
+
+	build_tables("bldg");
+	build_tables("dept");
+	build_tables("emp");
+	build_tables("log");
+	printf("\n");
+
+	print_tables(BLDG);
+	print_tables(DEPT);
+	print_tables(EMP);
+	print_tables(LOG);
+	printf("\n");
+
+	exec sql commit;
+
+	create_bed_rules(FALSE);
+	printf("\n");
+
+	printf("  have at it!\n");
+	printf("\n");
+
+	printf("  fire Green and Stannich so mgr McTigue gets the axe...\n");
+	exec sql delete from emp where name = 'Green' or name = 'Stannich';
+	exec sql commit;
+	printf("\n");
+	print_tables(LOG);
+	printf("\n");
+
+	printf("  give Blumberg big raise, triggering other raises...\n");
+	exec sql update emp set salary = 46000 where name = 'Blumberg';
+	exec sql commit;
+	printf("\n");
+	print_tables(LOG);
+	printf("\n");
+
+	printf("  fire Blumberg, wiping out a dept and a bldg...\n");
+	exec sql delete from emp where name = 'Blumberg';
+	exec sql commit;
+	printf("\n");
+	print_tables(LOG);
+	printf("\n");
+
+	printf("  change bldg A to bldg Z...\n");
+	exec sql update bldg set bldg = 'Z' where bldg = 'A';
+	exec sql commit;
+	printf("\n");
+	print_tables(LOG);
+	printf("\n");
+
+/*
+**	exec sql set noprintrules;
+*/
+
+	print_tables(BLDG);
+	print_tables(DEPT);
+	print_tables(EMP);
+	print_tables(LOG);
+	printf("\n");
+
+	exec sql commit;
+
+} /* ela10() */
+
+/*****************************************************************************/
+/*                                                                           */
+/*  everybody's fave database                           EMP                  */
+/*                                                      ---                  */
+/*                                DEPT                  name      --+        */
+/*                                ----                  salary      |        */
+/*                                dname   --+-------+-- dept        |        */
+/*     BLDG                       div     --+       +-- div         |        */
+/*     ----                       sales                 mgr       --+        */
+/*     bldg   ------------------- bldg                  birthdate            */
+/*     st_adr                     floor                 num_dep              */
+/*     city                       num_emp                                    */
+/*     state                                                                 */
+/*     zip                                                                   */
+/*                                                                           */
+/*****************************************************************************/
+
+/*****************************************************************************/
+/*                                                                           */
+/* now, these are rules!  maybe it's the too intelligent database...         */
+/*                                                                           */
+/*****************************************************************************/
+
+/*****************************************************************************/
+/*                                                                           */
+/*  everybody's fave database                     +---< EMP       <------+   */
+/*  insert rules                                  |     ---              |   */
+/*                        +-----> DEPT            |     name      >----+ |   */
+/*                        |       ----            |     salary    >----|-|-+ */
+/*                        |  +--< dname   <-+-ir--|-+-< dept           | | | */
+/*     BLDG               |  +--< div     <-+     | +-< div            | | | */
+/*     ----               |  |    sales           |     mgr       <-ir-+ | | */
+/* +-< bldg   <-------ir--|--|--< bldg            |     birthdate        | | */
+/* |   st_adr             |  |    floor           |     num_dep          | | */
+/* |   city               |  |    num_emp <-------+                      | | */
+/* |   state              |  |                                           | | */
+/* |   zip                |  |                                           | | */
+/* |                      |  |           +------------+                  | | */
+/* |     +------------+   |  +---------->|insert blank|>---------------->+ | */
+/* +---->|insert blank|>--+              |employee    |                  ^ | */
+/*       |dept and div|                  +------------+                  | | */
+/*       +------------+                                                  | | */
+/*                                               +---------------+       | | */
+/* absurd but consistant...                      |if sal. exceeds|>------+ | */
+/*                                               |mgrs, upd mgr  |         | */
+/*                                               |sal to sal +10k|<--------+ */
+/*                                               |unless mgr has |           */
+/*                                               |no mgr, then   |           */
+/*                                               |+20k           |           */
+/*                                               +---------------+           */
+/*                                                                           */
+/*****************************************************************************/
+
+/*****************************************************************************/
+/*                                                                           */
+/*  everybody's fave database                    +----< EMP       <----+     */
+/*  update rules                                 |      ---            |     */
+/*                       +------> DEPT           |      name      <----|-+   */
+/*                       |        ----           |      salary    >---+| |   */
+/*                       |        dname   >-+-uc-|--+-> dept          || |   */
+/*     BLDG              |        div     >-+    |  +-> div           || |   */
+/*     ----              |        sales          |      mgr       >-+ || |   */
+/* +-> bldg   >------uc--|------> bldg    >---+  |      birthdate   | || |   */
+/* |   st_adr            |        floor       |  |      num_dep     | || |   */
+/* |   city              |    +-< num_emp <------+                  | || |   */
+/* |   state             |    |               |                     | || |   */
+/* |   zip               |    |               |  +---------------+  | || |   */
+/* |                     |    V               |  |if sal. exceeds|<---+| |   */
+/* |                     |  +---------+       |  |mgrs, upd mgr  |  |  | |   */
+/* |                     +-<|del empty|       |  |sal to sal +10k|>----+ |   */
+/* |                        |dept, div|       |  |unless mgr has |  |    |   */
+/* |                        +---------+       |  |no mgr, then   |  |    |   */
+/* |                                          |  |+20k           |  |    |   */
+/* |                                          |  +---------------+  |    |   */
+/* |                                          |                     |    |   */
+/* |                                          |                     V    |   */
+/* |                                          |     +-----------------+  |   */
+/* |                   +-----------------+    |     |no one reports to|>-+   */
+/* +------------------<|no other dept in |<---+     |mgr, fire mgr.   |      */
+/*                     |the building, del|          +-----------------+      */
+/*                     |building.        |                                   */
+/*                     +-----------------+                                   */
+/*                                                                           */
+/*****************************************************************************/
+
+/*****************************************************************************/
+/*                                                                           */
+/*  everybody's fave database                    +----< EMP                  */
+/*  delete rules                                 |      ---                  */
+/*                                DEPT           |      name      <------+   */
+/*                                ----           |      salary           |   */
+/*                                dname   >-+-dr-|--+-> dept             |   */
+/*     BLDG                       div     >-+    |  +-> div              |   */
+/*     ----                       sales          |      mgr       >-+    |   */
+/* +-> bldg   >------dr---------> bldg    >---+  |      birthdate   |    |   */
+/* |   st_adr                     floor       |  |      num_dep     |    |   */
+/* |   city                       num_emp <------+                  |    |   */
+/* |   state                                  |                     V    |   */
+/* |   zip                                    |     +-----------------+  |   */
+/* |                   +-----------------+    |     |no one reports to|>-+   */
+/* +------------------<|no other dept in |<---+     |mgr, fire mgr.   |      */
+/*                     |the building, del|          +-----------------+      */
+/*                     |building.        |                                   */
+/*                     +-----------------+                                   */
+/*                                                                           */
+/*****************************************************************************/
+
+/**********************/
+/* create_bed_rules() */
+/**********************/
+
+create_bed_rules(do_drop)
+short	do_drop;
+{
+	printf("  create procedures and rules for bldg/dept/emp db...\n");
+	printf("\n");
+
+	exec sql set autocommit on;
+
+	/************************************************************/
+
+	printf("  drop and create procedure bldg_b01:\n");
+	exec sql drop procedure bldg_b01;
+	exec sql create procedure bldg_b01 (
+		bldg	varchar(2)	not null with default
+	) as
+	declare
+		Lbldg	varchar(2)	not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'bldg_b01: if bldg departmentless, delete';
+		select bldg into :Lbldg from dept where bldg = :bldg;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'bldg_b01 fail';
+		endif;
+
+		if ( :Lrows = 0 )
+		then
+			delete from bldg where bldg = :bldg;
+			select iierrornumber, iirowcount into Lerr, Lrows;
+			if ( :Lerr > 0 )
+			then
+				raise error :Lerr 'bldg_b01 fail';
+			endif;
+
+			msg_buf = 'bldg_b01: delete departmentless bldg '
+				+ :bldg
+				+ ' on bldg, rows: '
+				+ varchar(Lrows);
+
+			message 2 msg_buf;
+
+			insert into log ( entry ) values ( :msg_buf );
+			select iierrornumber into Lerr;
+			if ( :Lerr > 0 )
+			then
+				raise error :Lerr 'bldg_b01 fail';
+			endif;
+		else
+			msg_buf = 'bldg_b01: bldg '
+				+ :bldg
+				+ ' has depts ';
+			message 2 msg_buf;
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure bldg_r01:\n");
+	exec sql drop procedure bldg_r01;
+	exec sql create procedure bldg_r01 (
+		bldg	varchar(2)	not null with default
+	) as
+	declare
+		Lbldg	varchar(2)	not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'bldg_r01: prevent use of nonexistant bldg';
+		select bldg into :Lbldg from bldg where bldg = :bldg;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'bldg_r01 fail';
+		endif;
+
+		msg_buf = 'bldg_r01: select bldg '
+			+ :bldg
+			+ ' from bldg, rows: '
+			+ varchar(Lrows);
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'bldg_r01 fail';
+		endif;
+
+		if ( :Lrows = 0 )
+		then
+			raise error 1 'invalid bldg';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure dept_b01:\n");
+	exec sql drop procedure dept_b01;
+	exec sql create procedure dept_b01 (
+		dname	varchar(10)	not null with default,
+		div	varchar(2)	not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'dept_b01: increment departments num_emps';
+		update dept set num_emp = (num_emp + 1)
+		where dname = :dname and div = :div;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_b01 fail';
+		endif;
+
+		msg_buf = 'dept_b01: num_emp++ where dname '
+			+ :dname
+			+ ', div '
+			+ :div
+			+ ' from dept, rows: '
+			+ varchar(Lrows);
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_b01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure dept_b02:\n");
+	exec sql drop procedure dept_b02;
+	exec sql create procedure dept_b02 (
+		dname	varchar(10)	not null with default,
+		div	varchar(2)	not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'dept_b02: decrement departments num_emps';
+
+		update dept set num_emp = (num_emp - 1)
+		where dname = :dname and div = :div;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_b02 fail';
+		endif;
+
+		msg_buf = 'dept_b02: num_emp decr where dname '
+			+ :dname
+			+ ', div '
+			+ :div
+			+ ' from dept, rows: '
+			+ varchar(Lrows);
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_b02 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure dept_b03:\n");
+	exec sql drop procedure dept_b03;
+	exec sql create procedure dept_b03 (
+		bldg	varchar(2)	not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'dept_b03: add false dept for new bldg';
+		insert into dept ( bldg, dname, div, num_emp, floor, sales )
+		values ( :bldg, 'dummy', 'du', 0, 0, 0 );
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_b03 fail';
+		endif;
+
+		msg_buf = 'dept_b03: add dummy dname and div for bldg '
+			+ :bldg
+			+ ' to dept, rows: '
+			+ varchar(Lrows);
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_b03 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure dept_b04:\n");
+	exec sql drop procedure dept_b04;
+	exec sql create procedure dept_b04 (
+		dname	varchar(10)	not null with default,
+		div	varchar(2)	not null with default,
+		num_emp	integer		not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'dept_b04: delete departments w/ num_emp 0';
+
+		if ( num_emp = 0 )
+		then
+			delete from dept
+			where dname = :dname and div = :div;
+			select iierrornumber, iirowcount into Lerr, Lrows;
+			if ( :Lerr > 0 )
+			then
+				raise error :Lerr 'dept_b04 fail';
+			endif;
+
+			msg_buf = 'dept_b04: del dept '
+				+ :dname
+				+ ', div '
+				+ :div
+				+ ' w/ no emps from dept, rows: '
+				+ varchar(Lrows);
+
+			message 2 msg_buf;
+
+			insert into log ( entry ) values ( :msg_buf );
+			select iierrornumber into Lerr;
+			if ( :Lerr > 0 )
+			then
+				raise error :Lerr 'dept_b04 fail';
+			endif;
+		else
+			msg_buf = 'dept_b04: del dept '
+				+ :dname
+				+ ', div '
+				+ :div
+				+ ' has '
+				+ varchar(:num_emp)
+				+ ' emps';
+
+			message 2 msg_buf;
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure dept_u01:\n");
+	exec sql drop procedure dept_u01;
+	exec sql create procedure dept_u01 (
+		old_bldg	varchar(2)	not null with default,
+		new_bldg	varchar(2)	not null with default
+	) as
+	declare
+		Lrows		integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf		varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'dept_u01: update bldg';
+		update dept set bldg = :new_bldg where bldg = :old_bldg;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_u01 fail';
+		endif;
+
+		msg_buf = 'dept_u01: update bldg '
+			+ :old_bldg
+			+ ' to '
+			+ :new_bldg
+			+ ' on dept, rows: '
+			+ varchar(Lrows);
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_u01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure dept_r01:\n");
+	exec sql drop procedure dept_r01;
+	exec sql create procedure dept_r01 (
+		dname	varchar(10)	not null with default,
+		div	varchar(2)	not null with default
+	) as
+	declare
+		Ldiv	varchar(2)	not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'dept_r01: check for invalid dname, div';
+		select div into :Ldiv from dept
+		where dname = :dname and div = :div;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_r01 fail';
+		endif;
+
+		msg_buf = 'dept_r01: select dname '
+			+ :dname
+			+ ', div '
+			+ :div
+			+ ' from dept, rows: '
+			+ varchar(Lrows);
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_r01 fail';
+		endif;
+
+		if ( :Lrows = 0 )
+		then
+			raise error 1 'invalid dname, div';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure dept_r02:\n");
+	exec sql drop procedure dept_r02;
+	exec sql create procedure dept_r02 (
+		bldg	varchar(2)	not null with default
+	) as
+	declare
+		Lbldg	varchar(2)	not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'dept_r02: bldg still on the dept table?';
+		select bldg into :Lbldg from dept
+		where bldg = :bldg;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_r02 fail';
+		endif;
+
+		msg_buf = 'dept_r02: select bldg '
+			+ :bldg
+			+ ' from dept, rows: '
+			+ varchar(Lrows);
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'dept_r02 fail';
+		endif;
+
+		if ( :Lrows > 0 )
+		then
+			raise error 1 'bldg restrict on dept';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure emp_b01:\n");
+	exec sql drop procedure emp_b01;
+	exec sql create procedure emp_b01 (
+		dname	varchar(10)	not null with default,
+		div	varchar(2)	not null with default
+	) as
+	declare
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'emp_b01: add phony employee';
+		insert into emp ( 
+			name, 
+			salary, 
+			dept, 
+			div, 
+			mgr, 
+			birthdate, 
+			num_dep 
+		)
+		values ( 'dummy', 0, :dname, :div, 'dummy', 'dummy', 0 );
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'emp_b01 fail';
+		endif;
+
+		msg_buf = 'emp_b01: add dummy name for dept '
+			+ :dname
+			+ ' and div '
+			+ :div
+			+ ' to emp, rows: '
+			+ varchar(Lrows);
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'emp_b01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure emp_b02:\n");
+	exec sql drop procedure emp_b02;
+	exec sql create procedure emp_b02 (
+		name	varchar(10)	not null with default,
+		mgr	varchar(10)	not null with default,
+		salary	float8		not null with default
+	) as
+	declare
+		mgrmgr	varchar(10)	not null with default;
+		mgrsal	float8		not null with default;
+		incsal	float8		not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'emp_b02: raise mgr sal if emp sal >=';
+		select salary, mgr into :mgrsal, :mgrmgr from emp
+		where name = :mgr;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'emp_b02 fail';
+		endif;
+
+		if ( ( :mgrsal <= :salary ) and ( :Lrows != 0 ) )
+		then
+			if ( mgrmgr = '' )
+			then
+				:incsal = 20000;
+			else
+				:incsal = 10000;
+			endif;
+
+			update emp
+			set salary = :salary + :incsal
+			where name = :mgr;
+			select iierrornumber, iirowcount into Lerr, Lrows;
+			if ( :Lerr > 0 )
+			then
+				raise error :Lerr 'emp_b02 fail';
+			endif;
+
+			msg_buf = 'emp_b02: '
+				+ :mgr
+				+ ' '
+				+ varchar(:mgrsal)
+				+ ' to '
+				+ varchar(:salary + :incsal)
+				+ ' > '
+				+ :name
+				+ ' '
+				+ varchar(:salary)
+				+ ' rows: '
+				+ varchar(Lrows);
+
+			message 2 msg_buf;
+
+			insert into log ( entry ) values ( :msg_buf );
+			select iierrornumber into Lerr;
+			if ( :Lerr > 0 )
+			then
+				raise error :Lerr 'emp_b02 fail';
+			endif;
+
+		elseif ( :Lrows != 0 )
+		then
+			msg_buf = 'emp_b02: '
+				+ varchar(:mgrsal)
+				+ ' > '
+				+ varchar(:salary);
+
+			message 2 msg_buf;
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure emp_b03:\n");
+	exec sql drop procedure emp_b03;
+	exec sql create procedure emp_b03 (
+		mgr	varchar(10)	not null with default
+	) as
+	declare
+		Lname	varchar(10)	not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'emp_b03: delete employeeless managers';
+		select name into :Lname from emp where mgr = :mgr;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'emp_b03 fail';
+		endif;
+
+		if ( :Lrows = 0 )
+		then
+			delete from emp where name = :mgr;
+			select iierrornumber, iirowcount into Lerr, Lrows;
+			if ( :Lerr > 0 )
+			then
+				raise error :Lerr 'emp_b03 fail';
+			endif;
+
+			msg_buf = 'emp_b03: delete employeeless manager '
+				+ :mgr
+				+ ' on emp, rows: '
+				+ varchar(Lrows);
+
+			message 2 msg_buf;
+
+			insert into log ( entry ) values ( :msg_buf );
+			select iierrornumber into Lerr;
+			if ( :Lerr > 0 )
+			then
+				raise error :Lerr 'emp_b03 fail';
+			endif;
+		else
+			msg_buf = 'emp_b03: '
+				+ :mgr
+				+ ' still manages '
+				+ :Lname
+				+ ' on emp, rows: '
+				+ varchar(Lrows);
+
+			message 2 msg_buf;
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure emp_u01:\n");
+	exec sql drop procedure emp_u01;
+	exec sql create procedure emp_u01 (
+		old_dept	varchar(10)	not null with default,
+		old_div		varchar(2)	not null with default,
+		new_dept	varchar(10)	not null with default,
+		new_div 	varchar(2)	not null with default
+	) as
+	declare
+		Lrows		integer		not null with default;
+		Lerr		integer		not null with default;
+		msg_buf		varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'emp_u01: update dept, div on emp';
+		msg_buf = 'emp_u01: update dept '
+			+ :old_dept
+			+ ', div '
+			+ :old_div
+			+ ' to '
+			+ :new_dept
+			+ ', '
+			+ :new_div
+			+ ' on emp, rows: '
+			+ varchar(Lrows);
+
+		message 10 msg_buf;
+
+		update emp
+		set dept = :new_dept, div = :new_div
+		where dept = :old_dept and div = :old_div;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'emp_u01 fail';
+		endif;
+
+		msg_buf = 'emp_u01: update dept '
+			+ :old_dept
+			+ ', div '
+			+ :old_div
+			+ ' to '
+			+ :new_dept
+			+ ', '
+			+ :new_div
+			+ ' on emp, rows: '
+			+ varchar(Lrows);
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'emp_u01 fail';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure emp_r01:\n");
+	exec sql drop procedure emp_r01;
+	exec sql create procedure emp_r01 (
+		name	varchar(10)	not null with default
+	) as
+	declare
+		Lname	varchar(10)	not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'emp_r01: make sure person exists to be mgr';
+		select name into :Lname from emp where name = :name;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'emp_r01 fail';
+		endif;
+
+		msg_buf = 'emp_r01: select name '
+			+ :name
+			+ ' from emp, rows: '
+			+ varchar(Lrows);
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'emp_r01 fail';
+		endif;
+
+		if ( :Lrows = 0 )
+		then
+			raise error 1 'invalid mgr name';
+		endif;
+	end;
+
+	/************************************************************/
+
+	printf("  drop and create procedure emp_r02:\n");
+	exec sql drop procedure emp_r02;
+	exec sql create procedure emp_r02 (
+		dname	varchar(10)	not null with default,
+		div	varchar(2)	not null with default
+	) as
+	declare
+		Lname	varchar(10)	not null with default;
+		Ldiv	varchar(2)	not null with default;
+		Lrows	integer		not null with default;
+		Lerr	integer		not null with default;
+		msg_buf	varchar(81)	not null with default;
+	begin
+		Lrows = 0;
+		Lerr = 0;
+		message 1 'emp_r02: prevent del depts w/ emps';
+		select name into :Lname from emp
+		where dept = :dname and div = :div;
+		select iierrornumber, iirowcount into Lerr, Lrows;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'emp_r02 fail';
+		endif;
+
+		if ( :Lrows > 0 )
+		then
+			msg_buf = 'emp_r02: '
+				+ :Lname
+				+ ' still in dept '
+				+ :dname
+				+ ', div '
+				+ :div
+				+ ' from emp, rows: '
+				+ varchar(Lrows);
+		else
+			msg_buf = 'emp_r02: select dept '
+				+ :dname
+				+ ', div '
+				+ :div
+				+ ' from emp, rows: '
+				+ varchar(Lrows);
+		endif;
+
+		message 2 msg_buf;
+
+		insert into log ( entry ) values ( :msg_buf );
+		select iierrornumber into Lerr;
+		if ( :Lerr > 0 )
+		then
+			raise error :Lerr 'emp_r02 fail';
+		endif;
+
+		if ( :Lrows > 0 )
+		then
+			raise error 1 'dept, div restrict on emp';
+		endif;
+	end;
+
+	exec sql set autocommit off;
+
+	/************************************************************/
+
+	printf("  create rule bldg_01:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule bldg_01;
+	}
+	exec sql create rule bldg_01 after insert on bldg
+		execute procedure dept_b03 (
+			bldg	= new.bldg
+		);
+
+	printf("  create rule bldg_02:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule bldg_02;
+	}
+	exec sql create rule bldg_02 after update(bldg) on bldg
+		execute procedure dept_u01 (
+			old_bldg = old.bldg,
+			new_bldg = new.bldg
+		);
+
+	printf("  create rule bldg_03:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule bldg_03;
+	}
+	exec sql create rule bldg_03 after delete on bldg
+		execute procedure dept_r02 (
+			bldg	= old.bldg
+		);
+
+	printf("  create rule dept_01:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule dept_01;
+	}
+	exec sql create rule dept_01 after insert on dept
+		execute procedure bldg_r01 (
+			bldg	= new.bldg
+		);
+
+	printf("  create rule dept_02:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule dept_02;
+	}
+	exec sql create rule dept_02 after insert on dept
+		execute procedure emp_b01 (
+			dname	= new.dname,
+			div	= new.div
+		);
+
+	printf("  create rule dept_03:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule dept_03;
+	}
+	exec sql create rule dept_03 after update(num_emp) on dept
+		execute procedure dept_b04 (
+			dname	= old.dname,
+			div	= old.div,
+			num_emp	= new.num_emp
+		);
+
+	printf("  create rule dept_04:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule dept_04;
+	}
+	exec sql create rule dept_04 after update on dept
+		where old.dname != new.dname
+		or old.div != new.div
+		execute procedure emp_u01 (
+			old_dept	= old.dname,
+			old_div		= old.div,
+			new_dept	= new.dname,
+			new_div		= new.div
+		);
+
+	printf("  create rule dept_05:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule dept_05;
+	}
+	exec sql create rule dept_05 after update(bldg), delete on dept
+		execute procedure bldg_b01 (
+			bldg	= new.bldg
+		);
+
+	printf("  create rule dept_06:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule dept_06;
+	}
+	exec sql create rule dept_06 after delete on dept
+		execute procedure emp_r02 (
+			dname	= old.dname,
+			div	= old.div
+		);
+
+	printf("  create rule emp_01:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule emp_01;
+	}
+	exec sql create rule emp_01 after insert on emp
+		execute procedure dept_r01 (
+			dname	= new.dept,
+			div	= new.div
+		);
+
+	printf("  create rule emp_02a:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule emp_02a;
+	}
+	exec sql create rule emp_02a 
+		after insert on emp
+		execute procedure dept_b01 (
+			dname	= new.dept,
+			div	= new.div
+		);
+
+	printf("  create rule emp_02b:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule emp_02b;
+	}
+	exec sql create rule emp_02b 
+		after update(dept) on emp
+		where old.dept != new.dept
+		or old.div != new.div
+		execute procedure dept_b01 (
+			dname	= new.dept,
+			div	= new.div
+		);
+
+	printf("  create rule emp_03:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule emp_03;
+	}
+	exec sql create rule emp_03 after insert on emp
+		execute procedure emp_r01 (
+			mgr	= new.mgr
+		);
+
+	printf("  create rule emp_04a:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule emp_04a;
+	}
+	exec sql create rule emp_04a 
+		after delete on emp
+		execute procedure dept_b02 (
+			dname	= old.dept,
+			div	= old.div
+		);
+
+	printf("  create rule emp_04b:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule emp_04b;
+	}
+	exec sql create rule emp_04b 
+		after update(div) on emp
+		where old.dept != new.dept
+		or old.div != new.div
+		execute procedure dept_b02 (
+			dname	= old.dept,
+			div	= old.div
+		);
+
+	printf("  create rule emp_05a:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule emp_05a;
+	}
+	exec sql create rule emp_05a 
+		after insert on emp
+		execute procedure emp_b02 (
+			name	= new.name,
+			mgr	= new.mgr,
+			salary	= new.salary
+		);
+
+	printf("  create rule emp_05b:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule emp_05b;
+	}
+	exec sql create rule emp_05b 
+		after update on emp
+		where old.mgr != new.mgr
+		or old.salary != new.salary
+		execute procedure emp_b02 (
+			name	= new.name,
+			mgr	= new.mgr,
+			salary	= new.salary
+		);
+
+	printf("  create rule emp_06:\n");
+	if ( do_drop )
+	{
+		exec sql drop rule emp_06;
+	}
+	exec sql create rule emp_06 after update(mgr), delete on emp
+		execute procedure emp_b03 (
+			mgr	= old.mgr
+		);
+
+} /* create_bed_rules() */
+
+/**************************/
+/* drop_bed_rules_procs() */
+/**************************/
+
+drop_bed_rules_procs()
+{
+        exec sql drop procedure bldg_b01;
+        exec sql drop procedure bldg_r01;
+        exec sql drop procedure dept_b01;
+        exec sql drop procedure dept_b02;
+        exec sql drop procedure dept_b03;
+        exec sql drop procedure dept_b04;
+        exec sql drop procedure dept_u01;
+        exec sql drop procedure dept_r01;
+        exec sql drop procedure dept_r02;
+        exec sql drop procedure emp_b01;
+        exec sql drop procedure emp_b02;
+        exec sql drop procedure emp_b03;
+        exec sql drop procedure emp_u01;
+        exec sql drop procedure emp_r01;
+        exec sql drop procedure emp_r02;
+
+} /* drop_bed_rules_procs() */
+!!
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc ela10.sc 
+<<
+ESQL ela10.sc:
+>>
+? sepcc ela10.c 
+<<
+>>
+<<
+ela10.c
+>>
+? sepesqlc rulestest.sc 
+<<
+ESQL rulestest.sc:
+>>
+? sepcc rulestest.c 
+<<
+>>
+<<
+rulestest.c
+>>
+? sepcc driverel.c 
+<<
+>>
+<<
+driverel.c
+>>
+? seplnk driver driverel rulestest ela10 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+~
+>>
+* drop table bldg, emp, dept, log;\g
+<<
+~
+>>
+* drop procedure bldg_b01;\g
+<<
+~
+>>
+* drop procedure bldg_r01;\g
+<<
+~
+>>
+* drop procedure dept_b01;\g
+<<
+~
+>>
+* drop procedure dept_b02;\g
+<<
+~
+>>
+* drop procedure dept_b03;\g
+<<
+~
+>>
+* drop procedure dept_b04;\g
+<<
+~
+>>
+* drop procedure dept_u01;\g
+<<
+~
+>>
+* drop procedure dept_r01;\g
+<<
+~
+>>
+* drop procedure dept_r02;\g
+<<
+~
+>>
+* drop procedure emp_b01;\g
+<<
+~
+>>
+* drop procedure emp_b02;\g
+<<
+~
+>>
+* drop procedure emp_b03;\g
+<<
+~
+>>
+* drop procedure emp_u01;\g
+<<
+~
+>>
+* drop procedure emp_r01;\g
+<<
+~
+>>
+* drop procedure emp_r02;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tela10 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+rules tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   ela10
+XX-----------------XX
+
+connecting with database...
+
+XX running test ela10 XX
+
+ela10: business integrity.
+
+  business integrity style rules on the
+  world famous bldg/emp/dept database.
+
+  dropping bldg table...
+E_US0AC1 DROP: 'bldg' does not exist or is not owned by you.
+    (Mon Nov  6 14:51:02 2006)
+  creating bldg table...
+  dropping dept table...
+E_US0AC1 DROP: 'dept' does not exist or is not owned by you.
+    (Mon Nov  6 14:51:02 2006)
+  creating dept table...
+  dropping emp table...
+E_US0AC1 DROP: 'emp' does not exist or is not owned by you.
+    (Mon Nov  6 14:51:02 2006)
+  creating emp table...
+  dropping log table...
+E_US0AC1 DROP: 'log' does not exist or is not owned by you.
+    (Mon Nov  6 14:51:02 2006)
+  creating log table...
+
+contents of bldg:
+-----------------
+ bldg = A , st_adr = 1000 University Ave           , city = Berkeley       , state =-
+ CA, zip = 94000
+ bldg = B , st_adr = 1800 Shattuck Ave             , city = Berkeley       , state =-
+ CA, zip = 94100
+ bldg = C , st_adr = 900 Lake Shore Blvd           , city = Chicago        , state =-
+ IL, zip = 60080
+ bldg = D , st_adr = 24130 Pennsylvania Ave        , city = Washington     , state =-
+ DC, zip = 20198
+ bldg = E , st_adr = 42318 Woodsay Blvd            , city = Houston        , state =-
+ TX, zip = 77009
+ bldg = F , st_adr = 1585 Eye St                   , city = Washington     , state =-
+ DC, zip = 20199
+-----------------
+
+contents of dept:
+-----------------
+ dname = admin     , div = NW, sales = 0, bldg = A, floor = 1, num_emp = 3
+ dname = market    , div = NW, sales = 0, bldg = A, floor = 20, num_emp = 2
+ dname = sales     , div = NC, sales = 120000, bldg = C, floor = 1, num_emp = 5
+ dname = sales     , div = NE, sales = 0, bldg = B, floor = 1, num_emp = 3
+ dname = sales     , div = NW, sales = 200000, bldg = A, floor = 2, num_emp = 2
+ dname = sales     , div = SC, sales = 95000, bldg = E, floor = 1, num_emp = 1
+ dname = sales     , div = SE, sales = 175000, bldg = D, floor = 18, num_emp = 2
+ dname = tech sup  , div = NC, sales = 0, bldg = C, floor = 1, num_emp = 3
+ dname = tech sup  , div = NE, sales = 0, bldg = B, floor = 1, num_emp = 1
+ dname = tech sup  , div = NW, sales = 0, bldg = B, floor = 1, num_emp = 4
+ dname = tech sup  , div = SE, sales = 0, bldg = D, floor = 19, num_emp = 3
+-----------------
+
+contents of emp:
+----------------
+ name = Aitken    , salary = 50000.000000, dept = sales   , div = NE , mgr = Verducc-
+i  , birthdate = 12-mar-1947              , num_dep = 2
+ name = Blumberg  , salary = 32000.000000, dept = sales   , div = SC , mgr = Clark  -
+   , birthdate =  6-dec-1952              , num_dep = 2
+ name = Brodie    , salary = 40000.000000, dept = sales   , div = NC , mgr = Clark  -
+   , birthdate =  1-feb-1948              , num_dep = 2
+ name = Cameron   , salary = 35000.000000, dept = tech sup, div = SE , mgr = Shigio -
+   , birthdate = 15-aug-1960              , num_dep = 0
+ name = Clark     , salary = 40000.000000, dept = sales   , div = NC , mgr = Verducc-
+i  , birthdate = 18-nov-1949              , num_dep = 1
+ name = Curan     , salary = 30000.000000, dept = tech sup, div = NW , mgr = Shigio -
+   , birthdate = 20-aug-1959              , num_dep = 0
+ name = Curry     , salary = 32000.000000, dept = tech sup, div = NW , mgr = Shigio -
+   , birthdate = 30-nov-1955              , num_dep = 3
+ name = Giller    , salary = 46000.000000, dept = sales   , div = NC , mgr = Clark  -
+   , birthdate =  9-jun-1953              , num_dep = 1
+ name = Gordon    , salary = 27000.000000, dept = tech sup, div = NC , mgr = Shigio -
+   , birthdate = 23-may-1963              , num_dep = 0
+ name = Green     , salary = 26000.000000, dept = market  , div = NW , mgr = McTigue-
+   , birthdate = 19-dec-1961              , num_dep = 0
+ name = Gregori   , salary = 31000.000000, dept = sales   , div = NW , mgr = Verducc-
+i  , birthdate = 21-oct-1949              , num_dep = 2
+ name = Huber     , salary = 32000.000000, dept = sales   , div = NC , mgr = Clark  -
+   , birthdate = 29-jun-1951              , num_dep = 2
+ name = Kay       , salary = 38000.000000, dept = sales   , div = NC , mgr = Clark  -
+   , birthdate = 12-mar-1944              , num_dep = 3
+ name = Kreseski  , salary = 24000.000000, dept = tech sup, div = NC , mgr = Shigio -
+   , birthdate = 11-sep-1955              , num_dep = 0
+ name = Mandic    , salary = 43000.000000, dept = sales   , div = SE , mgr = Verducc-
+i  , birthdate = 10-jul-1964              , num_dep = 0
+ name = McShane   , salary = 22000.000000, dept = admin   , div = NW , mgr = Clark  -
+   , birthdate =  3-mar-1943              , num_dep = 0
+ name = McTigue   , salary = 41000.000000, dept = sales   , div = NW , mgr = Verducc-
+i  , birthdate =  9-apr-1953              , num_dep = 1
+ name = Ming      , salary = 22000.000000, dept = tech sup, div = SE , mgr = Shigio -
+   , birthdate =  4-may-1956              , num_dep = 1
+ name = Ramos     , salary = 30000.000000, dept = tech sup, div = NW , mgr = Shigio -
+   , birthdate = 21-jan-1941              , num_dep = 0
+ name = Robinson  , salary = 80000.000000, dept = sales   , div = NE , mgr = Verducc-
+i  , birthdate = 20-nov-1952              , num_dep = 1
+ name = Sabel     , salary = 21000.000000, dept = tech sup, div = SE , mgr = Shigio -
+   , birthdate =  8-jan-1958              , num_dep = 0
+ name = Saxena    , salary = 22000.000000, dept = tech sup, div = NC , mgr = Shigio -
+   , birthdate =  8-may-1950              , num_dep = 0
+ name = Shigio    , salary = 28000.000000, dept = sales   , div = SE , mgr = Verducc-
+i  , birthdate =  9-jul-1948              , num_dep = 3
+ name = Stannich  , salary = 33000.000000, dept = market  , div = NW , mgr = McTigue-
+   , birthdate = 13-dec-1961              , num_dep = 0
+ name = Stein     , salary = 40000.000000, dept = sales   , div = NE , mgr = Verducc-
+i  , birthdate = 25-dec-1952              , num_dep = 1
+ name = Stover    , salary = 35000.000000, dept = admin   , div = NW , mgr = Clark  -
+   , birthdate =  3-oct-1940              , num_dep = 4
+ name = Sullivan  , salary = 35000.000000, dept = tech sup, div = NW , mgr = Shigio -
+   , birthdate = 10-oct-1960              , num_dep = 1
+ name = Verducci  , salary = 55000.000000, dept = admin   , div = NW , mgr =        -
+   , birthdate = 25-dec-1958              , num_dep = 2
+ name = Zimmerman , salary = 25000.000000, dept = tech sup, div = NE , mgr = Shigio -
+   , birthdate = 28-aug-1962              , num_dep = 0
+----------------
+
+contents of log:
+----------------
+----------------
+
+  create procedures and rules for bldg/dept/emp db...
+
+  drop and create procedure bldg_b01:
+E_US0965 Procedure 'bldg_b01' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure bldg_r01:
+E_US0965 Procedure 'bldg_r01' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure dept_b01:
+E_US0965 Procedure 'dept_b01' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure dept_b02:
+E_US0965 Procedure 'dept_b02' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure dept_b03:
+E_US0965 Procedure 'dept_b03' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure dept_b04:
+E_US0965 Procedure 'dept_b04' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure dept_u01:
+E_US0965 Procedure 'dept_u01' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure dept_r01:
+E_US0965 Procedure 'dept_r01' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure dept_r02:
+E_US0965 Procedure 'dept_r02' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure emp_b01:
+E_US0965 Procedure 'emp_b01' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure emp_b02:
+E_US0965 Procedure 'emp_b02' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure emp_b03:
+E_US0965 Procedure 'emp_b03' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure emp_u01:
+E_US0965 Procedure 'emp_u01' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure emp_r01:
+E_US0965 Procedure 'emp_r01' not found.
+    (Mon Nov  6 14:51:02 2006)
+  drop and create procedure emp_r02:
+E_US0965 Procedure 'emp_r02' not found.
+    (Mon Nov  6 14:51:02 2006)
+  create rule bldg_01:
+  create rule bldg_02:
+  create rule bldg_03:
+  create rule dept_01:
+  create rule dept_02:
+  create rule dept_03:
+  create rule dept_04:
+  create rule dept_05:
+  create rule dept_06:
+  create rule emp_01:
+  create rule emp_02a:
+  create rule emp_02b:
+  create rule emp_03:
+  create rule emp_04a:
+  create rule emp_04b:
+  create rule emp_05a:
+  create rule emp_05b:
+  create rule emp_06:
+
+  have at it!
+
+  fire Green and Stannich so mgr McTigue gets the axe...
+PRINTRULES 1: Executing procedure 'dept_b02' from rule 'emp_04a'
+PRINTRULES 2: Rule/procedure depth = 1/1, parameters passed = 2
+PRINTRULES 1: Executing procedure 'dept_b04' from rule 'dept_03'
+PRINTRULES 2: Rule/procedure depth = 2/2, parameters passed = 3
+PRINTRULES 1: Executing procedure 'emp_b03' from rule 'emp_06'
+PRINTRULES 2: Rule/procedure depth = 1/1, parameters passed = 1
+PRINTRULES 1: Executing procedure 'dept_b02' from rule 'emp_04a'
+PRINTRULES 2: Rule/procedure depth = 1/1, parameters passed = 2
+PRINTRULES 1: Executing procedure 'dept_b04' from rule 'dept_03'
+PRINTRULES 2: Rule/procedure depth = 2/2, parameters passed = 3
+PRINTRULES 1: Executing procedure 'bldg_b01' from rule 'dept_05'
+PRINTRULES 2: Rule/procedure depth = 3/3, parameters passed = 1
+PRINTRULES 1: Executing procedure 'emp_r02' from rule 'dept_06'
+PRINTRULES 2: Rule/procedure depth = 3/3, parameters passed = 2
+PRINTRULES 1: Executing procedure 'emp_b03' from rule 'emp_06'
+PRINTRULES 2: Rule/procedure depth = 1/1, parameters passed = 1
+PRINTRULES 1: Executing procedure 'dept_b02' from rule 'emp_04a'
+PRINTRULES 2: Rule/procedure depth = 2/2, parameters passed = 2
+PRINTRULES 1: Executing procedure 'dept_b04' from rule 'dept_03'
+PRINTRULES 2: Rule/procedure depth = 3/3, parameters passed = 3
+PRINTRULES 1: Executing procedure 'emp_b03' from rule 'emp_06'
+PRINTRULES 2: Rule/procedure depth = 2/2, parameters passed = 1
+-------------------------------------------------------------------
+
+contents of log:
+----------------
+ entry = dept_b02: num_emp decr where dname market, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname market, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname sales, div NW from dept, rows: 1
+ entry = dept_b04: del dept market, div NW w/ no emps from dept, rows: 1
+ entry = emp_b03: delete employeeless manager McTigue on emp, rows: 1
+ entry = emp_r02: select dept market, div NW from emp, rows: 0
+----------------
+
+  give Blumberg big raise, triggering other raises...
+PRINTRULES 1: Executing procedure 'emp_b02' from rule 'emp_05b'
+PRINTRULES 2: Rule/procedure depth = 1/1, parameters passed = 3
+PRINTRULES 1: Executing procedure 'emp_b02' from rule 'emp_05b'
+PRINTRULES 2: Rule/procedure depth = 2/2, parameters passed = 3
+PRINTRULES 1: Executing procedure 'emp_b02' from rule 'emp_05b'
+PRINTRULES 2: Rule/procedure depth = 3/3, parameters passed = 3
+-------------------------------------------------------------------
+
+contents of log:
+----------------
+ entry = dept_b02: num_emp decr where dname market, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname market, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname sales, div NW from dept, rows: 1
+ entry = dept_b04: del dept market, div NW w/ no emps from dept, rows: 1
+ entry = emp_b02: Clark 40000.000 to 56000.000 > Blumberg 46000.000 rows: 1
+ entry = emp_b02: Verducci 55000.000 to 76000.000 > Clark 56000.000 rows: 1
+ entry = emp_b03: delete employeeless manager McTigue on emp, rows: 1
+ entry = emp_r02: select dept market, div NW from emp, rows: 0
+----------------
+
+  fire Blumberg, wiping out a dept and a bldg...
+PRINTRULES 1: Executing procedure 'dept_b02' from rule 'emp_04a'
+PRINTRULES 2: Rule/procedure depth = 1/1, parameters passed = 2
+PRINTRULES 1: Executing procedure 'dept_b04' from rule 'dept_03'
+PRINTRULES 2: Rule/procedure depth = 2/2, parameters passed = 3
+PRINTRULES 1: Executing procedure 'bldg_b01' from rule 'dept_05'
+PRINTRULES 2: Rule/procedure depth = 3/3, parameters passed = 1
+PRINTRULES 1: Executing procedure 'dept_r02' from rule 'bldg_03'
+PRINTRULES 2: Rule/procedure depth = 4/4, parameters passed = 1
+PRINTRULES 1: Executing procedure 'emp_r02' from rule 'dept_06'
+PRINTRULES 2: Rule/procedure depth = 3/3, parameters passed = 2
+PRINTRULES 1: Executing procedure 'emp_b03' from rule 'emp_06'
+PRINTRULES 2: Rule/procedure depth = 1/1, parameters passed = 1
+-------------------------------------------------------------------
+
+contents of log:
+----------------
+ entry = bldg_b01: delete departmentless bldg E on bldg, rows: 1
+ entry = dept_b02: num_emp decr where dname market, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname market, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname sales, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname sales, div SC from dept, rows: 1
+ entry = dept_b04: del dept market, div NW w/ no emps from dept, rows: 1
+ entry = dept_b04: del dept sales, div SC w/ no emps from dept, rows: 1
+ entry = dept_r02: select bldg E from dept, rows: 0
+ entry = emp_b02: Clark 40000.000 to 56000.000 > Blumberg 46000.000 rows: 1
+ entry = emp_b02: Verducci 55000.000 to 76000.000 > Clark 56000.000 rows: 1
+ entry = emp_b03: delete employeeless manager McTigue on emp, rows: 1
+ entry = emp_r02: select dept market, div NW from emp, rows: 0
+ entry = emp_r02: select dept sales, div SC from emp, rows: 0
+----------------
+
+  change bldg A to bldg Z...
+PRINTRULES 1: Executing procedure 'dept_u01' from rule 'bldg_02'
+PRINTRULES 2: Rule/procedure depth = 1/1, parameters passed = 2
+PRINTRULES 1: Executing procedure 'bldg_b01' from rule 'dept_05'
+PRINTRULES 2: Rule/procedure depth = 2/2, parameters passed = 1
+PRINTRULES 1: Executing procedure 'bldg_b01' from rule 'dept_05'
+PRINTRULES 2: Rule/procedure depth = 2/2, parameters passed = 1
+-------------------------------------------------------------------
+
+contents of log:
+----------------
+ entry = bldg_b01: delete departmentless bldg E on bldg, rows: 1
+ entry = dept_b02: num_emp decr where dname market, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname market, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname sales, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname sales, div SC from dept, rows: 1
+ entry = dept_b04: del dept market, div NW w/ no emps from dept, rows: 1
+ entry = dept_b04: del dept sales, div SC w/ no emps from dept, rows: 1
+ entry = dept_r02: select bldg E from dept, rows: 0
+ entry = dept_u01: update bldg A to Z on dept, rows: 2
+ entry = emp_b02: Clark 40000.000 to 56000.000 > Blumberg 46000.000 rows: 1
+ entry = emp_b02: Verducci 55000.000 to 76000.000 > Clark 56000.000 rows: 1
+ entry = emp_b03: delete employeeless manager McTigue on emp, rows: 1
+ entry = emp_r02: select dept market, div NW from emp, rows: 0
+ entry = emp_r02: select dept sales, div SC from emp, rows: 0
+----------------
+
+contents of bldg:
+-----------------
+ bldg = B , st_adr = 1800 Shattuck Ave             , city = Berkeley       , state =-
+ CA, zip = 94100
+ bldg = C , st_adr = 900 Lake Shore Blvd           , city = Chicago        , state =-
+ IL, zip = 60080
+ bldg = D , st_adr = 24130 Pennsylvania Ave        , city = Washington     , state =-
+ DC, zip = 20198
+ bldg = F , st_adr = 1585 Eye St                   , city = Washington     , state =-
+ DC, zip = 20199
+ bldg = Z , st_adr = 1000 University Ave           , city = Berkeley       , state =-
+ CA, zip = 94000
+-----------------
+
+contents of dept:
+-----------------
+ dname = admin     , div = NW, sales = 0, bldg = Z, floor = 1, num_emp = 3
+ dname = sales     , div = NC, sales = 120000, bldg = C, floor = 1, num_emp = 5
+ dname = sales     , div = NE, sales = 0, bldg = B, floor = 1, num_emp = 3
+ dname = sales     , div = NW, sales = 200000, bldg = Z, floor = 2, num_emp = 1
+ dname = sales     , div = SE, sales = 175000, bldg = D, floor = 18, num_emp = 2
+ dname = tech sup  , div = NC, sales = 0, bldg = C, floor = 1, num_emp = 3
+ dname = tech sup  , div = NE, sales = 0, bldg = B, floor = 1, num_emp = 1
+ dname = tech sup  , div = NW, sales = 0, bldg = B, floor = 1, num_emp = 4
+ dname = tech sup  , div = SE, sales = 0, bldg = D, floor = 19, num_emp = 3
+-----------------
+
+contents of emp:
+----------------
+ name = Aitken    , salary = 50000.000000, dept = sales   , div = NE , mgr = Verducc-
+i  , birthdate = 12-mar-1947              , num_dep = 2
+ name = Brodie    , salary = 40000.000000, dept = sales   , div = NC , mgr = Clark  -
+   , birthdate =  1-feb-1948              , num_dep = 2
+ name = Cameron   , salary = 35000.000000, dept = tech sup, div = SE , mgr = Shigio -
+   , birthdate = 15-aug-1960              , num_dep = 0
+ name = Clark     , salary = 56000.000000, dept = sales   , div = NC , mgr = Verducc-
+i  , birthdate = 18-nov-1949              , num_dep = 1
+ name = Curan     , salary = 30000.000000, dept = tech sup, div = NW , mgr = Shigio -
+   , birthdate = 20-aug-1959              , num_dep = 0
+ name = Curry     , salary = 32000.000000, dept = tech sup, div = NW , mgr = Shigio -
+   , birthdate = 30-nov-1955              , num_dep = 3
+ name = Giller    , salary = 46000.000000, dept = sales   , div = NC , mgr = Clark  -
+   , birthdate =  9-jun-1953              , num_dep = 1
+ name = Gordon    , salary = 27000.000000, dept = tech sup, div = NC , mgr = Shigio -
+   , birthdate = 23-may-1963              , num_dep = 0
+ name = Gregori   , salary = 31000.000000, dept = sales   , div = NW , mgr = Verducc-
+i  , birthdate = 21-oct-1949              , num_dep = 2
+ name = Huber     , salary = 32000.000000, dept = sales   , div = NC , mgr = Clark  -
+   , birthdate = 29-jun-1951              , num_dep = 2
+ name = Kay       , salary = 38000.000000, dept = sales   , div = NC , mgr = Clark  -
+   , birthdate = 12-mar-1944              , num_dep = 3
+ name = Kreseski  , salary = 24000.000000, dept = tech sup, div = NC , mgr = Shigio -
+   , birthdate = 11-sep-1955              , num_dep = 0
+ name = Mandic    , salary = 43000.000000, dept = sales   , div = SE , mgr = Verducc-
+i  , birthdate = 10-jul-1964              , num_dep = 0
+ name = McShane   , salary = 22000.000000, dept = admin   , div = NW , mgr = Clark  -
+   , birthdate =  3-mar-1943              , num_dep = 0
+ name = Ming      , salary = 22000.000000, dept = tech sup, div = SE , mgr = Shigio -
+   , birthdate =  4-may-1956              , num_dep = 1
+ name = Ramos     , salary = 30000.000000, dept = tech sup, div = NW , mgr = Shigio -
+   , birthdate = 21-jan-1941              , num_dep = 0
+ name = Robinson  , salary = 80000.000000, dept = sales   , div = NE , mgr = Verducc-
+i  , birthdate = 20-nov-1952              , num_dep = 1
+ name = Sabel     , salary = 21000.000000, dept = tech sup, div = SE , mgr = Shigio -
+   , birthdate =  8-jan-1958              , num_dep = 0
+ name = Saxena    , salary = 22000.000000, dept = tech sup, div = NC , mgr = Shigio -
+   , birthdate =  8-may-1950              , num_dep = 0
+ name = Shigio    , salary = 28000.000000, dept = sales   , div = SE , mgr = Verducc-
+i  , birthdate =  9-jul-1948              , num_dep = 3
+ name = Stein     , salary = 40000.000000, dept = sales   , div = NE , mgr = Verducc-
+i  , birthdate = 25-dec-1952              , num_dep = 1
+ name = Stover    , salary = 35000.000000, dept = admin   , div = NW , mgr = Clark  -
+   , birthdate =  3-oct-1940              , num_dep = 4
+ name = Sullivan  , salary = 35000.000000, dept = tech sup, div = NW , mgr = Shigio -
+   , birthdate = 10-oct-1960              , num_dep = 1
+ name = Verducci  , salary = 76000.000000, dept = admin   , div = NW , mgr =        -
+   , birthdate = 25-dec-1958              , num_dep = 2
+ name = Zimmerman , salary = 25000.000000, dept = tech sup, div = NE , mgr = Shigio -
+   , birthdate = 28-aug-1962              , num_dep = 0
+----------------
+
+contents of log:
+----------------
+ entry = bldg_b01: delete departmentless bldg E on bldg, rows: 1
+ entry = dept_b02: num_emp decr where dname market, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname market, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname sales, div NW from dept, rows: 1
+ entry = dept_b02: num_emp decr where dname sales, div SC from dept, rows: 1
+ entry = dept_b04: del dept market, div NW w/ no emps from dept, rows: 1
+ entry = dept_b04: del dept sales, div SC w/ no emps from dept, rows: 1
+ entry = dept_r02: select bldg E from dept, rows: 0
+ entry = dept_u01: update bldg A to Z on dept, rows: 2
+ entry = emp_b02: Clark 40000.000 to 56000.000 > Blumberg 46000.000 rows: 1
+ entry = emp_b02: Verducci 55000.000 to 76000.000 > Clark 56000.000 rows: 1
+ entry = emp_b03: delete employeeless manager McTigue on emp, rows: 1
+ entry = emp_r02: select dept market, div NW from emp, rows: 0
+ entry = emp_r02: select dept sales, div SC from emp, rows: 0
+----------------
+
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driverelstub.h 
+<<
+~
+>>
+? delete driverel.c 
+<<
+~
+>>
+? delete driverel.o 
+<<
+~
+>>
+? delete driverel.obj 
+<<
+~
+>>
+? delete ingclude.sc 
+<<
+~
+>>
+? delete ingclude.c 
+<<
+~
+>>
+? delete rulesh.sc 
+<<
+~
+>>
+? delete rulesh.c 
+<<
+~
+>>
+? delete rulestest.sc 
+<<
+~
+>>
+? delete rulestest.c 
+<<
+~
+>>
+? delete rulestest.o 
+<<
+~
+>>
+? delete rulestest.obj 
+<<
+~
+>>
+? delete ela10.c 
+<<
+~
+>>
+? delete ela10.o 
+<<
+~
+>>
+? delete ela10.obj 
+<<
+~
+>>
+
+
+Ending at: Mon Nov  6 14:55:31 2006

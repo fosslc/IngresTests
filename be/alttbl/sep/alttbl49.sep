@@ -1,0 +1,350 @@
+/*
+	Test Name: alttbl49.sep
+	Time: Tue Jan 21 03:41:54 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:
+	Purpose	:
+	Input Files  :
+	Output Files :
+	Database     :
+	Tables       :
+        Synopsis     : This sep test contains serveral scripts test alter table
+		       drop columns when column has dependency view. Views shou
+		       ld be dropped when columns were dropped.
+
+ History: 21-Jan-1997	(Author)	Created
+	  03/23/99      (kamra01)  Modified the page_size to 8K instead of vpg_sz	 
+			and STR_ST to btree
+*/
+? fill alttbl49.sql 
+!!
+set autocommit on \p\g
+drop table t \p\g
+create table t(col1 int, col2 int, col3 int) with page_size = 8192 \p\g
+create view v1(col1, col2) as select col1,col2 from t \p\g
+create view v2 as select col1 from v1 \p\g 
+insert into t values(1,2,3) \p\g
+select * from v1 \p\g
+select * from v2 \p\g
+alter table t drop column col1 restrict\p\g
+alter table t drop column col1 cascade  \p\g
+select * from t \p\g
+select * from v1 \p\g
+select * from v2 \p\g
+drop table t \p\g
+
+create table t(col1 int, col2 int) with page_size = 8192 \p\g
+create view v1(col1, col2) as select col1,col2 from t \p\g
+create view v2(col1) as select col1  from t \p\g
+insert into t values(1,2) \p\g
+select * from v1 \p\g
+select * from v2 \p\g
+alter table t drop column col1 cascade \p\g
+select * from t \p\g
+select * from v1 \p\g
+select * from v2 \p\g
+drop table t \p\g
+
+
+create table t(col1 int, col2 int) with page_size = 8192 \p\g
+create view v(col1 ) as select col1 from t where col2=2  \p\g
+insert into t values(1,2) \p\g
+insert into  t values(5,5) \p\g
+select * from v \p\g
+alter table t drop column col2 restrict\p\g
+select * from t \p\g
+select * from v \p\g
+alter table t drop column col2 cascade \p\g
+select * from t \p\g
+select * from v \p\g
+drop table t \p\g
+
+drop table t1 \p\g
+drop table t2 \p\g
+create table t1(col1 int, col2 int) with page_size = 8192 \p\g
+create table t2(col1 int, col2 int) with page_size = 8192 \p\g
+insert into t1  values(1,2) \p\g
+insert into t2 values(5,6) \p\g
+create view v1 as select t1.col1,t2.col2  from t1, t2 \p\g
+create view v2 as select t1.col2,t2.col1 from t1, t2 \p\g
+select * from v1 \p\g
+select * from v2 \p\g
+alter table t2 drop column col2 cascade \p\g
+select * from v1 \p\g
+select *  from v2 \p\g
+alter table t1 drop column col2 cascade \p\g
+select *  from v2 \p\g
+drop table t1 \p\g
+drop table t2 \p\g
+
+drop table t \p\g
+create table t(col1 int, col2 int, col3 int) with page_size = 8192 \p\g
+insert into t values(1,1,1) \p\g
+create view v as select col1 , col3 from t \p\g
+alter table t drop column col2 restrict \p\g
+update t set col1=5 where col3=1 \p\g
+select * from v\p\g
+modify t to btree \p\g
+select * from v\p\g
+update t set col1=6 where col3=1 \p\g
+select * from v\p\g
+drop table t \p\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i alttbl49.sql
+<<
+/* SQL Startup File */
+ set autocommit on 
+drop table t 
+E_US0AC1 DROP: 't' does not exist or is not owned by you.
+    (Tue Jan 21 05:47:38 1997)
+
+create table t(col1 int, col2 int, col3 int) with page_size = 8192 
+create view v1(col1, col2) as select col1,col2 from t 
+create view v2 as select col1 from v1 
+ 
+insert into t values(1,2,3) 
+(1 row)
+select * from v1 
+
++-------------+-------------+
+|col1         |col2         |
++-------------+-------------+
+|            1|            2|
++-------------+-------------+
+(1 row)
+select * from v2 
+
++-------------+
+|col1         |
++-------------+
+|            1|
++-------------+
+(1 row)
+alter table t drop column col1 restrict
+E_QE016B ALTER TABLE DROP COLUMN RESTRICT:  restricted destruction of base
+    table column cannot proceed as it  has one or more dependent objects
+    which would become abandoned.
+    (Tue Jan 21 05:47:45 1997)
+
+alter table t drop column col1 cascade  
+select * from t 
+
++-------------+-------------+
+|col2         |col3         |
++-------------+-------------+
+|            2|            3|
++-------------+-------------+
+(1 row)
+select * from v1 
+E_US0845 Table 'v1' does not exist or is not owned by you.
+    (Tue Jan 21 05:47:46 1997)
+
+select * from v2 
+E_US0845 Table 'v2' does not exist or is not owned by you.
+    (Tue Jan 21 05:47:46 1997)
+
+drop table t 
+
+create table t(col1 int, col2 int) with page_size = 8192 
+create view v1(col1, col2) as select col1,col2 from t 
+create view v2(col1) as select col1  from t 
+insert into t values(1,2) 
+(1 row)
+select * from v1 
+
++-------------+-------------+
+|col1         |col2         |
++-------------+-------------+
+|            1|            2|
++-------------+-------------+
+(1 row)
+select * from v2 
+
++-------------+
+|col1         |
++-------------+
+|            1|
++-------------+
+(1 row)
+alter table t drop column col1 cascade 
+select * from t 
+
++-------------+
+|col2         |
++-------------+
+|            2|
++-------------+
+(1 row)
+select * from v1 
+E_US0845 Table 'v1' does not exist or is not owned by you.
+    (Tue Jan 21 05:47:52 1997)
+
+select * from v2 
+E_US0845 Table 'v2' does not exist or is not owned by you.
+    (Tue Jan 21 05:47:52 1997)
+
+drop table t 
+
+
+create table t(col1 int, col2 int) with page_size = 8192 
+create view v(col1 ) as select col1 from t where col2=2  
+insert into t values(1,2) 
+(1 row)
+insert into  t values(5,5) 
+(1 row)
+select * from v 
+
++-------------+
+|col1         |
++-------------+
+|            1|
++-------------+
+(1 row)
+alter table t drop column col2 restrict
+E_QE016B ALTER TABLE DROP COLUMN RESTRICT:  restricted destruction of base
+    table column cannot proceed as it  has one or more dependent objects
+    which would become abandoned.
+    (Tue Jan 21 05:47:54 1997)
+
+select * from t 
+
++-------------+-------------+
+|col1         |col2         |
++-------------+-------------+
+|            1|            2|
+|            5|            5|
++-------------+-------------+
+(2 rows)
+select * from v 
+
++-------------+
+|col1         |
++-------------+
+|            1|
++-------------+
+(1 row)
+alter table t drop column col2 cascade 
+select * from t 
+
++-------------+
+|col1         |
++-------------+
+|            1|
+|            5|
++-------------+
+(2 rows)
+select * from v 
+E_US0845 Table 'v' does not exist or is not owned by you.
+    (Tue Jan 21 05:47:55 1997)
+
+drop table t 
+
+drop table t1 
+E_US0AC1 DROP: 't1' does not exist or is not owned by you.
+    (Tue Jan 21 05:47:56 1997)
+
+drop table t2 
+E_US0AC1 DROP: 't2' does not exist or is not owned by you.
+    (Tue Jan 21 05:47:56 1997)
+
+create table t1(col1 int, col2 int) with page_size = 8192 
+create table t2(col1 int, col2 int) with page_size = 8192 
+insert into t1  values(1,2) 
+(1 row)
+insert into t2 values(5,6) 
+(1 row)
+create view v1 as select t1.col1,t2.col2  from t1, t2 
+create view v2 as select t1.col2,t2.col1 from t1, t2 
+select * from v1 
+
++-------------+-------------+
+|col1         |col2         |
++-------------+-------------+
+|            1|            6|
++-------------+-------------+
+(1 row)
+select * from v2 
+
++-------------+-------------+
+|col2         |col1         |
++-------------+-------------+
+|            2|            5|
++-------------+-------------+
+(1 row)
+alter table t2 drop column col2 cascade 
+select * from v1 
+E_US0845 Table 'v1' does not exist or is not owned by you.
+    (Tue Jan 21 05:48:02 1997)
+
+select *  from v2 
+
++-------------+-------------+
+|col2         |col1         |
++-------------+-------------+
+|            2|            5|
++-------------+-------------+
+(1 row)
+alter table t1 drop column col2 cascade 
+select *  from v2 
+E_US0845 Table 'v2' does not exist or is not owned by you.
+    (Tue Jan 21 05:48:03 1997)
+
+drop table t1 
+drop table t2 
+
+drop table t 
+E_US0AC1 DROP: 't' does not exist or is not owned by you.
+    (Tue Jan 21 05:48:04 1997)
+
+create table t(col1 int, col2 int, col3 int) with page_size = 8192 
+insert into t values(1,1,1) 
+(1 row)
+create view v as select col1 , col3 from t 
+alter table t drop column col2 restrict 
+update t set col1=5 where col3=1 
+(1 row)
+select * from v
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            5|            1|
++-------------+-------------+
+(1 row)
+modify t to btree
+(1 row)
+select * from v
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            5|            1|
++-------------+-------------+
+(1 row)
+update t set col1=6 where col3=1 
+(1 row)
+select * from v
+
++-------------+-------------+
+|col1         |col3         |
++-------------+-------------+
+|            6|            1|
++-------------+-------------+
+(1 row)
+drop table t 
+>>
+* \q 
+<<
+
+>>
+
+
+Ending at: Tue Jan 21 05:49:18 1997

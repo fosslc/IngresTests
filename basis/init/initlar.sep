@@ -1,0 +1,467 @@
+/*
+Copyright (c) 2004 Ingres Corporation
+
+
+	Test Name: initlar.sep
+	Time: Thu Sep  3 14:54:56 1998
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : initlar.sep
+	Module  : 
+	Filename: initlar.sep
+	Purpose	: Initialize and extend to 6 locations the test db 'lardb'
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : 
+	Synopsis     :
+
+ History: 03-Sep-1998	(vande02) Created this initalization sep based on old
+			lar00.sep so test database 'lardb' is extended to 6
+			locations for subsequent tests.  Also, initializes
+			security auditing audit files before lar testing suite.
+			Left '(popri01) Alternate canon for "location exists",
+			in case test must be re-run' change in as it is needed.
+	  23-Sep-1998  (kinte01) Added VMS specific info from lar00.sep
+	  05-nov-1998	(walro03)
+			Added NT_GENERIC statements based on vissu01's
+			02-oct-1998 change to lar00.sep.
+	  25-dec-1998	(somsa01)
+			For Windows NT, changed "createloc.sql" to "lar89.sql"
+			so that it would work. Also, do not try to clear the
+			audit logs for now; ingstop/ingstart via SEP will fail
+			as SEP on NT uses the shared memory directory.
+	  17-dec-2001   (boija02)
+			this would fail almost silently, always leave the 
+			unhelpfully named lar89.sql behind, was cleaning up the
+			audit files badly and was very messy to debug.
+			Tidied, canonised, drop the audit logs everywhere, used
+			test specific, descriptive file names. Moved destroydb 
+			to top to allow locations to be dropped. Improved error
+			trapping when the locations are in use.
+	  10-jan-2003   (boija02) 
+			The output from rm is sufficiently inconsistent across
+                        unix OS that trying to canonise it is impractical. That
+                        means this test will diff and the runbe.sh script will 
+                        fall over. That breaks handoffqa. If delete as another 
+                        user is ever fixed, this can be reversed, but for now 
+                        we ignore the output.
+	15-Aug-2003	(rogch01)
+		Add alternate canons for audit logging being recycled.  Logging
+		should be off, in which case we don't want a message telling
+		us.  If it's on, leave the log recycle in peace.  Lose the \p's
+		and run the execute procedure statements inline.  Trying to
+		canonise the output from the different \p'd commands just
+		added complexity, particularly on VMS.
+	  26-Oct-2004	(wu$ca01) Add NT_GENERIC fill file to remove/create 
+                        locations loc1 - loc5 with OS commands rd/md for Windows
+                        because 'mkdir -p' failed in the Cygwin environment.
+                        This also removes the dependency on MKS toolkit or
+                        Cygwin. Align the history comment.
+          12-Aug-2005   (sinna02) Added VMS specific changes to associate 
+                        installation id in the area name for location. Also
+                        modified the instruction to create area logicals which
+                        will work whether II_SYSTEM is a device or a concealed
+                        logical as suggested by Darren Horler. 
+                 
+                           
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? destroydb SEPPARAMDB
+<<
+Destroying database 'lardb' . . .
+
+
+Destruction of database 'lardb' completed successfully.
+
+>>
+<<
+Destroying database 'lardb' . . .
+
+E_US0010 Database does not exist: 'lardb'.
+    (Fri Dec 21 10:36:57 2001)
+Destruction of database 'lardb' abnormally terminated.
+>>
+? sql -s iidbdb
+<<
+>>
+* drop location loc1;\g
+<<
+>>
+<<
+E_US18B9 ALTER/DROP LOCATION: The location 'loc1' not found.
+    (Fri Nov 22 18:51:26 2002)
+>>
+* drop location loc2;\g
+<<
+>>
+<<
+E_US18B9 ALTER/DROP LOCATION: The location 'loc2' not found.
+    (Fri Nov 22 18:51:26 2002)
+>>
+* drop location loc3;\g
+<<
+>>
+<<
+E_US18B9 ALTER/DROP LOCATION: The location 'loc3' not found.
+    (Fri Nov 22 18:51:26 2002)
+>>
+* drop location loc4;\g
+<<
+>>
+<<
+E_US18B9 ALTER/DROP LOCATION: The location 'loc4' not found.
+    (Fri Nov 22 18:51:26 2002)
+>>
+* drop location loc5;\g
+<<
+>>
+<<
+E_US18B9 ALTER/DROP LOCATION: The location 'loc5' not found.
+    (Fri Nov 22 18:51:26 2002)
+>>
+* commit\g
+<<
+>>
+* alter security_audit stop;\g
+<<
+E_SX002B Security auditing is not active.
+    (12-AUG-2003 14:22:27)
+
+>>
+<<
+>>
+* \q
+<<
+>>
+.if UNIX
+? qasetuser ingres rm @file(ii_system,ingres,files,audit.1)
+/*
+If delete as another user becomes available, we can stop ignoring this output. BOIJA02
+*/
+<<
+~
+>>
+? qasetuser ingres rm @file(ii_system,ingres,files,audit.2)
+<<
+~
+>>
+.else
+? delete @file(ii_system,ingres,files,audit.1)
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+? delete @file(ii_system,ingres,files,audit.2)
+<<
+file was deleted
+>>
+<<
+file was not found
+>>
+.endif
+.if (VMS)
+? fill larbuild.com
+!! 
+$! larbuild.com:used in conjunction with lar00.sep to create the multiple 
+$!		DB locations.
+$!
+$! History:
+$!
+$! 07-Jul-98:	chegu01:  created.
+$! 16-Jul-98:	chegu01:  modified to change the hardcoding paths to symbolic
+$!			  paths. 
+$!
+$!
+$!*****************************************************************************
+$ set noon
+$ echo ="write sys$output"
+$!
+$!clean the old locations
+$!
+$ i=0
+$ CLEANLOOP:
+$ i=i+1
+$!
+$ if i .gt.2 then goto DONE
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.loc1...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.loc2...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.loc3...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.loc4...]*.*;*
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000.loc5...]*.*;*
+$ goto CLEANLOOP
+$ DONE:
+$!
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$!
+$ delete ii_system:[000000]loc*.*;*
+$!
+$!create the new locations
+$!
+$ create/dir ii_system:[000000.loc1.ingres.data] 
+$ create/dir ii_system:[000000.loc2.ingres.data]
+$ create/dir ii_system:[000000.loc3.ingres.data]
+$ create/dir ii_system:[000000.loc4.ingres.data]
+$ create/dir ii_system:[000000.loc5.ingres.data]
+$!
+$!parse II_SYSTEM, define the area logicals pointing to row device locations:
+$!
+$ disk=f$extract(0,f$length(f$trnlnm("II_SYSTEM"))-1,f$trnlnm("II_SYSTEM"))
+$ i= f$locate(":", disk)
+$ disk1=f$extract(0, i, disk)
+$ disk2=f$extract(i+2, f$length("''disk'"), disk)
+$!
+$ if (f$trnlnm("''disk1'") .eqs. "")
+$ then
+$       dev=disk
+$ else
+$       if (disk2 .eqs. "") 
+$       then
+$ dev = F$PARSE("II_SYSTEM:[000000]",,,,"NO_CONCEAL")-"000000].;"-"]["
+$       else
+$ dev = F$PARSE("II_SYSTEM:[000000]",,,,"NO_CONCEAL")-"000000].;"-"]["
+$       endif
+$ endif
+$!
+$ dev1="''dev'"+"loc1.]"
+$ dev2="''dev'"+"loc2.]"
+$ dev3="''dev'"+"loc3.]"
+$ dev4="''dev'"+"loc4.]"
+$ dev5="''dev'"+"loc5.]"
+$!
+$ id=f$trnlnm("ii_installation") 
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area1_'id 'dev1
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area2_'id 'dev2
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area3_'id 'dev3
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area4_'id 'dev4
+$ define/user sys$output nl:
+$ define/user sys$error nl:
+$ define/system/exec/trans=concealed area5_'id 'dev5
+$ exit
+!!
+? qasetuser testenv @larbuild.com
+<<
+>>
+? fill lar_loc_setup.sql
+!!
+!!
+? fill larloc_setup.com
+!!
+$ open/write outfile []lar_loc_setup.sql
+$ say := write outfile
+$ id=f$trnlnm("ii_installation")
+$ say "create location loc1 with area='area1_''id'', usage=(database);commit;\g"
+$ say "create location loc2 with area='area2_''id'', usage=(database);commit;\g"
+$ say "create location loc3 with area='area3_''id'', usage=(database);commit;\g"
+$ say "create location loc4 with area='area4_''id'', usage=(database);commit;\g"
+$ say "create location loc5 with area='area5_''id'', usage=(database);commit;\g"
+$ close outfile
+!!
+? run larloc_setup.com
+<<
+
+>>
+.endif
+.if (UNIX) 
+? fill lar_loc_setup.exe 
+!!
+echo "create location loc1 with area ='" > lar_loc_setup.sql ; env \
+| grep II_SYSTEM | awk -F= '{print $2}' >> lar_loc_setup.sql \
+; echo "/loc1', usage=(database);commit;\g" >> lar_loc_setup.sql ; \
+echo "" >> lar_loc_setup.sql ; \
+echo "create location loc2 with area ='" >> lar_loc_setup.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> lar_loc_setup.sql ; \
+echo "/loc2', usage=(database);commit;\g" >> lar_loc_setup.sql ; \
+echo "" >> lar_loc_setup.sql ; \
+echo "create location loc3 with area ='" >> lar_loc_setup.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> lar_loc_setup.sql ; \
+echo "/loc3', usage=(database);commit;\g" >> lar_loc_setup.sql ; \
+echo "" >> lar_loc_setup.sql ; \
+echo "create location loc4 with area ='" >> lar_loc_setup.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> lar_loc_setup.sql ; \
+echo "/loc4', usage=(database);commit;\g" >> lar_loc_setup.sql ; \
+echo "" >> lar_loc_setup.sql ; \
+echo "create location loc5 with area ='" >> lar_loc_setup.sql ; \
+env | grep II_SYSTEM | awk -F= '{print $2}' >> lar_loc_setup.sql ; \
+echo "/loc5', usage=(database);commit;\g" >> lar_loc_setup.sql ;
+!!
+? run chmod u+x lar_loc_setup.exe 
+<<
+>>
+? run lar_loc_setup.exe 
+<<
+>>
+? qasetuser ingres rm -r @file(ii_system,loc1) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,loc2) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,loc3) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,loc4) 
+<<
+~
+>>
+? qasetuser ingres rm -r @file(ii_system,loc5) 
+<<
+~
+>>
+? qasetuser ingres mkdir -p @file(ii_system,loc1,ingres,data,default) 
+<<
+>>
+? qasetuser ingres mkdir -p @file(ii_system,loc2,ingres,data,default) 
+<<
+>>
+? qasetuser ingres mkdir -p @file(ii_system,loc3,ingres,data,default) 
+<<
+>>
+? qasetuser ingres mkdir -p @file(ii_system,loc4,ingres,data,default) 
+<<
+>>
+? qasetuser ingres mkdir -p @file(ii_system,loc5,ingres,data,default) 
+<<
+>>
+.endif 
+.if (NT_GENERIC) 
+? fill createloc.bat
+!!
+echo create location loc1 with area='%II_SYSTEM%\loc1', usage=(database); commit; -
+\g > lar_loc_setup.sql
+echo create location loc2 with area='%II_SYSTEM%\loc2', usage=(database); commit; -
+\g >> lar_loc_setup.sql
+echo create location loc3 with area ='%II_SYSTEM%\loc3', usage=(database);commit; -
+\g >> lar_loc_setup.sql
+echo create location loc4 with area ='%II_SYSTEM%\loc4', usage=(database);commit; -
+\g >> lar_loc_setup.sql
+echo create location loc5 with area ='%II_SYSTEM%\loc5', usage=(database);commit; -
+\g >> lar_loc_setup.sql
+!!
+? run createloc.bat
+<<
+>>
+? fill mklocdir.bat
+!!
+qasetuser ingres rd /S /Q %II_SYSTEM%\loc1
+qasetuser ingres rd /S /Q %II_SYSTEM%\loc2
+qasetuser ingres rd /S /Q %II_SYSTEM%\loc3
+qasetuser ingres rd /S /Q %II_SYSTEM%\loc4
+qasetuser ingres rd /S /Q %II_SYSTEM%\loc5
+qasetuser ingres md "%II_SYSTEM%\loc1\ingres\data\default"
+qasetuser ingres md "%II_SYSTEM%\loc2\ingres\data\default"
+qasetuser ingres md "%II_SYSTEM%\loc3\ingres\data\default"
+qasetuser ingres md "%II_SYSTEM%\loc4\ingres\data\default"
+qasetuser ingres md "%II_SYSTEM%\loc5\ingres\data\default"
+!!
+? run mklocdir.bat
+<<
+~
+>>
+? delete mklocdir.bat
+<<
+file was deleted
+>>
+.endif
+? sql -uingres -s iidbdb 
+<<
+>>
+* \i lar_loc_setup.sql
+<<
+>>
+* \q
+<<
+>>
+? createdb SEPPARAMDB
+<<
+Creating database 'lardb' . . .
+
+  Creating DBMS System Catalogs . . .
+  Modifying DBMS System Catalogs . . .
+  Creating Standard Catalog Interface . . .
+  Creating Front-end System Catalogs . . .
+
+Creation of database 'lardb' completed successfully.
+>>
+? sql -s -uingres iidbdb
+<<
+>>
+* alter security_audit restart;\g
+<<
+E_SX002B Security auditing is not active.
+    (12-AUG-2003 14:22:27)
+
+>>
+<<
+>>
+* execute procedure iiqef_add_location(database_name='lardb',location_name='loc1', a-
+ccess=8, need_dbdir_flg=1)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='lardb',location_name='loc2', a-
+ccess=8, need_dbdir_flg=1)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='lardb',location_name='loc3', a-
+ccess=8, need_dbdir_flg=1)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='lardb',location_name='loc4', a-
+ccess=8, need_dbdir_flg=1)\g
+<<
+>>
+* execute procedure iiqef_add_location(database_name='lardb',location_name='loc5', a-
+ccess=8, need_dbdir_flg=1)\g
+<<
+>>
+* commit;\g
+<<
+>>
+* \q
+<<
+>>
+.if !VMS
+? delete lar_loc_setup.sql
+<<
+file was deleted
+>>
+.endif
+
+
+Ending at: Thu Sep  3 14:54:56 1998

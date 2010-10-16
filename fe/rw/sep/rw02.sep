@@ -1,0 +1,294 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name   : rw02.sep (formerly CUR-04,wja00)
+	Time        : 23-JUN-1989 11:11:11
+	User Name   : qatest
+
+	Test ID     : rw02
+	Module      : REPORT and SREPORT
+	Filename    : rw02.sep
+	Purpose     : Cursory Test
+	Input Files : xwja00a.rw, xwja00b.rw, xwja00c.rw
+	Output Files: xwja00a.res, xwja00b.res, xwja00c.res
+	Database    : rwdb
+	Tables      : qeemp
+	Synopsis    :
+		Test parameters: on commandline.
+		Make sure they are assigned the correct datatype.
+		When SEP can set up input redirection for forked processes,
+		enhance this test to include automated response to prompts.
+		(e.g.: report basisdb wja00a -fxwja00b.res <xwja00b.dat)
+	History     :
+	  23-jun-1989	(edt)	  Created
+	  13-Jan-1993	(Victor)  Removed altcanons for sreport and added ignore
+				  results since sreport is already tested in
+				  this suite.
+	  01-May-1995	(ciodi01) Modified Due to SEP bug 66364, running a
+				  report command with command-line
+				  initialization of variables causes the test
+				  to hang.  This test will be removed from the
+				  file $TST_CFG/ferw.lis and will now be run by
+				  hand. The portion of the test from the
+				  "report" command to the end of the file are
+				  left in the test for clarity,but are commented
+	     Automated Instructions:
+	     ======================
+	     Run the sep test wja00.sep
+	     Hand Instructions:
+	     =================
+	     Enter the following at the command-line prompt:
+	     report $SEPPARAMDB wja00a -fxwja00a.res "(x1='qediv',x2='SC',
+	     x3='qenum_dep',x4='=',x5='4')"
+
+	     report $SEPPARAMDB wja00c -b -fxwja00c.res "(t_prompt_def='prp_def',
+	     t_prompt_def2='XX',t_prompt_nodef='',t_prompt_nodef2='YY',var1='',
+	     var2='ZZ')"
+	     Results:
+	     =======
+	     After all of the report-writer hand tests have been executed,
+	     run the sep test $ING_TST/fe/rw/hand/rwhand.sep. This will check 
+	     all of the output files and should complete with no diffs.
+
+          28-Jun-2004   (vande02) Adding if/endif for SEPPARAMFULLQA to set SEP
+                                  flag 'sepset nodelete' for FULL QA only and
+                                  front-end files will remain for hand tests.
+                                  Aligned history comments.
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+	  15-Aug-2007	(vande02) Added report wja00b which tests declared
+				  variables with no prompt no default and
+				  no prompt with a default.  This is bug 117376.
+				  Added report wja00c an new hand test which
+				  uses prompts with no default, with default,
+				  declared and undeclared variables (bugs
+				  110733, 118486).  Adding hand tests steps to
+				  fehndtst.txt.  Made a few header corrections.
+*/
+.if SEPPARAMFULLQA = "TRUE" 
+? sepset nodelete 
+<<
+SEP internal variable 'nodelete' is set.
+>>
+.else 
+.endif 
+? delobj SEPPARAMDB -report wja00a wja00b  wja00c
+<<
+~
+>>
+? fill xwja00a.rw 
+!!
+.name	wja00a
+.srem	REPORT Cursory -- parameters
+.query
+	select *
+	from qeemp
+	where qesalary = 21000.00 or qesalary = 80000.00
+	or $x1 = '$x2' or $x3 $x4 $x5
+.noformfeeds
+.detail
+	.tab 05 .pr qename
+	.tab 20 .pr qesalary
+	.tab 35 .pr qedept
+	.tab 50 .pr qediv
+	.tab 55 .pr left(qebirthdate,11)
+	.nl
+!!
+? fill xwja00b.rw 
+!!
+.NAME		wja00b
+.SHORTREMARK    RBF
+.DECLARE
+	t_noprompt_nodef = varchar(10) not null,
+	t_noprompt_def = varchar(10) not null with value "nop_def"
+
+.QUERY
+        SELECT datum = date('15-Aug-2007')
+        FROM ii_id
+.DETAIL
+.pr 'Report date is '
+.pr datum .nl
+
+.pr 'Noprompt nodef is ('
+.pr $t_noprompt_nodef
+.pr ') (should be "")' .nl
+
+.pr 'Noprompt def is ('
+.pr $t_noprompt_def
+.pr ') (should be "nop_def")' .nl
+!!
+? fill xwja00c.rw
+!!
+.NAME		wja00c
+.SHORTREMARK    RBF
+.DECLARE
+	t_noprompt_nodef = varchar(10) not null,
+	t_noprompt_def = varchar(10) not null with value "nop_def",
+	t_prompt_def = varchar(10) not null with prompt "Press return:" with value "prp_def",
+	t_prompt_def2 = varchar(10) not null with prompt "Enter XX:" with value "prp_def",
+	t_prompt_nodef = varchar(10) not null with prompt "Press return2:",
+	t_prompt_nodef2 = varchar(10) not null with prompt "Enter YY:"
+.QUERY
+        SELECT datum = date('29-Feb-2004')
+        FROM ii_id
+.DETAIL
+.pr 'Report date is '
+.pr datum .nl
+
+.pr 'Noprompt nodef is ('
+.pr $t_noprompt_nodef
+.pr ') (should be "")' .nl
+
+.pr 'Noprompt def is ('
+.pr $t_noprompt_def
+.pr ') (should be "nop_def")' .nl
+
+.pr 'Prompt def is ('
+.pr $t_prompt_def
+.pr ') (should be "prp_def")' .nl
+
+.pr 'Prompt def2 is ('
+.pr $t_prompt_def2
+.pr ') (should be "XX")' .nl
+
+.pr 'Prompt nodef is ('
+.pr $t_prompt_nodef
+.pr ') (should be "")' .nl
+
+.pr 'Prompt nodef2 is ('
+.pr $t_prompt_nodef2
+.pr ') (should be "YY")' .nl
+
+.pr 'Undeclared var1 (which you need to scroll down through) is ('
+.pr $var1
+.pr ')' .nl .pr '(should be "")' .nl
+
+.pr 'Undeclared var2 is ('
+.pr $var2
+.pr ') (should be "ZZ")' .nl
+!!
+? sreport SEPPARAMDB xwja00a.rw 
+<<
+~
+>>
+? sreport SEPPARAMDB xwja00c.rw 
+<<
+~
+>>
+? report SEPPARAMDB -ixwja00b.rw -b -fxwja00b.res 
+<<
+
+INGRES REPORT Copyright 2007 Ingres Corporation
+Reading report specifications and preparing query . . .
+File 'xwja00b.rw': Start of specifications for Report 'wja00b'.
+Retrieving data . . .
+
+>>
+? type xwja00b.res 
+<<
+Report date is 15-aug-2007
+Noprompt nodef is () (should be "")
+Noprompt def is (nop_def) (should be "nop_def")
+
+>>
+? delete xwja00b.res
+<<
+file was deleted
+>>
+/*  
+	The remainder of this test is run by hand.
+
+? report SEPPARAMDB wja00a -fxwja00a.res "(x1='qediv',x2='SC',x3='qenum_dep',x4='=',-
+x5='4')" 
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+? type xwja00a.res 
+<<
+     Blumberg        32000.000     sales          SC    6-dec-1952
+     Robinson        80000.000     sales          NE   20-nov-1952
+     Sabel           21000.000     tech sup       SE    8-jan-1958
+     Stover          35000.000     admin          NW    3-oct-1940
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>
+? report SEPPARAMDB wja00c -b -fxwja00c.res "(t_prompt_def='prp_def',t_prompt_def2='XX',t_prompt_nodef='',t_prompt_nodef2='YY',var1='',var2='ZZ')" 
+<<
+INGRES REPORT Copyright 2007 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+? type xwja00c.res 
+<<
+Report date is 14-aug-2007
+Noprompt nodef is () (should be "")
+Noprompt def is (nop_def) (should be "nop_def")
+Prompt def is (prp_def) (should be "prp_def")
+Prompt def2 is (XX) (should be "XX")
+Prompt nodef is () (should be "")
+Prompt nodef2 is (YY) (should be "YY")
+Undeclared var1 (which you need to scroll down through) is ()
+(should be "")
+Undeclared var2 is (ZZ) (should be "ZZ")
+
+>>
+*/
+
+
+Ending at: Wed Aug 15 13:53:42 2007

@@ -1,0 +1,258 @@
+/*
+	Copyright (c) 2007 Ingres Corporation
+
+	Test Name: lar165.sep
+	Time: Fri Mar 23 12:32:22 2001
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : lar165
+	Module  : be/lar
+	Filename: lar165.sep
+	Purpose	: To test the concurrent rollback feature
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : lar165_1, lar165_2, lar165_3, lar165_4, lar165_5
+	Synopsis     : This test copies data from iirelation to table lar165_1 
+		       and then doubles the data until there are between 4000
+		       5000 rows in the table. Then it copies this data into 4 
+		       additional tables (lar165_2-5) and takes a snapshot of
+		       the database. Then, a slave process starts a transaction
+		       to modify one of the tables to double the size of the 
+		       table and start another slave process without committing
+		       the update. This is repeated until 5 processes have each 
+		       doubled the size of one table and then they all wait 
+		       until a dbevent signals them each to execute a rollback 
+		       concurrently. When all the rollbacks have completed,
+		       another snapshot of the database is taken and compared 
+		       with the first snapshot to ensure that the rollback 
+		       completed successfully.
+
+ History: 23-Mar-2001	(marwi08)	Created
+          16-Jul-2001	(sheco02) Add drop table to clean up database.
+	  21-jun-2007	(horda03)
+		Correct syntax for invoking program on VMS
+	15-Oct-2007	(rogch01)
+		Stop running this test on VMS until it has been ported to that
+		platform.  Otherwise this test makes the lar suite hang.
+	17-Oct-2007	(rogch01)
+		Cross Darren's change from ingres26 and back out my change.
+*/
+? fill lar165.sql 
+!!
+set autocommit on\g
+drop lar165_1, lar165_2, lar165_3, lar165_4, lar165_5\g
+drop dbevent lar165_1\g
+drop dbevent lar165_2\g
+create dbevent lar165_1\g
+create dbevent lar165_2\g
+create table lar165_1 as select * from iirelation\g
+insert into lar165_1 select * from lar165_1\g
+insert into lar165_1 select * from lar165_1\g
+insert into lar165_1 select * from lar165_1\g
+insert into lar165_1 select * from lar165_1\g
+insert into lar165_1 select * from lar165_1\g
+create table lar165_2 as select * from lar165_1\g
+create table lar165_3 as select * from lar165_1\g
+create table lar165_4 as select * from lar165_1\g
+create table lar165_5 as select * from lar165_1\g
+modify lar165_1 to btree on reltid\g
+modify lar165_2 to btree on reltid\g
+modify lar165_3 to btree on reltid\g
+modify lar165_4 to btree on reltid\g
+modify lar165_5 to btree on reltid\g
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* \i lar165.sql 
+<<
+~
+>>
+* \q 
+<<
+~
+>>
+? fill lar165.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+#ifdef _WIN32
+char *cmdfmt = "start /b %s %d %d %s";
+
+#elif defined(__VMS)
+char *cmdfmt = "mc %s %d %d %s";
+
+#else
+char *cmdfmt = "%s %d %d %s &";
+#endif
+
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+      char      tbname[36];
+      char      qtxt[256];
+   EXEC SQL END DECLARE SECTION;
+
+   int       i, id, scnt;
+   int       ivar1;
+   int       ivar2;
+   char cmdline[500];
+
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   scnt = atoi(argv[1]);
+   id = atoi(argv[2]);
+   dbname = argv[3];
+
+   EXEC SQL CONNECT :dbname;
+
+   if (id == 0) /* if I'm the master...*/
+   {
+#ifdef DEBUGTEST
+      printf("Master\n");
+#endif
+      EXEC SQL raise dbevent lar165_1;
+#ifdef DEBUGTEST
+      printf("Master exits\n");
+#endif
+   }
+   else         /* I'm a slave */
+   {
+#ifdef DEBUGTEST
+      printf("Slave %d\n", id);
+#endif
+      EXEC SQL set autocommit off;
+      EXEC SQL register dbevent lar165_1;
+      EXEC SQL register dbevent lar165_2;
+
+      sprintf(tbname, "lar165_%d", id);
+
+      ivar1 = getval(tbname);
+
+      sprintf(qtxt, "update %s set reltid = reltid * 2", tbname);
+      EXEC SQL execute immediate :qtxt;
+
+#ifdef DEBUGTEST
+      printf("Slave %d UPDATE done\n", id);
+#endif
+
+      sprintf(cmdline, cmdfmt, argv[0], scnt, id - 1, dbname);
+      system(cmdline);
+
+      EXEC SQL get dbevent with wait;
+
+#ifdef DEBUGTEST
+      printf("Slave %d starts ROLLBACK\n", id);
+#endif
+      EXEC SQL ROLLBACK;
+#ifdef DEBUGTEST
+      printf("Slave %d ROLLBACK done\n", id);
+#endif
+
+      ivar2 = getval(tbname);
+
+#ifdef DEBUGTEST
+      printf("Slave %d %d, %d\n", id, ivar1, ivar2);
+#endif
+      if (ivar1 != ivar2)
+         printf("ERROR: Data mismatch, Slave %d\n", id);
+
+      if (id == scnt) /* then I'm the first slave */
+      {
+         for (i = 0; i < (scnt - 1); i++)
+         {
+            EXEC SQL get dbevent with wait;
+         }
+      }
+      else
+      {
+         EXEC SQL raise dbevent lar165_2;
+      }
+#ifdef DEBUGTEST
+      printf("Slave %d exits\n", id);
+#endif
+
+   }
+   EXEC SQL DISCONNECT;
+}
+int getval(char *tbl)
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int   ivar;
+      char  qtxt[256];
+   EXEC SQL END DECLARE SECTION;
+
+   sprintf(qtxt, "select avg(reltid) from %s", tbl);
+   EXEC SQL prepare junker from :qtxt;
+   EXEC SQL declare c1 cursor for junker;
+   EXEC SQL open c1;
+   EXEC SQL fetch c1 into :ivar;
+   EXEC SQL close c1;
+   return ivar;
+}
+!!
+? esqlc lar165.sc 
+<<
+~
+>>
+? sepcc lar165.c 
+<<
+~
+>>
+? seplnk lar165 
+<<
+~
+>>
+? run lar165.exe 5 5 SEPPARAMDB 
+<<
+>>
+? delete lar165.c 
+<<
+~
+>>
+? delete lar165.o 
+<<
+~
+>>
+? delete lar165.obj 
+<<
+~
+>>
+? delete lar165.exe 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table lar165_1;\g
+<<
+>>
+* drop table lar165_2;\g
+<<
+>>
+* drop table lar165_3;\g
+<<
+>>
+* drop table lar165_4;\g
+<<
+>>
+* drop table lar165_5;\g
+<<
+>>
+*\q
+<<
+
+>>
+
+
+Ending at: Mon Jul 16 17:04:20 2001

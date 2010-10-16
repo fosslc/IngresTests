@@ -1,0 +1,278 @@
+/*
+
+ Copyright (c) 2007 Ingres Corporation
+
+ 
+	Test Name: odbc03.sep
+	Time: Mon Apr  3 11:06:02 2000
+	User Name: ingres
+	Terminal type: septerm
+ 
+        Test ID      : odbc03.sep
+        Module       : odbc
+        Filename     : odbc03.sep
+        Purpose      : Testing Date() function
+        Input Files  : droptabel.sql, function.sql
+        Output Files :
+        Database     : odbcdb
+        Tables       :
+        Synopsis     :
+
+ History: 02-May-2000	(ngutr03)	Created
+	17-May-2001	(soura01)
+		Changed to also run on w95 & w98 with a SEPPARAM_NODE.
+	24-May-2001	(rogch01)
+		Detect setting of SEPPARAM_NODE to allow client server
+		operation on any OS.  Because the data source is defined from
+		the ingres account on NT, the test needs to be run as ingres.
+		Add "(1 row) to result of commit as odbctest.c treats a commit
+		like a delete, update or insert and prints out the number of
+		rows affected.
+        26-Nov-2001     (sarjo01)
+                Change testenv pw to ca-testenv for UNIX; Add ./ to odbctest
+                command. Made UNIX build script a separate file.
+        15-Jul-2004     (sarjo01)
+                Added password variable, SEPPARAM_OPASSWORD
+        12-Aug-2004     (sarjo01)
+                Changed DSN name to testdsn 
+        12-Aug-2004     (sarjo01)
+                Recanonize.
+        01-Oct-2004	(legru01)
+		Ported test to operate on Windows without using the MKS 
+		toolkit command "sh".Added "%"s for
+		the Windows environment variable SEPPARAM_OPASSWORD.
+        30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+	20-Jun-2007	(boija02) Deleting filled files makes debugging harder
+
+*/
+? delete runodbc.bat
+<<
+~
+>>
+? delete buildodbc.bat
+<<
+~
+>>
+? delete runodbc
+<<
+~
+>>
+? delete buildodbc
+<<
+~
+>>
+? delete odbctest
+<<
+~
+>>
+? delete odbctest.h
+<<
+~
+>>
+? delete odbctest.c
+<<
+~
+>>
+? delete odbctest.o
+<<
+~
+>>
+? delete odbctest.obj
+<<
+~
+>>
+? delete odbctest.exe
+<<
+~
+>>
+? fill droptable.sql
+!!
+drop table p_table\g
+!!
+? fill function.sql
+!!
+create table p_table  ( a integer, b character(10), c varchar(20), d float ,e date, -
+f smallint)\g
+insert into p_table values ( 123, 'abcdefghuj', '1234567890pppppppppp', 12.098774,  -
+date('3/9/99'),  30021 )\g
+select * from p_table\g
+update p_table set b='updated'\g
+select * from p_table\g
+update p_table set a=99, b= 'updatAgain' where a=123\g
+commit\g
+select * from p_table\g
+!!
+.if !SEPPARAM_NODE
+? sql -s -utestenv odbcdb
+<<
+
+>>
+.else
+? sql -s -utestenv SEPPARAM_NODE
+<<
+
+>>
+.endif
+* \i droptable.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? cp @file(ing_tst,odbc,src,odbctest.h) odbctest.h
+<<
+>>
+? cp @file(ing_tst,odbc,src,odbctest.c) odbctest.c
+<<
+>>
+.if (NT_GENERIC)
+? setenv SEPPARAM_FILENAME runodbc.bat
+<<
+~
+>>
+? fill buildodbc.bat
+!!
+cl odbctest.c Odbc32.lib Odbccp32.lib
+!!
+? fill runodbc.bat
+!!
+odbctest.exe -uid testenv -pwd %SEPPARAM_OPASSWORD% -dsn testdsn -file function.sql
+!!
+? run buildodbc.bat
+<<
+~
+>>
+.else
+? setenv SEPPARAM_FILENAME runodbc
+<<
+~
+>>
+? cp @file(ing_tst,odbc,src,buildodbc.sh) buildodbc
+<<
+~
+>>
+? fill runodbc
+!!
+./odbctest.exe -uid testenv -pwd $SEPPARAM_OPASSWORD -dsn testdsn -file function.sql
+!!
+? sh buildodbc odbctest.c
+<<
+~
+>>
+? run chmod +x runodbc
+<<
+~
+>>
+.endif
+? run SEPPARAM_FILENAME
+<<
+
+Please wait . . .
+Establishing a connection to 'testdsn' . . .
+Attempt connecting 1 of 3 . . .
+Successfully, connected to 'testdsn'.
+
+Now executing test: 'function.sql' . . .
+
+Reading from 'function.sql' . . .
+
+* create table p_table  ( a integer, b character(10), c varchar(20), d float ,e date-
+, f smallint)\g
+Executing . . .
+
+* insert into p_table values ( 123, 'abcdefghuj', '1234567890pppppppppp', 12.098774,-
+  date('3/9/99'),  30021 )\g
+Executing . . .
+
+(1 row)
+* select * from p_table\g
+Executing . . .
+
++---------------+----------+--------------------+--------------------+---------------
+-----------+----------+
+|a              |b         |c                   |d                   |e             -
+           |f         |
++---------------+----------+--------------------+--------------------+---------------
+-----------+----------+
+|            123|abcdefghuj|1234567890pppppppppp|              12.099|2099-03-09 00:-
+00:00      |     30021|
++---------------+----------+--------------------+--------------------+---------------
+-----------+----------+
+
+(1 row)
+* update p_table set b='updated'\g
+Executing . . .
+
+(1 row)
+* select * from p_table\g
+Executing . . .
+
++---------------+----------+--------------------+--------------------+---------------
+-----------+----------+
+|a              |b         |c                   |d                   |e             -
+           |f         |
++---------------+----------+--------------------+--------------------+---------------
+-----------+----------+
+|            123|updated   |1234567890pppppppppp|              12.099|2099-03-09 00:-
+00:00      |     30021|
++---------------+----------+--------------------+--------------------+---------------
+-----------+----------+
+
+(1 row)
+* update p_table set a=99, b= 'updatAgain' where a=123\g
+Executing . . .
+
+(1 row)
+* commit\g
+Executing . . .
+
+(1 row)
+* select * from p_table\g
+Executing . . .
+
++---------------+----------+--------------------+--------------------+---------------
+-----------+----------+
+|a              |b         |c                   |d                   |e             -
+           |f         |
++---------------+----------+--------------------+--------------------+---------------
+-----------+----------+
+|             99|updatAgain|1234567890pppppppppp|              12.099|2099-03-09 00:-
+00:00      |     30021|
++---------------+----------+--------------------+--------------------+---------------
+-----------+----------+
+
+(1 row)
+>>
+? delete buildodbc
+<<
+~
+>>
+? delete odbctest 
+<<
+~
+>>
+? delete odbctest.h
+<<
+~
+>>
+? delete odbctest.c
+<<
+~
+>>
+? delete odbctest.o
+<<
+~
+>>
+? delete odbctest.obj
+<<
+~
+>>
+? delete odbctest.exe
+<<
+~
+>>
+
+
+Ending at: Tue May 02 15:48:42 2000

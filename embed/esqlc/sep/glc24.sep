@@ -1,0 +1,584 @@
+/*
+	Test Name: pza23sc.sep
+	Time: Tue Jan 25 11:25:03 1994
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : pza23sc.sep
+	Module  : 
+	Filename: pza23sc
+	Purpose	: to test the BYTE and VARBYTE data types
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : byte1
+	Synopsis     : Test BYTE and VARBYTE data types with standard SQL.
+		       Uses host language variables and structures with
+		       select (cursor and select loop), insert, and 
+		       update statements to manipulate the byte data type.
+
+ History: 25-Jan-1994	(jbryson)	Created
+          11-Feb-1994   (jbryson)   Corrected SQLSTATE[5] to SQLSTATE[6]
+          02-Apr-1997   Modified (chiel02)
+                        Added an alternate canon for the sepcc command.  
+*/
+? delete pza23sc.c 
+<<
+~
+>>
+? delete pza23sc.o 
+<<
+~
+>>
+? delete pza23sc.obj 
+<<
+~
+>>
+? delete pza23sc.exe 
+<<
+~
+>>
+? fill pza23sc.sc 
+!!
+/*
+** VARBYTE test --- using byte data
+*/
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+
+#define BUFMAX	21
+/*
+** This test data includes some non-character data, some codes that should
+** get translated across Unix and VMS hetnet, and some trailing blanks.
+** (Want to be sure trailing blanks don't get trimmed.)
+**
+** In its most readable form, the test data looks like the following:
+**
+**     { BUFMAX,0,'A','B',0xa4,0xa8,0xd7,0xdd,0xf7,0xfd,0xff,'A',' ',' '};
+**
+** However, the compiler doesn't like 8-bit hex initializers for "char" types,
+** so we are using negative decimal notation instead.  (It would also work to
+** define the buffer as "unsigned char", but since we only document the use
+** of "char" I wanted to stick with that.)
+**
+*/
+VARCHAR struct {
+	short	len;
+	char	buf[BUFMAX];
+} vch1 = { BUFMAX,0,'A','B',-92,-88,-41,-35,-9,-3,-1,'A',' ',' '};
+
+VARCHAR struct {
+	short	len;
+	char	buf[BUFMAX];
+} vch2;
+short	vch2ind = 99;
+
+VARBYTE struct {
+	short	len;
+	char	buf[BUFMAX];
+} vbyte1 = { BUFMAX,0,'A','B',-92,-88,-41,-35,-9,-3,-1,'A',' ',' '};
+
+VARBYTE struct {
+	short	len;
+	char	buf[BUFMAX];
+} vbyte2;
+short	vbyte2ind = 99;
+
+#define CBUFMAX 22
+char 	cbuf1[CBUFMAX];
+short	cbuf1ind;
+char 	cbuf2[CBUFMAX];
+short	cbuf2ind;
+char c2[4];
+int rownum;
+int i;
+unsigned char uc;
+
+char 	*dbname;
+
+char SQLSTATE[6];
+
+EXEC SQL END DECLARE SECTION;
+
+int main(argc,argv)
+int argc;
+char **argv;
+{
+    if (argc == 2)
+    {
+	dbname = argv[1];
+    }
+    else
+    {
+	printf("Usage: %s <database name>\n",argv[0]);
+	exit(1);
+    }
+    dbname = argv[1];
+
+    EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+    EXEC SQL CONNECT :dbname;
+    printf("\nCONNECT SQLSTATE = %s\n", SQLSTATE);
+
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+    EXEC SQL DROP TABLE byte1;
+
+    EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+    printf("\nRecreate the test table:\n");
+
+    /* lets test the CREATE TABLE command with BYTE VARYING */
+    EXEC SQL CREATE TABLE byte1 
+	(
+	col0 integer, 
+	col1 byte(21),
+	col2 byte varying(21)
+	);
+    printf("CREATE SQLSTATE = %s\n", SQLSTATE);
+
+    /*
+    ** Insert data from various combinations of VARCHAR and VARBYTE
+    ** variables.  Follow up with some NULL values.
+    */
+    EXEC SQL INSERT INTO byte1 VALUES (1, :vch1, :vch1);
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+    EXEC SQL INSERT INTO byte1 VALUES (2, :vbyte1, :vbyte1);
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+    EXEC SQL INSERT INTO byte1 VALUES (3, :vch1, :vbyte1);
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+    EXEC SQL INSERT INTO byte1 VALUES (4, :vbyte1, :vch1);
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+    EXEC SQL INSERT INTO byte1 VALUES (5, NULL, NULL);
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+
+    /*
+    ** See what comes back from a select loop.
+    **
+    ** NOTE that the "byte" column gets null-padded by the DBMS to the
+    ** full defined length, which is longer than our buffer.  So we should
+    ** see truncation warnings (shown by the value in the indicator variable)
+    ** when retrieving from col1.  But no truncation warnings from col2,
+    ** because col2 doesn't get padded out beyond the length of the data
+    ** we inserted in the first place.
+    **
+    */
+    printf("\nSee what comes back from a select loop:\n");
+    EXEC SQL SELECT * INTO :rownum, :vch2:vch2ind, :vbyte2:vbyte2ind FROM byte1;
+    EXEC SQL BEGIN;
+	printf("\nROW %1d:\n    vch2 = (%2d)", rownum, (int)vch2ind);
+	for (i = 0; i < BUFMAX && vch2ind != -1; i++)
+	{
+	    /*
+	    ** Must assign to "unsigned char" temporary, to work around
+	    ** problem in printf() behavior.
+	    */
+	    uc = vch2.buf[i];
+	    printf("%2x", (int)uc);
+	    if (vch1.buf[i] != vch2.buf[i])
+		printf("\n***DATA MISMATCH*** i = %d\n", i);
+	}
+	printf("\n  vbyte2 = (%2d)", (int)vbyte2ind); 
+	for (i = 0; i < BUFMAX && vbyte2ind != -1; i++)
+	{
+	    uc = vbyte2.buf[i];
+	    printf("%2x", (int)uc);
+	    if (vbyte1.buf[i] != vbyte2.buf[i])
+		printf("\n***DATA MISMATCH*** i = %d\n", i);
+	}
+	printf("\n");
+    EXEC SQL END;
+
+    /*
+    ** See what comes back from a cursor.
+    */
+    printf("\nSee what comes back from a cursor:\n");
+    EXEC SQL DECLARE bytecur1 CURSOR FOR SELECT * FROM byte1;
+    EXEC SQL OPEN bytecur1;
+    printf("OPEN SQLSTATE = %s\n", SQLSTATE);
+
+    while (sqlca.sqlcode == 0)
+    {
+	EXEC SQL FETCH bytecur1 INTO :rownum, :vch2:vch2ind, :vbyte2:vbyte2ind;
+	if(sqlca.sqlcode)
+	   break;
+
+	printf("\nROW %1d:\n    vch2 = (%2d)", rownum, (int)vch2ind);
+	for (i = 0; i < BUFMAX && vch2ind != -1; i++)
+	{
+	    uc = vch2.buf[i];
+	    printf("%2x", (int)uc);
+	    if (vch1.buf[i] != vch2.buf[i])
+		printf("\n***DATA MISMATCH*** i = %d\n", i);
+	}
+	printf("\n  vbyte2 = (%2d)", (int)vbyte2ind); 
+	for (i = 0; i < BUFMAX && vbyte2ind != -1; i++)
+	{
+	    uc = vbyte2.buf[i];
+	    printf("%2x", (int)uc);
+	    if (vbyte1.buf[i] != vbyte2.buf[i])
+		printf("\n***DATA MISMATCH*** i = %d\n", i);
+	}
+	printf("\n");
+	printf("  SQLSTATE = %s\n", SQLSTATE);
+    }
+    EXEC SQL CLOSE bytecur1;
+    printf("\nCLOSE SQLSTATE = %s\n", SQLSTATE);
+
+    printf("\nNow swap col1 and col2:\n");
+    EXEC SQL DECLARE bytecur2 CURSOR FOR SELECT * FROM byte1;
+    EXEC SQL OPEN bytecur2;
+    printf("OPEN SQLSTATE = %s\n", SQLSTATE);
+
+    while (sqlca.sqlcode == 0)
+    {
+        EXEC SQL FETCH bytecur2 INTO :rownum, :vbyte2:vbyte2ind, :vch2:vch2ind;
+	if(sqlca.sqlcode)
+	   break;
+
+	printf("\nROW %1d:\n    vch2 = (%2d)", rownum, (int)vch2ind);
+	for (i = 0; i < BUFMAX && vch2ind != -1; i++)
+	{
+	    uc = vch2.buf[i];
+	    printf("%2x", (int)uc);
+	    if (vch1.buf[i] != vch2.buf[i])
+		printf("\n***DATA MISMATCH*** i = %d\n", i);
+	}
+	printf("\n  vbyte2 = (%2d)", (int)vbyte2ind); 
+	for (i = 0; i < BUFMAX && vbyte2ind != -1; i++)
+	{
+	    uc = vbyte2.buf[i];
+	    printf("%2x", (int)uc);
+	    if (vbyte1.buf[i] != vbyte2.buf[i])
+		printf("\n***DATA MISMATCH*** i = %d\n", i);
+	}
+	printf("\n");
+	printf("  SQLSTATE = %s\n", SQLSTATE);
+    }
+    EXEC SQL CLOSE bytecur2;
+    printf("\nCLOSE SQLSTATE = %s\n", SQLSTATE);
+
+    /*
+    ** Now try a fixed CHAR buffer.
+    **
+    ** NOTE that these buffers are large enough that we won't see any
+    ** truncation warning indicators.
+    **
+    */
+    printf("\n\nNow select into fixed char buffer:\n");
+    EXEC SQL SELECT * INTO :rownum, :cbuf1:cbuf1ind, :cbuf2:cbuf2ind FROM byte1;
+    EXEC SQL BEGIN;
+	printf("\nROW %1d:\n   cbuf1 = (%2d)", rownum, (int)cbuf1ind);
+	for (i = 0; i < CBUFMAX && cbuf1ind != -1; i++)
+	{
+	    uc = cbuf1[i];
+	    printf("%2x", (int)uc);
+	}
+	printf("\n   cbuf2 = (%2d)", (int)cbuf2ind); 
+	for (i = 0; i < CBUFMAX && cbuf2ind != -1; i++)
+	{
+	    uc = cbuf2[i];
+	    printf("%2x", (int)uc);
+	}
+	printf("\n");
+    EXEC SQL END;
+
+    /*
+    ** Just to be complete, try an UPDATE.
+    **
+    ** First, let's change some of the test data so that we can recognize
+    ** the difference after the update.  (These "X"s will show up as x'58'
+    ** in the printout.)
+    */
+    vbyte1.buf[1] = 'X';
+    vbyte1.buf[2] = 'X';
+
+    printf("\n\nNow try an update and read it back:\n");
+
+    EXEC SQL UPDATE byte1 SET col1 = :vbyte1, col2 = :vbyte1
+	WHERE byte1.col0 = 3;
+    printf("INSERT SQLSTATE = %s\n", SQLSTATE);
+
+    EXEC SQL SELECT * INTO :rownum, :vch2:vch2ind, :vbyte2:vbyte2ind FROM byte1;
+    EXEC SQL BEGIN;
+	printf("\nROW %1d:\n    vch2 = (%2d)", rownum, (int)vch2ind);
+	for (i = 0; i < BUFMAX && vch2ind != -1; i++)
+	{
+	    uc = vch2.buf[i];
+	    printf("%2x", (int)uc);
+	}
+	printf("\n  vbyte2 = (%2d)", (int)vbyte2ind); 
+	for (i = 0; i < BUFMAX && vbyte2ind != -1; i++)
+	{
+	    uc = vbyte2.buf[i];
+	    printf("%2x", (int)uc);
+	}
+	printf("\n");
+    EXEC SQL END;
+
+
+    /*
+    ** And just to be really complete, try UPDATEing via a cursor.
+    ** (Put the old data back again.)
+    */
+    vbyte1.buf[1] = 'A';
+    vbyte1.buf[2] = 'B';
+
+    printf("\n\nNow reverse that update via a cursor:\n");
+    EXEC SQL DECLARE bytecur3 CURSOR FOR SELECT * FROM byte1
+	FOR UPDATE OF col1, col2;
+    EXEC SQL OPEN bytecur3;
+    printf("OPEN SQLSTATE   = %s\n", SQLSTATE);
+
+    while (sqlca.sqlcode == 0)
+    {
+        EXEC SQL FETCH bytecur3 INTO :rownum, :vch2:vch2ind, :vbyte2:vbyte2ind;
+	if(sqlca.sqlcode)
+	   break;
+	printf("fetch SQLSTATE  = %s\n", SQLSTATE);
+	if (rownum == 3)
+	{
+	    EXEC SQL UPDATE byte1 SET col1 = :vbyte1, col2 = :vbyte1
+		WHERE CURRENT OF bytecur3;
+	    printf("update SQLSTATE = %s\n", SQLSTATE);
+	    break;
+	}
+    }
+    EXEC SQL CLOSE bytecur3;
+    printf("CLOSE SQLSTATE  = %s\n", SQLSTATE);
+
+    /*
+    ** Read it back to see if it worked.
+    */
+    EXEC SQL SELECT * INTO :rownum, :vch2:vch2ind, :vbyte2:vbyte2ind FROM byte1;
+    EXEC SQL BEGIN;
+	printf("\nROW %1d:\n    vch2 = (%2d)", rownum, (int)vch2ind);
+	for (i = 0; i < BUFMAX && vch2ind != -1; i++)
+	{
+	    uc = vch2.buf[i];
+	    printf("%2x", (int)uc);
+	}
+	printf("\n  vbyte2 = (%2d)", (int)vbyte2ind); 
+	for (i = 0; i < BUFMAX && vbyte2ind != -1; i++)
+	{
+	    uc = vbyte2.buf[i];
+	    printf("%2x", (int)uc);
+	}
+	printf("\n");
+    EXEC SQL END;
+
+
+    EXEC SQL DISCONNECT;
+    printf("\nDISCONNECT SQLSTATE = %s\n", SQLSTATE);
+
+    exit(0);
+}
+
+!!
+? esqlc pza23sc.sc 
+<<
+ESQL pza23sc.sc:
+>>
+<<
+>>
+? sepcc pza23sc 
+<<
+>>
+<<
+pza23sc.c
+>> 
+? seplnk pza23sc 
+<<
+>>
+? run pza23sc.exe SEPPARAMDB 
+<<
+
+CONNECT SQLSTATE = 00000
+
+Recreate the test table:
+CREATE SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+INSERT SQLSTATE = 00000
+
+See what comes back from a select loop:
+
+ROW 1:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 2:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 3:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 4:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 5:
+    vch2 = (-1)
+  vbyte2 = (-1)
+
+See what comes back from a cursor:
+OPEN SQLSTATE = 00000
+
+ROW 1:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  SQLSTATE = 00000
+
+ROW 2:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  SQLSTATE = 00000
+
+ROW 3:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  SQLSTATE = 00000
+
+ROW 4:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  SQLSTATE = 00000
+
+ROW 5:
+    vch2 = (-1)
+  vbyte2 = (-1)
+  SQLSTATE = 00000
+
+CLOSE SQLSTATE = 00000
+
+Now swap col1 and col2:
+OPEN SQLSTATE = 00000
+
+ROW 1:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  SQLSTATE = 00000
+
+ROW 2:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  SQLSTATE = 00000
+
+ROW 3:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  SQLSTATE = 00000
+
+ROW 4:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  SQLSTATE = 00000
+
+ROW 5:
+    vch2 = (-1)
+  vbyte2 = (-1)
+  SQLSTATE = 00000
+
+CLOSE SQLSTATE = 00000
+
+
+Now select into fixed char buffer:
+
+ROW 1:
+   cbuf1 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0
+   cbuf2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0
+
+ROW 2:
+   cbuf1 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0
+   cbuf2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0
+
+ROW 3:
+   cbuf1 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0
+   cbuf2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0
+
+ROW 4:
+   cbuf1 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0
+   cbuf2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0 0
+
+ROW 5:
+   cbuf1 = (-1)
+   cbuf2 = (-1)
+
+
+Now try an update and read it back:
+INSERT SQLSTATE = 00000
+
+ROW 1:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 2:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 3:
+    vch2 = ( 0) 05858a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 05858a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 4:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 5:
+    vch2 = (-1)
+  vbyte2 = (-1)
+
+
+Now reverse that update via a cursor:
+OPEN SQLSTATE   = 00000
+fetch SQLSTATE  = 00000
+fetch SQLSTATE  = 00000
+fetch SQLSTATE  = 00000
+update SQLSTATE = 00000
+CLOSE SQLSTATE  = 00000
+
+ROW 1:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 2:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 3:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 4:
+    vch2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+  vbyte2 = ( 0) 04142a4a8d7ddf7fdff412020 0 0 0 0 0 0 0 0
+
+ROW 5:
+    vch2 = (-1)
+  vbyte2 = (-1)
+
+DISCONNECT SQLSTATE = 00000
+>>
+? delete pza23sc.c 
+<<
+~
+>>
+? delete pza23sc.o 
+<<
+~
+>>
+? delete pza23sc.obj 
+<<
+~
+>>
+? delete pza23sc.exe 
+<<
+~
+>>
+
+
+Ending at: Tue Jan 25 11:27:56 1994

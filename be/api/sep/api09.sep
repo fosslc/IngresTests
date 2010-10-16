@@ -1,0 +1,1335 @@
+/*
+	Copyright (c) 2006 Ingres Corporation
+
+	Test Name: api09.sep
+	Time: Mon Dec 13 10:19:05 1999
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : api09.sep
+	Module  : be/api
+	Filename: api09.sep
+	Purpose	: OpenAPI version 2 introduces environment handles. These
+		  handles have their own ADF control blocks which default to
+		  the environment logical settings and can be set with the new
+		  OpenAPI function IIapi_setEnvParam().  To test
+		  IIapi_setEnvParam(), IIapi_autocommit() and
+		  IIapi_releaseEnv() functions 
+	Input Files  :
+	Output Files :
+	Database     : apidb1
+	Tables       : test
+	Synopsis     :
+
+ History: 30-Dec-1999	(ngutr03)	Created
+	  17-sep-2001   (devjo01)	Changed failure tests to make sure
+					program will not infinitely loop
+					if an error code other than
+					IIAPI_ST_NO_DATA is returned.
+	11-jun-2003 (abbjo03)
+		Corrections to eliminate warnings on VMS.
+	 6-Oct-2006	(rogch01)
+		Reorder canons to make the platform specific ones diff against
+		the result to make interpretation easier.  Create a VMS
+		specific canon based on the Windows one but with the drop
+		table output in the correct place.
+*/
+? cp @file(ii_system,ingres,files,iiapidep.h) iiapidep.h 
+<<
+~
+>>
+? cp @file(ii_system,ingres,files,iiapi.h) iiapi.tmp 
+<<
+~
+>>
+.if (NT_GENERIC) 
+? fill makeiiapi.bat 
+!!
+sed  "s/<iiapidep.h>/\"iiapidep.h\"/g" iiapi.tmp > iiapi.h 
+!!
+? run makeiiapi.bat 
+<<
+~
+>>
+.endif 
+.if (UNIX) 
+? fill makeiiapi.sh 
+!!
+sed  "s/<iiapidep.h>/\"iiapidep.h\"/g" iiapi.tmp > iiapi.h
+!!
+? sh makeiiapi.sh 
+<<
+>>
+.endif 
+.if (VMS)
+? fill iiapi_edit.com
+!!
+$ pipe sed "s/<iiapidep.h>/""iiapidep.h""/g" iiapi.tmp > iiapi.h
+!!
+? qasetuser testenv @iiapi_edit.com
+<<
+>>
+.endif
+? fill century.c 
+!!
+/***********************************************************************************-
+*****
+** Implementation File: formatdata.c												   **
+** Author:              ngutr03                                                     -
+   **
+** Last Revision:       November 17, 1999               							   **
+** Description:         OpenAPI version 2 introduces environment handles. These     -
+   **
+**                      handles have their own ADF control blocks which default to t-
+he **
+**                      environment logical settings and can be set with the new    -
+   **
+**                      OpenAPI function IIapi_setEnvParam().                       -
+   **
+** Purpose:             To test IIapi_setEnvParam(), IIapi_autocommit() and         -
+   **
+**                      IIapi_releaseEnv() functions                                -
+   **
+**                                                                                  -
+   **
+************************************************************************************-
+*****/
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "iiapi.h"
+#include "iiapidep.h"
+
+/* function prototypes */
+II_PTR API_Initialize(II_LONG);										   /* Initialize environment */
+void API_DisplayStatus(char*, IIAPI_STATUS);						   /* Display status of the functi-
+on */
+void API_ReleaseEnv(II_PTR);										   /* Free the environment handle */
+void API_Disconnect(II_PTR, char*);	     							   /* Disconnect from a DBMS or Name-
+ Server */
+II_PTR API_Connect(IIAPI_CONNPARM*);								   /* Connect to DBMS or Name server */
+void API_DisplayErrorInfo(II_PTR);									   /* Display Error Message Information *-
+/
+void API_Wait(IIAPI_GENPARM *);									       /* Wait if the task is not finished *-
+/
+void API_Terminate();										           /* Clean up all */
+void API_ExecQuery(char*, II_PTR, II_PTR);                             /* Execute SQ-
+L query */
+void API_Show(char* , II_PTR, II_PTR);					               /* Display Name Server Dat-
+a */
+void API_GetQueryInfo(IIAPI_QUERYPARM*);							   /* Get Information about a query *-
+/
+IIAPI_QUERYPARM API_Query(char*, IIAPI_QUERYTYPE, II_PTR, II_PTR);     /* Allocate Q-
+uery Statement Handle */
+void API_ReleaseStmtHandle(II_PTR);									   /* Free Statement Handle */
+int API_GetDescriptor(II_PTR, IIAPI_GETDESCRPARM*); 		           /* Communicate the -
+format of the data to be returned with IIapi_getcolumns() */
+II_PTR API_Autocommit(II_PTR, II_PTR);						           /* Set autocommit ON/OFF */
+void API_GetColumns(II_PTR, IIAPI_DESCRIPTOR*, IIAPI_GETCOLPARM*,int); /* Get and Di-
+splay Data from a select statement */
+II_PTR API_SetEnvParm(II_PTR, II_LONG, II_PTR);                        /* Assign an -
+environment parameter and value in the environment handle */
+void API_printLine();
+
+
+/***********************************************************************************-
+**
+** Function Name: API_Initialize				    								**
+** Description:   Allocates an environment handle and returns it to the application -
+**
+** Input:         timeout                											**
+** Return value:  Environment Handle    											**
+************************************************************************************-
+**/
+
+II_PTR API_Initialize(II_LONG timeout)
+{
+	IIAPI_INITPARM iiapi_initparm;
+
+	iiapi_initparm.in_timeout = timeout;
+	iiapi_initparm.in_version = IIAPI_VERSION_2;
+	iiapi_initparm.in_envHandle = NULL;
+
+	printf("Initializing API environment...\n");
+	IIapi_initialize(&iiapi_initparm);
+
+	printf("%s\n", (iiapi_initparm.in_status == IIAPI_ST_SUCCESS) ? "Successfully, init-
+ialized API environment" : "Failed to initialize API environment");
+	API_DisplayStatus("IIapi_initialize", iiapi_initparm.in_status);
+	API_printLine();
+
+	return(iiapi_initparm.in_envHandle);
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_ReleaseEnv													**
+** Description:   Frees an environment handle and any resources associated with the -
+**
+**                environment handle.												**
+** Input:         envHandle															**
+** Return value:  None																**	
+************************************************************************************-
+**/
+
+void API_ReleaseEnv(II_PTR envHandle)
+{
+	IIAPI_RELENVPARM relEnvParm;
+
+	relEnvParm.re_envHandle = envHandle;
+	printf("Releasing API environment...\n");
+	IIapi_releaseEnv(&relEnvParm);
+	printf("%s\n", (relEnvParm.re_status == IIAPI_ST_SUCCESS) ? "Successfully, released-
+ API environment" : "Failed to release API environment");
+
+	API_DisplayStatus("IIapi_releaseEnv", relEnvParm.re_status);
+	API_printLine();
+}
+
+
+/***********************************************************************************-
+**
+** Function Name: API_Connect														**
+** Description:   Connects to the DBMS Server or Name Server based on               -
+**
+**                connection type		                                            **
+** Input:         connParm															**
+** Return value:  Connection Handle													**
+************************************************************************************-
+**/
+
+II_PTR API_Connect(IIAPI_CONNPARM* connParm)
+{
+	printf("Establishing a connection to '%s' \n", (connParm->co_target != NULL) ? conn-
+Parm->co_target : "LOCAL machine");
+	IIapi_connect(connParm);
+	
+	/* wait until the task is completed... */
+	API_Wait(&connParm->co_genParm);
+
+	API_DisplayStatus("IIapi_connect", connParm->co_genParm.gp_status);
+	if( connParm->co_genParm.gp_status == IIAPI_ST_SUCCESS )
+	{
+		printf("Successfully, connected to '%s'\n", (connParm->co_target != NULL) ? connPa-
+rm->co_target : "LOCAL machine");
+	}
+	else
+	{
+		printf("*** Failed to connect to '%s'***\n\n", connParm->co_target);
+		/* Display error messages if there are...*/
+		if( connParm->co_genParm.gp_errorHandle != NULL )
+		{
+			API_DisplayErrorInfo(connParm->co_genParm.gp_errorHandle);	
+		}
+	}
+	API_printLine();
+
+	return(connParm->co_connHandle);
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_Disconnect													**
+** Description:   Closes a DBMS Server connection and frees the connection handle	**
+** Input:         Connection Handle, target name									**
+** Return value:  None																**
+************************************************************************************-
+**/
+
+void API_Disconnect(II_PTR connHandle, char* co_target)
+{
+	IIAPI_DISCONNPARM disconnParm;
+
+	disconnParm.dc_genParm.gp_callback = NULL;
+	disconnParm.dc_connHandle = connHandle;
+	
+	printf("Disconnecting from '%s'... \n", (co_target != NULL) ? co_target : "LOCAL ma-
+chine");
+	IIapi_disconnect(&disconnParm);
+	/* wait until the task is completed... */
+	API_Wait(&disconnParm.dc_genParm);
+	printf("%s'%s'\n", (disconnParm.dc_genParm.gp_status == IIAPI_ST_SUCCESS) ? "Succes-
+sfully, disconnected from " : "Failed to disconnect from ", (co_target != NULL) ? co-
+_target : "LOCAL machine");
+	API_DisplayStatus("IIapi_disconnect", disconnParm.dc_genParm.gp_status);
+	/* Display error messages if there are...*/
+	if( disconnParm.dc_genParm.gp_errorHandle != NULL )
+	{
+		API_DisplayErrorInfo(disconnParm.dc_genParm.gp_errorHandle);	
+	}
+	API_printLine();
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_DisplayErrorInfo  											**
+** Description:   Displays Error Messages                                   		**
+** Input:         errorHandle  														**
+** Return value:  None      														**
+************************************************************************************-
+**/
+
+void API_DisplayErrorInfo(II_PTR errorHandle)
+{
+	IIAPI_GETEINFOPARM getEInfoParm;
+
+	getEInfoParm.ge_errorHandle = errorHandle;
+
+	while( TRUE )
+	{
+		IIapi_getErrorInfo(&getEInfoParm);
+		if( getEInfoParm.ge_status == IIAPI_ST_NO_DATA )
+			break;
+		fprintf(stderr, "\tType of Message:");
+		switch (getEInfoParm.ge_type)
+		{
+		case IIAPI_GE_ERROR:
+			fprintf(stderr, "IIAPI_GE_ERROR");
+			break;
+		case IIAPI_GE_WARNING:
+			fprintf(stderr, "IIAPI_GE_WARNING");
+			break;
+		case IIAPI_GE_MESSAGE:
+			fprintf(stderr, "IIAPI_GE_MESSAGE");
+			break;
+		default:
+			fprintf(stderr, "Unknown Message Type");
+			break;
+		}
+		fprintf(stderr, "\n\tSQLState:\t%s\n", getEInfoParm.ge_SQLSTATE);
+		fprintf(stderr, "\tError Code:\t%ld\n", getEInfoParm.ge_errorCode);
+		fprintf(stderr, "\tMessage:\t%s\n\n", getEInfoParm.ge_message);
+
+		if( getEInfoParm.ge_serverInfoAvail )
+		{
+			fprintf(stderr, "\tSVR_ID_Error:\t%ld\n", getEInfoParm.ge_serverInfo->svr_id_erro-
+r);
+			fprintf(stderr, "\tSVR_Local_Error:%ld\n", getEInfoParm.ge_serverInfo->svr_local_-
+error);
+			fprintf(stderr, "\tSVR_Server_Type:%ld\n", getEInfoParm.ge_serverInfo->svr_server-
+_type);
+			fprintf(stderr, "\tSVR_Severity:\t");
+			switch(getEInfoParm.ge_serverInfo->svr_severity)
+			{
+			case IIAPI_SVR_DEFAULT:
+				fprintf(stderr, "IIAPI_SVR_DEFAULT");
+				break;
+			case IIAPI_SVR_MESSAGE:
+				fprintf(stderr, "IIAPI_SVR_MESSAGE");
+				break;
+			case IIAPI_SVR_WARNING:
+				fprintf(stderr, "IIAPI_SVR_WARNING");
+				break;
+			case IIAPI_SVR_FORMATTED:
+				fprintf(stderr, "IIAPI_SVR_FORMATTED");
+				break;
+			default:
+				fprintf(stderr, "Unknown");
+				break;
+			}
+			fprintf(stderr, "\n");
+		}
+	}
+	return;
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_DisplayStatus													**
+** Description:   Displays status of the function upon its return					**
+** Input:         statusID															**
+** Return value:  None																**				
+************************************************************************************-
+**/
+
+void API_DisplayStatus(char* strMsg, IIAPI_STATUS statusID )
+{
+	printf("%s returned status = ", strMsg);
+	switch(statusID)
+	{
+	case IIAPI_ST_SUCCESS:
+		printf("IIAPI_ST_SUCCESS\n");
+		break;
+	case IIAPI_ST_WARNING:
+		printf("IIAPI_ST_WARNING\n");
+		break;
+	case IIAPI_ST_OUT_OF_MEMORY:
+		printf("IIAPI_ST_OUT_OF_MEMORY\n");
+		break;
+	case IIAPI_ST_FAILURE:
+		printf("IIAPI_ST_FAILURE\n");
+		break;
+	case IIAPI_ST_NOT_INITIALIZED:
+		printf("IIAPI_ST_NOT_INITIALIZED\n");
+		break;
+	case IIAPI_ST_INVALID_HANDLE:
+		printf("IIAPI_ST_INVALID_HANDLE\n");
+		break;
+	case IIAPI_ST_MESSAGE:
+		printf("IIAPI_ST_MESSAGE\n");
+		break;
+	case IIAPI_ST_ERROR:
+		printf("IIAPI_ST_ERROR\n");
+		break;
+	case IIAPI_ST_NO_DATA:
+		printf("IIAPI_ST_NO_DATA\n");
+		break;
+	default:
+		printf("Unknown Status");
+		break;
+	}
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_Wait		    					            		    	**
+** Description:   Waits if the task is finished                                     -
+**
+** Input:         genParm								     						**
+** Return value:  None				                  								**
+************************************************************************************-
+**/
+void API_Wait(IIAPI_GENPARM* genParm)
+{
+	IIAPI_WAITPARM waitP;
+	waitP.wt_timeout = -1;
+
+    while (!genParm->gp_completed)
+	{
+        IIapi_wait(&waitP);
+	}
+	if( genParm->gp_status != IIAPI_ST_SUCCESS )
+	{
+		printf("Error in IIapi_wait\n");
+		API_DisplayStatus("IIapi_wait", genParm->gp_status);
+		if( genParm->gp_errorHandle != NULL )
+		{
+			/* Display error messages if there are...*/
+			API_DisplayErrorInfo(genParm->gp_errorHandle);	
+		}
+	}
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_Terminate		    					            		    **
+** Description:   Clean up all                                                      -
+**
+** Input:         None									     						**
+** Return value:  None				                  								**
+************************************************************************************-
+**/
+void API_Terminate()
+{
+	IIAPI_TERMPARM termParm;
+	/* Clean up */
+	printf("Terminating API...\n");
+	IIapi_terminate(&termParm);
+	printf("%s\n", (termParm.tm_status == IIAPI_ST_SUCCESS) ? "Successfully, terminated-
+ API" : "Failed to terminate API");
+	API_DisplayStatus("IIapi_terminate", termParm.tm_status);
+
+	printf("\t\t\t*** THE END ***\n");
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_ExecQuery      					            		    	**
+** Description:   Execute SQL query                                                 -
+**
+** Input:         stmtText, connHandle, tranHandle             						**
+** Return value:  none                               								**
+************************************************************************************-
+**/
+
+void API_ExecQuery(char* stmtText, II_PTR connHandle, II_PTR tranHandle)
+{
+	IIAPI_QUERYPARM queryParm;
+	
+	queryParm = API_Query(stmtText, IIAPI_QT_QUERY, connHandle, tranHandle);
+	API_GetQueryInfo(&queryParm);
+	API_ReleaseStmtHandle(queryParm.qy_stmtHandle);
+	API_printLine();
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_Show        					            			    	**
+** Description:   Displays name server information							        **
+** Input:         queryText, connHandle, tranHandle    								**
+** Return value:  None                              								**
+************************************************************************************-
+**/
+
+void API_Show(char* queryText, II_PTR connHandle, II_PTR tranHandle)
+{
+	IIAPI_GETDESCRPARM getDescrP;
+    IIAPI_GETCOLPARM   getColP;
+	int                nColumns = 0; /* Number of columns */
+	IIAPI_QUERYPARM    queryParm;
+
+	queryParm = API_Query(queryText, IIAPI_QT_QUERY, connHandle, tranHandle);
+	nColumns  = API_GetDescriptor(queryParm.qy_stmtHandle, &getDescrP);
+	if( nColumns > 0 )
+		API_GetColumns(queryParm.qy_stmtHandle, getDescrP.gd_descriptor, &getColP, nColumn-
+s);
+	API_GetQueryInfo(&queryParm);
+
+	API_ReleaseStmtHandle(queryParm.qy_stmtHandle);
+	API_printLine();
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_GetQueryInfo					            			    	**
+** Description:   Returns information about a query                         		**
+** Input:         queryP                            								**
+** Return value:  Data associated with an SQL statement								**
+************************************************************************************-
+**/
+void API_GetQueryInfo(IIAPI_QUERYPARM* queryP)
+{
+	IIAPI_GETQINFOPARM getQInfoP;
+	getQInfoP.gq_genParm.gp_callback = NULL;
+	getQInfoP.gq_genParm.gp_closure = NULL;
+	getQInfoP.gq_stmtHandle = queryP->qy_stmtHandle;
+
+	IIapi_getQueryInfo(&getQInfoP);
+	
+	 /* wait until the task is completed... */
+	API_Wait(&getQInfoP.gq_genParm);
+	
+	if( getQInfoP.gq_flags & IIAPI_GQF_FAIL)
+	{
+		printf("Execution of query failed...\n");
+		API_DisplayStatus("IIapi_getQueryInfo", getQInfoP.gq_genParm.gp_status);
+		if( getQInfoP.gq_genParm.gp_errorHandle != NULL )
+		{
+			/* Display error messages if there are...*/
+			API_DisplayErrorInfo(getQInfoP.gq_genParm.gp_errorHandle);	
+		}
+	}
+	else
+	{
+		printf("->Statement processed\n");
+	}
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_ReleaseStmtHandle					            			    **
+** Description:   Ends an SQL statement or database event retrieval and frees the	**
+**                statement or event handle                                         -
+**
+** Input:         Statement handle                  								**
+** Return value:  None                              								**
+************************************************************************************-
+**/
+void API_ReleaseStmtHandle(II_PTR stmtHandle)
+{
+	IIAPI_CLOSEPARM iiapi_closeparm;
+	
+	iiapi_closeparm.cl_genParm.gp_callback = NULL;
+    iiapi_closeparm.cl_stmtHandle = stmtHandle;
+
+	IIapi_close(&iiapi_closeparm);
+
+	/* wait until the task is completed... */
+	API_Wait(&iiapi_closeparm.cl_genParm);
+
+	if( iiapi_closeparm.cl_genParm.gp_errorHandle != NULL )
+	{
+		printf("Error in IIapi_close\n");
+		API_DisplayStatus("IIapi_close", iiapi_closeparm.cl_genParm.gp_status);
+		/* Display error messages if there are...*/
+		API_DisplayErrorInfo(iiapi_closeparm.cl_genParm.gp_errorHandle);	
+	}
+}
+
+
+
+/***********************************************************************************-
+**
+** Function Name: API_Autocommit    					            		    	**
+** Description:   Enables or Disables an autocommit transaction                     -
+**
+** Input:         Connection Handle, Transaction Handle     						**
+** Return value:  Transaction Handle                  								**
+************************************************************************************-
+**/
+II_PTR API_Autocommit(II_PTR connHandle, II_PTR tranHandle)
+{
+	IIAPI_AUTOPARM autoParm;
+
+	autoParm.ac_genParm.gp_callback = NULL;
+	autoParm.ac_connHandle = connHandle;
+	autoParm.ac_tranHandle = tranHandle;
+
+	printf("set autocommit %s\n", (connHandle != NULL) ? "ON" : "OFF");
+	IIapi_autocommit(&autoParm);
+
+	/* wait until the task is completed... */
+	API_Wait(&autoParm.ac_genParm);
+
+	if( autoParm.ac_genParm.gp_status != IIAPI_ST_SUCCESS )
+	{
+		printf("Error in IIapi_autocommit\n");
+		API_DisplayStatus("IIapi_autocommit", autoParm.ac_genParm.gp_status);
+		if( autoParm.ac_genParm.gp_errorHandle != NULL )
+		{
+			/* Display error messages if there are...*/
+			API_DisplayErrorInfo(autoParm.ac_genParm.gp_errorHandle);	
+		}
+	}
+
+	API_printLine();
+
+	return (autoParm.ac_tranHandle);
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_GetColumns     					            			    **
+** Description:   Returns the result of the SQL statement or database event         -
+**
+**                retrieval                                                         -
+**
+** Input:         Statement handle, getcolparm, descriptor         					**
+** Return value:  None                              								**
+************************************************************************************-
+**/
+void API_GetColumns(II_PTR stmtHandle, IIAPI_DESCRIPTOR* iiapi_descriptor,IIAPI_GETC-
+OLPARM* iiapi_getcolparm, int Columns)
+{
+	IIAPI_DATAVALUE* iiapi_datavalue;
+	int i, j, k;
+	char *buffer;
+    int  actsize;
+	char szbuffer[17];
+	IIAPI_CONVERTPARM iiapi_convertparm;
+
+	iiapi_getcolparm->gc_genParm.gp_callback = NULL;
+	iiapi_getcolparm->gc_stmtHandle = stmtHandle;
+	iiapi_getcolparm->gc_rowCount = 1;
+	iiapi_getcolparm->gc_columnCount = Columns;
+
+	/* allocate memory */
+	iiapi_getcolparm->gc_columnData = iiapi_datavalue =
+                (IIAPI_DATAVALUE *) malloc(iiapi_getcolparm->gc_rowCount *
+                iiapi_getcolparm->gc_columnCount * sizeof(IIAPI_DATAVALUE));
+
+	for (i=0, k=0; i<iiapi_getcolparm->gc_rowCount; i++)
+	{
+		for (j=0; j<iiapi_getcolparm->gc_columnCount; j++, k++)
+		{
+			iiapi_datavalue[k].dv_value = (II_PTR) malloc(iiapi_descriptor[j].ds_length);
+		}
+	}
+	printf("\n");
+	while( TRUE )
+	{
+		IIapi_getColumns( iiapi_getcolparm );
+		/* wait the IIapi_getColumns to finish */
+		API_Wait( &iiapi_getcolparm->gc_genParm );
+		
+		/* if there is error message, print it out */
+		if( iiapi_getcolparm->gc_genParm.gp_errorHandle != NULL )
+		{
+			API_DisplayStatus("IIapi_getColumns", iiapi_getcolparm->gc_genParm.gp_status);
+			/* Display error messages if there are...*/
+			API_DisplayErrorInfo( iiapi_getcolparm->gc_genParm.gp_errorHandle );	
+		}
+
+        if (iiapi_getcolparm->gc_genParm.gp_status >= IIAPI_ST_NO_DATA )
+			break;
+		/* print information of columns in a table */
+        for (i=0, k=0; i<iiapi_getcolparm->gc_rowsReturned; i++)
+        {
+			for (j=0; j<iiapi_getcolparm->gc_columnCount; j++, k++)
+			{
+				printf("\t%s: ", iiapi_descriptor[j].ds_columnName);
+				switch (iiapi_datavalue[k].dv_null)
+				{
+				case TRUE:
+					printf("NULL");
+					break;
+				case FALSE:
+					switch (iiapi_descriptor[j].ds_dataType)
+					{
+					case IIAPI_BYTE_TYPE:
+					case IIAPI_CHA_TYPE:
+					case IIAPI_CHR_TYPE:
+					case IIAPI_VBYTE_TYPE:
+					case IIAPI_LBYTE_TYPE:
+					case IIAPI_LVCH_TYPE:
+					case IIAPI_TXT_TYPE:
+						actsize = iiapi_descriptor[j].ds_length;
+                        buffer = (char*)malloc(actsize + 1);
+                        strncpy(buffer, (char*)iiapi_datavalue[k].dv_value, actsize)-
+;
+                        buffer[actsize] = '\0';
+                        printf("%s", buffer);
+                        free(buffer);
+                        break;
+                    case IIAPI_VCH_TYPE:
+                        actsize = *(unsigned short*)iiapi_datavalue[k].dv_value;
+                        buffer = (char*)malloc(actsize + 1);
+                        strncpy(buffer, (char*)iiapi_datavalue[k].dv_value + 2, acts-
+ize);
+                        buffer[actsize] = '\0';
+                        printf("%s", buffer);
+                        free(buffer);
+                        break;
+                    case IIAPI_HNDL_TYPE:
+                        printf("%p", iiapi_datavalue[k].dv_value);
+                        break;
+                    case IIAPI_FLT_TYPE:
+                        switch (iiapi_descriptor[j].ds_length)
+                        {
+                            case 4:
+                                printf("%f",*(float*)iiapi_datavalue[k].dv_value);
+                                break;
+                            case 8:
+                                printf("%lf",*(double*)iiapi_datavalue[k].dv_value);
+                                break;
+                            default:
+                                printf("Unknown size");
+                                break;
+                        }
+                        break;
+                    case IIAPI_INT_TYPE:
+                        switch (iiapi_descriptor[j].ds_length)
+                        {
+                            case 1:
+                                printf("%d", *(char*)iiapi_datavalue[k].dv_value);
+                                break;
+                            case 2:
+                                printf("%d", *(short*)iiapi_datavalue[k].dv_value);
+                                break;
+                            case 4:
+                                printf("%ld", *(long*)iiapi_datavalue[k].dv_value);
+                                break;
+                            default:
+                                printf("Unknown size");
+                                break;
+                        }
+                        break;
+                    case IIAPI_LOGKEY_TYPE:
+                        strncpy(szbuffer, iiapi_datavalue[k].dv_value, 16);
+                        szbuffer[16] = '\0';
+                        printf("%s", szbuffer);
+                        break;
+                    case IIAPI_TABKEY_TYPE:
+						strncpy(szbuffer, iiapi_datavalue[k].dv_value, 8);
+                        szbuffer[16] = '\0';
+                        printf("%s", szbuffer);
+                        break;
+                    case IIAPI_DEC_TYPE:
+                        printf("Incompatible data type with C");
+                        break;
+                    case IIAPI_DTE_TYPE:  /* convert date type to char */
+						iiapi_convertparm.cv_srcDesc = iiapi_descriptor[j];
+                        iiapi_convertparm.cv_srcDesc.ds_nullable = TRUE;
+ 
+                        iiapi_convertparm.cv_srcValue = iiapi_datavalue[k];
+ 
+                        iiapi_convertparm.cv_dstDesc = iiapi_descriptor[j];
+                        iiapi_convertparm.cv_dstDesc.ds_dataType = IIAPI_CHA_TYPE;
+                        iiapi_convertparm.cv_dstDesc.ds_nullable = TRUE;
+                        iiapi_convertparm.cv_dstDesc.ds_length = 26;
+ 
+                        iiapi_convertparm.cv_dstValue.dv_null = FALSE;
+                        iiapi_convertparm.cv_dstValue.dv_length = iiapi_convertparm.-
+cv_dstDesc.ds_length;
+                        iiapi_convertparm.cv_dstValue.dv_value = (II_PTR)malloc(iiap-
+i_convertparm.cv_dstValue.dv_length + 1);
+ 
+                        *((char *)iiapi_convertparm.cv_dstValue.dv_value + iiapi_con-
+vertparm.cv_dstDesc.ds_length) = '\0';
+ 
+                        IIapi_convertData(&iiapi_convertparm);
+ 
+                        switch (iiapi_convertparm.cv_status)
+                        {
+                            case IIAPI_ST_SUCCESS:
+                                printf("%s", (char *)iiapi_convertparm.cv_dstValue.d-
+v_value);
+                                break;
+                            case IIAPI_ST_FAILURE:
+                                printf("\nIIapi_convertData return:\t");
+                                printf("IIAPI_ST_FAILURE");
+                                break;
+                            default:
+                                printf("\nIIapi_convertData return:\t");
+                                printf("Unknown status");
+                                break;
+                        }
+                        free(iiapi_convertparm.cv_dstValue.dv_value);
+ 
+                        break;
+                    case IIAPI_MNY_TYPE:    /* convert money to char */             -
+    
+                        iiapi_convertparm.cv_srcDesc = iiapi_descriptor[j];
+                        iiapi_convertparm.cv_srcDesc.ds_nullable = TRUE;
+ 
+                        iiapi_convertparm.cv_srcValue = iiapi_datavalue[k];
+ 
+                        iiapi_convertparm.cv_dstDesc = iiapi_descriptor[j];
+                        iiapi_convertparm.cv_dstDesc.ds_dataType = IIAPI_CHA_TYPE;
+                        iiapi_convertparm.cv_dstDesc.ds_nullable = TRUE;
+                        iiapi_convertparm.cv_dstDesc.ds_length = 20;
+ 
+                        iiapi_convertparm.cv_dstValue.dv_null = FALSE;
+                        iiapi_convertparm.cv_dstValue.dv_length =
+                                iiapi_convertparm.cv_dstDesc.ds_length;
+                        iiapi_convertparm.cv_dstValue.dv_value = (II_PTR)malloc(iiap-
+i_convertparm.cv_dstValue.dv_length + 1);
+ 
+                        *((char *)iiapi_convertparm.cv_dstValue.dv_value + iiapi_con-
+vertparm.cv_dstDesc.ds_length) = '\0';
+ 
+                        IIapi_convertData(&iiapi_convertparm);
+ 
+                        switch (iiapi_convertparm.cv_status)
+                        {
+                            case IIAPI_ST_SUCCESS:
+                                printf("%s", (char *)iiapi_convertparm.cv_dstValue.d-
+v_value);
+                                break;
+                            case IIAPI_ST_FAILURE:
+                                printf("\nIIapi_convertData return:\t");
+                                printf("IIAPI_ST_FAILURE");
+                                break;
+                            default:
+                                printf("\nIIapi_convertData return:\t");
+                                printf("Unknown status");
+                                break;
+                        }
+                        free(iiapi_convertparm.cv_dstValue.dv_value);
+ 
+                        break;
+                    default:
+                        printf("Unknown data type");
+                        break;
+					}
+                break;
+              default:
+                printf("Unknown: %d", iiapi_datavalue[k].dv_null);
+                break;
+			  }
+		      printf("\n");
+		   }
+		   printf("=========================================\n");
+		}
+	}
+	for (i=0, k=0; i<iiapi_getcolparm->gc_rowCount; i++)
+	{
+		for (j=0; j<iiapi_getcolparm->gc_columnCount; j++, k++)
+		{
+			free(iiapi_datavalue[k].dv_value);
+		}
+	}
+	free(iiapi_datavalue);
+	
+	return;
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_Query         					            				**
+** Description:   Begins an SQL statement and allocates a statement handle     		**
+** Input:         connHandle, tranHandle, SQLStmt, queryType    					**
+** Return value:  queryParm         												**
+************************************************************************************-
+**/
+IIAPI_QUERYPARM API_Query(char* SQLStmt, IIAPI_QUERYTYPE queryType, II_PTR connHandl-
+e, II_PTR tranHandle)
+{
+	IIAPI_QUERYPARM queryParm;
+
+	queryParm.qy_genParm.gp_callback = NULL;
+	queryParm.qy_genParm.gp_closure = NULL;
+  	queryParm.qy_connHandle = connHandle;
+	queryParm.qy_stmtHandle = NULL;
+	queryParm.qy_tranHandle = tranHandle;
+	queryParm.qy_queryType = queryType;
+	queryParm.qy_parameters = FALSE;
+	queryParm.qy_queryText = SQLStmt;
+
+	printf("SQL> %s\n", SQLStmt);
+	printf("Executing . . .\n");
+	IIapi_query(&queryParm);
+    /* wait until the task is completed... */
+	API_Wait(&queryParm.qy_genParm);
+	if( queryParm.qy_genParm.gp_errorHandle != NULL )
+	{
+		API_DisplayStatus("IIapi_query", queryParm.qy_genParm.gp_status);
+		/* Display error messages if there are...*/
+		API_DisplayErrorInfo(queryParm.qy_genParm.gp_errorHandle);	
+	}
+	
+	return(queryParm);
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_GetDescriptor 					            			    **
+** Description:   Communicates the format of the data to be returned with           -
+**
+**                IIapi_getcolumns()                                                -
+**
+** Input:         Statement handle identifying the query that requested data		**
+**                from the DBMS server                                              -
+**
+** Return value:  Number of Columns                    								**
+************************************************************************************-
+**/
+int API_GetDescriptor(II_PTR stmtHandle, IIAPI_GETDESCRPARM* getDescrP)
+{
+	getDescrP->gd_genParm.gp_callback = NULL;
+    getDescrP->gd_genParm.gp_closure = NULL;
+    getDescrP->gd_stmtHandle = stmtHandle;
+
+	IIapi_getDescriptor(getDescrP);
+
+	/* wait until the task is completed... */
+	API_Wait(&getDescrP->gd_genParm);
+
+	if( getDescrP->gd_genParm.gp_errorHandle != NULL )
+	{
+		API_DisplayStatus("IIapi_getDescriptor", getDescrP->gd_genParm.gp_status);
+		/* Display error messages if there are...*/
+		API_DisplayErrorInfo(getDescrP->gd_genParm.gp_errorHandle);	
+	}
+
+	return( getDescrP->gd_descriptorCount );
+}
+
+/***********************************************************************************-
+**
+** Function Name: API_SetEnvParm    					            		    	**
+** Description:   Assign an environment parameter and value in the environment      -
+**
+**                handle                                                            -
+**
+** Input:         envHandle, paramID, paramValue             						**
+** Return value:  None                              								**
+************************************************************************************-
+**/
+
+II_PTR API_SetEnvParm(II_PTR envHandle, II_LONG paramID, II_PTR paramValue)
+{
+	IIAPI_SETENVPRMPARM setenvPrmParm;
+	
+	setenvPrmParm.se_envHandle = envHandle;
+	setenvPrmParm.se_paramID = paramID;
+	setenvPrmParm.se_paramValue = paramValue;
+
+	printf("Setting environment parameters...\n");
+	IIapi_setEnvParam( &setenvPrmParm );
+	if( setenvPrmParm.se_status != IIAPI_ST_SUCCESS )
+	{
+		printf("Error in IIapi_setEnvParam\n");
+	}
+	API_DisplayStatus("IIapi_setEnvParam", setenvPrmParm.se_status);
+	API_printLine();
+	
+	return( setenvPrmParm.se_envHandle );
+}
+
+void API_printLine()
+{
+	printf("------------------------------------\n\n");
+}
+
+
+int main()
+{
+	II_PTR					envHandle;
+	II_PTR					newEnvHandle;
+	II_PTR                  connHandle;
+	II_LONG                 centuryBoundary = 50;
+	IIAPI_CONNPARM          iiapi_connparm;
+	II_PTR                  tranHandle;
+	
+	/* Initialize the environment */
+	envHandle = API_Initialize(-1);
+
+	printf("Setting II_DATE_CENTURY_BOUNDARY = 50\n");
+	/* set environment parameters */
+	newEnvHandle = API_SetEnvParm(envHandle, IIAPI_EP_CENTURY_BOUNDARY, &centuryBoundar-
+y);
+	
+	iiapi_connparm.co_genParm.gp_callback = NULL;
+ 	iiapi_connparm.co_connHandle = newEnvHandle;
+    iiapi_connparm.co_tranHandle = NULL;
+	iiapi_connparm.co_target = "apidb1";
+	iiapi_connparm.co_username = "testenv";
+	iiapi_connparm.co_password = NULL;
+    iiapi_connparm.co_timeout = -1;
+	iiapi_connparm.co_type = IIAPI_CT_SQL;
+
+	/* connect to DBMS server */
+	connHandle = API_Connect( &iiapi_connparm );
+
+	/* set auto commit on */
+	tranHandle = API_Autocommit(connHandle, NULL);
+
+	API_ExecQuery("drop table test", connHandle, tranHandle);
+	API_ExecQuery("create table test(col1 date)  with page_size=4096", connHandle, tran-
+Handle);
+	API_ExecQuery("insert into test values(date('10/29/99'))", connHandle, tranHandle);
+	API_ExecQuery("insert into test values(date('10/29/01'))", connHandle, tranHandle);
+	API_ExecQuery("insert into test values(date('10/29/50'))", connHandle, tranHandle);
+    API_Show("select * from test", connHandle, tranHandle);
+        API_ExecQuery("drop table test", connHandle, tranHandle);
+	/* set auto commit off */
+	API_Autocommit(NULL, tranHandle);
+
+	/* disconnect from the server */
+	API_Disconnect(connHandle, iiapi_connparm.co_target);
+
+
+	/* release API environment */
+	API_ReleaseEnv(envHandle);
+
+	/* terminate API */
+	API_Terminate();
+
+	return (0);
+}
+!!
+? sepcc century 
+<<
+>>
+<< IF (NT_GENERIC||VMS) 
+century.c
+>>
+.if (VMS)
+? seplnk -a century
+<<
+>>
+.else
+? seplnk century 
+<<
+>>
+.endif
+? run century.exe 
+<<
+	Type of Message:IIAPI_GE_ERROR
+	SQLState:	42500
+	Error Code:	2753
+	Message:	DROP: 'test' does not exist or is not owned by you.
+
+	SVR_ID_Error:	67653632
+	SVR_Local_Error:2753
+	SVR_Server_Type:0
+	SVR_Severity:	IIAPI_SVR_DEFAULT
+Initializing API environment...
+Successfully, initialized API environment
+IIapi_initialize returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Setting II_DATE_CENTURY_BOUNDARY = 50
+Setting environment parameters...
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Establishing a connection to 'apidb1' 
+IIapi_connect returned status = IIAPI_ST_SUCCESS
+Successfully, connected to 'apidb1'
+------------------------------------
+
+set autocommit ON
+------------------------------------
+
+SQL> drop table test
+Executing . . .
+Error in IIapi_wait
+IIapi_wait returned status = IIAPI_ST_ERROR
+Execution of query failed...
+IIapi_getQueryInfo returned status = IIAPI_ST_ERROR
+------------------------------------
+
+SQL> create table test(col1 date)  with page_size=4096
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> insert into test values(date('10/29/99'))
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> insert into test values(date('10/29/01'))
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> insert into test values(date('10/29/50'))
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> select * from test
+Executing . . .
+
+	col1: 29-oct-1999               
+=========================================
+	col1: 29-oct-2001               
+=========================================
+	col1: 29-oct-1950               
+=========================================
+Error in IIapi_wait
+IIapi_wait returned status = IIAPI_ST_NO_DATA
+->Statement processed
+------------------------------------
+
+SQL> drop table test
+Executing . . .
+->Statement processed
+------------------------------------
+
+set autocommit OFF
+------------------------------------
+
+Disconnecting from 'apidb1'... 
+Successfully, disconnected from 'apidb1'
+IIapi_disconnect returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Releasing API environment...
+Successfully, released API environment
+IIapi_releaseEnv returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Terminating API...
+Successfully, terminated API
+IIapi_terminate returned status = IIAPI_ST_SUCCESS
+			*** THE END ***
+>>
+<< IF (NT_GENERIC) 
+Initializing API environment...
+Successfully, initialized API environment
+IIapi_initialize returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Setting II_DATE_CENTURY_BOUNDARY = 50
+Setting environment parameters...
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Establishing a connection to 'apidb1' 
+IIapi_connect returned status = IIAPI_ST_SUCCESS
+Successfully, connected to 'apidb1'
+------------------------------------
+
+set autocommit ON
+------------------------------------
+
+SQL> drop table test
+Executing . . .
+Error in IIapi_wait
+IIapi_wait returned status = IIAPI_ST_ERROR
+Execution of query failed...
+IIapi_getQueryInfo returned status = IIAPI_ST_ERROR
+------------------------------------
+
+SQL> create table test(col1 date)  with page_size=4096
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> insert into test values(date('10/29/99'))
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> insert into test values(date('10/29/01'))
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> insert into test values(date('10/29/50'))
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> select * from test
+Executing . . .
+
+	col1: 29-oct-1999               
+=========================================
+	col1: 29-oct-2001               
+=========================================
+	col1: 29-oct-1950               
+=========================================
+Error in IIapi_wait
+IIapi_wait returned status = IIAPI_ST_NO_DATA
+->Statement processed
+------------------------------------
+
+SQL> drop table test
+Executing . . .
+->Statement processed
+------------------------------------
+
+set autocommit OFF
+------------------------------------
+
+Disconnecting from 'apidb1'... 
+Successfully, disconnected from 'apidb1'
+IIapi_disconnect returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Releasing API environment...
+Successfully, released API environment
+IIapi_releaseEnv returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Terminating API...
+Successfully, terminated API
+IIapi_terminate returned status = IIAPI_ST_SUCCESS
+			*** THE END ***
+	Type of Message:IIAPI_GE_ERROR
+	SQLState:	42500
+	Error Code:	2753
+	Message:	DROP: 'test' does not exist or is not owned by you.
+
+	SVR_ID_Error:	67653632
+	SVR_Local_Error:2753
+	SVR_Server_Type:0
+	SVR_Severity:	IIAPI_SVR_DEFAULT
+>>
+<< IF (VMS)
+Initializing API environment...
+Successfully, initialized API environment
+IIapi_initialize returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Setting II_DATE_CENTURY_BOUNDARY = 50
+Setting environment parameters...
+IIapi_setEnvParam returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Establishing a connection to 'apidb1' 
+IIapi_connect returned status = IIAPI_ST_SUCCESS
+Successfully, connected to 'apidb1'
+------------------------------------
+
+set autocommit ON
+------------------------------------
+
+SQL> drop table test
+Executing . . .
+Error in IIapi_wait
+IIapi_wait returned status = IIAPI_ST_ERROR
+	Type of Message:IIAPI_GE_ERROR
+	SQLState:	42500
+	Error Code:	2753
+	Message:	DROP: 'test' does not exist or is not owned by you.
+
+	SVR_ID_Error:	67653632
+	SVR_Local_Error:2753
+	SVR_Server_Type:0
+	SVR_Severity:	IIAPI_SVR_DEFAULT
+Execution of query failed...
+IIapi_getQueryInfo returned status = IIAPI_ST_ERROR
+------------------------------------
+
+SQL> create table test(col1 date)  with page_size=4096
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> insert into test values(date('10/29/99'))
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> insert into test values(date('10/29/01'))
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> insert into test values(date('10/29/50'))
+Executing . . .
+->Statement processed
+------------------------------------
+
+SQL> select * from test
+Executing . . .
+
+	col1: 29-oct-1999               
+=========================================
+	col1: 29-oct-2001               
+=========================================
+	col1: 29-oct-1950               
+=========================================
+Error in IIapi_wait
+IIapi_wait returned status = IIAPI_ST_NO_DATA
+->Statement processed
+------------------------------------
+
+SQL> drop table test
+Executing . . .
+->Statement processed
+------------------------------------
+
+set autocommit OFF
+------------------------------------
+
+Disconnecting from 'apidb1'... 
+Successfully, disconnected from 'apidb1'
+IIapi_disconnect returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Releasing API environment...
+Successfully, released API environment
+IIapi_releaseEnv returned status = IIAPI_ST_SUCCESS
+------------------------------------
+
+Terminating API...
+Successfully, terminated API
+IIapi_terminate returned status = IIAPI_ST_SUCCESS
+			*** THE END ***
+>>
+? delete iiapi_edit.com 
+<<
+~
+>>
+? delete makeiiapi.bat 
+<<
+~
+>>
+? delete century.obj 
+<<
+~
+>>
+? delete century.c 
+<<
+~
+>>
+? delete century.o 
+<<
+~
+>>
+? delete century.exe 
+<<
+~
+>>
+? delete iiapi.h 
+<<
+~
+>>
+? delete iiapi.tmp 
+<<
+~
+>>
+? delete iiapidep.h 
+<<
+~
+>>
+
+
+Ending at: Thu Dec 30 01:52:07 1999

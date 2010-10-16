@@ -1,0 +1,341 @@
+/*
+	Test Name: fja18.sep 
+	Time     : 28-Jun-1993 14:09:29
+	User Name: testenv 
+
+	Test ID  : fja18 
+	Module   : datatypes 
+	Filename : fja18.sep
+	Purpose  : It tests the semantics and syntax of float precision
+	Input Files  : none 
+	Output Files : none 
+	Database     : SEPPARAMDB 
+	Tables       : 
+	Synopsis     : It creates tables with different datatypes
+		       and tests the functionality of the float precision
+	History      : 28-Jun-1993 (daniel lee)
+                       created the test
+        <<< IMPORTANT NOTE: >>>
+        The float precision display in the canon may
+        NOT be correct because of a problem with the
+        terminal monitor(TM) when this test was written.
+        It is strongly recommended to check the canon FIRST !!!
+          21-Jun-1995	(ciodi01)
+			Accepted new canons for the following queries:
+			select a/b from fl_10801,select b/a from fl_10801,
+			select a/c from fl_10801,select c/a from fl_10801.
+			All of these cause arithmetic overflow (divide by
+			zero), which used to process the entire query
+			but return a blank line for a row with a divide by
+			zero; now the divide by zero is a fatal error and
+			query processing terminates.
+	  23-Mar-1999   (vande02) Hard-coded VPG_SZ to 4K and added empty canon
+                        after 'sql -s SEPPARAMDB1' if the test db does not exist
+                        you will see the msg."TM could not connect".
+*/
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* set autocommit on;\g
+<<
+>>
+* drop table fl_10801, fl_10802;\g
+<<
+~
+>>
+* create table fl_10801 ( a decimal(15, 2), b f8, c i4) with page_size=4096;\g
+<<
+>>
+* insert into fl_10801 values (123.12, 123.1231, 123000);\g
+<<
+(1 row)
+>>
+* insert into fl_10801 values (NULL, NULL, NULL);\g
+<<
+(1 row)
+>>
+* insert into fl_10801 values (-123.11, -123.1232, -123000);\g
+<<
+(1 row)
+>>
+* insert into fl_10801 values (0.0, 0, 0);\g
+<<
+(1 row)
+>>
+* insert into fl_10801 values (0.000, .00000, 0.);\g
+<<
+(1 row)
+>>
+* select * from fl_10801;\g
+<<
+
++-----------------+-----------+-------------+
+|a                |b          |c            |
++-----------------+-----------+-------------+
+|           123.12|    123.123|       123000|
+|                 |           |             |
+|          -123.11|   -123.123|      -123000|
+|             0.00|      0.000|            0|
+|             0.00|      0.000|            0|
++-----------------+-----------+-------------+
+(5 rows)
+>>
+* select a from fl_10801 where a is null;\g
+<<
+
++-----------------+
+|a                |
++-----------------+
+|                 |
++-----------------+
+(1 row)
+>>
+* select a from fl_10801 where a is not null;\g
+<<
+
++-----------------+
+|a                |
++-----------------+
+|           123.12|
+|          -123.11|
+|             0.00|
+|             0.00|
++-----------------+
+(4 rows)
+>>
+* select a*b from fl_10801;\g
+<<
+
++-----------+
+|col1       |
++-----------+
+|  15158.916|
+|           |
+|  15157.697|
+|      0.000|
+|      0.000|
++-----------+
+(5 rows)
+>>
+* select b*a from fl_10801;\g
+<<
+
++-----------+
+|col1       |
++-----------+
+|  15158.916|
+|           |
+|  15157.697|
+|      0.000|
+|      0.000|
++-----------+
+(5 rows)
+>>
+* select a/b from fl_10801;\g
+<<
+E_US106B Floating divide by zero detected in query.
+    (Wed Jun 21 08:51:09 1995)
+
+>>
+* select b/a from fl_10801;\g
+<<
+E_US106B Floating divide by zero detected in query.
+    (Wed Jun 21 08:56:45 1995)
+
+>>
+* select a*c from fl_10801;\g
+<<
+
++----------------------------+
+|col1                        |
++----------------------------+
+|                 15143760.00|
+|                            |
+|                 15142530.00|
+|                        0.00|
+|                        0.00|
++----------------------------+
+(5 rows)
+>>
+* select c*a from fl_10801;\g
+<<
+
++----------------------------+
+|col1                        |
++----------------------------+
+|                 15143760.00|
+|                            |
+|                 15142530.00|
+|                        0.00|
+|                        0.00|
++----------------------------+
+(5 rows)
+>>
+* select a/c from fl_10801;\g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Wed Jun 21 08:56:51 1995)
+
+>>
+* select c/a from fl_10801;\g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Wed Jun 21 08:56:53 1995)
+
+>>
+* select -a from fl_10801;\g
+<<
+
++-----------------+
+|col1             |
++-----------------+
+|          -123.12|
+|                 |
+|           123.11|
+|             0.00|
+|             0.00|
++-----------------+
+(5 rows)
+>>
+* select +a from fl_10801;\g
+<<
+
++-----------------+
+|col1             |
++-----------------+
+|           123.12|
+|                 |
+|          -123.11|
+|             0.00|
+|             0.00|
++-----------------+
+(5 rows)
+>>
+* create table fl_10802 ( a decimal(15, 3), b f4, c f8, d i1, e i2, f i4, g     mone-
+y ) with page_size=4096;\g
+<<
+>>
+* insert into fl_10802 values ( 123.12, 123.12, 123.12, 12, 123, 123.12312,     '$12-
+3.12');\g
+<<
+(1 row)
+>>
+* insert into fl_10802 select b, a, a, a, a, a, a from fl_10802;\g
+<<
+(1 row)
+>>
+* insert into fl_10802 (a) select c from fl_10802 where c is not null;\g
+<<
+(2 rows)
+>>
+* insert into fl_10802 (a) select d from fl_10802 where d is not null;\g
+<<
+(2 rows)
+>>
+* insert into fl_10802 (a) select e from fl_10802 where e is not null;\g
+<<
+(2 rows)
+>>
+* insert into fl_10802 (a) select f from fl_10802 where f is not null;\g
+<<
+(2 rows)
+>>
+* insert into fl_10802 (a) select g from fl_10802 where g is not null;\g
+<<
+(2 rows)
+>>
+* select a, ii_dv_desc(a) from fl_10802;\g
+<<
+
++-----------------+------------------------------+
+|a                |col2                          |
++-----------------+------------------------------+
+|          123.120|nullable decimal(15, 3)       |
+|          123.120|nullable decimal(15, 3)       |
+|          123.120|nullable decimal(15, 3)       |
+|          123.120|nullable decimal(15, 3)       |
+|           12.000|nullable decimal(15, 3)       |
+|          123.000|nullable decimal(15, 3)       |
+|          123.000|nullable decimal(15, 3)       |
+|          123.000|nullable decimal(15, 3)       |
+|          123.000|nullable decimal(15, 3)       |
+|          123.000|nullable decimal(15, 3)       |
+|          123.120|nullable decimal(15, 3)       |
+|          123.120|nullable decimal(15, 3)       |
++-----------------+------------------------------+
+(12 rows)
+>>
+* select b, ii_dv_desc(b) from fl_10802 where b is not null;\g
+<<
+
++-----------+------------------------------+
+|b          |col2                          |
++-----------+------------------------------+
+|    123.120|nullable float4               |
+|    123.120|nullable float4               |
++-----------+------------------------------+
+(2 rows)
+>>
+* select c, ii_dv_desc(c) from fl_10802 where c is not null;\g
+<<
+
++-----------+------------------------------+
+|c          |col2                          |
++-----------+------------------------------+
+|    123.120|nullable float8               |
+|    123.120|nullable float8               |
++-----------+------------------------------+
+(2 rows)
+>>
+* select d, ii_dv_desc(d) from fl_10802 where d is not null;\g
+<<
+
++------+------------------------------+
+|d     |col2                          |
++------+------------------------------+
+|    12|nullable integer1             |
+|   123|nullable integer1             |
++------+------------------------------+
+(2 rows)
+>>
+* select e, ii_dv_desc(e) from fl_10802 where e is not null;\g
+<<
+
++------+------------------------------+
+|e     |col2                          |
++------+------------------------------+
+|   123|nullable integer2             |
+|   123|nullable integer2             |
++------+------------------------------+
+(2 rows)
+>>
+* select f, ii_dv_desc(f) from fl_10802 where f is not null;\g
+<<
+
++-------------+------------------------------+
+|f            |col2                          |
++-------------+------------------------------+
+|          123|nullable integer4             |
+|          123|nullable integer4             |
++-------------+------------------------------+
+(2 rows)
+>>
+* select g, ii_dv_desc(g) from fl_10802 where g is not null;\g
+<<
+
++--------------------+------------------------------+
+|g                   |col2                          |
++--------------------+------------------------------+
+|             $123.12|nullable money                |
+|             $123.12|nullable money                |
++--------------------+------------------------------+
+(2 rows)
+>>
+* \q
+<<
+~
+>>
+
+
+Ending at: Wed Jun 21 08:57:19 1995

@@ -1,0 +1,501 @@
+/*
+Test Name: dba38
+Time: march 12th 15:10
+User Name: rch
+
+Test ID : dba38
+Module  :qrymod
+Filename:dba38.sep
+Purpose :tests inheritance of permits between groups users and roles
+Input Files :none
+Output Files:none
+Database: SEPPARAMDB3 = grantdb
+Tables      :dba38_t1
+Synopsis    :grants update(col3) to group along with select,upd,del,ins in one
+	     grant statement. Update(col4) to a user in another statement.
+	     tests that
+		a) other group members cannot update col4
+		b) the privileged user can perform the updates to col3 and col4
+	   . Also attempts update to col3 & 4 within one statement. This
+		   will currently fail since it is a requirement for update
+		   that the necessary permits be contained within one tuple. 
+		   This only applies for columns.
+		c) A role can perform any operation the user can.
+	     
+	     Initialization test = dba00.sep
+
+
+History :Created by rch		Created: 3.12.90	Author :rch
+          28-May-1992	(Author)
+          11-Oct-1993	(garys) Updated canon to accept double quotes for
+				delimiter for dba and no quotes for granted
+				user - plus expanded help permit info for
+				grants.
+	  16-Mar-1999   (vande02) Hard-coded VPG_SZ to 4K
+*/
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop table dba38_t1;\g
+<<
+~
+>>
+* create table dba38_t1
+<<
+>>
+*	(col1 smallint,col2 smallint,col3 smallint,col4 smallint) with page_size=4096;\p\g
+<<
+ create table dba38_t1
+	(col1 smallint,col2 smallint,col3 smallint,col4 smallint) with page_size=4096;
+>>
+* insert into dba38_t1
+<<
+>>
+* values (1,2,3,4);\p\g
+<<
+ insert into dba38_t1
+ values (1,2,3,4);
+(1 row)
+>>
+* grant update(col4), select, insert, delete 
+<<
+>>
+*	on table dba38_t1 
+<<
+>>
+*	to group pvusr3_group;\p\g
+<<
+ grant update(col4), select, insert, delete 
+	on table dba38_t1 
+	to group pvusr3_group;
+>>
+* grant update(col3) on table dba38_t1 to user pvusr3   ;\p\g
+<<
+ grant update(col3) on table dba38_t1 to user pvusr3      ;
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr2 sql -s SEPPARAMDB3 "-Gpvusr3_group" 
+<<
+>>
+* help permit dba38_t1;
+<<
+>>
+* \p\g
+<<
+/* SQL Startup File */
+ help permit dba38_t1;
+ 
+Permissions on dba38_t1 are:
+
+
+Permission 2:
+grant   select   on table "pvusr1".dba38_t1 to group pvusr3_group     
+
+Permission 3:
+grant   delete   on table "pvusr1".dba38_t1 to group pvusr3_group     
+
+Permission 4:
+grant   insert   on table "pvusr1".dba38_t1 to group pvusr3_group     
+
+Permission 5:
+grant update (col4) on table "pvusr1".dba38_t1 to group pvusr3_group  
+
+Permission 6:
+grant update (col3) on table "pvusr1".dba38_t1 to user pvusr3         
+
+
+
+>>
+* select dbmsinfo('group');
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('group');
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_group                  |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('username');
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('username');
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr2                          |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('role');
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('role');
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|                                |
++--------------------------------+
+(1 row)
+>>
+* insert into dba38_t1
+<<
+>>
+* values (22,22,22,22);
+<<
+>>
+* \p\g
+<<
+ insert into dba38_t1
+ values (22,22,22,22);
+ 
+(1 row)
+>>
+* update dba38_t1
+<<
+>>
+* set col4=99;
+<<
+>>
+* \p\g
+<<
+ update dba38_t1
+ set col4=99;
+ 
+(2 rows)
+>>
+* update dba38_t1
+<<
+>>
+* set col3=99;
+<<
+>>
+* \p\g
+<<
+ update dba38_t1
+ set col3=99;
+ 
+E_US0DAE UPDATE on table dba38_t1: no GRANT or GRANT compatible permit
+    exists.
+    ( 3-OCT-1990 10:58:03)
+
+>>
+* update dba38_t1
+<<
+>>
+* set col3=99,col4=99;
+<<
+>>
+* \p\g
+<<
+ update dba38_t1
+ set col3=99,col4=99;
+ 
+E_US0DAE UPDATE on table dba38_t1: no GRANT or GRANT compatible permit
+    exists.
+    ( 3-OCT-1990 10:59:28)
+
+>>
+* select * from dba38_t1;
+<<
+>>
+* \p\g
+<<
+ select * from dba38_t1;
+ 
+
++------+------+------+------+
+|col1  |col2  |col3  |col4  |
++------+------+------+------+
+|     1|     2|     3|    99|
+|    22|    22|    22|    99|
++------+------+------+------+
+(2 rows)
+>>
+* delete from dba38_t1
+<<
+>>
+* where col1=22;
+<<
+>>
+* \p\g
+<<
+ delete from dba38_t1
+ where col1=22;
+ 
+(1 row)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Gpvusr3_group" 
+<<
+>>
+* help permit dba38_t1;
+<<
+>>
+* \p\g
+<<
+/* SQL Startup File */
+ help permit dba38_t1;
+ 
+Permissions on dba38_t1 are:
+
+
+Permission 2:
+grant   select   on table "pvusr1".dba38_t1 to group pvusr3_group     
+
+Permission 3:
+grant   delete   on table "pvusr1".dba38_t1 to group pvusr3_group     
+
+Permission 4:
+grant   insert   on table "pvusr1".dba38_t1 to group pvusr3_group     
+
+Permission 5:
+grant update (col4) on table "pvusr1".dba38_t1 to group pvusr3_group  
+
+Permission 6:
+grant update (col3) on table "pvusr1".dba38_t1 to user pvusr3         
+
+
+
+>>
+* select dbmsinfo('group');
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('group');
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_group                  |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('username');
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('username');
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3                          |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('role');
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('role');
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|                                |
++--------------------------------+
+(1 row)
+>>
+* insert into dba38_t1
+<<
+>>
+* values (22,22,22,22);
+<<
+>>
+* \p\g
+<<
+ insert into dba38_t1
+ values (22,22,22,22);
+ 
+(1 row)
+>>
+* update dba38_t1
+<<
+>>
+* set col4=99;
+<<
+>>
+* \p\g
+<<
+ update dba38_t1
+ set col4=99;
+ 
+(2 rows)
+>>
+* update dba38_t1
+<<
+>>
+* set col3=99;
+<<
+>>
+* \p\g
+<<
+ update dba38_t1
+ set col3=99;
+ 
+(2 rows)
+>>
+* delete from dba38_t1 where col1=22;\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql -s SEPPARAMDB3 "-Rpvusr1_role" "-Gpvusr3_group" 
+<<
+>>
+* help permit dba38_t1;
+<<
+>>
+* \p\g
+<<
+/* SQL Startup File */
+ help permit dba38_t1;
+ 
+Permissions on dba38_t1 are:
+
+
+Permission 2:
+grant   select   on table "pvusr1".dba38_t1 to group pvusr3_group     
+
+Permission 3:
+grant   delete   on table "pvusr1".dba38_t1 to group pvusr3_group     
+
+Permission 4:
+grant   insert   on table "pvusr1".dba38_t1 to group pvusr3_group     
+
+Permission 5:
+grant update (col4) on table "pvusr1".dba38_t1 to group pvusr3_group  
+
+Permission 6:
+grant update (col3) on table "pvusr1".dba38_t1 to user pvusr3         
+
+
+
+>>
+* select dbmsinfo('group');
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('group');
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3_group                  |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('username');
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('username');
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr3                          |
++--------------------------------+
+(1 row)
+>>
+* select dbmsinfo('role');
+<<
+>>
+* \p\g
+<<
+ select dbmsinfo('role');
+ 
+
++--------------------------------+
+|col1                            |
++--------------------------------+
+|pvusr1_role                    |
++--------------------------------+
+(1 row)
+>>
+* insert into dba38_t1
+<<
+>>
+* values (22,22,22,22);
+<<
+>>
+* \p\g
+<<
+ insert into dba38_t1
+ values (22,22,22,22);
+ 
+(1 row)
+>>
+* update dba38_t1
+<<
+>>
+* set col4=99;
+<<
+>>
+* \p\g
+<<
+ update dba38_t1
+ set col4=99;
+ 
+(2 rows)
+>>
+* update dba38_t1
+<<
+>>
+* set col3=99;
+<<
+>>
+* \p\g
+<<
+ update dba38_t1
+ set col3=99;
+ 
+(2 rows)
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB3 
+<<
+>>
+* drop table dba38_t1;\p\g
+<<
+/* SQL Startup File */
+ drop table dba38_t1;
+>>
+* \q
+<<
+>>
+
+
+Ending at: Mon Oct 11 14:20:36 1993

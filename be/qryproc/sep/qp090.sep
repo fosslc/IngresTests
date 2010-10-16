@@ -1,0 +1,376 @@
+/*
+	Test Name: efa20.sep
+	Time: Tue May  8 19:29:17 1990
+	User Name: testenv
+ 
+	Test ID : efa20
+	Module  :  
+	Filename: efa20.sep
+	Purpose	: Test procedures on non-existing tables.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : bldg
+	Synopsis     : Try to create a procedure on a empty table.
+			build a table and a procedure on it and then
+			drop the table and try to run the procedure.
+	Setup Test   : efa00.sep
+	
+	History	: xx-xxx-1989	Created				Author
+          20-Mar-1995	(gauje01)  Updated canons to match slightly different
+			new error message syntax.
+		  7-MAR-1997    (vissu01) Modified for NT
+
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa20.sc 
+!!
+/*
+**	efa20.sc
+**
+**	objects: execute proc on nonexistant table
+**
+**	history:
+**		oct 16/89 sgp
+**			- created.
+*/
+
+#define EFA20
+
+#include "driverefstub.h"
+
+#include <stdio.h>
+
+exec sql include 'dbph.sc';
+exec sql include sqlca;
+
+/************/
+/* efa20() */
+/************/
+
+efa20()
+{
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa20: execute procedures on non-existant tables\n");
+	drop_tables(BLDG_TABLE);
+
+	/**********/
+	/* test 1 */
+	/**********/
+
+	printf("\n    test 1: create and exec proc on nonexistant table\n");
+	printf("              both should fail\n");
+	create_efa20_01();
+	exec sql execute procedure efa20_01;
+
+	/**********/
+	/* test 2 */
+	/**********/
+
+	printf("\n    test 2: build table then create and exec proc\n");
+	build_tables(BLDG_TABLE);
+	create_efa20_01();
+	exec sql execute procedure efa20_01;
+
+	/**********/
+	/* test 3 */
+	/**********/
+
+	printf("\n    test 3: drop table then exec proc, exec should fail\n");
+	drop_tables(BLDG_TABLE);
+	printf("  exec proc...\n");
+	exec sql execute procedure efa20_01;
+
+	printf("  drop proc...\n");
+	exec sql drop procedure efa20_01;
+
+	printf("  commit and try to exec proc...\n");
+	exec sql commit;
+
+	exec sql execute procedure efa20_01;
+
+} /* efa20() */
+
+/**********************/
+/* create_efa20_01() */
+/**********************/
+
+create_efa20_01()
+{
+	printf("      dropping procedure efa20_01...\n");
+	exec sql drop procedure efa20_01;
+
+	printf("      creating procedure efa20_01...\n");
+	exec sql create procedure efa20_01 as
+	declare
+		bldg		varchar(2)	not null with default;
+		mesg_buf	varchar(100)	not null with default;
+	begin
+		select bldg into :bldg from bldg;
+
+		if ( iierrornumber != 0 )
+		then
+			mesg_buf = 'efa20_01 error number: ' 
+				+ varchar(iierrornumber);
+			message mesg_buf;
+		endif;
+
+		mesg_buf = 'efa20_01 number of rows retrieved: ' 
+			+ varchar(iirowcount);
+		message mesg_buf;
+	end;
+
+} /* create_efa20_01() */
+!!
+? sepesqlc efa20.sc 
+<<
+ESQL efa20.sc:
+>>
+? sepcc efa20.c 
+<<
+>>
+<<
+efa20.c
+>>
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa20 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+~
+>>
+* drop table bldg;\g
+<<
+~
+>>
+* drop procedure efa20_01;\g
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa20 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa20
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa20 XX
+
+  efa20: execute procedures on non-existant tables
+  dropping bldg table...
+E_US0AC1 DROP: 'bldg' does not exist or is not owned by you.
+    (Mon Mar 20 11:52:29 1995)
+
+    test 1: create and exec proc on nonexistant table
+              both should fail
+      dropping procedure efa20_01...
+E_US0965 Procedure 'efa20_01' not found.
+    (Mon Mar 20 11:52:29 1995)
+      creating procedure efa20_01...
+E_US0845 Table 'bldg' does not exist or is not owned by you.
+    (Mon Mar 20 11:52:29 1995)
+E_US0965 Procedure 'efa20_01' not found.
+    (Mon Mar 20 11:52:29 1995)
+
+    test 2: build table then create and exec proc
+  creating bldg table...
+      dropping procedure efa20_01...
+E_US0965 Procedure 'efa20_01' not found.
+    (Mon Mar 20 11:52:32 1995)
+      creating procedure efa20_01...
+MESSAGE 0: efa20_01 number of rows retrieved: 1
+
+    test 3: drop table then exec proc, exec should fail
+  dropping bldg table...
+  exec proc...
+E_US0845 Table 'bldg' does not exist or is not owned by you.
+    (Mon Mar 20 11:52:34 1995)
+  drop proc...
+  commit and try to exec proc...
+E_US0965 Procedure 'efa20_01' not found.
+    (Mon Mar 20 11:52:34 1995)
+
+disconnecting with database...
+>>
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa20
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa20 XX
+
+  efa20: execute procedures on non-existant tables
+  dropping bldg table...
+E_US0AC1 DROP: 'bldg' does not exist or is not owned by you.
+    (Wed May 29 16:00:25 1991)
+
+    test 1: create and exec proc on nonexistant table
+              both should fail
+      dropping procedure efa20_01...
+E_US0965 Procedure 'efa20_01' not found.
+    (Wed May 29 16:00:25 1991)
+      creating procedure efa20_01...
+E_US0845 Table 'bldg' does not exist or is not owned by you.
+    (Wed May 29 16:00:25 1991)
+E_US0965 Procedure 'efa20_01' not found.
+    (Wed May 29 16:00:25 1991)
+
+    test 2: build table then create and exec proc
+  creating bldg table...
+      dropping procedure efa20_01...
+E_US0965 Procedure 'efa20_01' not found.
+    (Wed May 29 16:00:27 1991)
+      creating procedure efa20_01...
+MESSAGE 0: efa20_01 number of rows retrieved: 1
+
+    test 3: drop table then exec proc, exec should fail
+  dropping bldg table...
+  exec proc...
+E_US0847 User 'testenv' does not own table 'bldg'.
+    (Wed May 29 16:00:28 1991)
+  drop proc...
+  commit and try to exec proc...
+E_US0965 Procedure 'efa20_01' not found.
+    (Wed May 29 16:00:29 1991)
+
+disconnecting with database...
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driverefstub.h 
+<<
+~
+>>
+? delete driveref.c 
+<<
+~
+>>
+? delete driveref.obj 
+<<
+~
+>>
+? delete driveref.o 
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~
+>>
+? delete dbph.c 
+<<
+~
+>>
+? delete dbpmisc.sc 
+<<
+~
+>>
+? delete dbpmisc.c 
+<<
+~
+>>
+? delete dbpmisc.obj 
+<<
+~
+>>
+? delete dbpmisc.o 
+<<
+~
+>>
+? delete efa20.c 
+<<
+~
+>>
+? delete efa20.obj 
+<<
+~
+>>
+? delete efa20.o 
+<<
+~
+>>
+
+
+Ending at: Mon Mar 20 11:53:04 1995

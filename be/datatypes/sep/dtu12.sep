@@ -1,0 +1,218 @@
+/*
+	Test Name: dtu12.sep
+	Time: Fri Nov  9 23:43:01 2001
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID : dtu12.sep
+	Module  : be/datatypes
+	Filename: dtu12.sep
+	Purpose	: To test the new unicode data types first available with
+                  II 2.6/0106 and later releases.
+	Input Files  : dtu12.sc
+	Output Files : dtu12.exe
+	Database     : unidb
+	Tables       : test_nchar, test_nchar2, test_nchar3, test_nvarchar,
+                       test_nvarchar2, test_lnvarchar, test_lnvarchar2
+	Synopsis     : This test is to insert unicode string of different
+                       lengths into a declared length column.
+
+ History:  9-Nov-2001	(wu$ca01)	Created
+          13-Nov-2001	(sarjo01) Issue 11369238 resolved. 
+          16-Sep-2002   (hanch04) Update to run again 32/64-bit server
+          22-JAN-2004	(rogch01)
+		See issue 13179778.  The parameter in error E_AD1082 can
+		either be 'O' or ' '.  Both are equally wrong, but that is no
+		reason to diff on one but not the other.  Removed the comment
+		about the no-longer-known problem 11369238.
+*/
+? fill dtu12.sc 
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i, i1, i2;
+  wchar_t wc1[65], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, k2;
+EXEC SQL END DECLARE SECTION;
+
+static wchar_t *wvals[] =
+{
+    L"test value 1",
+    L"test value 2",
+    L"test value 3"
+};
+#define NUMROWS 3
+
+static char ln[] = "================================================================-
+======\n";
+void print_header(char *s)
+{
+   printf("%s\n%s", s, ln);
+}
+
+void print_trailer()
+{
+   printf(ln);
+}
+
+int main(int argc, char *argv[])
+{
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname options = '-string_truncation=fail';
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+   EXEC SQL drop table test_nchar3;
+   EXEC SQL create table test_nchar3
+            (col1 int, col2 nchar(16), col3 nvarchar(16));
+   for (i = 0; i < NUMROWS; i++) 
+   {
+      wcscpy(wc1, wvals[i]);
+      EXEC SQL INSERT INTO test_nchar3 VALUES (:i, :wc1, :wc1);
+   }
+
+   print_header("Select all...");
+   EXEC SQL SELECT col1, col2, col3
+        INTO :i1, :nv1, :nv2
+        FROM test_nchar3 order by 1;
+   EXEC SQL BEGIN;
+        UC_TERM(nv1);
+        UC_TERM(nv2);
+        printf("|%3d|%S|%S|\n", i1, nv1.text, nv2.text);
+   EXEC SQL END;
+   print_trailer();
+
+   print_header("Insert oversized into nchar (fail)...");
+   wcscpy(wc1, L"OVERSIZED -------------");
+   wcscpy(wc2, L"Legal sized");
+   EXEC SQL INSERT INTO test_nchar3 VALUES (100, :wc1, :wc2);
+
+   EXEC SQL SELECT col1, col2, col3
+        INTO :i1, :nv1, :nv2
+        FROM test_nchar3 order by 1;
+   EXEC SQL BEGIN;
+        UC_TERM(nv1);
+        UC_TERM(nv2);
+        printf("|%3d|%S|%S|\n", i1, nv1.text, nv2.text);
+   EXEC SQL END;
+   print_trailer();
+
+   EXEC SQL DISCONNECT;
+   EXEC SQL CONNECT :dbname options = '-string_truncation=ignore';
+   print_header("Insert oversized into nchar (pass)...");
+   wcscpy(wc1, L"OVERSIZED -------------");
+   wcscpy(wc2, L"Legal sized");
+   EXEC SQL INSERT INTO test_nchar3 VALUES (100, :wc1, :wc2);
+
+   EXEC SQL SELECT col1, col2, col3
+        INTO :i1, :nv1, :nv2
+        FROM test_nchar3 order by 1;
+   EXEC SQL BEGIN;
+        UC_TERM(nv1);
+        UC_TERM(nv2);
+        printf("|%3d|%S|%S|\n", i1, nv1.text, nv2.text);
+   EXEC SQL END;
+   print_trailer();
+
+
+   printf("Operation complete\n");
+
+   EXEC SQL DISCONNECT;
+
+
+}
+!!
+? esqlc dtu12.sc 
+<<
+~
+>>
+? sepcc dtu12 
+<<
+~
+>>
+? seplnk dtu12 
+<<
+~
+>>
+? run dtu12.exe SEPPARAMDB3 
+<<
+Select all...
+======================================================================
+|  0|test value 1    |test value 1|
+|  1|test value 2    |test value 2|
+|  2|test value 3    |test value 3|
+======================================================================
+Insert oversized into nchar (fail)...
+======================================================================
+E_AD1082 String ' ' is too long to fit into the resulting string type.
+    (Fri Nov  9 23:43:43 2001)
+|  0|test value 1    |test value 1|
+|  1|test value 2    |test value 2|
+|  2|test value 3    |test value 3|
+======================================================================
+Insert oversized into nchar (pass)...
+======================================================================
+|  0|test value 1    |test value 1|
+|  1|test value 2    |test value 2|
+|  2|test value 3    |test value 3|
+|100|OVERSIZED ------|Legal sized|
+======================================================================
+Operation complete
+>>
+<<
+Select all...
+======================================================================
+|  0|test value 1    |test value 1|
+|  1|test value 2    |test value 2|
+|  2|test value 3    |test value 3|
+======================================================================
+Insert oversized into nchar (fail)...
+======================================================================
+E_AD1082 String 'O' is too long to fit into the resulting string type.
+    (22-JAN-2004 13:51:01)
+|  0|test value 1    |test value 1|
+|  1|test value 2    |test value 2|
+|  2|test value 3    |test value 3|
+======================================================================
+Insert oversized into nchar (pass)...
+======================================================================
+|  0|test value 1    |test value 1|
+|  1|test value 2    |test value 2|
+|  2|test value 3    |test value 3|
+|100|OVERSIZED ------|Legal sized|
+======================================================================
+Operation complete
+>>
+? delete dtu12.c 
+<<
+~
+>>
+? delete dtu12.o 
+<<
+~
+>>
+? delete dtu12.obj 
+<<
+~
+>>
+? delete dtu12.exe 
+<<
+~
+>>
+
+
+Ending at: 22-JAN-2004 13:51:23

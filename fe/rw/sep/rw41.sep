@@ -1,0 +1,315 @@
+/*
+	Test Name   : CER-105
+	Time        : 23-JUL-1990 11:11:11
+	User Name   : testenv
+
+	Test ID     : wia15
+	Module      : REPORT and SREPORT
+	Filename    : wia15.sep
+	Purpose     : Certification Test
+	Input Files : xwia15.rw
+	Output Files: xwia15.rw
+	Database    : SEPPARAMDB
+	Tables      : wia15a_book, wia15a_author, wia15a_subject,
+		wia15b_book, wia15b_author, wia15b_subject, (in report:
+		wia15b_tempbooks, wia15b_subj_count, wia15b_auth_count)
+	Synopsis    :
+	History     : 
+	23-jul-1990	edt	Created
+	03-jul-1991	dufour	Removed table drops and creates required for 
+				initialization to a separate initilization 
+				script in basis/fe.
+        13-Jan-1993       victor the cleaner
+                      Removed altcanons for sreport and added ignore results
+                      since sreport is already tested in this suite.
+********************************************************************************
+				     Notes
+1.	The ingtest!basis!fe!mkrwopn.sep script for the Report Writer tests 
+	must be run prior to execution of this script.
+2.	A SEPPARAMDB logical/variable must be assigned.
+3.	All additions and/or modifications to this script are limited to Open
+	SQL syntax and data types.
+********************************************************************************
+          26-Jan-1996	(pathi01)
+			Took alternate canons to remove the REPORT Copyright
+			banner diff for NT.
+	   1-May-1996 	(clate01) 
+			Modified canons to work for NT
+           9-Sep-1996	(Author)
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delobj SEPPARAMDB -report wia15a wia15b 
+<<
+~
+>>
+? fill xwia15.rw 
+!!
+.NAME	wia15a
+.SREM	RW Manual 6.4 Appendix B "books"
+.LONGREMARK
+The BOOKS report demonstrates the use of joining tables
+for producing a report.
+.ENDREMARK
+.FORMFEEDS
+.QUERY
+	select b.id, b.title, a.name, subject='', code=1
+	from wia15a_book b, wia15a_author a
+	where b.id = a.id
+	union
+	select b.id, b.title, name='', s.subject, code=2
+	from wia15a_book b, wia15a_subject s
+	where b.id = s.id
+.SORT   title, code
+.BREAK  title, code    /* title and code will be break columns */
+.RIGHTMARGIN 80        /* Initialize right margin */
+.DECLARE
+	authors_column = integer,
+	subject_column = integer,
+	title_string = varchar(8)
+.HEADER report
+	/* Initialize variables */
+	.LET authors_column = 5
+	.LET subject_column = 20
+.HEADER title
+        /* Reset margin and print title of book                        */
+	/* start a block after printing the master info                */
+        .LEFTMARGIN 0
+        .ULCHARACTER "=" .UNDERLINE .PRINT title .NEWLINE .NOUNDERLINE
+        .BLOCK
+.HEADER code
+	/* goto the top of the block each time code changes */
+        /* set the margin to the correct column for the code type  */
+        .TOP
+        .ULCHARACTER "-"
+        .IF code = 1 .THEN
+                .LEFTMARGIN $authors_column
+                .LET title_string = 'Authors'
+        .ELSEIF code = 2 .THEN
+                .LEFTMARGIN $subject_column
+                .LET title_string = 'Subject'
+        .ENDIF
+        .UNDERLINE .PRINT $title_string .NEWLINE .NOUNDERLINE
+.DETAIL
+        /* test the value of code to see which column to print */
+        .IF code = 1 .THEN
+                .PRINT name .NEWLINE
+        .ELSEIF code = 2 .THEN
+                .PRINT subject .NEWLINE
+        .ENDIF
+.FOOTER title
+        .ENDBLOCK   /* end the block at the end of the master info */
+        .NEWLINE
+
+
+
+.NAME	wia15b
+.SREM	RW Manual 6.4 Appendix B "books2"
+.LONGREMARK
+The BOOKS2 report demonstrates using setup and cleanup to produce
+temporary tables.
+.ENDREMARK
+.FORMFEEDS
+.SETUP
+        create view wia15b_tempbooks as
+                select b.id, b.title, a.name, subject='', code=1
+                        from wia15b_book b, wia15b_author a
+                        where b.id = a.id
+                union
+                select b.id, b.title, name='', s.subject, code=2
+                        from wia15b_book b, wia15b_subject s
+                        where b.id = s.id;
+        create table wia15b_subj_count as
+                select id, num_sub=count(subject)
+                from wia15b_tempbooks
+                where code = 2
+                group by id;
+        create table wia15b_auth_count as
+                select id, num_auths=count(name)
+                from wia15b_tempbooks
+                where code = 1
+                group by id;
+.CLEANUP
+        drop view wia15b_tempbooks;
+        drop table wia15b_subj_count;
+        drop table wia15b_auth_count;
+.QUERY
+        select	b.id, b.title, b.name, b.subject, b.code, a.num_auths, s.num_sub
+        from wia15b_tempbooks b, wia15b_subj_count s, wia15b_auth_count a
+        where b.id = a.id and b.id = s.id
+.PAGELENGTH 20
+.SORT title, code
+.BREAK title, code      /* title and code will be break columns */
+.RIGHTMARGIN 80         /* it is important to set the right margin here */
+.DECLARE
+	lines_in_title = integer,
+	authors_column = integer,
+	subject_column = integer,
+	title_string = varchar(8)
+.HEADER report
+	/* Initialize variables */
+	.LET lines_in_title = 4
+	.LET authors_column = 5
+	.LET subject_column = 20
+.HEADER title
+	/* Request the maximum number of lines needed to print all book */
+	/* information on one page.                                     */
+	.IF num_sub > num_auths .THEN
+		.need num_sub + $lines_in_title
+	.ELSE
+		.need num_sub + $lines_in_title
+	.ENDIF
+	/* Reset margin and print title of book                        */
+	/* start a block after printing the master info                */
+        .LEFTMARGIN 0
+        .ULCHARACTER "=" .UNDERLINE .PRINT title .NEWLINE .NOUNDERLINE
+        .BLOCK
+.HEADER code
+	/* goto the top of the block each time code changes */
+	/* set the margin to the correct column for the code type  */
+        .TOP
+        .ULCHARACTER "-"
+        .IF code = 1 .THEN
+                .LEFTMARGIN $authors_column
+		.LET title_string = 'Authors'
+        .ELSEIF code = 2 .THEN
+                .LEFTMARGIN $subject_column
+		.LET title_string = 'Subject'
+        .ENDIF
+        .UNDERLINE .PRINT $title_string .NEWLINE .NOUNDERLINE
+.DETAIL
+	/*  test the value of code to see which column to print  */
+        .IF code = 1 .THEN
+                .PRINT name .NEWLINE
+        .ELSEIF code = 2 .THEN
+                .PRINT subject .NEWLINE
+        .ENDIF
+.FOOTER title
+        .ENDBLOCK  /* end the block at the end of the master info */
+        .NEWLINE
+!!
+? sreport SEPPARAMDB xwia15.rw 
+<<
+~
+>>
+? report SEPPARAMDB wia15a -fxwia15a.out 
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+<< IF (NT_GENERIC) 
+INGRES REPORT Copyright (c) 1981, 1991 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+<<
+INGRES REPORT Copyright (c) 1981, 1991 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+? type xwia15a.out 
+<<
+The C Programming Language
+=== = =========== ========
+     Authors        Subject
+     -------        -------
+     Kernighan      C
+     Ritchie        language
+                    programming
+
+
+>>
+? delete xwia15a.out 
+<<
+file was deleted
+>>
+? report SEPPARAMDB wia15b -fxwia15b.out 
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+<<
+INGRES REPORT Copyright (c) 1981, 1993 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+<< IF (NT_GENERIC) 
+INGRES REPORT Copyright (c) 1981, 1991 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+<<
+INGRES REPORT Copyright (c) 1981, 1991 Ingres Corporation
+Reading report specifications and preparing query . . .
+Retrieving data . . .
+>>
+? type xwia15b.out 
+<<
+Computer Programming and Arch.
+======== =========== === ====
+     Authors        Subject
+     -------        -------
+     Eckhouse       architecture
+     Levy           assembler
+                    computer
+                    programming
+
+Database Systems
+======== =======
+     Authors        Subject
+     -------        -------
+     Ullman         Database
+                    management
+
+The C Programming Language
+=== = =========== ========
+     Authors        Subject
+     -------        -------
+     Kernighan      C
+     Ritchie        language
+                    programming
+
+The INGRES Papers
+=== ====== ======
+     Authors        Subject
+     -------        -------
+     Stonebraker    Database
+                    INGRES
+                    computer
+
+The Quiet American
+=== ===== ========
+     Authors        Subject
+     -------        -------
+     Greene         Vietnam
+
+
+>>
+? delete xwia15b.out 
+<<
+file was deleted
+>>
+? delobj SEPPARAMDB -report wia15a wia15b 
+<<
+~
+>>
+
+
+Ending at: Mon Sep  9 18:59:10 1996

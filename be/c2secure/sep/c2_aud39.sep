@@ -1,0 +1,296 @@
+/*
+	Test Name: 
+	Time: Wed Jan 20 13:17:25 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:	c2hsa01.sep
+	Purpose	:	test HELP SECURITY_ALARM
+	Input Files  :
+	Output Files :
+	Database     :	SEPPARAMDB
+	Tables       :	test1,test2,test3,test4
+                        ingtest1,ingtest2,ingtest3
+	Synopsis     :	help security_alarm will be tested on:
+                        - valid tablenames (all/some/none have security_alarms)
+                        - tables you own and tables you do not own
+                        - non-table objects (view, index, procedure, rule, 
+                          dbevent)
+
+------------------>     The ingresversion was containing following bug when
+        *               this test was produced:
+        *                if the DBA created a security_alarm on one of his
+        *               tables, all other users have been able to see this alarm
+        *                if the DBA granted privileges to other users, these
+        *               users have been able to see the security_alarms, 
+        *               produced on this tables
+        
+
+ History: 20-Jan-1993	(jrimpler)	Created
+          20-Jan-1993	(Author)
+           6-May-1994	(stephenb)		Updated canons
+          12-Jan-1995   (holla02)   Modified to conform to changes in 1.1/03:
+                                    security alarm numbering and hsa output
+*/
+? fill init4.qry 
+!!
+create table test1 (col1 integer) with page_size=2048;\g
+create table test2 (col1 integer) with page_size=2048;\g
+create table test3 (col1 integer) with page_size=2048;\g
+create table test4 (col1 integer) with page_size=2048;\g
+create security_alarm on table test1 if failure;\g
+create security_alarm on table test1 by user ingres;\g
+create security_alarm on table test3;\g
+grant all on table test2 to ingres;\g
+create view tab1view as select col1 from test1;\g
+create index tab2index on test2 (col1) with page_size=2048;\g
+create procedure proc1 (i integer not null, getvalue integer not null)
+as begin
+    if i<3 then getvalue=getvalue+11;
+    endif;
+    return :getvalue;
+   end;\g
+create rule tab1rule after insert on test1
+   execute procedure proc1 (i=12,getvalue=1);\g
+create dbevent testevent;\g
+!!
+? fill init5.qry 
+!!
+create table ingtab1 (col1 integer) with page_size=2048;\g
+create table ingtab2 (col1 integer) with page_size=2048;\g
+create security_alarm on table ingtab2;\g
+create table ingtab3 (col1 integer) with page_size=2048;\g
+grant all on table ingtab3 to testenv;\g
+!!
+? fill drop4.qry 
+!!
+drop table test1;\g
+drop table test2;\g
+drop table test3;\g
+drop table test4;\g
+drop procedure proc1;\g
+drop rule tab1rule;\g
+drop dbevent testevent;\g
+!!
+? fill drop5.qry 
+!!
+drop table ingtab1;\g
+drop table ingtab2;\g
+drop table ingtab3;\g
+!!
+? sql -uingres -s SEPPARAMDB 
+<<
+>>
+* \i init5.qry 
+<<
+~
+>>
+* \q 
+<<
+>>
+? sql -utestenv -s SEPPARAMDB 
+<<
+>>
+* \i init4.qry 
+<<
+(0 rows)
+>>
+* help security_alarm test1, test3;\g 
+<<
+Security alarms on test1 are:
+
+
+Security alarm 1:
+create security_alarm on table test1  if failure when select, insert,
+delete, update by public
+
+Security alarm 2:
+create security_alarm on table test1  if success, failure when select,
+insert, delete, update by user ingres                        
+
+
+Security alarms on test3 are:
+
+
+Security alarm 1:
+create security_alarm on table test3  if success, failure when select,
+insert, delete, update by public
+
+
+>>
+* help security_alarm test1, test2;\g 
+<<
+Security alarms on test1 are:
+
+
+Security alarm 1:
+create security_alarm on table test1  if failure when select, insert,
+delete, update by public
+
+Security alarm 2:
+create security_alarm on table test1  if success, failure when select,
+insert, delete, update by user ingres                        
+
+
+Table test2 has no security alarms.
+
+>>
+* help security_alarm test2,test4;\g 
+<<
+Table test2 has no security alarms.
+
+Table test4 has no security alarms.
+
+>>
+* help security_alarm test1,test4;\g 
+<<
+Security alarms on test1 are:
+
+
+Security alarm 1:
+create security_alarm on table test1  if failure when select, insert,
+delete, update by public
+
+Security alarm 2:
+create security_alarm on table test1  if success, failure when select,
+insert, delete, update by user ingres
+
+
+Table test4 has no security alarms.
+
+>>
+* help security_alarm test1, test2, test3, test4;\g 
+<<
+Security alarms on test1 are:
+
+
+Security alarm 1:
+create security_alarm on table test1  if failure when select, insert,
+delete, update by public
+
+Security alarm 2:
+create security_alarm on table test1  if success, failure when select,
+insert, delete, update by user ingres
+
+
+Table test2 has no security alarms.
+
+Security alarms on test3 are:
+
+
+Security alarm 1:
+create security_alarm on table test3  if success, failure when select,
+insert, delete, update by public
+
+
+Table test4 has no security alarms.
+
+>>
+* help security_alarm 'ingres'.ingtab1;\g 
+<<
+No tables were found that matched ''ingres'.ingtab1'
+
+
+>>
+* help security_alarm 'ingres'.ingtab2;\g 
+<<
+No tables were found that matched ''ingres'.ingtab2'
+
+>>
+* help security_alarm 'ingres'.ingtab3;\g 
+<<
+No tables were found that matched ''ingres'.ingtab3'
+
+>>
+* help security_alarm tab1view;\g 
+<<
+Table tab1view has no security alarms.
+
+
+>>
+* help security_alarm tab2index;\g 
+<<
+Table tab2index has no security alarms.
+
+>>
+* help security_alarm proc1;\g 
+<<
+No tables were found that matched 'proc1'
+
+>>
+* help security_alarm tab1rule;\g 
+<<
+No tables were found that matched 'tab1rule'
+
+>>
+* help security_alarm testevent;\g 
+<<
+No tables were found that matched 'testevent'
+
+>>
+* \q 
+<<
+>>
+? sql -uingres -s SEPPARAMDB 
+<<
+>>
+* help security_alarm ingtab1, ingtab2, ingtab3;\g 
+<<
+Table ingtab1 has no security alarms.
+
+Security alarms on ingtab2 are:
+
+
+Security alarm 1:
+create security_alarm on table ingtab2  if success, failure when
+select, insert, delete, update by public
+
+
+Table ingtab3 has no security alarms.
+
+>>
+* help security_alarm test1;\g 
+<<
+No tables were found that matched 'test1'
+
+>>
+* help security_alarm test2;\g 
+<<
+Table test2 has no security alarms.
+
+>>
+* help security_alarm test3;\g 
+<<
+No tables were found that matched 'test3'
+
+>>
+* help security_alarm test4;\g 
+<<
+No tables were found that matched 'test4'
+
+>>
+* \i drop5.qry 
+<<
+>>
+* \q 
+<<
+>>
+? sql -utestenv -s SEPPARAMDB 
+<<
+>>
+* \i drop4.qry 
+<<
+E_US189D DROP RULE: Rule 'tab1rule' does not exist.
+    (Wed Jan 20 14:55:11 1993)
+
+>>
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Fri May  6 10:40:48 1994

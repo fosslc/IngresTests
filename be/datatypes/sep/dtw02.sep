@@ -1,0 +1,1126 @@
+/*
+	Copyright (c) 2007 Ingres Corporation
+
+        Test Name    : dtw02.sep (formerly fia03)
+        User Name    : testenv
+        Module       : be/datatypes
+        Purpose      : Arithmetic Result Size test cases
+        Input Files  : none
+        Output Files : none
+        Database     : datatypedb
+        Tables       : dt4, dec_table5
+        Synopsis     : 1. Do all 4 arithmetic functions with a variety of
+			  DECIMAL values and verify result sizes are correctly
+			  computed.  Exceptions will be listed in warning
+			  messages.  Create a table and insert a few random
+			  tuples; we are mostly concerned with the precision and
+			  scale of the result: they should be computed according
+			  to the formulas listed in the decimal product spec.
+			  Accuracy for the math has been tested independently.
+		       2. Just for good measure let's put the max and min values
+			  for each column to make sure they'll go
+
+        History :
+	  unknown 	(John Black)   Created
+	  07-aug-1992	(John B. park) Modified to sep format
+          10-Jan-1994	(jpark)   updated canons.
+          17-Dec-1997	(zhaqi01) Modify canon due to change of float
+	  30-mar-1999	(yu$pe02) Hard code page size to 4K.
+          02-Dec-2002	(drivi01) This is a temporary change due to change
+				  #460603 to fix bug #92366, this resolves most
+				  of the decimal problems but causes some sep
+				  tests to diff.  Due to the above change.  Some
+				  output has been changed to output decimals
+				  with a smaller scale when precision is too
+				  high. A long term solution is being worked on.
+	  19-Dec-2002	(drivi01) Backed out changes #460603,460686,460173 due
+				  to disagreement between Development and Level2
+				  Support on decimal functionality.
+	   9-Oct-2006	(kibro01) Amended decimal functionality back to 
+                                  documented behaviour as per bug 116433
+	   7-Jun-2007	(vande02) Changed table dt4 columns 'a' and  'b' to
+				  decimal(39,0) and decimal(39,39) and column
+				  'e' to decimal(20,4) and the inserts from 31
+				  to 39 digits to hit the new Decimal precision
+				  maximum of 39 digits.  This makes this test
+				  valid again.  Updated canons where ii_dv_desc
+				  returns the new maximum precision of 39 and
+				  when new results from aggregates using the
+				  new definition for 'e decimal(20,4)' changed
+				  the results.
+
+				  This new max of 39 is as of Ingres 2006
+				  Release 3.
+
+                                  Copied embeded test comments to Synopsis.
+	   22-Jun-2007	(vande02) Added a few more queries at the end to test
+				  the new decimals max of 39, and 39+1 to show
+				  the behavior when it is selected back.  This
+				  is the way it works, see comments in SD
+				  issue 119289.
+*/
+? sql -s SEPPARAMDB 
+/*
+** Arithmetic Result Size test cases 
+*/
+<<
+>>
+* set autocommit on; \g
+<<
+>>
+* drop table dt4, dec_table5;  \g
+<<
+~
+>>
+* create table dt4 (a decimal(39,0), b decimal(39,39), c decimal(15,8), 		    d deci-
+mal(15,7), e decimal(20,4), f decimal(1,0))with page_size=4096; \g 
+/*
+** 1. Do all 4 arithmetic functions with a variety of DECIMAL values and  
+**    verify result sizes are correctly computed.  Exceptions will be 
+**    listed in warning messages. 
+** 
+** create a table and insert a few random tuples; we are mostly concerned with 
+** the precision and scale of the result: they should be computed according to 
+** the formulas listed in the decimal product spec.  Accuracy for the math has 
+** been tested independently. 
+*/
+<<
+>>
+* insert into dt4 values (0, 0, 0, 0, 0, 0); \g
+<<
+(1 row)
+>>
+* insert into dt4 values (1, 0.1, 1, 1, 1, 1); \g
+<<
+(1 row)
+>>
+* insert into dt4 values (-1,-0.1, -1, -1, -1, -1); \g
+<<
+(1 row)
+>>
+* insert into dt4 values (1234567890.0, 0.456789, 100.121, 50111.0001, 10, 4);\g
+<<
+(1 row)
+>>
+* insert into dt4 values (5432155555555.0,0.12233445566,-12,-6,-123321.0,-9); \g
+<<
+(1 row)
+>>
+* select * from dt4; \g
+<<
+
++----------------------------------------+-------------------------------------------
++-----------------+-----------------+------------------+--+
+|a                                       |b                                         -
+|c                |d                |e                 |f |
++----------------------------------------+-------------------------------------------
++-----------------+-----------------+------------------+--+
+|                                       0| 0.000000000000000000000000000000000000000-
+|       0.00000000|        0.0000000|            0.0000| 0|
+|                                       1| 0.100000000000000000000000000000000000000-
+|       1.00000000|        1.0000000|            1.0000| 1|
+|                                      -1|-0.100000000000000000000000000000000000000-
+|      -1.00000000|       -1.0000000|           -1.0000|-1|
+|                              1234567890| 0.456789000000000000000000000000000000000-
+|     100.12100000|    50111.0001000|           10.0000| 4|
+|                           5432155555555| 0.122334455660000000000000000000000000000-
+|     -12.00000000|       -6.0000000|      -123321.0000|-9|
++----------------------------------------+-------------------------------------------
++-----------------+-----------------+------------------+--+
+(5 rows)
+>>
+* select a+a, ii_dv_desc(a+a) from dt4;  \g
+<<
++--------------------------------+------------------------------+
+|col1                            |col2                          |
++--------------------------------+------------------------------+
+|                               0|nullable decimal(39, 0)       |
+|                               2|nullable decimal(39, 0)       |
+|                              -2|nullable decimal(39, 0)       |
+|                      2469135780|nullable decimal(39, 0)       |
+|                  10864311111110|nullable decimal(39, 0)       |
++--------------------------------+------------------------------+
+(5 rows)
+>>
+* select a+b, ii_dv_desc(a+b) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:48:20 1994)
+
+>>
+* select a+c, ii_dv_desc(a+c) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                       0.00000000|nullable decimal(39, 8)       |
+|                       2.00000000|nullable decimal(39, 8)       |
+|                      -2.00000000|nullable decimal(39, 8)       |
+|              1234567990.12100000|nullable decimal(39, 8)       |
+|           5432155555543.00000000|nullable decimal(39, 8)       |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select a+d, ii_dv_desc(a+d) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                        0.0000000|nullable decimal(39, 7)       |
+|                        2.0000000|nullable decimal(39, 7)       |
+|                       -2.0000000|nullable decimal(39, 7)       |
+|               1234618001.0001000|nullable decimal(39, 7)       |
+|            5432155555549.0000000|nullable decimal(39, 7)       |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select a+e, ii_dv_desc(a+e) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                           0.0000|nullable decimal(39, 4)       |
+|                           2.0000|nullable decimal(39, 4)       |
+|                          -2.0000|nullable decimal(39, 4)       |
+|                  1234567900.0000|nullable decimal(39, 4)       |
+|               5432155432234.0000|nullable decimal(39, 4)       |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select a+f, ii_dv_desc(a+f) from dt4;  \g
+<<
++--------------------------------+------------------------------+
+|col1                            |col2                          |
++--------------------------------+------------------------------+
+|                               0|nullable decimal(39, 0)       |
+|                               2|nullable decimal(39, 0)       |
+|                              -2|nullable decimal(39, 0)       |
+|                      1234567894|nullable decimal(39, 0)       |
+|                   5432155555546|nullable decimal(39, 0)       |
++--------------------------------+------------------------------+
+(5 rows)
+>>
+* select b+b, ii_dv_desc(b+b) from dt4;  \g
+<<
+
++------------------------------------------+-----------------------------------------
+----------------------+
+|col1                                      |col2                                    -
+                      |
++------------------------------------------+-----------------------------------------
+----------------------+
+| 0.000000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.200000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+|-0.200000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.913578000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.244668911320000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
++------------------------------------------+-----------------------------------------
+----------------------+
+(5 rows)
+>>
+* select b+c, ii_dv_desc(b+c) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:48:23 1994)
+
+>>
+* select b+d, ii_dv_desc(b+d) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:48:26 1994)
+
+>>
+* select b+e, ii_dv_desc(b+e) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:48:27 1994)
+
+>>
+* select b+f, ii_dv_desc(b+f) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:48:28 1994)
+
+>>
+* select c+c, ii_dv_desc(c+c) from dt4;  \g
+<<
++------------------+------------------------------+
+|col1              |col2                          |
++------------------+------------------------------+
+|        0.00000000|nullable decimal(16, 8)       |
+|        2.00000000|nullable decimal(16, 8)       |
+|       -2.00000000|nullable decimal(16, 8)       |
+|      200.24200000|nullable decimal(16, 8)       |
+|      -24.00000000|nullable decimal(16, 8)       |
++------------------+------------------------------+
+(5 rows)
+>>
+* select c+d, ii_dv_desc(c+d) from dt4;  \g
+<<
++-------------------+------------------------------+
+|col1               |col2                          |
++-------------------+------------------------------+
+|         0.00000000|nullable decimal(17, 8)       |
+|         2.00000000|nullable decimal(17, 8)       |
+|        -2.00000000|nullable decimal(17, 8)       |
+|     50211.12110000|nullable decimal(17, 8)       |
+|       -18.00000000|nullable decimal(17, 8)       |
++-------------------+------------------------------+
+(5 rows)
+>>
+* select c+e, ii_dv_desc(c+e) from dt4;  \g
+<<
++-----------------------+------------------------------+
+|col1                   |col2                          |
++-----------------------+------------------------------+
+|             0.00000000|nullable decimal(25, 8)       |
+|             2.00000000|nullable decimal(25, 8)       |
+|            -2.00000000|nullable decimal(25, 8)       |
+|           110.12100000|nullable decimal(25, 8)       |
+|       -123333.00000000|nullable decimal(25, 8)       |
++-----------------------+------------------------------+
+(5 rows)
+>>
+* select c+f, ii_dv_desc(c+f) from dt4;  \g
+<<
++------------------+------------------------------+
+|col1              |col2                          |
++------------------+------------------------------+
+|        0.00000000|nullable decimal(16, 8)       |
+|        2.00000000|nullable decimal(16, 8)       |
+|       -2.00000000|nullable decimal(16, 8)       |
+|      104.12100000|nullable decimal(16, 8)       |
+|      -21.00000000|nullable decimal(16, 8)       |
++------------------+------------------------------+
+(5 rows)
+>>
+* select d+d, ii_dv_desc(d+d) from dt4;  \g
+<<
++------------------+------------------------------+
+|col1              |col2                          |
++------------------+------------------------------+
+|         0.0000000|nullable decimal(16, 7)       |
+|         2.0000000|nullable decimal(16, 7)       |
+|        -2.0000000|nullable decimal(16, 7)       |
+|    100222.0002000|nullable decimal(16, 7)       |
+|       -12.0000000|nullable decimal(16, 7)       |
++------------------+------------------------------+
+(5 rows)
+>>
+* select d+e, ii_dv_desc(d+e) from dt4;  \g
+<<
++----------------------+------------------------------+
+|col1                  |col2                          |
++----------------------+------------------------------+
+|             0.0000000|nullable decimal(24, 7)       |
+|             2.0000000|nullable decimal(24, 7)       |
+|            -2.0000000|nullable decimal(24, 7)       |
+|         50121.0001000|nullable decimal(24, 7)       |
+|       -123327.0000000|nullable decimal(24, 7)       |
++----------------------+------------------------------+
+(5 rows)
+>>
+* select d+f, ii_dv_desc(d+f) from dt4;  \g
+<<
++------------------+------------------------------+
+|col1              |col2                          |
++------------------+------------------------------+
+|         0.0000000|nullable decimal(16, 7)       |
+|         2.0000000|nullable decimal(16, 7)       |
+|        -2.0000000|nullable decimal(16, 7)       |
+|     50115.0001000|nullable decimal(16, 7)       |
+|       -15.0000000|nullable decimal(16, 7)       |
++------------------+------------------------------+
+(5 rows)
+>>
+* select e+e, ii_dv_desc(e+e) from dt4;  \g
+<<
++-------------------+------------------------------+
+|col1               |col2                          |
++-------------------+------------------------------+
+|             0.0000|nullable decimal(21, 4)       |
+|             2.0000|nullable decimal(21, 4)       |
+|            -2.0000|nullable decimal(21, 4)       |
+|            20.0000|nullable decimal(21, 4)       |
+|       -246642.0000|nullable decimal(21, 4)       |
++-------------------+------------------------------+
+(5 rows)
+>>
+* select e+f, ii_dv_desc(e+f) from dt4;  \g
+<<
++-------------------+------------------------------+
+|col1               |col2                          |
++-------------------+------------------------------+
+|             0.0000|nullable decimal(21, 4)       |
+|             2.0000|nullable decimal(21, 4)       |
+|            -2.0000|nullable decimal(21, 4)       |
+|            14.0000|nullable decimal(21, 4)       |
+|       -123330.0000|nullable decimal(21, 4)       |
++-------------------+------------------------------+
+(5 rows)
+>>
+* select f+f, ii_dv_desc(f+f) from dt4;  \g
+<<
++---+------------------------------+
+|col|col2                          |
++---+------------------------------+
+|  0|nullable decimal(2, 0)        |
+|  2|nullable decimal(2, 0)        |
+| -2|nullable decimal(2, 0)        |
+|  8|nullable decimal(2, 0)        |
+|-18|nullable decimal(2, 0)        |
++---+------------------------------+
+(5 rows)
+>>
+* select a-a, ii_dv_desc(a-a) from dt4; \g
+<<
++--------------------------------+------------------------------+
+|col1                            |col2                          |
++--------------------------------+------------------------------+
+|                               0|nullable decimal(39, 0)       |
+|                               0|nullable decimal(39, 0)       |
+|                               0|nullable decimal(39, 0)       |
+|                               0|nullable decimal(39, 0)       |
+|                               0|nullable decimal(39, 0)       |
++--------------------------------+------------------------------+
+(5 rows)
+>>
+* select a-b, ii_dv_desc(a-b) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:48:31 1994)
+
+>>
+* select a-c, ii_dv_desc(a-c) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                       0.00000000|nullable decimal(39, 8)       |
+|                       0.00000000|nullable decimal(39, 8)       |
+|                       0.00000000|nullable decimal(39, 8)       |
+|              1234567789.87900000|nullable decimal(39, 8)       |
+|           5432155555567.00000000|nullable decimal(39, 8)       |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select a-d, ii_dv_desc(a-d) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                        0.0000000|nullable decimal(39, 7)       |
+|                        0.0000000|nullable decimal(39, 7)       |
+|                        0.0000000|nullable decimal(39, 7)       |
+|               1234517778.9999000|nullable decimal(39, 7)       |
+|            5432155555561.0000000|nullable decimal(39, 7)       |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select a-e, ii_dv_desc(a-e) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                           0.0000|nullable decimal(39, 4)       |
+|                           0.0000|nullable decimal(39, 4)       |
+|                           0.0000|nullable decimal(39, 4)       |
+|                  1234567880.0000|nullable decimal(39, 4)       |
+|               5432155678876.0000|nullable decimal(39, 4)       |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select a-f, ii_dv_desc(a-f) from dt4;  \g
+<<
++--------------------------------+------------------------------+
+|col1                            |col2                          |
++--------------------------------+------------------------------+
+|                               0|nullable decimal(39, 0)       |
+|                               0|nullable decimal(39, 0)       |
+|                               0|nullable decimal(39, 0)       |
+|                      1234567886|nullable decimal(39, 0)       |
+|                   5432155555564|nullable decimal(39, 0)       |
++--------------------------------+------------------------------+
+(5 rows)
+>>
+* select b-b, ii_dv_desc(b-b) from dt4;  \g
+<<
+
++------------------------------------------+-----------------------------------------
+----------------------+
+|col1                                      |col2                                    -
+                      |
++------------------------------------------+-----------------------------------------
+----------------------+
+| 0.000000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.000000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.000000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.000000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.000000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
++------------------------------------------+-----------------------------------------
+----------------------+
+(5 rows)
+>>
+* select b-c, ii_dv_desc(b-c) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:48:33 1994)
+
+>>
+* select b-d, ii_dv_desc(b-d) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:48:35 1994)
+
+>>
+* select b-e, ii_dv_desc(b-e) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:48:36 1994)
+
+>>
+* select b-f, ii_dv_desc(b-f) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Mon Jan 10 11:48:38 1994)
+
+>>
+* select c-c, ii_dv_desc(c-c) from dt4;  \g
+<<
++------------------+------------------------------+
+|col1              |col2                          |
++------------------+------------------------------+
+|        0.00000000|nullable decimal(16, 8)       |
+|        0.00000000|nullable decimal(16, 8)       |
+|        0.00000000|nullable decimal(16, 8)       |
+|        0.00000000|nullable decimal(16, 8)       |
+|        0.00000000|nullable decimal(16, 8)       |
++------------------+------------------------------+
+(5 rows)
+>>
+* select c-d, ii_dv_desc(c-d) from dt4;  \g
+<<
++-------------------+------------------------------+
+|col1               |col2                          |
++-------------------+------------------------------+
+|         0.00000000|nullable decimal(17, 8)       |
+|         0.00000000|nullable decimal(17, 8)       |
+|         0.00000000|nullable decimal(17, 8)       |
+|    -50010.87910000|nullable decimal(17, 8)       |
+|        -6.00000000|nullable decimal(17, 8)       |
++-------------------+------------------------------+
+(5 rows)
+>>
+* select c-e, ii_dv_desc(c-e) from dt4;  \g
+<<
++-----------------------+------------------------------+
+|col1                   |col2                          |
++-----------------------+------------------------------+
+|             0.00000000|nullable decimal(25, 8)       |
+|             0.00000000|nullable decimal(25, 8)       |
+|             0.00000000|nullable decimal(25, 8)       |
+|            90.12100000|nullable decimal(25, 8)       |
+|        123309.00000000|nullable decimal(25, 8)       |
++-----------------------+------------------------------+
+(5 rows)
+>>
+* select c-f, ii_dv_desc(c-f) from dt4;  \g
+<<
++------------------+------------------------------+
+|col1              |col2                          |
++------------------+------------------------------+
+|        0.00000000|nullable decimal(16, 8)       |
+|        0.00000000|nullable decimal(16, 8)       |
+|        0.00000000|nullable decimal(16, 8)       |
+|       96.12100000|nullable decimal(16, 8)       |
+|       -3.00000000|nullable decimal(16, 8)       |
++------------------+------------------------------+
+(5 rows)
+>>
+* select d-d, ii_dv_desc(d-d) from dt4;  \g
+<<
++------------------+------------------------------+
+|col1              |col2                          |
++------------------+------------------------------+
+|         0.0000000|nullable decimal(16, 7)       |
+|         0.0000000|nullable decimal(16, 7)       |
+|         0.0000000|nullable decimal(16, 7)       |
+|         0.0000000|nullable decimal(16, 7)       |
+|         0.0000000|nullable decimal(16, 7)       |
++------------------+------------------------------+
+(5 rows)
+>>
+* select d-e, ii_dv_desc(d-e) from dt4;  \g
+<<
++----------------------+------------------------------+
+|col1                  |col2                          |
++----------------------+------------------------------+
+|             0.0000000|nullable decimal(24, 7)       |
+|             0.0000000|nullable decimal(24, 7)       |
+|             0.0000000|nullable decimal(24, 7)       |
+|         50101.0001000|nullable decimal(24, 7)       |
+|        123315.0000000|nullable decimal(24, 7)       |
++----------------------+------------------------------+
+(5 rows)
+>>
+* select d-f, ii_dv_desc(d-f) from dt4;  \g
+<<
++------------------+------------------------------+
+|col1              |col2                          |
++------------------+------------------------------+
+|         0.0000000|nullable decimal(16, 7)       |
+|         0.0000000|nullable decimal(16, 7)       |
+|         0.0000000|nullable decimal(16, 7)       |
+|     50107.0001000|nullable decimal(16, 7)       |
+|         3.0000000|nullable decimal(16, 7)       |
++------------------+------------------------------+
+(5 rows)
+>>
+* select e-e, ii_dv_desc(e-e) from dt4;  \g
+<<
++-------------------+------------------------------+
+|col1               |col2                          |
++-------------------+------------------------------+
+|             0.0000|nullable decimal(21, 4)       |
+|             0.0000|nullable decimal(21, 4)       |
+|             0.0000|nullable decimal(21, 4)       |
+|             0.0000|nullable decimal(21, 4)       |
+|             0.0000|nullable decimal(21, 4)       |
++-------------------+------------------------------+
+(5 rows)
+>>
+* select e-f, ii_dv_desc(e-f) from dt4;  \g
+<<
++-------------------+------------------------------+
+|col1               |col2                          |
++-------------------+------------------------------+
+|             0.0000|nullable decimal(21, 4)       |
+|             0.0000|nullable decimal(21, 4)       |
+|             0.0000|nullable decimal(21, 4)       |
+|             6.0000|nullable decimal(21, 4)       |
+|       -123312.0000|nullable decimal(21, 4)       |
++-------------------+------------------------------+
+(5 rows)
+>>
+* select f-f, ii_dv_desc(f-f) from dt4;  \g
+<<
++---+------------------------------+
+|col|col2                          |
++---+------------------------------+
+|  0|nullable decimal(2, 0)        |
+|  0|nullable decimal(2, 0)        |
+|  0|nullable decimal(2, 0)        |
+|  0|nullable decimal(2, 0)        |
+|  0|nullable decimal(2, 0)        |
++---+------------------------------+
+(5 rows)
+>>
+* select a*a, ii_dv_desc(a*a) from dt4; \g
+<<
++--------------------------------+------------------------------+
+|col1                            |col2                          |
++--------------------------------+------------------------------+
+|                               0|nullable decimal(39, 0)       |
+|                               1|nullable decimal(39, 0)       |
+|                               1|nullable decimal(39, 0)       |
+|             1524157875019052100|nullable decimal(39, 0)       |
+|      29508313979747050691358025|nullable decimal(39, 0)       |
++--------------------------------+------------------------------+
+(5 rows)
+>>
+* select a*b, ii_dv_desc(a*b) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Thu Jul 27 11:12:06 2006)
+
+>>
+* select a*c, ii_dv_desc(a*c) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                       0.00000000|nullable decimal(39, 8)       |
+|                       1.00000000|nullable decimal(39, 8)       |
+|                       1.00000000|nullable decimal(39, 8)       |
+|            123606171714.69000000|nullable decimal(39, 8)       |
+|         -65185866666660.00000000|nullable decimal(39, 8)       |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select a*d, ii_dv_desc(a*d) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                        0.0000000|nullable decimal(39, 7)       |
+|                        1.0000000|nullable decimal(39, 7)       |
+|                        1.0000000|nullable decimal(39, 7)       |
+|           61865431659246.7890000|nullable decimal(39, 7)       |
+|          -32592933333330.0000000|nullable decimal(39, 7)       |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select a*e, ii_dv_desc(a*e) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                           0.0000|nullable decimal(39, 4)       |
+|                           1.0000|nullable decimal(39, 4)       |
+|                           1.0000|nullable decimal(39, 4)       |
+|                 12345678900.0000|nullable decimal(39, 4)       |
+|         -669898855266598155.0000|nullable decimal(39, 4)       |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select a*f, ii_dv_desc(a*f) from dt4;  \g
+<<
++--------------------------------+------------------------------+
+|col1                            |col2                          |
++--------------------------------+------------------------------+
+|                               0|nullable decimal(39, 0)       |
+|                               1|nullable decimal(39, 0)       |
+|                               1|nullable decimal(39, 0)       |
+|                      4938271560|nullable decimal(39, 0)       |
+|                 -48889399999995|nullable decimal(39, 0)       |
++--------------------------------+------------------------------+
+(5 rows)
+>>
+* select b*b, ii_dv_desc(b*b) from dt4;  \g
+<<
+
++------------------------------------------+-----------------------------------------
+----------------------+
+|col1                                      |col2                                    -
+                      |
++------------------------------------------+-----------------------------------------
+----------------------+
+| 0.000000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.010000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.010000000000000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.208656190521000000000000000000000000000|nullable decimal(39, 39)                -
+                      |
+| 0.014965719041628506035600000000000000000|nullable decimal(39, 39)                -
+                      |
++------------------------------------------+-----------------------------------------
+----------------------+
+(5 rows)
+>>
+* select b*c, ii_dv_desc(b*c) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Thu Jul 27 11:12:06 2006)
+
+>>
+* select b*d, ii_dv_desc(b*d) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Thu Jul 27 11:12:06 2006)
+
+>>
+* select b*e, ii_dv_desc(b*e) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Thu Jul 27 11:12:06 2006)
+
+>>
+* select b*f, ii_dv_desc(b*f) from dt4;  \g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Thu Jul 27 11:12:06 2006)
+
+>>
+* select c*c, ii_dv_desc(c*c) from dt4;  \g
+<<
++--------------------------------+------------------------------+
+|col1                            |col2                          |
++--------------------------------+------------------------------+
+|              0.0000000000000000|nullable decimal(30, 16)      |
+|              1.0000000000000000|nullable decimal(30, 16)      |
+|              1.0000000000000000|nullable decimal(30, 16)      |
+|          10024.2146410000000000|nullable decimal(30, 16)      |
+|            144.0000000000000000|nullable decimal(30, 16)      |
++--------------------------------+------------------------------+
+(5 rows)
+>>
+* select c*d, ii_dv_desc(c*d) from dt4;  \g
+<<
++--------------------------------+------------------------------+
+|col1                            |col2                          |
++--------------------------------+------------------------------+
+|               0.000000000000000|nullable decimal(30, 15)      |
+|               1.000000000000000|nullable decimal(30, 15)      |
+|               1.000000000000000|nullable decimal(30, 15)      |
+|         5017163.441012100000000|nullable decimal(30, 15)      |
+|              72.000000000000000|nullable decimal(30, 15)      |
++--------------------------------+------------------------------+
+(5 rows)
+>>
+* select c*e, ii_dv_desc(c*e) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                   0.000000000000|nullable decimal(35, 12)      |
+|                   1.000000000000|nullable decimal(35, 12)      |
+|                   1.000000000000|nullable decimal(35, 12)      |
+|                1001.210000000000|nullable decimal(35, 12)      |
+|             1479852.000000000000|nullable decimal(35, 12)      |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select c*f, ii_dv_desc(c*f) from dt4;  \g
+<<
++------------------+------------------------------+
+|col1              |col2                          |
++------------------+------------------------------+
+|        0.00000000|nullable decimal(16, 8)       |
+|        1.00000000|nullable decimal(16, 8)       |
+|        1.00000000|nullable decimal(16, 8)       |
+|      400.48400000|nullable decimal(16, 8)       |
+|      108.00000000|nullable decimal(16, 8)       |
++------------------+------------------------------+
+(5 rows)
+>>
+* select d*d, ii_dv_desc(d*d) from dt4;  \g
+<<
++--------------------------------+------------------------------+
+|col1                            |col2                          |
++--------------------------------+------------------------------+
+|                0.00000000000000|nullable decimal(30, 14)      |
+|                1.00000000000000|nullable decimal(30, 14)      |
+|                1.00000000000000|nullable decimal(30, 14)      |
+|       2511112331.02220001000000|nullable decimal(30, 14)      |
+|               36.00000000000000|nullable decimal(30, 14)      |
++--------------------------------+------------------------------+
+(5 rows)
+>>
+* select d*e, ii_dv_desc(d*e) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                    0.00000000000|nullable decimal(35, 11)      |
+|                    1.00000000000|nullable decimal(35, 11)      |
+|                    1.00000000000|nullable decimal(35, 11)      |
+|               501110.00100000000|nullable decimal(35, 11)      |
+|               739926.00000000000|nullable decimal(35, 11)      |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select d*f, ii_dv_desc(d*f) from dt4;  \g
+<<
++------------------+------------------------------+
+|col1              |col2                          |
++------------------+------------------------------+
+|         0.0000000|nullable decimal(16, 7)       |
+|         1.0000000|nullable decimal(16, 7)       |
+|         1.0000000|nullable decimal(16, 7)       |
+|    200444.0004000|nullable decimal(16, 7)       |
+|        54.0000000|nullable decimal(16, 7)       |
++------------------+------------------------------+
+(5 rows)
+>>
+* select e*e, ii_dv_desc(e*e) from dt4;  \g
+<<
++---------------------------------+------------------------------+
+|col1                             |col2                          |
++---------------------------------+------------------------------+
+|                       0.00000000|nullable decimal(39, 8)       |
+|                       1.00000000|nullable decimal(39, 8)       |
+|                       1.00000000|nullable decimal(39, 8)       |
+|                     100.00000000|nullable decimal(39, 8)       |
+|             15208069041.00000000|nullable decimal(39, 8)       |
++---------------------------------+------------------------------+
+(5 rows)
+>>
+* select e*f, ii_dv_desc(e*f) from dt4;  \g
+<<
++-------------------+------------------------------+
+|col1               |col2                          |
++-------------------+------------------------------+
+|             0.0000|nullable decimal(21, 4)       |
+|             1.0000|nullable decimal(21, 4)       |
+|             1.0000|nullable decimal(21, 4)       |
+|            40.0000|nullable decimal(21, 4)       |
+|       1109889.0000|nullable decimal(21, 4)       |
++-------------------+------------------------------+
+(5 rows)
+>>
+* select f*f, ii_dv_desc(f*f) from dt4;  \g
+<<
++---+------------------------------+
+|col|col2                          |
++---+------------------------------+
+|  0|nullable decimal(2, 0)        |
+|  1|nullable decimal(2, 0)        |
+|  1|nullable decimal(2, 0)        |
+| 16|nullable decimal(2, 0)        |
+| 81|nullable decimal(2, 0)        |
++---+------------------------------+
+(5 rows)
+>>
+* select a/a, ii_dv_desc(a/a) from dt4; \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:48:49 1994)
+
+>>
+* select a/b, ii_dv_desc(a/b) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:48:50 1994)
+
+>>
+* select a/c, ii_dv_desc(a/c) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:48:52 1994)
+
+>>
+* select a/d, ii_dv_desc(a/d) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:48:53 1994)
+
+>>
+* select a/e, ii_dv_desc(a/e) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:48:54 1994)
+
+>>
+* select a/f, ii_dv_desc(a/f) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:48:56 1994)
+
+>>
+* select b/b, ii_dv_desc(b/b) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:48:57 1994)
+
+>>
+* select b/c, ii_dv_desc(b/c) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:48:59 1994)
+
+>>
+* select b/d, ii_dv_desc(b/d) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:01 1994)
+
+>>
+* select b/e, ii_dv_desc(b/e) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:04 1994)
+
+>>
+* select b/f, ii_dv_desc(b/f) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:06 1994)
+
+>>
+* select c/c, ii_dv_desc(c/c) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:07 1994)
+
+>>
+* select c/d, ii_dv_desc(c/d) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:08 1994)
+
+>>
+* select c/e, ii_dv_desc(c/e) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:09 1994)
+
+>>
+* select c/f, ii_dv_desc(c/f) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:11 1994)
+
+>>
+* select d/d, ii_dv_desc(d/d) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:12 1994)
+
+>>
+* select d/e, ii_dv_desc(d/e) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:14 1994)
+
+>>
+* select d/f, ii_dv_desc(d/f) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:16 1994)
+
+>>
+* select e/e, ii_dv_desc(e/e) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:17 1994)
+
+>>
+* select e/f, ii_dv_desc(e/f) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:19 1994)
+
+>>
+* select f/f, ii_dv_desc(f/f) from dt4;  \g
+<<
+E_AD1126 Packed Decimal divide by zero detected in query.
+    (Mon Jan 10 11:49:20 1994)
+
+>>
+/*
+** Just for good measure let's put the max and min values for each column 
+** to make sure they'll go 
+*/
+* insert into dt4 values (999999999999999999999999999999999999999., 0.999999999999999999999999999999999999999, 9999999.99999999, 99999999.9999999, 9999999999999999.9999, 9.0); \g
+<<
+(1 row)
+>>
+* insert into dt4 values (-999999999999999999999999999999999999999., -0.999999999999999999999999999999999999999, -9999999.99999999, -99999999.9999999, -9999999999999999.9999, -9.0); \g
+<<
+(1 row)
+>>
+* create table dec_table5 (dec39_0 dec(39,0), dec38_1 dec(38,1), dec39_39 dec(39,39)-
+) \g
+<<
+>>
+/*
+        Insert one digit less than the column definition
+*/
+* insert into dec_table5 values(12345678901234567890123456789012345678., 12345678901-
+2345678901234567890123456.8, .12345678901234567890123456789012345678)\g
+<<
+(1 row)
+>>
+* select * from dec_table5\g
+<<
+
++----------------------------------------+----------------------------------------+--
+-----------------------------------------+
+|dec39_0                                 |dec38_1                                 |d-
+ec39_39                                  |
++----------------------------------------+----------------------------------------+--
+-----------------------------------------+
+|  12345678901234567890123456789012345678|  123456789012345678901234567890123456.8| -
+0.123456789012345678901234567890123456780|
++----------------------------------------+----------------------------------------+--
+-----------------------------------------+
+(1 row)
+>>
+* delete from dec_table5\g
+<<
+~
+>>
+/*
+        Insert at the maximum amount of digits for the column definition
+*/
+* insert into dec_table5 values(123456789012345678901234567890123456789., 1234567890-
+123456789012345678901234567.8, .123456789012345678901234567890123456789)\g
+<<
+(1 row)
+>>
+* select * from dec_table5\g
+<<
++----------------------------------------+----------------------------------------+--
+-----------------------------------------+
+|dec39_0                                 |dec38_1                                 |d-
+ec39_39                                  |
++----------------------------------------+----------------------------------------+--
+-----------------------------------------+
+| 123456789012345678901234567890123456789| 1234567890123456789012345678901234567.8| -
+0.123456789012345678901234567890123456789|
++----------------------------------------+----------------------------------------+--
+-----------------------------------------+
+(1 row)
+>>
+* delete from dec_table5\g
+<<
+~
+>>
+/*
+        Insert into column dec39_0 by including one digit in the scale
+	and one digit before the decimal into column dec39_39.
+	The display will be 15 or 16 digits with the remaining as zeros.
+        See Service Desk Issue 119289 as to why it works this way.
+*/
+* insert into dec_table5 values(123456789012345678901234567890123456789.1, 123456789-
+0123456789012345678901234567.8, 0.123456789012345678901234567890123456789)\g
+<<
+(1 row)
+>>
+* select * from dec_table5\g
+<<
+
++----------------------------------------+----------------------------------------+--
+-----------------------------------------+
+|dec39_0                                 |dec38_1                                 |d-
+ec39_39                                  |
++----------------------------------------+----------------------------------------+--
+-----------------------------------------+
+| 123456789012345000000000000000000000000| 1234567890123456789012345678901234567.8| -
+0.123456789012345000000000000000000000000|
++----------------------------------------+----------------------------------------+--
+-----------------------------------------+
+(1 row)
+>>
+/*
+        The following three inserts should all fail being one over the max.
+        Insert 1 hits max of column dec39_0, insert 2 hits max of column
+        dec38_1 and insert 3 hits max of column dec39_39
+*/
+* insert into dec_table5 values(1234567890123456789012345678901234567890., 123456789-
+0.1, .1234567890)\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Thu Jun 21 22:04:20 2007)
+
+>>
+* insert into dec_table5 values(1234567890., 12345678901234567890123456789012345678.9, .1234567890)\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Thu Jun 21 22:04:22 2007)
+
+>>
+* insert into dec_table5 values(1234567890., 1234567890.1, 1.123456789012345678901234567890123456789)\g
+<<
+E_AD1127 Packed Decimal overflow detected in query.
+    (Thu Jun 21 22:04:23 2007)
+
+>>
+* \q
+<<
+>>
+
+
+Ending at: Thu Jun  7 15:06:03 2007

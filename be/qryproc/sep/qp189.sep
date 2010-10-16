@@ -1,0 +1,1000 @@
+/*
+	Test Name: ela14.sep
+	Time: Tue Jun  5 19:35:24 1990
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : ela14
+	Module  : 
+	Filename: ela14.sep
+	Purpose	: Test the triggering on a value changing of each datatype.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : 
+	Synopsis     : Create rules that fire on each datatype
+		when that value doesn't = the old value. Fire
+		all rules.
+	Setup        : ela00.sep
+
+	History	: xx-xxx-1989	Created				Author
+         03-May-1994                            (scotts)
+                     The queries in this test that are doing float
+                     comparisons in equality/inequality clauses are
+                     incorrect. Floats are defined as "approximate
+                     numeric" values and are not exact numbers and
+                     should not be treated as such. Previous INGRES
+                     behavior didnt really flag this as a problem
+                     when a float was used in an equality comparison
+                     but in OpING it will be apparent. I fixed the
+                     queries that used floats in equality/inequality
+                     statements and used ranges instead that are
+                     within 0.001 (for float4 values) and 0.0001 (for
+                     float8 values).
+
+          NOTE: FLOATS MAY BE STORED WITH SLIGHTLY DIFFERENT VALUES ON
+                DIFFERENT PLATFORMS.
+		7-MAR-1997    (vissu01) Modified for NT
+          18-Oct-2001	(BOIJA02) Ordering of procedures firing rules is non-det
+			erministic, so replaced the standard-out-based prallt
+			procedure with an sql-based alternative. This writes the
+			relevant changes to a log table, which we can order the 
+			select from. General cleanup of ignored canons, badly
+			canonised drops and a missing disconnect at the end of 	
+			the executable, so it used to timeout rather than 
+			leaving gracefully.
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverelstub.h) driverelstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,rulesh.sc) rulesh.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,rulestest.sc) rulestest.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,ingclude.sc) ingclude.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverel.c) driverel.c 
+<<
+>>
+? fill ela14.sc 
+!!
+/*
+**	ela14.sc
+*/
+
+#define ELA14
+
+#include "driverelstub.h"
+
+#include <stdio.h>
+
+exec sql include 'rulesh.sc';
+
+/***********/
+/* ela14() */
+/***********/
+
+ela14()
+{
+	printf("ela14: rules on different data types.\n");
+	printf("\n");
+
+	build_tables("all_types");
+	print_tables(ALL_TYPES);
+	exec sql create table alltypes_log (
+                chatter         varchar(20)     not null with default,
+                i1              i1              not null with default,
+                i2              i2              not null with default,
+                i4              i4              not null with default,
+                f4              f4              not null with default,
+                f8              f8              not null with default,
+                c10             c(10)           not null with default,
+                char10          char(10)        not null with default,
+                vchar10         vchar(10)       not null with default,
+                varchar10       varchar(10)     not null with default,
+                d               date            not null with default,
+                m               money           not null with default
+                );
+       	exec sql create procedure write_to_log_table (
+                chatter         varchar(20)     not null with default,
+                i1              i1              not null with default,
+                i2              i2              not null with default,
+                i4              i4              not null with default,
+                f4              f4              not null with default,
+                f8              f8              not null with default,
+                c10             c(10)           not null with default,
+                char10          char(10)        not null with default,
+                vchar10         vchar(10)       not null with default,
+                varchar10       varchar(10)     not null with default,
+                d               date            not null with default,
+                m               money           not null with default
+        ) as
+
+        begin
+                insert into alltypes_log values(
+                        :chatter, :i1, :i2, :i4, :f4, :f8, :c10, :char10
+                        , :vchar10, :varchar10, :d, :m);
+        end;
+
+
+	printf("  build rules...\n");
+	exec sql create rule ela14_01 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.i1 != n.i1 )
+		execute procedure write_to_log_table (
+			chatter		= 'i1 old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_02 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.i1 != n.i1 )
+		execute procedure write_to_log_table (
+			chatter		= 'i1 new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	exec sql create rule ela14_03 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.i2 != n.i2 )
+		execute procedure write_to_log_table (
+			chatter		= 'i2 old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_04 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.i2 != n.i2 )
+		execute procedure write_to_log_table (
+			chatter		= 'i2 new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	exec sql create rule ela14_05 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.i4 != n.i4 )
+		execute procedure write_to_log_table (
+			chatter		= 'i4 old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_06 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.i4 != n.i4 )
+		execute procedure write_to_log_table (
+			chatter		= 'i4 new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	exec sql create rule ela14_07 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.f4 != n.f4 )
+		execute procedure write_to_log_table (
+			chatter		= 'f4 old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_08 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.f4 != n.f4 )
+		execute procedure write_to_log_table (
+			chatter		= 'f4 new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	exec sql create rule ela14_09 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.f8 != n.f8 )
+		execute procedure write_to_log_table (
+			chatter		= 'f8 old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_10 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.f8 != n.f8 )
+		execute procedure write_to_log_table (
+			chatter		= 'f8 new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	exec sql create rule ela14_11 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.c10 != n.c10 )
+		execute procedure write_to_log_table (
+			chatter		= 'c10 old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_12 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.c10 != n.c10 )
+		execute procedure write_to_log_table (
+			chatter		= 'c10 new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	exec sql create rule ela14_13 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.char10 != n.char10 )
+		execute procedure write_to_log_table (
+			chatter		= 'char10 old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_14 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.char10 != n.char10 )
+		execute procedure write_to_log_table (
+			chatter		= 'char10 new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	exec sql create rule ela14_15 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.vchar10 != n.vchar10 )
+		execute procedure write_to_log_table (
+			chatter		= 'vchar10 old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_16 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.vchar10 != n.vchar10 )
+		execute procedure write_to_log_table (
+			chatter		= 'vchar10 new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	exec sql create rule ela14_17 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.varchar10 != n.varchar10 )
+		execute procedure write_to_log_table (
+			chatter		= 'varchar10 old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_18 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.varchar10 != n.varchar10 )
+		execute procedure write_to_log_table (
+			chatter		= 'varchar10 new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	exec sql create rule ela14_19 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.d != n.d )
+		execute procedure write_to_log_table (
+			chatter		= 'd old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_20 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.d != n.d )
+		execute procedure write_to_log_table (
+			chatter		= 'd new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	exec sql create rule ela14_21 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.m != n.m )
+		execute procedure write_to_log_table (
+			chatter		= 'm old',
+			i1		= o.i1,
+			i2		= o.i2,
+			i4		= o.i4,
+			f4		= o.f4,
+			f8		= o.f8,
+			c10		= o.c10,
+			char10		= o.char10,
+			vchar10		= o.vchar10,
+			varchar10	= o.varchar10,
+			d		= o.d,
+			m		= o.m
+		);
+
+	exec sql create rule ela14_22 after insert, update, delete on all_types
+		referencing old as o new as n
+		where ( o.m != n.m )
+		execute procedure write_to_log_table (
+			chatter		= 'm new',
+			i1		= n.i1,
+			i2		= n.i2,
+			i4		= n.i4,
+			f4		= n.f4,
+			f8		= n.f8,
+			c10		= n.c10,
+			char10		= n.char10,
+			vchar10		= n.vchar10,
+			varchar10	= n.varchar10,
+			d		= n.d,
+			m		= n.m
+		);
+
+	printf("\n");
+
+	printf("  update i1 1 to 11 on all_types...\n");
+	exec sql update all_types set i1 = 11 
+	where i1 = 1;
+	printf("\n");
+
+	printf("  update i2 1 to 11 on all_types...\n");
+	exec sql update all_types set i2 = 11 
+	where i2 = 1;
+	printf("\n");
+
+	printf("  update i4 1 to 11 on all_types...\n");
+	exec sql update all_types set i4 = 11 
+	where i4 = 1;
+	printf("\n");
+
+	printf("  update f4 1.1 to 11.11 on all_types...\n");
+	exec sql update all_types set f4 = 11.11 
+        where f4 between 1.099 and 1.101;
+	printf("\n");
+
+	printf("  update f8 1.1 to 11.11 on all_types...\n");
+	exec sql update all_types set f8 = 11.11 
+        where f8 between 1.099 and 1.101;
+	printf("\n");
+
+	printf("  update c10 1 to 11 on all_types...\n");
+	exec sql update all_types set c10 = '000000011' 
+	where c10 = '000000001';
+	printf("\n");
+
+	printf("  update char10 1 to 11 on all_types...\n");
+	exec sql update all_types set char10 = '000000011' 
+	where char10 = '000000001';
+	printf("\n");
+
+	printf("  update vchar10 1 to 11 on all_types...\n");
+	exec sql update all_types set vchar10 = '000000011' 
+	where vchar10 = '000000001';
+	printf("\n");
+
+	printf("  update varchar10 1 to 11 on all_types...\n");
+	exec sql update all_types set varchar10 = '000000011' 
+	where varchar10 = '000000001';
+	printf("\n");
+
+	printf("  update d '01-jan-1582' to '02-feb-1583' on all_types...\n");
+	exec sql update all_types set d = '02-feb-1583' 
+	where d = '01-jan-1582';
+	printf("\n");
+
+	printf("  update m 1 to 11 on all_types...\n");
+	exec sql update all_types set m = 11.11 
+	where m = 1.01;
+	printf("\n");
+
+	print_tables(ALL_TYPES);
+	exec sql disconnect;
+
+} /* ela14() */
+!!
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc ela14.sc 
+<<
+ESQL ela14.sc:
+>>
+? sepcc ela14.c 
+<<
+>>
+<<
+ela14.c
+>>
+? sepesqlc rulestest.sc 
+<<
+ESQL rulestest.sc:
+>>
+? sepcc rulestest.c 
+<<
+>>
+<<
+rulestest.c
+>>
+? sepcc driverel.c 
+<<
+>>
+<<
+driverel.c
+>>
+? seplnk driver driverel rulestest ela14 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+>>
+* drop table all_types;\g
+<<
+~
+>>
+* drop table alltypes_log;\g
+<<
+~
+>>
+* drop procedure write_to_log_table;\g
+<<
+~
+>>
+* drop rule ela14_01;
+<<
+~
+>>
+* drop rule ela14_02;
+<<
+~
+>>
+* drop rule ela14_03;
+<<
+~
+>>
+* drop rule ela14_04;
+<<
+~
+>>
+* drop rule ela14_05;
+<<
+~
+>>
+* drop rule ela14_06;
+<<
+~
+>>
+* drop rule ela14_07;
+<<
+~
+>>
+* drop rule ela14_08;
+<<
+~
+>>
+* drop rule ela14_09;
+<<
+~
+>>
+* drop rule ela14_10;
+<<
+~
+>>
+* drop rule ela14_11;
+<<
+~
+>>
+* drop rule ela14_12;
+<<
+~
+>>
+* drop rule ela14_13;
+<<
+~
+>>
+* drop rule ela14_14;
+<<
+~
+>>
+* drop rule ela14_15;
+<<
+~
+>>
+* drop rule ela14_16;
+<<
+~
+>>
+* drop rule ela14_17;
+<<
+~
+>>
+* drop rule ela14_18;
+<<
+~
+>>
+* drop rule ela14_19;
+<<
+~
+>>
+* drop rule ela14_20;
+<<
+~
+>>
+* drop rule ela14_21;
+<<
+~
+>>
+* drop rule ela14_22;
+<<
+~
+>>
+* \q 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tela14 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+rules tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   ela14
+XX-----------------XX
+
+connecting with database...
+
+XX running test ela14 XX
+
+ela14: rules on different data types.
+
+  dropping all_types table...
+E_US0AC1 DROP: 'all_types' does not exist or is not owned by you.
+    (Thu Oct 18 17:44:47 2001)
+  creating all_types table...
+contents of all_types:
+----------------------
+ i1 = 1, i2 = 1, i4 = 1, f4 = 1.100000, f8 = 1.100000, c10 = 000000001 , char10 = 00-
+0000001 , vchar10 = 000000001, varchar10 = 000000001, d = 01-jan-1582              ,-
+ m = 1.010000
+ i1 = 2, i2 = 2, i4 = 2, f4 = 2.200000, f8 = 2.200000, c10 = 000000002 , char10 = 00-
+0000002 , vchar10 = 000000002, varchar10 = 000000002, d = 03-mar-1583              ,-
+ m = 2.020000
+ i1 = 3, i2 = 3, i4 = 3, f4 = 3.300000, f8 = 3.300000, c10 = 000000003 , char10 = 00-
+0000003 , vchar10 = 000000003, varchar10 = 000000003, d = 05-may-1584              ,-
+ m = 3.030000
+ i1 = 4, i2 = 4, i4 = 4, f4 = 4.400000, f8 = 4.400000, c10 = 000000004 , char10 = 00-
+0000004 , vchar10 = 000000004, varchar10 = 000000004, d = 07-jul-1585              ,-
+ m = 4.040000
+ i1 = 5, i2 = 5, i4 = 5, f4 = 5.500000, f8 = 5.500000, c10 = 000000005 , char10 = 00-
+0000005 , vchar10 = 000000005, varchar10 = 000000005, d = 09-sep-1586              ,-
+ m = 5.050000
+ i1 = 6, i2 = 6, i4 = 6, f4 = 6.600000, f8 = 6.600000, c10 = 000000006 , char10 = 00-
+0000006 , vchar10 = 000000006, varchar10 = 000000006, d = 11-nov-1587              ,-
+ m = 6.060000
+ i1 = 7, i2 = 7, i4 = 7, f4 = 7.700000, f8 = 7.700000, c10 = 000000007 , char10 = 00-
+0000007 , vchar10 = 000000007, varchar10 = 000000007, d = 13-jan-1589              ,-
+ m = 7.070000
+ i1 = 8, i2 = 8, i4 = 8, f4 = 8.800000, f8 = 8.800000, c10 = 000000008 , char10 = 00-
+0000008 , vchar10 = 000000008, varchar10 = 000000008, d = 15-mar-1590              ,-
+ m = 8.080000
+ i1 = 9, i2 = 9, i4 = 9, f4 = 9.900000, f8 = 9.900000, c10 = 000000009 , char10 = 00-
+0000009 , vchar10 = 000000009, varchar10 = 000000009, d = 17-may-1591              ,-
+ m = 9.090000
+ i1 = 10, i2 = 10, i4 = 10, f4 = 10.010000, f8 = 10.010000, c10 = 000000010 , char10-
+ = 000000010 , vchar10 = 000000010, varchar10 = 000000010, d = 19-jul-1592          -
+    , m = 10.100000
+----------------------
+  build rules...
+
+  update i1 1 to 11 on all_types...
+
+  update i2 1 to 11 on all_types...
+
+  update i4 1 to 11 on all_types...
+
+  update f4 1.1 to 11.11 on all_types...
+
+  update f8 1.1 to 11.11 on all_types...
+
+  update c10 1 to 11 on all_types...
+
+  update char10 1 to 11 on all_types...
+
+  update vchar10 1 to 11 on all_types...
+
+  update varchar10 1 to 11 on all_types...
+
+  update d '01-jan-1582' to '02-feb-1583' on all_types...
+
+  update m 1 to 11 on all_types...
+
+contents of all_types:
+----------------------
+ i1 = 2, i2 = 2, i4 = 2, f4 = 2.200000, f8 = 2.200000, c10 = 000000002 , char10 = 00-
+0000002 , vchar10 = 000000002, varchar10 = 000000002, d = 03-mar-1583              ,-
+ m = 2.020000
+ i1 = 3, i2 = 3, i4 = 3, f4 = 3.300000, f8 = 3.300000, c10 = 000000003 , char10 = 00-
+0000003 , vchar10 = 000000003, varchar10 = 000000003, d = 05-may-1584              ,-
+ m = 3.030000
+ i1 = 4, i2 = 4, i4 = 4, f4 = 4.400000, f8 = 4.400000, c10 = 000000004 , char10 = 00-
+0000004 , vchar10 = 000000004, varchar10 = 000000004, d = 07-jul-1585              ,-
+ m = 4.040000
+ i1 = 5, i2 = 5, i4 = 5, f4 = 5.500000, f8 = 5.500000, c10 = 000000005 , char10 = 00-
+0000005 , vchar10 = 000000005, varchar10 = 000000005, d = 09-sep-1586              ,-
+ m = 5.050000
+ i1 = 6, i2 = 6, i4 = 6, f4 = 6.600000, f8 = 6.600000, c10 = 000000006 , char10 = 00-
+0000006 , vchar10 = 000000006, varchar10 = 000000006, d = 11-nov-1587              ,-
+ m = 6.060000
+ i1 = 7, i2 = 7, i4 = 7, f4 = 7.700000, f8 = 7.700000, c10 = 000000007 , char10 = 00-
+0000007 , vchar10 = 000000007, varchar10 = 000000007, d = 13-jan-1589              ,-
+ m = 7.070000
+ i1 = 8, i2 = 8, i4 = 8, f4 = 8.800000, f8 = 8.800000, c10 = 000000008 , char10 = 00-
+0000008 , vchar10 = 000000008, varchar10 = 000000008, d = 15-mar-1590              ,-
+ m = 8.080000
+ i1 = 9, i2 = 9, i4 = 9, f4 = 9.900000, f8 = 9.900000, c10 = 000000009 , char10 = 00-
+0000009 , vchar10 = 000000009, varchar10 = 000000009, d = 17-may-1591              ,-
+ m = 9.090000
+ i1 = 10, i2 = 10, i4 = 10, f4 = 10.010000, f8 = 10.010000, c10 = 000000010 , char10-
+ = 000000010 , vchar10 = 000000010, varchar10 = 000000010, d = 19-jul-1592          -
+    , m = 10.100000
+ i1 = 11, i2 = 11, i4 = 11, f4 = 11.110000, f8 = 11.110000, c10 = 000000011 , char10-
+ = 000000011 , vchar10 = 000000011, varchar10 = 000000011, d = 02-feb-1583          -
+    , m = 11.110000
+----------------------
+
+disconnecting with database...
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select  char(chatter, 12) as title, c10, char10, 
+<<
+>>
+* char(d, 12) as date, char(f4, 7) as f4, char(f8, 7) as f8, 
+<<
+>>
+* char(i1, 2) as i1, char(i2, 2) as i2, char(i4, 2) as i4,
+<<
+>>
+* m as money, varchar10, vchar10 from alltypes_log order by 1\g
+<<
+
++------------+----------+----------+------------+-------+-------+------+------+------
+-+--------------------+----------+----------+
+|title       |c10       |char10    |date        |f4     |f8     |i1    |i2    |i4   -
+ |money               |varchar10 |vchar10   |
++------------+----------+----------+------------+-------+-------+------+------+------
+-+--------------------+----------+----------+
+|c10 new     |000000011 |000000001 |01-jan-1582 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000001 |000000001 |
+|c10 old     |000000001 |000000001 |01-jan-1582 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000001 |000000001 |
+|char10 new  |000000011 |000000011 |01-jan-1582 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000001 |000000001 |
+|char10 old  |000000011 |000000001 |01-jan-1582 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000001 |000000001 |
+|d new       |000000011 |000000011 |02-feb-1583 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000011 |000000011 |
+|d old       |000000011 |000000011 |01-jan-1582 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000011 |000000011 |
+|f4 new      |000000001 |000000001 |01-jan-1582 |11.110 |1.100  |11    |11    |11   -
+ |               $1.01|000000001 |000000001 |
+|f4 old      |000000001 |000000001 |01-jan-1582 |1.100  |1.100  |11    |11    |11   -
+ |               $1.01|000000001 |000000001 |
+|f8 new      |000000001 |000000001 |01-jan-1582 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000001 |000000001 |
+|f8 old      |000000001 |000000001 |01-jan-1582 |11.110 |1.100  |11    |11    |11   -
+ |               $1.01|000000001 |000000001 |
+|i1 new      |000000001 |000000001 |01-jan-1582 |1.100  |1.100  |11    |1     |1    -
+ |               $1.01|000000001 |000000001 |
+|i1 old      |000000001 |000000001 |01-jan-1582 |1.100  |1.100  |1     |1     |1    -
+ |               $1.01|000000001 |000000001 |
+|i2 new      |000000001 |000000001 |01-jan-1582 |1.100  |1.100  |11    |11    |1    -
+ |               $1.01|000000001 |000000001 |
+|i2 old      |000000001 |000000001 |01-jan-1582 |1.100  |1.100  |11    |1     |1    -
+ |               $1.01|000000001 |000000001 |
+|i4 new      |000000001 |000000001 |01-jan-1582 |1.100  |1.100  |11    |11    |11   -
+ |               $1.01|000000001 |000000001 |
+|i4 old      |000000001 |000000001 |01-jan-1582 |1.100  |1.100  |11    |11    |1    -
+ |               $1.01|000000001 |000000001 |
+|m new       |000000011 |000000011 |02-feb-1583 |11.110 |11.110 |11    |11    |11   -
+ |              $11.11|000000011 |000000011 |
+|m old       |000000011 |000000011 |02-feb-1583 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000011 |000000011 |
+|varchar10 ne|000000011 |000000011 |01-jan-1582 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000011 |000000011 |
+|varchar10 ol|000000011 |000000011 |01-jan-1582 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000001 |000000011 |
+|vchar10 new |000000011 |000000011 |01-jan-1582 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000001 |000000011 |
+|vchar10 old |000000011 |000000011 |01-jan-1582 |11.110 |11.110 |11    |11    |11   -
+ |               $1.01|000000001 |000000001 |
++------------+----------+----------+------------+-------+-------+------+------+------
+-+--------------------+----------+----------+
+(22 rows)
+>>
+* \q
+<<
+>>
+? delete driver.exe 
+<<
+file was deleted
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driver.sc 
+<<
+file was deleted
+>>
+? delete driver.c 
+<<
+file was deleted
+>>
+? delete driverelstub.h 
+<<
+file was deleted
+>>
+? delete driverel.c 
+<<
+file was deleted
+>>
+? delete driverel.o 
+<<
+~
+>>
+? delete driverel.obj 
+<<
+~
+>>
+? delete ingclude.sc 
+<<
+file was deleted
+>>
+? delete ingclude.c 
+<<
+file was deleted
+>>
+? delete rulesh.sc 
+<<
+file was deleted
+>>
+? delete rulesh.c 
+<<
+file was deleted
+>>
+? delete rulestest.sc 
+<<
+file was deleted
+>>
+? delete rulestest.c 
+<<
+file was deleted
+>>
+? delete rulestest.o 
+<<
+~
+>>
+? delete rulestest.obj 
+<<
+~
+>>
+? delete ela14.c 
+<<
+file was deleted
+>>
+? delete ela14.o 
+<<
+~
+>>
+? delete ela14.obj 
+<<
+~
+>>
+
+
+Ending at: Fri Oct 19 15:01:57 2001

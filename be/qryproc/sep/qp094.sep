@@ -1,0 +1,690 @@
+/*
+	Test Name: efa27.sep
+	Time: Wed May  9 16:05:37 1990
+	User Name: testenv
+ 
+	Test ID : efa27
+	Module  : 
+	Filename: efa27.sep
+	Purpose	: Make sure ingres doesn't get confused about which
+		  table and procedure to use when there are two with
+		  the same name in a database owned by different people.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : bldg
+	Synopsis     : create a table and procedure from two different 
+		people and each procedure from both people with various 
+		grants given. give each the same name. Try to confuse ingres 
+		and execute makes sure that ingres always executes the users 
+		procedure rather than another procedure with the same name 
+		and that the user has grants to use.
+
+	Setup Test   : efa00.sep
+
+	History	: xx-xxx-1989	Created				Author
+		  7-MAR-1997    (vissu01) Modified for NT
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driverefstub.h) driverefstub.h 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbph.sc) dbph.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,dbpmisc.sc) dbpmisc.sc 
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,driveref.c) driveref.c 
+<<
+>>
+? fill efa27.sc 
+!!
+/*
+**	efa27.sc
+**
+**	objects: see if procs violate permissions
+**
+**	history:
+**		oct 16/89 sgp
+**			- created.
+*/
+
+#define EFA27
+
+#include "driverefstub.h"
+
+#include <stdio.h>
+
+exec sql include 'dbph.sc';
+
+exec sql include sqlca;
+
+/************/
+/* efa27() */
+/************/
+
+efa27()
+{
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa27: do all sorts of ownership type things\n");
+
+	/**********/
+	/* test 1 */
+	/**********/
+
+	printf("\n    test 1: build and use proc and table as dba\n");
+
+	drop_tables(BLDG_TABLE);
+	build_tables(BLDG_TABLE);
+	printf("      make all the bldgs on dba table Z...\n");
+	exec sql update bldg set bldg = 'Z';
+	create_efa27_01_dba();
+	printf("      executing procedure efa27_01 (dba)...\n");
+	exec sql execute procedure efa27_01;
+
+	/**********/
+	/* test 2 */
+	/**********/
+
+	printf("\n    test 2: try to use proc and table as pvusr3\n");
+	con_pvusr3();
+	printf("      dropping procedure efa27_01 (dba)...\n");
+	exec sql drop procedure efa27_01;
+	drop_tables(BLDG_TABLE);
+	printf("      executing procedure efa27_01 (dba)...\n");
+	exec sql execute procedure efa27_01;
+
+	/**********/
+	/* test 3 */
+	/**********/
+
+	printf("\n    test 3: check to make sure dba proc is still there\n");
+	discon_pvusr3();
+	printf("      executing procedure efa27_01 (dba)...\n");
+	exec sql execute procedure efa27_01;
+
+	/**********/
+	/* test 4 */
+	/**********/
+
+	printf("\n    test 4: try to build proc as pvusr3  w/ table dba\n");
+	con_pvusr3();
+	create_efa27_01_pvusr3();
+	discon_pvusr3();
+
+	/**********/
+	/* test 5 */
+	/**********/
+
+	printf("\n    test 5: check to make sure dba proc is still there\n");
+	printf("      executing procedure efa27_01 (dba)...\n");
+	exec sql execute procedure efa27_01;
+
+	/**********/
+	/* test 6 */
+	/**********/
+
+	printf("\n    test 6: build usr proc and usr table\n");
+	printf("\n    granting public permission on bk_bldg...\n");
+	exec sql grant select on table bk_bldg to pvusr3;
+	con_pvusr3();
+	drop_tables(BLDG_TABLE);
+	build_tables(BLDG_TABLE);
+	exec sql drop procedure efa27_01;
+	create_efa27_01_pvusr3();
+	printf("      executing procedure efa27_01 (pvusr3)...\n");
+	exec sql execute procedure efa27_01;
+	discon_pvusr3();
+
+	/**********/
+	/* test 7 */
+	/**********/
+
+	printf("\n    test 7: try dba proc & table\n");
+	printf("      executing procedure efa27_01 (dba)...\n");
+	exec sql execute procedure efa27_01;
+
+	/**********/
+	/* test 8 */
+	/**********/
+
+	printf("\n    test 8: try usr proc & table\n");
+	con_pvusr3();
+	printf("      executing procedure efa27_01 (pvusr3)...\n");
+	exec sql execute procedure efa27_01;
+
+	/**********/
+	/* test 9 */
+	/**********/
+
+	printf("\n    test 9: give pvusr3 permission on dba proc, see which it chooses\n");
+	discon_pvusr3();
+	printf("\n granting execute on proc (dba) to pvusr3 \n");
+	exec sql grant execute on procedure efa27_01 to pvusr3;
+	con_pvusr3();
+	printf("      executing procedure efa27_01 (pvusr3)...\n");
+	exec sql execute procedure efa27_01;
+
+	/***********/
+	/* test 10 */
+	/***********/
+
+	printf("\n    test 10: drop the pvusr3 proc and try to exec dba proc\n");
+	printf("      dropping procedure efa27_01 (usr)...\n");
+	exec sql drop procedure efa27_01;
+	printf("      executing procedure efa27_01 (dba)...\n");
+	exec sql execute procedure efa27_01;
+
+	/***********/
+	/* test 11 */
+	/***********/
+
+	printf("\n    test 11: give pvusr3 permission on dba table\n");
+	discon_pvusr3();
+	printf("    granting public permission on bldg...\n");
+	exec sql grant select on bldg to pvusr3;
+	con_pvusr3();
+	printf("      executing procedure efa27_01 (dba)...\n");
+	exec sql execute procedure efa27_01;
+
+	/***********/
+	/* test 12 */
+	/***********/
+
+	printf("\n    test 12: remove pvusr permission on dba table\n");
+	discon_pvusr3();
+	printf("    ungranting public permission on bldg...\n");
+	exec sql drop permit on bldg 2;
+	con_pvusr3();
+	printf("      executing procedure efa27_01 (dba)...\n");
+	exec sql execute procedure efa27_01;
+
+	/***********/
+	/* test 13 */
+	/***********/
+
+	printf("\n    test 13: remove pvusr3 permission on dba proc\n");
+	discon_pvusr3();
+	printf("    ungranting public permission on proc...\n");
+	exec sql drop permit on procedure efa27_01 all;
+	con_pvusr3();
+	printf("      executing procedure efa27_01 (dba)...\n");
+	exec sql execute procedure efa27_01;
+
+	/***********/
+	/* cleanup */
+	/***********/
+
+	printf("\n    cleanup:\n");
+	discon_pvusr3();
+	printf("    ungranting public permission on bk_bldg...\n");
+	exec sql drop permit on bk_bldg 2;
+
+} /* efa27() */
+
+/**************************/
+/* create_efa27_01_dba() */
+/**************************/
+
+create_efa27_01_dba()
+{
+	printf("      dropping procedure efa27_01 (dba)...\n");
+	exec sql drop procedure efa27_01;
+
+	printf("      creating procedure efa27_01 (dba)...\n");
+	exec sql create procedure efa27_01 as
+	declare
+		bldg		varchar(2)	not null with default;
+		mesg_buf	varchar(100)	not null with default;
+	begin
+		select bldg into :bldg from bldg;
+
+		if ( iierrornumber != 0 )
+		then
+			mesg_buf = 'efa27_01 error number: ' 
+				+ varchar(iierrornumber);
+			message mesg_buf;
+		endif;
+
+		mesg_buf = 'efa27_01 (dba) number of rows retrieved: ' 
+			+ varchar(iirowcount)
+			+ ', bldg is '
+			+ bldg;
+		message mesg_buf;
+	end;
+
+} /* create_efa27_01_dba() */
+
+/**************************/
+/* create_efa27_01_pvusr3() */
+/**************************/
+
+create_efa27_01_pvusr3()
+{
+	printf("      dropping procedure efa27_01 (pvusr3)...\n");
+	exec sql drop procedure efa27_01;
+
+	printf("      creating procedure efa27_01 (pvusr3)...\n");
+	exec sql create procedure efa27_01 as
+	declare
+		bldg		varchar(2)	not null with default;
+		mesg_buf	varchar(100)	not null with default;
+	begin
+		select bldg into :bldg from bldg;
+
+		if ( iierrornumber != 0 )
+		then
+			mesg_buf = 'efa27_01 error number: ' 
+				+ varchar(iierrornumber);
+			message mesg_buf;
+		endif;
+
+		mesg_buf = 'efa27_01 (pvusr3) number of rows retrieved: ' 
+			+ varchar(iirowcount)
+			+ ', bldg is '
+			+ bldg;
+		message mesg_buf;
+	end;
+
+} /* create_efa27_01_pvusr3() */
+
+/*****************/
+/* con_pvusr3() */
+/*****************/
+
+con_pvusr3()
+{
+	printf("\n    disconnect...\n");
+	exec sql disconnect;
+	printf("\n    reconnect as pvusr3...\n");
+
+	exec sql connect :db_name_str identified by 'pvusr3';
+	printf("\n    done reconnecting as pvusr3...\n");
+
+} /* con_pvusr3() */
+
+/********************/
+/* discon_pvusr3() */
+/********************/
+
+discon_pvusr3()
+{
+	printf("\n    disconnect...\n");
+	exec sql disconnect;
+	printf("\n    reconnect...\n");
+	exec sql connect :db_name_str;
+
+} /* discon_pvusr3() */
+!!
+? sepesqlc efa27.sc 
+<<
+ESQL efa27.sc:
+>>
+? sepcc efa27.c 
+<<
+>>
+<<
+efa27.c
+>>
+? sepesqlc driver.sc 
+<<
+ESQL driver.sc:
+>>
+? sepesqlc dbpmisc.sc 
+<<
+ESQL dbpmisc.sc:
+>>
+? sepcc driver.c 
+<<
+>>
+<<
+driver.c
+>>
+? sepcc dbpmisc.c 
+<<
+>>
+<<
+dbpmisc.c
+>>
+? sepcc driveref.c 
+<<
+>>
+<<
+driveref.c
+>>
+? seplnk driver driveref dbpmisc efa27 
+<<
+>>
+? sql SEPPARAMDB -s 
+<<
+>>
+* drop table bldg;\g
+<<
+~
+>>
+* drop procedure efa27_01;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql SEPPARAMDB -s 
+<<
+>>
+* drop table bldg;\g
+<<
+~
+>>
+* drop procedure efa27_01;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tefa27 
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+database procedures tests
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   efa27
+XX-----------------XX
+
+connecting with database...
+
+XX running test efa27 XX
+
+  efa27: do all sorts of ownership type things
+
+    test 1: build and use proc and table as dba
+  dropping bldg table...
+E_US0AC1 DROP: 'bldg' does not exist or is not owned by you.
+    ( 2-OCT-1991 11:05:56)
+  creating bldg table...
+      make all the bldgs on dba table Z...
+      dropping procedure efa27_01 (dba)...
+E_US0965 Procedure 'efa27_01' not found.
+    ( 2-OCT-1991 11:06:00)
+      creating procedure efa27_01 (dba)...
+      executing procedure efa27_01 (dba)...
+MESSAGE 0: efa27_01 (dba) number of rows retrieved: 1, bldg is Z
+
+    test 2: try to use proc and table as pvusr3
+
+    disconnect...
+
+    reconnect as pvusr3...
+
+    done reconnecting as pvusr3...
+      dropping procedure efa27_01 (dba)...
+E_US0965 Procedure 'efa27_01' not found.
+    ( 2-OCT-1991 11:06:04)
+  dropping bldg table...
+E_US0AC1 DROP: 'bldg' does not exist or is not owned by you.
+    ( 2-OCT-1991 11:06:05)
+      executing procedure efa27_01 (dba)...
+E_US0D36 User has no permission to execute database procedure 'efa27_01'.
+    ( 2-OCT-1991 11:06:05)
+
+    test 3: check to make sure dba proc is still there
+
+    disconnect...
+
+    reconnect...
+      executing procedure efa27_01 (dba)...
+MESSAGE 0: efa27_01 (dba) number of rows retrieved: 1, bldg is Z
+
+    test 4: try to build proc as pvusr3  w/ table dba
+
+    disconnect...
+
+    reconnect as pvusr3...
+
+    done reconnecting as pvusr3...
+      dropping procedure efa27_01 (pvusr3)...
+E_US0965 Procedure 'efa27_01' not found.
+    ( 2-OCT-1991 11:06:11)
+      creating procedure efa27_01 (pvusr3)...
+E_US0DAE SELECT on table bldg: no GRANT or GRANT compatible permit exists.
+    ( 2-OCT-1991 11:06:11)
+
+    disconnect...
+
+    reconnect...
+
+    test 5: check to make sure dba proc is still there
+      executing procedure efa27_01 (dba)...
+MESSAGE 0: efa27_01 (dba) number of rows retrieved: 1, bldg is Z
+
+    test 6: build usr proc and usr table
+
+    granting public permission on bk_bldg...
+
+    disconnect...
+
+    reconnect as pvusr3...
+
+    done reconnecting as pvusr3...
+  dropping bldg table...
+E_US0AC1 DROP: 'bldg' does not exist or is not owned by you.
+    ( 2-OCT-1991 11:06:17)
+  creating bldg table...
+E_US0965 Procedure 'efa27_01' not found.
+    ( 2-OCT-1991 11:06:20)
+      dropping procedure efa27_01 (pvusr3)...
+E_US0965 Procedure 'efa27_01' not found.
+    ( 2-OCT-1991 11:06:20)
+      creating procedure efa27_01 (pvusr3)...
+      executing procedure efa27_01 (pvusr3)...
+MESSAGE 0: efa27_01 (pvusr3) number of rows retrieved: 1, bldg is A
+
+    disconnect...
+
+    reconnect...
+
+    test 7: try dba proc & table
+      executing procedure efa27_01 (dba)...
+MESSAGE 0: efa27_01 (dba) number of rows retrieved: 1, bldg is Z
+
+    test 8: try usr proc & table
+
+    disconnect...
+
+    reconnect as pvusr3...
+
+    done reconnecting as pvusr3...
+      executing procedure efa27_01 (pvusr3)...
+MESSAGE 0: efa27_01 (pvusr3) number of rows retrieved: 1, bldg is A
+
+    test 9: give pvusr3 permission on dba proc, see which it chooses
+
+    disconnect...
+
+    reconnect...
+
+ granting execute on proc (dba) to pvusr3 
+
+    disconnect...
+
+    reconnect as pvusr3...
+
+    done reconnecting as pvusr3...
+      executing procedure efa27_01 (pvusr3)...
+MESSAGE 0: efa27_01 (pvusr3) number of rows retrieved: 1, bldg is A
+
+    test 10: drop the pvusr3 proc and try to exec dba proc
+      dropping procedure efa27_01 (usr)...
+      executing procedure efa27_01 (dba)...
+MESSAGE 0: efa27_01 (dba) number of rows retrieved: 1, bldg is Z
+
+    test 11: give pvusr3 permission on dba table
+
+    disconnect...
+
+    reconnect...
+    granting public permission on bldg...
+
+    disconnect...
+
+    reconnect as pvusr3...
+
+    done reconnecting as pvusr3...
+      executing procedure efa27_01 (dba)...
+MESSAGE 0: efa27_01 (dba) number of rows retrieved: 1, bldg is Z
+
+    test 12: remove pvusr permission on dba table
+
+    disconnect...
+
+    reconnect...
+    ungranting public permission on bldg...
+
+    disconnect...
+
+    reconnect as pvusr3...
+
+    done reconnecting as pvusr3...
+      executing procedure efa27_01 (dba)...
+MESSAGE 0: efa27_01 (dba) number of rows retrieved: 1, bldg is Z
+
+    test 13: remove pvusr3 permission on dba proc
+
+    disconnect...
+
+    reconnect...
+    ungranting public permission on proc...
+
+    disconnect...
+
+    reconnect as pvusr3...
+
+    done reconnecting as pvusr3...
+      executing procedure efa27_01 (dba)...
+E_US0D36 User has no permission to execute database procedure 'efa27_01'.
+    ( 2-OCT-1991 11:06:54)
+
+    cleanup:
+
+    disconnect...
+
+    reconnect...
+    ungranting public permission on bk_bldg...
+
+disconnecting with database...
+>>
+? sql SEPPARAMDB -s 
+<<
+>>
+* drop table bldg;\g
+<<
+~
+>>
+* drop procedure efa27_01;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr3 sql SEPPARAMDB -s 
+<<
+>>
+* drop table bldg;\g
+<<
+~
+>>
+* drop procedure efa27_01;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? delete driver.exe 
+<<
+~
+>>
+? delete driver.sc 
+<<
+~
+>>
+? delete driver.c 
+<<
+~
+>>
+? delete driver.o 
+<<
+~
+>>
+? delete driver.obj 
+<<
+~
+>>
+? delete driverefstub.h 
+<<
+~
+>>
+? delete driveref.c 
+<<
+~
+>>
+? delete driveref.o 
+<<
+~
+>>
+? delete driveref.obj 
+<<
+~
+>>
+? delete dbph.sc 
+<<
+~
+>>
+? delete dbph.c 
+<<
+~
+>>
+? delete dbpmisc.sc 
+<<
+~
+>>
+? delete dbpmisc.c 
+<<
+~
+>>
+? delete dbpmisc.o 
+<<
+~
+>>
+? delete dbpmisc.obj 
+<<
+~
+>>
+? delete efa27.c 
+<<
+~
+>>
+? delete efa27.o 
+<<
+~
+>>
+? delete efa27.obj 
+<<
+~
+>>
+
+
+Ending at:  2-OCT-1991 11:09:14

@@ -1,0 +1,422 @@
+/*
+Copyright (c) 2007 Ingres Corporation
+
+	Test Name: am33.sep (formerly fe024.sep)
+	Time:  6-JUL-1989 12:03:21
+	User Name: qatest      
+ 
+	Test ID : am33
+	Module  : be/qryproc
+	Filename: am33.sep
+	Purpose	: update tests
+	Input Files  : fe000a.dat, fe000b.dat, fe000c.dat
+	Output Files :
+	Database     : accessdb1
+	Tables       : s, p, sp, pcopy, spcopy
+	Synopsis     : simple updates
+
+	History	:
+	  xx-xxx-1989	Created
+	  05-JUL-1989   (LARRYH)  Converted
+          25-Feb-1993	(Author)
+           9-May-1995	(wooke01) Changed one query so query output is sorted
+                        	  by pno.  Within same Query changed canon 
+                        	  so query output is ordered after the table
+                        	  has been updated.  See Lines 106 - 132.
+                        	  This is to stop diffs on platforms.
+	  18-Mar-1999	(vande02) Hard-coded VPG_SZ to 8K
+	   4-Oct-2001	(devjo01) Change canons to reflect lifting of keyword
+				  restrictions.
+           2-Jul-2007	(vande02) Replacing a canon for scalar sub-queries
+				  which expect E_US1401 message due to not being
+				  support yet.  See Service Desk issue 119187.
+				  Header corrections.
+
+				  This change is applicable to 2006 Release 3.
+*/ 
+? fill fe000a.dat 
+!!
+s1	smith	20	london
+s2	jones	10	paris
+s3	blake	30	paris
+s4	clark	20	london
+s5	adams	30	athens
+!!
+? fill fe000b.dat 
+!!
+p1	nut	red	12	london
+p2	bolt	green	17	paris
+p3	screw	blue	17	rome
+p4	screw	red	14	london
+p5	cam	blue	12	paris
+p6	cog	red	19	london
+!!
+? fill fe000c.dat 
+!!
+s1	p1	300
+s1	p2	200
+s1	p3	400
+s1	p4	200
+s1	p5	100
+s1	p6	100
+s2	p1	300
+s2	p2	400
+s3	p2	200
+s4	p2	200
+s4	p4	300
+s4	p5	400
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop  table p, s, sp; \g 
+<<
+~
+>>
+* create table p (pno vchar(2), pname vchar(10), color vchar(6), weight integer2, ci-
+ty vchar(10)) with page_size=8192; \g 
+<<
+>>
+* create table s (sno vchar(2), sname vchar(6), status integer2, city vchar(10)) wit-
+h page_size=8192; \g 
+<<
+>>
+* create table sp (sno vchar(2), pno vchar(2), qty integer2) with page_size=8192; \g-
+ 
+<<
+>>
+* copy table p (pno=vchar(0)tab, pname=vchar(0)tab, color=vchar(0)tab, weight=vchar(-
+0)tab, city=vchar(0)nl) from 'fe000b.dat'; \g 
+<<
+(6 rows)
+>>
+* copy table s (sno=vchar(0)tab, sname=vchar(0)tab, status=vchar(0)tab, city=vchar(0-
+)nl) from 'fe000a.dat'; \g 
+<<
+(5 rows)
+>>
+* copy table sp (sno=vchar(0)tab, pno=vchar(0)tab, qty=vchar(0)nl) from 'fe000c.dat'-
+; \g 
+<<
+(12 rows)
+>>
+* drop pcopy, spcopy; \g 
+<<
+E_US0AC1 DROP: 'pcopy' does not exist or is not owned by you.
+    ( 6-JUL-1989 12:27:22)
+
+E_US0AC1 DROP: 'spcopy' does not exist or is not owned by you.
+    ( 6-JUL-1989 12:27:22)
+
+>>
+* create table pcopy as select * from p with page_size=8192; \g 
+<<
+(6 rows)
+>>
+* select * from pcopy order by pno; update pcopy set weight=10, color='purple'; sele-
+ct * from pcopy order by pno; drop pcopy; \g 
+<<
+
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p1    |nut       |red   |    12|london    |
+|p2    |bolt      |green |    17|paris     |
+|p3    |screw     |blue  |    17|rome      |
+|p4    |screw     |red   |    14|london    |
+|p5    |cam       |blue  |    12|paris     |
+|p6    |cog       |red   |    19|london    |
++------+----------+------+------+----------+
+(6 rows)
+(6 rows)
+
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p1    |nut       |purple|    10|london    |
+|p2    |bolt      |purple|    10|paris     |
+|p3    |screw     |purple|    10|rome      |
+|p4    |screw     |purple|    10|london    |
+|p5    |cam       |purple|    10|paris     |
+|p6    |cog       |purple|    10|london    |
++------+----------+------+------+----------+
+(6 rows)
+>>
+* create table pcopy as select * from p with page_size=8192; select * from pcopy ; \-
+g 
+<<
+(6 rows)
+
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p1    |nut       |red   |    12|london    |
+|p2    |bolt      |green |    17|paris     |
+|p3    |screw     |blue  |    17|rome      |
+|p4    |screw     |red   |    14|london    |
+|p5    |cam       |blue  |    12|paris     |
+|p6    |cog       |red   |    19|london    |
++------+----------+------+------+----------+
+(6 rows)
+>>
+* update pcopy set pno='p9', color = 'pink' where pno='p6'; select * from pcopy; \g 
+<<
+(1 row)
+
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p1    |nut       |red   |    12|london    |
+|p2    |bolt      |green |    17|paris     |
+|p3    |screw     |blue  |    17|rome      |
+|p4    |screw     |red   |    14|london    |
+|p5    |cam       |blue  |    12|paris     |
+|p9    |cog       |pink  |    19|london    |
++------+----------+------+------+----------+
+(6 rows)
+>>
+* update pcopy set weight = weight+10 where color = 'red'; select * from pcopy; drop-
+ pcopy; \g 
+<<
+(2 rows)
+
++------+----------+------+------+----------+
+|pno   |pname     |color |weight|city      |
++------+----------+------+------+----------+
+|p1    |nut       |red   |    22|london    |
+|p2    |bolt      |green |    17|paris     |
+|p3    |screw     |blue  |    17|rome      |
+|p4    |screw     |red   |    24|london    |
+|p5    |cam       |blue  |    12|paris     |
+|p9    |cog       |pink  |    19|london    |
++------+----------+------+------+----------+
+(6 rows)
+>>
+* create table spcopy as select * from sp with page_size=8192; select * from spcopy;-
+ \g 
+<<
+(12 rows)
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* update spcopy set qty=50 where sno=any (select sno from s where sname = 'blake'); -
+\g 
+<<
+(1 row)
+>>
+* select * from spcopy; drop spcopy; \g 
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |    50|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* create table spcopy as select * from sp with page_size=8192; select * from spcopy;-
+  \g 
+<<
+(12 rows)
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* update spcopy set qty=qty+100 where qty=200; select * from spcopy; drop spcopy; \g-
+ 
+<<
+(4 rows)
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   300|
+|s1    |p3    |   400|
+|s1    |p4    |   300|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   300|
+|s4    |p2    |   300|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* create table spcopy as select * from sp with page_size=8192; select * from spcopy;-
+ \g 
+<<
+(12 rows)
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* update spcopy set qty=qty+100 where qty=any (select qty from spcopy where qty=200)-
+; select * from spcopy; drop spcopy; \g 
+<<
+(4 rows)
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   300|
+|s1    |p3    |   400|
+|s1    |p4    |   300|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   300|
+|s4    |p2    |   300|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* create table spcopy as select * from sp with page_size=8192; select * from spcopy;-
+ \g 
+<<
+(12 rows)
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* update spcopy set sno='ss', qty=qty+10, pno='pp'; select * from spcopy; drop spcop-
+y; \g 
+<<
+(12 rows)
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|ss    |pp    |   310|
+|ss    |pp    |   210|
+|ss    |pp    |   410|
+|ss    |pp    |   210|
+|ss    |pp    |   110|
+|ss    |pp    |   110|
+|ss    |pp    |   310|
+|ss    |pp    |   410|
+|ss    |pp    |   210|
+|ss    |pp    |   210|
+|ss    |pp    |   310|
+|ss    |pp    |   410|
++------+------+------+
+(12 rows)
+>>
+* create table spcopy as select * from sp with page_size=8192; update spcopy set qty-
+ = (select weight from p where spcopy.pno = p.pno); \g \r 
+/*
+Can't update one table from another (unfortunately)
+*/
+<<
+(12 rows)
+E_US1401 Scalar subqueries not yet supported in this context.
+    (Mon Jul  2 19:09:18 2007)
+
+>>
+* update spcopy set qty = select weight from p where spcopy.pno = p.pno; \g 
+/*
+*/
+<<
+E_US0836 line 1, Column 'select' not found in any specified table.
+    (Thu Oct  4 15:14:34 2001)
+
+>>
+* drop spcopy; \g 
+<<
+>>
+* \q 
+<<
+~
+>>
+? delete fe000a.dat 
+<<
+~
+>>
+? delete fe000b.dat 
+<<
+~
+>>
+? delete fe000c.dat 
+<<
+~
+>>
+
+
+Ending at: Mon Jul  2 19:09:23 2007

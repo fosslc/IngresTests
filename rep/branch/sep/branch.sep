@@ -1,0 +1,1063 @@
+/*
+	Test Name: branch.sep
+	Time: Thu Feb 20 11:42:32 1997
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:	branch.sep
+	Purpose	:	test the Central-to-Branch(See Figure 2-9 in User Guide)
+	Input Files  :  runrepl.opt, runrepl.opt1, runrepl.opt2, runrepl.opt3,
+		        runrepl.opt4, cdds.sql, cleanup.sql, insert.qry.	
+	Output Files :
+	Database     :	repdb1, repdb2, repdb3, repdb4.
+	Tables       :	tasks, tasks_cdds.
+	Synopsis     :	Created the configuration for 4 CDDS:
+
+			CDDS#0(Default):	10	10	20
+						10	10	30
+						10	10	40
+						20	20	10
+						30	30	10
+						40	40	10
+			CDDS#1(Advertise):	10	10	20
+						20	20	10
+			CDDS#2(Graphic):	10	10	30
+			CDDS#3(Asset):		10	10	40
+
+			Insert different values into repdb1(10) for different CDDS,
+			check the databases(repdb2, repdb3, repdb4) to make sure
+			the CDDS work depending on the CDDS lookup table.
+
+ History: 20-Feb-1997	(Author)	Created
+          08-May-1997 	(hsuji01)
+          06-Oct-1998	(kinte01) Add VMS version
+	  16-Nov-1998	(kinte01) Correct typo - referenced runrep.opt* instead
+				  of runrepl.opt*
+	  08-dec-1998   (nanpr01)       Removed imagerep.
+	02-Jun-1999 (abbjo03)
+		Replace DD_RSERVERS by its default. Use default runrepl.opts.
+		Replace ddgenrul by repcfg.
+          04-04-2003    (madsu02)    rpserver command on VMS displays process
+                                      started information,  edited sep test to
+                                      ignore the result.
+          05-08-2003   (madsu02)    By definition, a Protected Read Only
+                                    CDDS cannot be activated. Removed commands
+                                    to activate repdb3 and repdb4, now the test
+                                    runs clean on VMS.
+	24-Apr-2007	(boija02) Adding -TPC1 for cluster portability
+*/
+? sql -s SEPPARAMDB_1
+<<
+>>
+* insert into dd_databases values (10,'replnode','repdb1',' ','ingres',' ',1,' ','da-
+tabase10')\g 
+<<
+(1 row)
+>>
+* insert into dd_databases values (20,'replnode','repdb2',' ','ingres',' ',0,' ','da-
+tabase20')\g 
+<<
+(1 row)
+>>
+* insert into dd_databases values (30,'replnode','repdb3',' ','ingres',' ',0,' ','da-
+tabase30')\g 
+<<
+(1 row)
+>>
+* insert into dd_databases values (40,'replnode','repdb4',' ','ingres',' ',0,' ','da-
+tabase40')\g
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (10,0,1,1-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (20,0,1,2-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (30,0,1,3-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (40,0,1,4-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (10,10,20,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (10,10,30,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (10,10,40,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (20,20,10,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (30,30,10,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (40,40,10,0)\g 
+<<
+(1 row)
+>>
+* \q
+<<
+~
+>>
+? fill runrepl.opt1 
+!!
+-SVR1
+-IDBreplnode::repdb2
+-OWNtestenv
+-TPC1
+!!
+? fill runrepl.opt2 
+!!
+-SVR2
+-IDBreplnode::repdb1
+-OWNtestenv
+-TPC1
+!!
+? fill runrepl.opt3 
+!!
+-SVR3
+-IDBreplnode::repdb1
+-OWNtestenv
+-TPC1
+!!
+? fill runrepl.opt4 
+!!
+-SVR4
+-IDBreplnode::repdb1
+-OWNtestenv
+-TPC1
+!!
+? cp runrepl.opt1 @file(ii_system,ingres,rep,servers,server1,runrepl.opt) 
+<<
+>>
+? cp runrepl.opt3 @file(ii_system,ingres,rep,servers,server3,runrepl.opt) 
+<<
+>>
+? cp runrepl.opt2 @file(ii_system,ingres,rep,servers,server2,runrepl.opt) 
+<<
+>>
+? cp runrepl.opt4 @file(ii_system,ingres,rep,servers,server4,runrepl.opt) 
+<<
+>>
+? fill cdds.sql 
+!!
+create table tasks_cdds (project varchar(12) not null not default, cdds_no integer2 -
+not null not default)\g
+insert into tasks_cdds values ('Advertise',1) \g
+insert into tasks_cdds values ('Graphic',2) \g
+insert into tasks_cdds values ('Asset',3) \g
+commit \g
+!!
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* \i cdds.sql 
+<<
+(1 row)
+(1 row)
+(1 row)
+>>
+* select * from tasks_cdds \g\q
+<<
+
++------------+------+
+|project     |cdds_n|
++------------+------+
+|Advertise   |     1|
+|Graphic     |     2|
+|Asset       |     3|
++------------+------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* \i cdds.sql 
+<<
+(1 row)
+(1 row)
+(1 row)
+>>
+* select * from tasks_cdds \g\q
+<<
+
++------------+------+
+|project     |cdds_n|
++------------+------+
+|Advertise   |     1|
+|Graphic     |     2|
+|Asset       |     3|
++------------+------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_3 
+<<
+>>
+* \i cdds.sql 
+<<
+(1 row)
+(1 row)
+(1 row)
+>>
+* select * from tasks_cdds \g\q
+<<
+
++------------+------+
+|project     |cdds_n|
++------------+------+
+|Advertise   |     1|
+|Graphic     |     2|
+|Asset       |     3|
++------------+------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_4 
+<<
+>>
+* \i cdds.sql 
+<<
+(1 row)
+(1 row)
+(1 row)
+>>
+* select * from tasks_cdds \g\q
+<<
+
++------------+------+
+|project     |cdds_n|
++------------+------+
+|Advertise   |     1|
+|Graphic     |     2|
+|Asset       |     3|
++------------+------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* insert into dd_cdds (cdds_no,cdds_name,collision_mode,error_mode) values (1,'First-
+ CDDS',0,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (10,1,1,1-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (20,1,1,2-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (10,10,20,1)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (20,20,10,1)\g 
+<<
+(1 row)
+>>
+* insert into dd_cdds (cdds_no,cdds_name,collision_mode,error_mode) values (2,'Secon-
+d CDDS',0,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (10,2,1,1-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (30,2,2,3-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (10,10,30,2)\g 
+<<
+(1 row)
+>>
+* insert into dd_cdds(cdds_no,cdds_name,collision_mode,error_mode) values (3,'Third -
+CDDS',0,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (10,3,1,1-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_db_cdds(database_no,cdds_no,target_type,server_no) values (40,3,2,4-
+)\g 
+<<
+(1 row)
+>>
+* insert into dd_paths(localdb,sourcedb,targetdb,cdds_no) values (10,10,40,3)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_tables(table_no,table_name,table_owner,columns_registered,cd-
+ds_no,index_used) values (1,'tasks','testenv',date('now'),0,'tasks')\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (1,'hours',4,0)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (1,'name',1,1)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (1,'project',2,2)\g 
+<<
+(1 row)
+>>
+* insert into dd_regist_columns(table_no,column_name,column_sequence,key_sequence) v-
+alues (1,'task',3,3)\g 
+<<
+(1 row)
+>>
+* update dd_regist_tables set cdds_lookup_table='tasks_cdds' where table_no=1\g 
+<<
+(1 row)
+>>
+* \q 
+<<
+>>
+? ddgensup SEPPARAMDB_1 1
+<<
+Processing table 'testenv.tasks' . . .
+Generating support tables for 'testenv.tasks' . . . 
+Creating procedure 'tasks00001rmi' . . .
+Creating procedure 'tasks00001rmu' . . .
+Creating procedure 'tasks00001rmd' . . .
+Support procedures for 'testenv.tasks' have been created . . .
+
+Creation of support objects for table 'testenv.tasks' successful.
+>>
+? ddmovcfg SEPPARAMDB_1 20
+<<
+Moving contents of Replicator catalogs to 'replnode::repdb2' . . .
+Processing table 'testenv.tasks' . . .
+Generating support tables for 'testenv.tasks' . . . 
+Creating procedure 'tasks00001rmi' . . .
+Creating procedure 'tasks00001rmu' . . .
+Creating procedure 'tasks00001rmd' . . .
+Support procedures for 'testenv.tasks' have been created . . .
+
+Configuration moved to 'replnode::repdb2'
+>>
+? ddmovcfg SEPPARAMDB_1 30
+<<
+Moving contents of Replicator catalogs to 'replnode::repdb3' . . .
+Processing table 'testenv.tasks' . . .
+Generating support tables for 'testenv.tasks' . . . 
+Creating procedure 'tasks00001rmi' . . .
+Creating procedure 'tasks00001rmu' . . .
+Creating procedure 'tasks00001rmd' . . .
+Support procedures for 'testenv.tasks' have been created . . .
+
+Configuration moved to 'replnode::repdb3'
+>>
+? ddmovcfg SEPPARAMDB_1 40
+<<
+Moving contents of Replicator catalogs to 'replnode::repdb4' . . .
+Processing table 'testenv.tasks' . . .
+Generating support tables for 'testenv.tasks' . . . 
+Creating procedure 'tasks00001rmi' . . .
+Creating procedure 'tasks00001rmu' . . .
+Creating procedure 'tasks00001rmd' . . .
+Support procedures for 'testenv.tasks' have been created . . .
+
+Configuration moved to 'replnode::repdb4'
+>>
+? repcfg SEPPARAMDB_1 cdds activate 0
+<<
+>>
+? repcfg SEPPARAMDB_2 cdds activate 0
+<<
+>>
+? fill insert.qry 
+!!
+insert into tasks values ('somson, charlie1', 'Advertise', 'manage', 30)\g
+insert into tasks values ('somson, charlie2', 'Asset', 'implement', 30)\g
+insert into tasks values ('somson, charlie3', 'Graphic', 'Design', 30)\g
+insert into tasks values ('somson, charlie4', 'TextProc', 'manage', 30)\g
+insert into tasks values ('somson, charlie5', 'SalesFor', 'sales', 30)\g
+
+!!
+? rpserver 1 
+<<
+~
+>>
+? rpserver 2 
+<<
+~
+>>
+? rpserver 3 
+<<
+~
+>>
+? rpserver 4 
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* \i insert.qry 
+<<
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+(1 row)
+>>
+* commit \g
+<<
+~
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie1    |Advertise   |manage   |           30|
+|somson, charlie2    |Asset       |implement|           30|
+|somson, charlie3    |Graphic     |Design   |           30|
+|somson, charlie4    |TextProc    |manage   |           30|
+|somson, charlie5    |SalesFor    |sales    |           30|
++--------------------+------------+---------+-------------+
+(5 rows)
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie1    |Advertise   |manage   |           30|
+|somson, charlie4    |TextProc    |manage   |           30|
+|somson, charlie5    |SalesFor    |sales    |           30|
++--------------------+------------+---------+-------------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_3 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie3    |Graphic     |Design   |           30|
+|somson, charlie4    |TextProc    |manage   |           30|
+|somson, charlie5    |SalesFor    |sales    |           30|
++--------------------+------------+---------+-------------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_4 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie2    |Asset       |implement|           30|
+|somson, charlie4    |TextProc    |manage   |           30|
+|somson, charlie5    |SalesFor    |sales    |           30|
++--------------------+------------+---------+-------------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* update tasks set name = 'somson, charlie11' where name = 'somson, charlie1'\g
+<<
+(1 row)
+>>
+* update tasks set name = 'somson, charlie22' where name = 'somson, charlie2'\g
+<<
+(1 row)
+>>
+* update tasks set name = 'somson, charlie33' where name = 'somson, charlie3'\g
+<<
+(1 row)
+>>
+* commit\g
+<<
+~
+>>
+* select * from tasks where name like 'somson%'\g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           30|
+|somson, charlie22   |Asset       |implement|           30|
+|somson, charlie33   |Graphic     |Design   |           30|
+|somson, charlie4    |TextProc    |manage   |           30|
+|somson, charlie5    |SalesFor    |sales    |           30|
++--------------------+------------+---------+-------------+
+(5 rows)
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           30|
+|somson, charlie4    |TextProc    |manage   |           30|
+|somson, charlie5    |SalesFor    |sales    |           30|
++--------------------+------------+---------+-------------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_3 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie33   |Graphic     |Design   |           30|
+|somson, charlie4    |TextProc    |manage   |           30|
+|somson, charlie5    |SalesFor    |sales    |           30|
++--------------------+------------+---------+-------------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_4 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie22   |Asset       |implement|           30|
+|somson, charlie4    |TextProc    |manage   |           30|
+|somson, charlie5    |SalesFor    |sales    |           30|
++--------------------+------------+---------+-------------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* update tasks set hours = 20 where name like 'somson%'\g 
+<<
+(5 rows)
+>>
+* commit \g
+<<
+~
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
++--------------------+------------+---------+-------------+
+(5 rows)
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
++--------------------+------------+---------+-------------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_3 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
++--------------------+------------+---------+-------------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_4 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
++--------------------+------------+---------+-------------+
+(3 rows)
+>>
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* select * from tasks where name like 'somson%';\g 
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
++--------------------+------------+---------+-------------+
+(5 rows)
+>>
+* insert into tasks values('somson, charlie7','Advertise','manage',40)\g 
+<<
+(1 row)
+>>
+* insert into tasks values('somson, charlie8','Asset','sales',40)\g 
+<<
+(1 row)
+>>
+* insert into tasks values('somson, charlie9','Graphic','Design',40)\g 
+<<
+(1 row)
+>>
+* select * from tasks where name like 'somson%' \g 
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie7    |Advertise   |manage   |           40|
+|somson, charlie8    |Asset       |sales    |           40|
+|somson, charlie9    |Graphic     |Design   |           40|
++--------------------+------------+---------+-------------+
+(8 rows)
+>>
+* commit;\g\q 
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie7    |Advertise   |manage   |           40|
++--------------------+------------+---------+-------------+
+(4 rows)
+>>
+? sql -s SEPPARAMDB_3 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie9    |Graphic     |Design   |           40|
++--------------------+------------+---------+-------------+
+(4 rows)
+>>
+? sql -s SEPPARAMDB_4 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie8    |Asset       |sales    |           40|
++--------------------+------------+---------+-------------+
+(4 rows)
+>>
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* select * from tasks where name like 'somson%';\g 
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie7    |Advertise   |manage   |           40|
+|somson, charlie8    |Asset       |sales    |           40|
+|somson, charlie9    |Graphic     |Design   |           40|
++--------------------+------------+---------+-------------+
+(8 rows)
+>>
+* select * from tasks where hours = 40\g 
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie7    |Advertise   |manage   |           40|
+|somson, charlie8    |Asset       |sales    |           40|
+|somson, charlie9    |Graphic     |Design   |           40|
++--------------------+------------+---------+-------------+
+(3 rows)
+>>
+* delete from tasks where hours = 40;\g 
+<<
+~
+>>
+* select * from tasks where hours = 40\g 
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
++--------------------+------------+---------+-------------+
+(0 rows)
+>>
+* commit;\g\q
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* select * from tasks where hours=40;\g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
++--------------------+------------+---------+-------------+
+(0 rows)
+>>
+? sql -s SEPPARAMDB_3 
+<<
+>>
+* select * from tasks where hours=40;\g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
++--------------------+------------+---------+-------------+
+(0 rows)
+>>
+? sql -s SEPPARAMDB_4 
+<<
+>>
+* select * from tasks where hours=40;\g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
++--------------------+------------+---------+-------------+
+(0 rows)
+>>
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* select * from tasks where name like 'somson%';\g
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
++--------------------+------------+---------+-------------+
+(5 rows)
+>>
+* insert into tasks values('somson, charlie6','Advertise','manage',100);\g 
+<<
+(1 row)
+>>
+* insert into tasks values('somson, charlie7','Asset','sales',100);\g 
+<<
+(1 row)
+>>
+* insert into tasks values('somson, charlie8','Graphic','Design',100);\g 
+<<
+(1 row)
+>>
+* select * from tasks where name like 'somson%' \g 
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie6    |Advertise   |manage   |          100|
+|somson, charlie7    |Asset       |sales    |          100|
+|somson, charlie8    |Graphic     |Design   |          100|
++--------------------+------------+---------+-------------+
+(8 rows)
+>>
+* commit;\g\q
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie6    |Advertise   |manage   |          100|
++--------------------+------------+---------+-------------+
+(4 rows)
+>>
+? sql -s SEPPARAMDB_3 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie8    |Graphic     |Design   |          100|
++--------------------+------------+---------+-------------+
+(4 rows)
+>>
+? sql -s SEPPARAMDB_4 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie7    |Asset       |sales    |          100|
++--------------------+------------+---------+-------------+
+(4 rows)
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* select * from tasks where name like 'somson%' \g
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie6    |Advertise   |manage   |          100|
++--------------------+------------+---------+-------------+
+(4 rows)
+>>
+* insert into tasks values('somson, charlie111','Advertise','manage',100)\g
+<<
+(1 row)
+>>
+* select * from tasks where name like 'somson%' \g
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie111  |Advertise   |manage   |          100|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie6    |Advertise   |manage   |          100|
++--------------------+------------+---------+-------------+
+(5 rows)
+>>
+* commit;\g\q
+<<
+~
+>>
+? sleep SEPPARAM_SLEEP 
+<<
+>>
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie11   |Advertise   |manage   |           20|
+|somson, charlie111  |Advertise   |manage   |          100|
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie6    |Advertise   |manage   |          100|
+|somson, charlie7    |Asset       |sales    |          100|
+|somson, charlie8    |Graphic     |Design   |          100|
++--------------------+------------+---------+-------------+
+(9 rows)
+>>
+? sql -s SEPPARAMDB_3 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie33   |Graphic     |Design   |           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie8    |Graphic     |Design   |          100|
++--------------------+------------+---------+-------------+
+(4 rows)
+>>
+? sql -s SEPPARAMDB_4 
+<<
+>>
+* select * from tasks where name like 'somson%' \g\q
+<<
+
++--------------------+------------+---------+-------------+
+|name                |project     |task     |hours        |
++--------------------+------------+---------+-------------+
+|somson, charlie22   |Asset       |implement|           20|
+|somson, charlie4    |TextProc    |manage   |           20|
+|somson, charlie5    |SalesFor    |sales    |           20|
+|somson, charlie7    |Asset       |sales    |          100|
++--------------------+------------+---------+-------------+
+(4 rows)
+>>
+? sql -s SEPPARAMDB_1 
+<<
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+~
+>>
+? sql -s SEPPARAMDB_2 
+<<
+>>
+* raise dbevent dd_stop_server\g\q
+<<
+~
+>>
+
+
+Ending at: Mon Jun 30 15:45:36 1997

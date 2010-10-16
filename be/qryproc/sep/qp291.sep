@@ -1,0 +1,157 @@
+/*
+        Test Name: qp291.sep
+        Time: Mon May 14 11:59:58 2001
+        User Name: testenv
+        Terminal type: septerm
+
+        Test ID : qp291.sep
+        Module  : be/qryproc
+        Filename: qp291.sep
+        Purpose : To test the new feature row producing procedure. 
+        Input Files  : 
+        Output Files : 
+        Database     : qryprocdb
+        Tables       : qp291_table1
+        Synopsis     : This is to test the EXECUTE PROCEDURE LOOP with a huge 
+                       table of many rows within an embedded C program.
+
+ History: 11-May-2001   (wu$ca01)       Created
+**
+**  ROW PRODUCING PROCEDURE
+**
+**  - EXECUTE PROCEDURE LOOP, MANY ROWS
+**
+          28-Mar-2001	(sarjo01)
+          10-Apr-2001	(sarjo01)
+*/
+? fill setup.sql 
+!!
+set autocommit on\g
+\i cleanup.sql
+create table qp291_table1 as select * from iirelation\g
+insert into qp291_table1 select * from qp291_table1\g
+insert into qp291_table1 select * from qp291_table1\g
+insert into qp291_table1 select * from qp291_table1\g
+insert into qp291_table1 select * from qp291_table1\g
+insert into qp291_table1 select * from qp291_table1\g
+insert into qp291_table1 select * from qp291_table1\g
+insert into qp291_table1 select * from qp291_table1\g
+insert into qp291_table1 select * from qp291_table1\g
+!!
+? fill cleanup.sql 
+!!
+drop table qp291_table1\g
+drop table qp291_table2\g
+drop procedure qp291_rp1\g
+!!
+? fill rp1.sql 
+!!
+/*-------------------------------------------*   GOOD SYNTAX: nested FOR
+*/
+create procedure qp291_rp1
+       result row(int, char(32), char(32))
+as declare
+   v1 int;
+   v2 char(33);
+   v3 char(33);
+   buf char(80) not null;
+begin
+   for select reltid, relid, relowner into :v1, :v2, :v3 from qp291_table1 order by 1 do
+      return row(:v1, :v2, :v3);
+   endfor;
+end;\g
+!!
+? fill rp1.sc 
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+      int       v1;
+      char      v2[33];
+      char      v3[33];
+      int       rcount;
+   EXEC SQL END DECLARE SECTION;
+
+   int       i;
+
+   EXEC SQL WHENEVER SQLERROR stop;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+
+   EXEC SQL select count(*) into :rcount from qp291_table1; 
+
+   i = 0;
+   EXEC SQL execute procedure qp291_rp1
+                    result row (:v1, :v2, :v3);
+   EXEC SQL begin;
+      i++;
+   EXEC SQL end;
+
+   EXEC SQL disconnect;
+
+   if (rcount != i)
+      printf("Actual: %d, expected: %d\n", i, rcount);
+   else
+      printf("Operation completed\n");
+}
+!!
+? esqlc rp1.sc 
+<<
+~
+>>
+? sepcc rp1.c 
+<<
+~
+>>
+? seplnk rp1 
+<<
+~
+>>
+? sql SEPPARAMDB 
+<<
+~
+>>
+* \i setup.sql
+<<
+~
+>>
+* \i rp1.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? run rp1.exe SEPPARAMDB 
+<<
+Operation completed
+>>
+? delete rp1.c 
+<<
+~
+>>
+? delete rp1.o 
+<<
+~
+>>
+? delete rp1.obj 
+<<
+~
+>>
+? delete rp1.exe 
+<<
+~
+>>
+
+
+Ending at: Tue Apr 10 10:37:26 2001

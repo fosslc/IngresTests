@@ -1,0 +1,393 @@
+/*
+
+ Copyright (c) 2007 Ingres Corporation
+
+ 
+	Test Name: odbc00.sep
+	Time: Mon Apr  3 11:06:02 2000
+	User Name: ingres
+	Terminal type: septerm
+ 
+	Test ID      : odbc00.sep
+	Module       : odbc
+	Filename     : odbc00.sep
+	Purpose	     : To test ODBC scalar functions
+	Input Files  : droptable.sql, scalar.sql
+	Output Files :
+	Database     : odbcdb
+	Tables       :
+	Synopsis     :
+
+ History: 02-May-2000	(ngutr03)	Created
+	17-May-2001	(soura01)
+		Changed to also run on w95 & w98 with a SEPPARAM_NODE.
+	24-May-2001	(rogch01)
+		Detect setting of SEPPARAM_NODE to allow client server
+		operation on any OS.  Because the data source is defined from
+		the ingres account on NT, the test needs to be run as ingres.
+        26-Nov-2001     (sarjo01)
+                Change testenv pw to ca-testenv for UNIX; Add ./ to odbctest
+		command. Made UNIX build script a separate file. 
+        15-Jul-2004     (sarjo01)
+                Added password variable, SEPPARAM_OPASSWORD 
+        12-Aug-2004     (sarjo01)
+                Changed DSN name to testdsn 
+        12-Aug-2004     (sarjo01)
+                Recanonize.
+        01-Oct-2004	(legru01)
+		Ported test to operate on Windows without using the MKS 
+		toolkit command "sh".Added "%"s for
+		the Windows environment variable SEPPARAM_OPASSWORD.
+        30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+	20-Jun-2007	(boija02) Deleting filled files makes debugging harder
+
+*/
+? delete runodbc.bat
+<<
+~
+>>
+? delete buildodbc.bat
+<<
+~
+>>
+? delete runodbc
+<<
+~
+>>
+? delete buildodbc
+<<
+~
+>>
+? delete odbctest
+<<
+~
+>>
+? delete odbctest.h
+<<
+~
+>>
+? delete odbctest.c
+<<
+~
+>>
+? delete odbctest.o
+<<
+~
+>>
+? delete odbctest.obj
+<<
+~
+>>
+? delete odbctest.exe
+<<
+~
+>>
+? fill droptable.sql
+!!
+drop table test\g
+drop table absvalue\g
+drop table squareroot\g
+drop table modtable\g
+!!
+? fill scalar.sql
+!!
+create table test ( "first name" varchar(15), "last name" varchar(15) )\g
+insert into test values ('michael', 'chang')\g
+insert into test values ('jennifer', 'smith')\g
+insert into test values ('kelly', 'nguyen')\g
+select { fn ucase("first name") } as "upper case first name" from test\g
+select { fn lcase("first name") } as "lower case first name" from test\g
+select { fn concat( { fn concat("first name", ', ') }, "last name") } as "full name"-
+ from test\g
+select { fn lcase("first name") } as "first name", { fn length("first name") } as le-
+ngth from test\g
+create table absvalue( number int )\g
+insert into absvalue values ( -123 )\g
+insert into absvalue values ( 0 )\g
+insert into absvalue values ( +123 )\g
+select number, { fn abs(number) } as "absolute value of number" from absvalue\g
+create table squareroot( number int)\g
+insert into squareroot values(4)\g
+insert into squareroot values(25)\g
+insert into squareroot values(9)\g
+insert into squareroot values(7)\g
+insert into squareroot values(1)\g
+select number, { fn sqrt(number) } as "SQRT of number" from squareroot\g
+create table modtable(number int)\g
+insert into modtable values(3)\g
+insert into modtable values(-7)\g
+insert into modtable values(4)\g
+insert into modtable values(0)\g
+select number, { fn mod(number, 2) } as "number mod 2" from modtable\g
+!!
+.if !SEPPARAM_NODE
+? sql -s -utestenv odbcdb
+<<
+
+>>
+.else
+? sql -s -utestenv SEPPARAM_NODE
+<<
+
+>>
+.endif
+* \i droptable.sql
+<<
+~
+>>
+* \q
+<<
+~
+>>
+? cp @file(ing_tst,odbc,src,odbctest.h) odbctest.h
+<<
+
+>>
+? cp @file(ing_tst,odbc,src,odbctest.c) odbctest.c
+<<
+
+>>
+.if (NT_GENERIC)
+? setenv SEPPARAM_FILENAME runodbc.bat
+<<
+~
+>>
+? fill buildodbc.bat
+!!
+cl odbctest.c Odbc32.lib Odbccp32.lib
+!!
+? fill runodbc.bat
+!!
+odbctest.exe -uid testenv -pwd %SEPPARAM_OPASSWORD% -dsn testdsn -file scalar.sql
+!!
+? run buildodbc.bat
+<<
+~
+>>
+.else
+? setenv SEPPARAM_FILENAME runodbc
+<<
+~
+>>
+? cp @file(ing_tst,odbc,src,buildodbc.sh) buildodbc
+<<
+~
+>>
+? fill runodbc
+!!
+./odbctest.exe -uid testenv -pwd $SEPPARAM_OPASSWORD -dsn testdsn -file scalar.sql
+!!
+? sh buildodbc odbctest.c
+<<
+~
+>>
+? run chmod +x runodbc
+<<
+~
+>>
+.endif 
+? run SEPPARAM_FILENAME
+<<
+
+Please wait . . .
+Establishing a connection to 'testdsn' . . .
+Attempt connecting 1 of 3 . . .
+Successfully, connected to 'testdsn'.
+
+Now executing test: 'scalar.sql' . . .
+
+Reading from 'scalar.sql' . . .
+
+* create table test ( "first name" varchar(15), "last name" varchar(15) )\g
+Executing . . .
+
+* insert into test values ('michael', 'chang')\g
+Executing . . .
+
+(1 row)
+* insert into test values ('jennifer', 'smith')\g
+Executing . . .
+
+(1 row)
+* insert into test values ('kelly', 'nguyen')\g
+Executing . . .
+
+(1 row)
+* select { fn ucase("first name") } as "upper case first name" from test\g
+Executing . . .
+
++---------------------+
+|upper case first name|
++---------------------+
+|MICHAEL              |
+|JENNIFER             |
+|KELLY                |
++---------------------+
+
+(3 rows)
+* select { fn lcase("first name") } as "lower case first name" from test\g
+Executing . . .
+
++---------------------+
+|lower case first name|
++---------------------+
+|michael              |
+|jennifer             |
+|kelly                |
++---------------------+
+
+(3 rows)
+* select { fn concat( { fn concat("first name", ', ') }, "last name") } as "full nam-
+e" from test\g
+Executing . . .
+
++--------------------------------+
+|full name                       |
++--------------------------------+
+|michael, chang                  |
+|jennifer, smith                 |
+|kelly, nguyen                   |
++--------------------------------+
+
+(3 rows)
+* select { fn lcase("first name") } as "first name", { fn length("first name") } as -
+length from test\g
+Executing . . .
+
++---------------+---------------+
+|first name     |length         |
++---------------+---------------+
+|michael        |              7|
+|jennifer       |              8|
+|kelly          |              5|
++---------------+---------------+
+
+(3 rows)
+* create table absvalue( number int )\g
+Executing . . .
+
+* insert into absvalue values ( -123 )\g
+Executing . . .
+
+(1 row)
+* insert into absvalue values ( 0 )\g
+Executing . . .
+
+(1 row)
+* insert into absvalue values ( +123 )\g
+Executing . . .
+
+(1 row)
+* select number, { fn abs(number) } as "absolute value of number" from absvalue\g
+Executing . . .
+
++---------------+------------------------+
+|number         |absolute value of number|
++---------------+------------------------+
+|           -123|                     123|
+|              0|                       0|
+|            123|                     123|
++---------------+------------------------+
+
+(3 rows)
+* create table squareroot( number int)\g
+Executing . . .
+
+* insert into squareroot values(4)\g
+Executing . . .
+
+(1 row)
+* insert into squareroot values(25)\g
+Executing . . .
+
+(1 row)
+* insert into squareroot values(9)\g
+Executing . . .
+
+(1 row)
+* insert into squareroot values(7)\g
+Executing . . .
+
+(1 row)
+* insert into squareroot values(1)\g
+Executing . . .
+
+(1 row)
+* select number, { fn sqrt(number) } as "SQRT of number" from squareroot\g
+Executing . . .
+
++---------------+--------------------+
+|number         |sqrt of number      |
++---------------+--------------------+
+|              4|               2.000|
+|             25|               5.000|
+|              9|               3.000|
+|              7|               2.646|
+|              1|               1.000|
++---------------+--------------------+
+
+(5 rows)
+* create table modtable(number int)\g
+Executing . . .
+
+* insert into modtable values(3)\g
+Executing . . .
+
+(1 row)
+* insert into modtable values(-7)\g
+Executing . . .
+
+(1 row)
+* insert into modtable values(4)\g
+Executing . . .
+
+(1 row)
+* insert into modtable values(0)\g
+Executing . . .
+
+(1 row)
+* select number, { fn mod(number, 2) } as "number mod 2" from modtable\g
+Executing . . .
+
++---------------+------------+
+|number         |number mod 2|
++---------------+------------+
+|              3|           1|
+|             -7|          -1|
+|              4|           0|
+|              0|           0|
++---------------+------------+
+
+(4 rows)
+>>
+? delete buildodbc
+<<
+~
+>>
+? delete odbctest.h
+<<
+~
+>>
+? delete odbctest.c
+<<
+~
+>>
+? delete odbctest
+<<
+~
+>>
+? delete odbctest.o
+<<
+~
+>>
+? delete odbctest.obj
+<<
+~
+>>
+? delete odbctest.exe
+<<
+~
+>>
+
+
+Ending at: Tue May 02 15:02:44 2000

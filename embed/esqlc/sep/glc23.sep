@@ -1,0 +1,394 @@
+/*
+	Test Name: pza22sc.sep
+	Time: Fri Jan 21 15:00:38 1994
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : pza22sc
+	Module  : 3gl
+	Filename: pza22sc.sep
+	Purpose	: tests several FIPS features.
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : foo, "foo 2"
+	Synopsis     : Tests the following FIPS features:
+			- Grant option, revoke cascade|restrict
+			- Constraints and User-specified Defaults
+			- Set Session Authorization
+
+              This test assumes/requires the use of "testenv" as the user.
+	      This test will also run against a FIPS or Ingres database
+	      just change SEPPARAMDB to the correct database.
+
+
+ History: 21-Jan-1994	(jbryson)	Created
+           8-APR-1994	(scotts) Recaptured the canon for running the 
+           pza22sc executable. An error message has been changed since 
+           the last saveset (E_US1906). This is the error that points
+           out that there was a referential constraint error on an 
+           INSERT statement. This used to be denoted by E_US1905. Also
+           added an alternate canon for running against a FIPS database.
+           7-Apr-1995	(somsa01)	Added a correct FIPS canon.
+           02-Apr-1997  Modified (chiel02)
+                        Added an alternate canon for the sepcc command. 
+          07-Apr-1998	(uptad01) Added alternate cannon as we have diffs
+                        caused by upper and lower case string differences in the
+                        output of constraint test. 
+*/
+? delete pza22sc.c 
+<<
+~
+>>
+? delete pza22sc.o 
+<<
+~
+>>
+? delete pza22sc.obj 
+<<
+~
+>>
+? delete pza22sc.exe 
+<<
+~
+>>
+? fill pza22sc.sc 
+!!
+EXEC SQL INCLUDE SQLCA;
+
+int main(argc,argv)
+int  argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char *argv[];
+EXEC SQL END DECLARE SECTION;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+   char  *user = "testenv";
+   int col1,
+       col2;
+   char dname[11],
+        location[11],
+        creation_date[26];
+   float budget,
+         expenses;
+EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   /* Start up INGRES and the INGRES/FORMS system */
+   EXEC SQL CONNECT :argv[1];
+
+   EXEC SQL WHENEVER SQLERROR CONTINUE;
+   EXEC SQL DROP TABLE foo;
+   EXEC SQL DROP TABLE "foo 2";
+   EXEC SQL DROP PROCEDURE foo;
+   EXEC SQL DROP RULE foo;
+
+   EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+   /* tests constraints and user-specified defaults */
+   printf("Testing constraints and user-specified defaults\n");
+   EXEC SQL CREATE TABLE foo
+	 (col1            INTEGER NOT NULL,
+	  col2            INTEGER NOT NULL,
+	  dname           CHAR(10),
+	  location        CHAR(10) DEFAULT 'CA',
+	  creation_date   DATE DEFAULT '1/1/94', 
+	  budget          MONEY DEFAULT 100000,
+	  expenses        MONEY DEFAULT 0);
+
+   EXEC SQL CREATE TABLE "foo 2"
+         (col1 integer default 99 check (col1 > 0) not null);
+
+   EXEC SQL ALTER TABLE foo ADD CONSTRAINT unique_foo
+	 UNIQUE (col1);
+
+   EXEC SQL ALTER TABLE foo ADD CONSTRAINT primary_foo
+	 PRIMARY KEY (col2);
+
+   EXEC SQL ALTER TABLE "foo 2" ADD CONSTRAINT primary_foo2
+	 PRIMARY KEY (col1);
+
+   EXEC SQL ALTER TABLE foo ADD CONSTRAINT check_foo
+	 CHECK (col1 > 0);
+
+   EXEC SQL ALTER TABLE foo ADD CONSTRAINT foreign_foo 
+	 FOREIGN KEY (col1)
+	 REFERENCES "foo 2" (col1);
+
+   printf("\nThis insert will fail!\n");
+   EXEC SQL INSERT INTO foo (col1, col2, dname) VALUES (0,1,'hello');
+   printf("\nThis insert will fail!\n");
+   EXEC SQL INSERT INTO foo (col1, col2, dname) VALUES (1,1,'hello');
+
+   printf("\nResults of working inserts...\n");
+   EXEC SQL INSERT INTO "foo 2" (col1) VALUES (1);
+   EXEC SQL INSERT INTO foo (col1, col2, dname) VALUES (1,1,'hello');
+
+   EXEC SQL SELECT col1, col2, trim(dname), trim(location), 
+		   varchar(creation_date), budget, expenses
+	INTO :col1, :col2, :dname, :location,
+	     :creation_date, :budget, :expenses
+        FROM foo;
+   EXEC SQL BEGIN;
+      printf("col1=%d, col2=%d, dname=%s, location=%s\n",
+	      col1, col2, dname, location);
+      printf("creation_date=%s, budget=%f, expenses=%.2f\n",
+	      creation_date, budget, expenses);
+   EXEC SQL END;
+   printf("\n\n");
+
+   EXEC SQL CREATE PROCEDURE foo AS
+	 DECLARE
+	 var1 = INTEGER;
+	 BEGIN
+	    var1=0
+	 END;
+
+   EXEC SQL CREATE RULE foo
+	 AFTER UPDATE (col1, col2)
+	 OF foo
+	 EXECUTE PROCEDURE foo;
+
+   EXEC SQL ALTER TABLE foo DROP CONSTRAINT unique_foo  CASCADE;
+   EXEC SQL ALTER TABLE foo DROP CONSTRAINT primary_foo CASCADE;
+   EXEC SQL ALTER TABLE foo DROP CONSTRAINT check_foo   CASCADE;
+   EXEC SQL ALTER TABLE foo DROP CONSTRAINT foreign_foo CASCADE;
+   EXEC SQL ALTER TABLE "foo 2" DROP CONSTRAINT primary_foo2 RESTRICT;
+
+   /* tests grant option, revoke cascade|restrict */
+   printf("Testing grant option, revoke cascade|restrict\n");
+   EXEC SQL GRANT REFERENCES (col1) ON foo TO qatest;
+
+   EXEC SQL REVOKE REFERENCES (col1) ON foo FROM qatest CASCADE;
+
+   EXEC SQL GRANT EXECUTE ON PROCEDURE foo TO qatest;
+
+   EXEC SQL REVOKE EXECUTE ON PROCEDURE foo FROM qatest CASCADE;
+
+   EXEC SQL GRANT ALL PRIVILEGES
+        ON "foo 2"
+        TO PUBLIC
+        WITH GRANT OPTION;
+
+   EXEC SQL REVOKE ALL PRIVILEGES
+        ON "foo 2"
+        FROM PUBLIC RESTRICT;
+
+   EXEC SQL GRANT ALL PRIVILEGES ON PROCEDURE foo TO user1;
+
+   EXEC SQL REVOKE ALL PRIVILEGES ON PROCEDURE foo FROM user1 RESTRICT;
+
+   EXEC SQL GRANT SELECT, INSERT, DELETE, UPDATE(col1) ON "foo 2" TO user1;
+
+   EXEC SQL REVOKE SELECT ON "foo 2" FROM user1 RESTRICT;
+   EXEC SQL REVOKE ALL PRIVILEGES ON "foo 2" FROM user1 RESTRICT;
+
+   EXEC SQL DROP RULE foo;
+   EXEC SQL DROP PROCEDURE foo;
+   /*EXEC SQL DROP TABLE foo;*/
+   EXEC SQL DROP TABLE "foo 2";
+
+   EXEC SQL COMMIT;
+   /* tests SET SESSION AUTHORIZATION .... */
+   printf("Testing SET SESSION AUTHORIZATION\n");
+   EXEC SQL SET SESSION AUTHORIZATION qatest;
+   show_user("qatest");
+   EXEC SQL SET SESSION AUTHORIZATION 'qatest';
+   show_user("'qatest'");
+   EXEC SQL SET SESSION AUTHORIZATION USER;
+   show_user("USER");
+   EXEC SQL SET SESSION AUTHORIZATION CURRENT_USER;
+   show_user("CURRENT_USER");
+   EXEC SQL SET SESSION AUTHORIZATION SYSTEM_USER;
+   show_user("SYSTEM_USER");
+   EXEC SQL SET SESSION AUTHORIZATION SESSION_USER;
+   show_user("SESSION_USER");
+   EXEC SQL SET SESSION AUTHORIZATION INITIAL_USER;
+   show_user("INITIAL_USER");
+   EXEC SQL SET SESSION AUTHORIZATION :user;
+   show_user(":user='testenv'");
+
+   EXEC SQL DISCONNECT;
+
+   exit(0);
+} /* Main Program */
+
+show_user(set_name)
+char *set_name;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+   char user_name[20];
+EXEC SQL END DECLARE SECTION;
+
+   EXEC SQL SELECT trim(USER) into :user_name;
+   EXEC SQL COMMIT;
+   printf("Session authorization was set to %-15s and is %s\n", 
+	set_name, user_name);
+}
+!!
+? esqlc pza22sc.sc 
+<<
+ESQL pza22sc.sc:
+>>
+<<
+>>
+? sepcc pza22sc 
+<<
+>>
+<<
+pza22sc.c
+>>
+? seplnk pza22sc 
+<<
+>>
+? run pza22sc.exe SEPPARAMDB 
+/*
+   The first canon gets used when running against an Ingres Database.
+   The second canon gets used when running against a FIPS Database.
+*/
+<<
+Testing constraints and user-specified defaults
+
+This insert will fail!
+E_US1905 Check integrity constraint '"check_foo"'
+    on table '"foo"' was violated.
+    ( 8-APR-1994 14:46:38)
+
+This insert will fail!
+E_US1906 Cannot INSERT into table '"foo"' because the values do not match
+    those in table '"foo 2"' (violation of REFERENTIAL constraint
+    '"foreign_foo"').
+    ( 8-APR-1994 14:46:38)
+
+Results of working inserts...
+col1=1, col2=1, dname=hello, location=CA
+creation_date=01-jan-1994, budget=100000.000000, expenses=0.00
+
+
+Testing grant option, revoke cascade|restrict
+Testing SET SESSION AUTHORIZATION
+Session authorization was set to qatest          and is qatest
+Session authorization was set to 'qatest'        and is qatest
+Session authorization was set to USER            and is qatest
+Session authorization was set to CURRENT_USER    and is qatest
+Session authorization was set to SYSTEM_USER     and is testenv
+Session authorization was set to SESSION_USER    and is testenv
+Session authorization was set to INITIAL_USER    and is testenv
+Session authorization was set to :user='testenv' and is testenv
+>>
+<<
+Testing constraints and user-specified defaults
+
+This insert will fail!
+E_US1905 Check integrity constraint '"CHECK_FOO"'
+    on table '"FOO"' was violated.
+    ( 8-APR-1994 14:46:38)
+
+This insert will fail!
+E_US1906 Cannot INSERT into table '"FOO"' because the values do not match
+    those in table '"foo 2"' (violation of REFERENTIAL constraint
+    '"FOREIGN_FOO"').
+    ( 8-APR-1994 14:46:38)
+
+Results of working inserts...
+col1=1, col2=1, dname=hello, location=CA
+creation_date=01-jan-1994, budget=100000.000000, expenses=0.00
+
+
+Testing grant option, revoke cascade|restrict
+Testing SET SESSION AUTHORIZATION
+Session authorization was set to qatest          and is qatest
+Session authorization was set to 'qatest'        and is qatest
+Session authorization was set to USER            and is qatest
+Session authorization was set to CURRENT_USER    and is qatest
+Session authorization was set to SYSTEM_USER     and is testenv
+Session authorization was set to SESSION_USER    and is testenv
+Session authorization was set to INITIAL_USER    and is testenv
+Session authorization was set to :user='testenv' and is testenv
+>>
+<<
+Testing constraints and user-specified defaults
+
+This insert will fail!
+E_US1905 Check integrity constraint '"CHECK_FOO"'
+    on table '"FOO"' was violated.
+    (Fri Apr  7 14:19:23 1995)
+
+This insert will fail!
+E_US1906 Cannot INSERT into table '"FOO"' because the values do not match
+    those in table '"foo 2"' (violation of REFERENTIAL constraint
+    '"FOREIGN_FOO"').
+    (Fri Apr  7 14:19:26 1995)
+
+Results of working inserts...
+col1=1, col2=1, dname=hello, location=CA
+creation_date=01-jan-1994, budget=100000.000000, expenses=0.00
+
+
+Testing grant option, revoke cascade|restrict
+Testing SET SESSION AUTHORIZATION
+Session authorization was set to qatest          and is QATEST
+Session authorization was set to 'qatest'        and is QATEST
+Session authorization was set to USER            and is QATEST
+Session authorization was set to CURRENT_USER    and is QATEST
+Session authorization was set to SYSTEM_USER     and is TESTENV
+Session authorization was set to SESSION_USER    and is TESTENV
+Session authorization was set to INITIAL_USER    and is TESTENV
+Session authorization was set to :user='testenv' and is TESTENV
+>>
+<< IF (NT_GENERIC) 
+Testing constraints and user-specified defaults
+
+This insert will fail!
+E_US1905 Check integrity constraint '"check_foo"'
+    on table '"foo"' was violated.
+    (Tue Apr 07 11:16:37 1998)
+
+This insert will fail!
+E_US1906 Cannot INSERT into table '"foo"' because the values do not match
+    those in table '"foo 2"' (violation of REFERENTIAL constraint
+    '"foreign_foo"').
+    (Tue Apr 07 11:16:37 1998)
+
+Results of working inserts...
+col1=1, col2=1, dname=hello, location=CA
+creation_date=01-jan-1994, budget=100000.000000, expenses=0.00
+
+
+Testing grant option, revoke cascade|restrict
+Testing SET SESSION AUTHORIZATION
+Session authorization was set to qatest          and is qatest
+Session authorization was set to 'qatest'        and is qatest
+Session authorization was set to USER            and is qatest
+Session authorization was set to CURRENT_USER    and is qatest
+Session authorization was set to SYSTEM_USER     and is ingres
+Session authorization was set to SESSION_USER    and is ingres
+Session authorization was set to INITIAL_USER    and is ingres
+Session authorization was set to :user='testenv' and is testenv
+>>
+? delete pza22sc.c 
+<<
+~
+>>
+? delete pza22sc.o 
+<<
+~
+>>
+? delete pza22sc.obj 
+<<
+~
+>>
+? delete pza22sc.exe 
+<<
+~
+>>
+
+
+Ending at: Tue Apr 07 11:17:50 1998

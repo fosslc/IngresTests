@@ -1,0 +1,255 @@
+/*
+	Test Name    : ega08
+	Time	     :
+	User Name    : testenv
+ 
+	Test ID      : ega08
+	Module       : 
+	Filename     : ega08.sep
+	Purpose	     : To test for bug 45912
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB = b45912, SEPPARAMDRIVERDB = -db45912
+	Tables       : ega08t1, ega08t2
+	Synopsis     : Execute a compiled 3gl file that does a repeat
+			select twice and kills the server.
+	History      :
+           8-Oct-1992 Created by CAMACHO
+		WARNING!!!!! This test will crash the server for 
+		release 6.4/02 or before.
+	   7-MAR-1997    (vissu01) Modified for NT
+	   8-Aug-1997  (merja01) - Changed i4 from long to int.
+	  23-Mar-1999  (vande02) Hard-coded VPG_SZ to 2K/changed 'sql -s
+                                SEPPARAMDB' canon to be empty, in order to catch
+                                the msg. "TM could not connect ..." if the test
+                                database did not exist.
+*/
+? cp @file(tst_testools,driver,driver.sc) driver.sc
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,egstub.h) egstub.h
+<<
+>>
+? cp @file(ing_tst,be,qryproc,src,drivereg.c) drivereg.c
+<<
+>>
+? fill ega08.sc
+!!
+/* FILE  ega08.sc: query subroutine */
+
+#define EGA08
+
+#include "egstub.h"
+#include <stdio.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+
+	int 	send_feat;
+	int 	rec_feat;
+	char	statement[1024];
+
+EXEC SQL END DECLARE SECTION;
+
+ega08()
+{
+	int i = 0;
+
+	send_feat = 0;
+
+	EXEC SQL WHENEVER SQLERROR GOTO err_exit;
+
+
+	EXEC SQL REPEATED SELECT feat_num
+		INTO :rec_feat 
+		FROM ega08t1
+		WHERE (feat_num > :send_feat )
+			and feat_num in (
+				select feat_num from ega08t2
+				where
+					si>='!' and si<='!'  or
+					si>=';' and si<=';'  or
+					si>='F' and si<='J~' or
+					si>='P' and si<='P'  or
+					si>='V' and si<='Z~')
+		order by ega08t1.feat_num;
+
+	EXEC SQL BEGIN;
+		printf( "%d\n", rec_feat );
+		if ( i++ > 100 ) 
+			EXEC SQL ENDSELECT;
+	EXEC SQL END;
+
+
+	printf( "ega08: done\n" );
+	return;
+
+err_exit:
+	printf( "failed: %.70s\n", sqlca.sqlerrm.sqlerrmc);
+	return;
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table ega08t1;\g
+<<
+~
+>>
+* create table ega08t1 (feat_num integer not null) with page_size=2048;\g
+<<
+>>
+* drop table ega08t2;\g
+<<
+~
+>>
+* create table ega08t2 (si varchar(11) not null,
+<<
+>>
+* 	feat_num integer not null) with page_size=2048;\g
+<<
+>>
+* modify ega08t1 to cheap with page_size=2048;\g
+<<
+(0 rows)
+>>
+* create unique index ega08t1_feat_num on ega08t1(feat_num)
+<<
+>>
+* 	with structure=btree, page_size=2048;\g
+<<
+(0 rows)
+>>
+* modify ega08t2 to btree on si with page_size=2048;\g
+<<
+(0 rows)
+>>
+* insert into ega08t1 values (9);\g
+<<
+(1 row)
+>>
+* insert into ega08t1 values (4);\g
+<<
+(1 row)
+>>
+* insert into ega08t2 values (';',4);\g
+<<
+(1 row)
+>>
+* insert into ega08t2 values ('!',9);\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? sepesqlc driver.sc
+<<
+>>
+<<
+ESQL driver.sc:
+>>
+? sepcc driver.c
+<<
+>>
+<<
+driver.c
+>>
+? sepesqlc ega08.sc
+<<
+>>
+<<
+ESQL ega08.sc:
+>>
+? sepcc ega08.c
+<<
+>>
+<<
+ega08.c
+>>
+? sepcc drivereg.c
+<<
+>>
+<<
+drivereg.c
+>>
+? seplnk driver drivereg ega08 
+<<
+>>
+? run driver.exe SEPPARAMDRIVERDB -tega08
+<<
+TEST DRIVER
+source: driver.sc (Fri May 17 00:00:00 1991)
+REPEATE QUERIES
+
+
+XX-----------------XX
+XX tests scheduled XX
+XX-----------------XX
+   ega08
+XX-----------------XX
+
+connecting with database...
+
+XX running test ega08 XX
+
+4
+9
+ega08: done
+
+disconnecting with database...
+>>
+? delete driver.exe
+<<
+~
+>>
+? delete driver.sc
+<<
+~
+>>
+? delete driver.c
+<<
+~
+>>
+? delete driver.obj
+<<
+~
+>>
+? delete driver.o
+<<
+~
+>>
+? delete egstub.h
+<<
+~
+>>
+? delete drivereg.c
+<<
+~
+>>
+? delete drivereg.obj
+<<
+~
+>>
+? delete drivereg.o
+<<
+~
+>>
+? delete ega08.o
+<<
+~
+>>
+? delete ega08.obj
+<<
+~
+>>
+? delete ega08.c
+<<
+~
+>>
+
+Ending at: Thu Oct  8 16:37:51 1992
+
+

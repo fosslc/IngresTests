@@ -1,0 +1,585 @@
+/*
+	Test ID : eta08
+	Module  : user defined default
+	Filename: eta08.sep
+	Purpose	: To test that the correct USER-type default gets the 
+		correct values in a multiple session esqlc program.
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : eta08_dba_t1, eta08_user_t1, eta08_curr_user_t1, 
+			eta08_sess_user_t1, eta08_sys_user_t1, eta08_init_user_t1
+	Synopsis     : Connect to 3 sessions as different users. In
+		each session, create tables with the USER-type defaults
+		and check that the correct values are supplied in
+		each session.
+
+	History	: 7-Dec-1993	(camacho) created test.
+		  7-MAR-1997    (vissu01) Modified for NT
+	26-March-1999  (kamra01) modified VPG_SZ to 8192
+	12-jun-2003 (abbjo03)
+		Remove extraneous semicolon.
+*/
+? fill eta08.sc 
+!!
+/*
+**	eta08.sc
+**
+** This program will test the user defined defaults of $DBA,
+** USER, CURRENT_USER, SESSION_USER, SYSTEM_USER, and
+** INITIAL_USER in different sessions. It will open 3 sessions
+** and create a table with each default and a view on that table
+** that does not contain the default column. It will then insert
+** a row into that view so that Ingres will supply the default 
+** value for the hidden column. We then will select from the table
+** to see the inserted values.
+*/
+
+#include <stdio.h>
+
+drop_tables()
+{
+	printf("\nDropping Tables ....\n\n");
+	exec sql drop table eta08_dba_t1;
+	exec sql drop table eta08_user_t1;
+	exec sql drop table eta08_curr_user_t1;
+	exec sql drop table eta08_sess_user_t1;
+	exec sql drop table eta08_sys_user_t1;
+	exec sql drop table eta08_init_user_t1;
+}
+
+create_tables()
+{
+	printf("\nCreating Tables ....\n\n");
+	exec sql create table eta08_dba_t1 ( a i4, col c(50) WITH DEFAULT $DBA)with page_size=8192;
+	exec sql create view dba_v1 as select a from eta08_dba_t1;
+
+	exec sql create table eta08_user_t1 ( a i4, col c(50) WITH DEFAULT USER)with page_size=8192;
+	exec sql create view user_v1 as select a from eta08_user_t1;
+
+	exec sql create table eta08_curr_user_t1 
+		( a i4, col c(50) WITH DEFAULT CURRENT_USER)with page_size=8192;
+	exec sql create view curr_user_v1 as select a from eta08_curr_user_t1;
+
+	exec sql create table eta08_sess_user_t1
+		( a i4, col c(50) WITH DEFAULT SESSION_USER)with page_size=8192;
+	exec sql create view sess_user_v1 as select a from eta08_sess_user_t1;
+
+	exec sql create table eta08_sys_user_t1
+		( a i4, col c(50) WITH DEFAULT SYSTEM_USER)with page_size=8192;
+	exec sql create view sys_user_v1 as select a from eta08_sys_user_t1;
+
+	exec sql create table eta08_init_user_t1
+		( a i4, col c(50) WITH DEFAULT INITIAL_USER)with page_size=8192;
+	exec sql create view init_user_v1 as select a from eta08_init_user_t1;
+}
+
+insert_value(val)
+exec sql begin declare section;
+        int val;
+exec sql end declare section;
+{
+	printf("\nInserting value %d into tables.\n\n",val);
+
+	exec sql insert into dba_v1 values (:val);
+	exec sql insert into user_v1 values (:val);
+	exec sql insert into curr_user_v1 values (:val);
+	exec sql insert into sess_user_v1 values (:val);
+	exec sql insert into sys_user_v1 values (:val);
+	exec sql insert into init_user_v1 values (:val);
+}
+
+show_users(value)
+exec sql begin declare section;
+        int value;
+exec sql end declare section;
+{
+exec sql begin declare section;
+	char def[60];
+exec sql end declare section;
+
+exec sql select dbmsinfo('username') into :def;
+printf("\n\nDBMSinfo - username is : %s\n", def);
+
+	exec sql select col 
+	into :def 
+	from eta08_dba_t1
+	where a = :value;
+
+	printf("Default DBA is : %s\n", def);
+
+	exec sql select col 
+	into :def 
+	from eta08_user_t1
+	where a = :value;
+
+	printf("Default USER is : %s\n", def);
+
+	exec sql select col 
+	into :def 
+	from eta08_curr_user_t1
+	where a = :value;
+
+	printf("default CURRENT_USER is : %s\n", def);
+
+	exec sql select col 
+	into :def 
+	from eta08_sess_user_t1
+	where a = :value;
+
+	printf("default SESSION_USER is : %s\n", def);
+
+	exec sql select col 
+	into :def 
+	from eta08_sys_user_t1
+	where a = :value;
+
+	printf("default SYSTEM_USER is : %s\n", def);
+
+	exec sql select col 
+	into :def 
+	from eta08_init_user_t1
+	where a = :value;
+
+	printf("default INITIAL_USER is : %s\n", def);
+
+	exec sql commit;
+
+	return;
+}
+
+/***********/
+/* eta08() */
+/***********/
+
+eta08(db_name_ptr)
+exec sql begin declare section;
+	char *db_name_ptr;
+exec sql end declare section;
+{
+	printf("\n\n  connecting session 1 (testenv)...\n");
+	exec sql connect :db_name_ptr session 1 identified by testenv;
+	create_tables();
+ 	exec sql commit;
+
+	printf("  connecting session 2 (pvusr1)...\n");
+	exec sql connect :db_name_ptr session 2 identified by pvusr1;
+	create_tables();
+	exec sql commit; 
+
+	printf("  connecting session 3 (pvusr2)...\n");
+	exec sql connect :db_name_ptr session 3 identified by pvusr2;
+	create_tables();
+	exec sql commit; 
+
+	printf("\n\nSwitching to session 1 (testenv)...\n");
+	exec sql set_ingres ( session = 1 );
+	insert_value(1);
+	show_users(1);	
+
+	printf("\n\nSwitching to session 2 (pvusr1)...\n");
+	exec sql set_ingres ( session = 2 );
+	insert_value(1);
+	show_users(1);
+
+	printf("\n\nSwitching to session 3 (pvusr2)...\n");
+	exec sql set_ingres ( session = 3 );
+	insert_value(1);
+	show_users(1);
+
+	printf("\n\nSwitching to session 1 (testenv)...\n");
+	exec sql set_ingres ( session = 1 );
+	insert_value(2);
+	show_users(2);	
+
+	printf("\n\nSwitching to session 2 (pvusr1)...\n");
+	exec sql set_ingres ( session = 2 );
+	insert_value(2);
+	show_users(2);
+
+	printf("\n\nSwitching to session 3 (pvusr2)...\n");
+	exec sql set_ingres ( session = 3 );
+	insert_value(2);
+	show_users(2);
+
+	printf("\n\nSwitching to session 1 (testenv)...\n");
+	exec sql set_ingres ( session = 1 );
+	insert_value(3);
+	show_users(3);	
+
+	printf("\n\nSwitching to session 2 (pvusr1)...\n");
+	exec sql set_ingres ( session = 2 );
+	insert_value(3);
+	show_users(3);
+
+	printf("\n\nSwitching to session 3 (pvusr2)...\n");
+	exec sql set_ingres ( session = 3 );
+	insert_value(3);
+	show_users(3);
+
+	printf("\n\nSwitching to session 1 (testenv)...\n");
+	exec sql set_ingres ( session = 1 );
+	insert_value(4);
+	show_users(4);	
+
+	printf("\n\nSwitching to session 2 (pvusr1)...\n");
+	exec sql set_ingres ( session = 2 );
+	insert_value(4);
+	show_users(4);
+
+	printf("\n\nSwitching to session 3 (pvusr2)...\n");
+	exec sql set_ingres ( session = 3 );
+	insert_value(4);
+	show_users(4);
+
+	printf("\n\n  disconnecting session 1 (testenv)...\n");
+	exec sql set_ingres ( session = 1 );
+	exec sql commit;
+	exec sql disconnect session 1;
+
+	printf("  disconnecting session 2 (pvusr1)...\n");
+	exec sql set_ingres ( session = 2 );
+	exec sql disconnect session 2;
+
+	printf("  disconnecting session 3 (pvusr2)...\n\n\n");
+	exec sql set_ingres ( session = 3 );
+	exec sql disconnect session 3;
+
+} /* eta08() */
+
+main(argc, argv)
+int argc;
+char **argv;
+{
+eta08(argv[1]);
+}
+
+!!
+? qasetusertm testenv sql -s SEPPARAMDB 
+<<
+>>
+* drop table eta08_dba_t1;\g
+<<
+~
+>>
+* drop table eta08_user_t1;\g
+<<
+~
+>>
+* drop table eta08_curr_user_t1;\g
+<<
+~
+>>
+* drop table eta08_sess_user_t1;\g
+<<
+~
+>>
+* drop table eta08_sys_user_t1;\g
+<<
+~
+>>
+* drop table eta08_init_user_t1;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr1 sql -s SEPPARAMDB 
+<<
+>>
+* drop table eta08_dba_t1;\g
+<<
+~
+>>
+* drop table eta08_user_t1;\g
+<<
+~
+>>
+* drop table eta08_curr_user_t1;\g
+<<
+~
+>>
+* drop table eta08_sess_user_t1;\g
+<<
+~
+>>
+* drop table eta08_sys_user_t1;\g
+<<
+~
+>>
+* drop table eta08_init_user_t1;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? qasetusertm pvusr2 sql -s SEPPARAMDB 
+<<
+>>
+* drop table eta08_dba_t1;\g
+<<
+~
+>>
+* drop table eta08_user_t1;\g
+<<
+~
+>>
+* drop table eta08_curr_user_t1;\g
+<<
+~
+>>
+* drop table eta08_sess_user_t1;\g
+<<
+~
+>>
+* drop table eta08_sys_user_t1;\g
+<<
+~
+>>
+* drop table eta08_init_user_t1;\g
+<<
+~
+>>
+* \q
+<<
+>>
+? sepesqlc eta08.sc 
+<<
+ESQL eta08.sc:
+>>
+? sepcc eta08.c 
+<<
+>>
+<< IF (NT_GENERIC)
+eta08.c
+>>
+? seplnk eta08 
+<<
+>>
+? run eta08.exe SEPPARAMDB 
+<<
+
+  connecting session 1 (testenv)...
+
+Creating Tables ....
+
+  connecting session 2 (pvusr1)...
+
+Creating Tables ....
+
+  connecting session 3 (pvusr2)...
+
+Creating Tables ....
+
+
+
+Switching to session 1 (testenv)...
+
+Inserting value 1 into tables.
+
+
+
+DBMSinfo - username is : testenv
+Default DBA is : testenv
+Default USER is : testenv
+default CURRENT_USER is : testenv
+default SESSION_USER is : testenv
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : testenv
+
+
+Switching to session 2 (pvusr1)...
+
+Inserting value 1 into tables.
+
+
+
+DBMSinfo - username is : pvusr1
+Default DBA is : testenv
+Default USER is : pvusr1
+default CURRENT_USER is : pvusr1
+default SESSION_USER is : pvusr1
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : pvusr1
+
+
+Switching to session 3 (pvusr2)...
+
+Inserting value 1 into tables.
+
+
+
+DBMSinfo - username is : pvusr2
+Default DBA is : testenv
+Default USER is : pvusr2
+default CURRENT_USER is : pvusr2
+default SESSION_USER is : pvusr2
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : pvusr2
+
+
+Switching to session 1 (testenv)...
+
+Inserting value 2 into tables.
+
+
+
+DBMSinfo - username is : testenv
+Default DBA is : testenv
+Default USER is : testenv
+default CURRENT_USER is : testenv
+default SESSION_USER is : testenv
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : testenv
+
+
+Switching to session 2 (pvusr1)...
+
+Inserting value 2 into tables.
+
+
+
+DBMSinfo - username is : pvusr1
+Default DBA is : testenv
+Default USER is : pvusr1
+default CURRENT_USER is : pvusr1
+default SESSION_USER is : pvusr1
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : pvusr1
+
+
+Switching to session 3 (pvusr2)...
+
+Inserting value 2 into tables.
+
+
+
+DBMSinfo - username is : pvusr2
+Default DBA is : testenv
+Default USER is : pvusr2
+default CURRENT_USER is : pvusr2
+default SESSION_USER is : pvusr2
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : pvusr2
+
+
+Switching to session 1 (testenv)...
+
+Inserting value 3 into tables.
+
+
+
+DBMSinfo - username is : testenv
+Default DBA is : testenv
+Default USER is : testenv
+default CURRENT_USER is : testenv
+default SESSION_USER is : testenv
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : testenv
+
+
+Switching to session 2 (pvusr1)...
+
+Inserting value 3 into tables.
+
+
+
+DBMSinfo - username is : pvusr1
+Default DBA is : testenv
+Default USER is : pvusr1
+default CURRENT_USER is : pvusr1
+default SESSION_USER is : pvusr1
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : pvusr1
+
+
+Switching to session 3 (pvusr2)...
+
+Inserting value 3 into tables.
+
+
+
+DBMSinfo - username is : pvusr2
+Default DBA is : testenv
+Default USER is : pvusr2
+default CURRENT_USER is : pvusr2
+default SESSION_USER is : pvusr2
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : pvusr2
+
+
+Switching to session 1 (testenv)...
+
+Inserting value 4 into tables.
+
+
+
+DBMSinfo - username is : testenv
+Default DBA is : testenv
+Default USER is : testenv
+default CURRENT_USER is : testenv
+default SESSION_USER is : testenv
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : testenv
+
+
+Switching to session 2 (pvusr1)...
+
+Inserting value 4 into tables.
+
+
+
+DBMSinfo - username is : pvusr1
+Default DBA is : testenv
+Default USER is : pvusr1
+default CURRENT_USER is : pvusr1
+default SESSION_USER is : pvusr1
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : pvusr1
+
+
+Switching to session 3 (pvusr2)...
+
+Inserting value 4 into tables.
+
+
+
+DBMSinfo - username is : pvusr2
+Default DBA is : testenv
+Default USER is : pvusr2
+default CURRENT_USER is : pvusr2
+default SESSION_USER is : pvusr2
+default SYSTEM_USER is : testenv
+default INITIAL_USER is : pvusr2
+
+
+  disconnecting session 1 (testenv)...
+  disconnecting session 2 (pvusr1)...
+  disconnecting session 3 (pvusr2)...
+
+
+
+>>
+<<
+>>
+? delete eta08.c 
+<<
+~
+>>
+? delete eta08.o 
+<<
+~
+>>
+? delete eta08.obj 
+<<
+~
+>>
+? delete eta08.exe
+<<
+~
+>>
+
+
+Ending at: Fri Jun  4 13:28:28 1993

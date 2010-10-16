@@ -1,0 +1,1490 @@
+/*
+	Test Name: pza02sc.sep
+	Time: 26-AUG-1991 15:33:55
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : pza02sc
+	Module  : 3gl
+	Filename: pza02sc.sep
+	Purpose	: To test basic tablefield operations using a 3gl application
+	Input Files  :
+	Output Files :	apxc.qry, apxc.sc, person.dat, person.frm
+	Database     :	SEPPARAMDB (personnel)
+	Tables       :	person
+	Synopsis     :	This application uses an ingres form to display data
+			in a tablefield. The application then tests basic
+			tablefield operations--deletes, scrolls, searches,
+			validates--then unloads the tablefield to 
+			correspondingly update, insert and delete data from 
+			the person table. The application also defines one 
+			savepoint and one cursor.
+
+	History: 26-AUG-1991	Created				Author: saundra
+		 01-JUL-1992  	Modified (jpark)
+			Modified filenames to conform to DOS specs of
+			8 character filenames and 3 character extensions.
+			Also, replaced hard-code database names to 
+			SEPPARAMDB.
+		 31-JUL-1992	Modified (bobs)
+			Changed type of variable "record" from int to long.
+                 18-FEB-1993    Modified (bobs)
+                        Added "int" return from main (apxb.sc) and added
+                        "exit(0)" at end of main program, for compatibility
+                        with Tools for Windows.
+		22-FEB-1993	Modified (jpark)
+			Moved all of the delete commands to the beginning
+			of test from the end of test to conform to testing
+			standards.
+		20-AUG-1993	Modified (alices) helping jbryson to update
+			apxc.sc for 6.5.
+			Delete all intermediate files that are generated
+			by the language compiler.
+		23-NOV-1993	Modified (jbryson) Removed unused compiled
+                        forms.  I don't know why the compiled forms were even
+                        used, since the source code does not use them.
+          20-Jan-1995	(qiuji01)   Changed canon for copyright.
+			Replaced deleter with delobj.
+          01-Apr-1997	(chiel02)  Modified for Windows NT.
+                                   Added an alternate canon for the sepcc command.
+                                   Changed the delobj command to its correct syntax.
+          07-Apr-1998	(uptad01)  Added alternate cannon for COPYFORM as it
+                         Diffs on leading and trailing white spaces
+          30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
+
+*/
+? delete apxc.c 
+<<
+~
+>>
+? delete apxc.exe 
+<<
+~
+>>
+? delete apxc.o 
+<<
+~
+>>
+? delete apxc.obj 
+<<
+~
+>>
+? delobj SEPPARAMDB -form personfrm 
+<<
+~
+>>
+? fill person.dat 
+!!
+neil goodman	28	100
+mark wittenberg	32	101
+barbara banks	39	102
+joe cortopassi	26	103
+peter shmitz	27	104
+duck daffey	18	105
+qaddafy muamar	46	106
+billie goodman	3	109
+arthur hochberg	33	110
+!!
+? fill apxc.qry 
+!!
+create person (name = c20, age = i2, number = i4)\p\g
+copy person (name = c0tab, age = c0tab, number=c0nl) from
+	"person.dat"\p\g
+print person\p\g
+!!
+? fill apxc.sc 
+!!
+EXEC SQL include sqlca;
+
+EXEC SQL declare person table
+           (name      char(20),    /* Person name */
+            age       smallint,    /* Age */
+            number    integer);    /* Unique id number */
+
+/*
+** Procedure: MAIN
+** Purpose: Entry point into Table Editor program.
+*/
+
+int main(argc,argv)
+int  argc;
+EXEC SQL BEGIN DECLARE SECTION;
+char *argv[];
+EXEC SQL END DECLARE SECTION;
+{
+/* Table field row states */
+# define stUNDEF       0   /* Empty or undefined row */
+# define stNEW         1   /* Appended by user */
+# define stUNCHANGED   2   /* Loaded by program - not updated */
+# define stCHANGE      3   /* Loaded by program - since changed */
+# define stDELETE      4   /* Deleted by program */
+
+# define NOT_FOUND   100   /* SQLCA value for no rows */
+
+   EXEC SQL BEGIN DECLARE SECTION;
+
+      /* Person information */
+      char   pname[21];     /* Full name (with C null) */
+      int    page,          /* Age of person */
+             pnumber;       /* Unique person number */
+      int    maxid;         /* Max person id number */
+
+      /* Table field entry information */
+      int    state,         /* State of data set entry */
+             record,        /* Record number */
+             lastrow;       /* Last row in table field */
+
+      /* Utility buffers */
+      char   msgbuf[100],   /* Message buffer */
+             respbuf[256];  /* Response buffer */
+
+   EXEC SQL END DECLARE SECTION;
+
+   int update_error;      /* Update error from database */
+   int xact_aborted;      /* Transaction aborted */
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+
+   /* Set up error handling for main program */
+   EXEC SQL WHENEVER SQLWARNING CONTINUE;
+   EXEC SQL WHENEVER NOT FOUND CONTINUE;
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   /* Start up INGRES and the INGRES/FORMS system */
+   EXEC SQL CONNECT :argv[1];
+
+   EXEC FRS FORMS;
+
+   /* Verify that the user can edit the "person" table */
+   EXEC FRS PROMPT NOECHO ('Password for table editor: ',:respbuf);
+
+   if (strcmp(respbuf, "MASTER_OF_ALL") != 0)
+   {
+      EXEC FRS MESSAGE 'No permission for task. Exiting . . .';
+      EXEC FRS ENDFORMS;
+      EXEC SQL DISCONNECT;
+      exit( 1 );
+   }
+
+   /* We assume no SQL errors can happen during screen updating */
+   EXEC SQL WHENEVER SQLERROR CONTINUE;
+
+   EXEC FRS MESSAGE 'Initializing Person Form . . .';
+   EXEC FRS FORMINIT personfrm;
+
+   /*
+   ** Initialize "persontbl" table field with a data set in FILL 
+   ** mode, so that the run-time user can append rows. To keep 
+   ** track of events occurring to original rows loaded into the 
+   ** table field, hide the unique person number.
+   */
+   EXEC FRS INITTABLE personfrm persontbl FILL (number = integer);
+
+   maxid = Load_Table();
+
+   EXEC FRS DISPLAY personfrm UPDATE;
+   EXEC FRS INITIALIZE;
+
+   EXEC FRS ACTIVATE MENUITEM 'Top';
+   EXEC FRS BEGIN;
+      /*
+      ** Provide menu items, as well as the system FRS key,
+      ** to scroll to both extremes of the table field.
+      */
+      EXEC FRS SCROLL personfrm persontbl TO 1;
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Bottom';
+   EXEC FRS BEGIN;
+      EXEC FRS SCROLL personfrm persontbl TO END; /* Forward */
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Remove';
+   EXEC FRS BEGIN;
+      /*
+      ** Remove the person in the row the user's cursor is on.
+      ** If there are no persons, exit operation with message.
+      ** Note that this check cannot really happen, as there is 
+      ** always an UNDEFINED row in FILL mode.
+      */
+      EXEC FRS INQUIRE_FRS TABLE personfrm 
+               (:lastrow = LASTROW(persontbl));
+      if (lastrow == 0)
+      {
+            EXEC FRS MESSAGE 'nobody to remove';
+            EXEC FRS SLEEP 2;
+            EXEC FRS RESUME FIELD persontbl;
+      }
+      EXEC FRS DELETEROW personfrm persontbl; /* Record later */
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Find';
+   EXEC FRS BEGIN;
+      /*
+      ** Scroll user to the requested table field entry.
+      ** Prompt the user for a name, and if one is typed in,
+      ** loop through the data set searching for it.
+      */
+      EXEC FRS PROMPT ('Person''s name : ', :respbuf);
+      if (respbuf[0] == '\0')
+          EXEC FRS RESUME FIELD persontbl;
+
+      EXEC FRS UNLOADTABLE personfrm persontbl 
+            (:pname = name,
+             :record = _record,
+             :state = _state);
+      EXEC FRS BEGIN;
+
+         /* Do not compare with deleted rows */
+         if ((strcmp(pname, respbuf) == 0) &&
+             (state != stDELETE))
+         {
+            EXEC FRS SCROLL personfrm persontbl
+                     TO :record;
+            EXEC FRS RESUME FIELD persontbl;
+         }
+
+      EXEC FRS END;
+
+      /* Fell out of loop without finding name */
+      sprintf(msgbuf,
+            "Person \"%s\" not found in table [HIT RETURN] ",
+            respbuf);
+      EXEC FRS PROMPT NOECHO (:msgbuf, :respbuf);
+   EXEC FRS END;
+
+   EXEC FRS ACTIVATE MENUITEM 'Exit';
+   EXEC FRS BEGIN;
+      EXEC FRS VALIDATE FIELD persontbl;
+      EXEC FRS BREAKDISPLAY;
+   EXEC FRS END;
+   EXEC FRS FINALIZE;
+
+   /*
+   ** Exit person table editor and unload the table field. If any
+   ** updates, deletions or additions were made, duplicate these
+   ** changes in the source table. If the user added new people,
+   ** assign a unique id to each person before adding the person 
+   ** to the table. To do this, increment the previously-saved 
+   ** maximum id number with each insert.
+   */
+
+   /* Do all the updates within a transaction */
+   EXEC SQL SAVEPOINT savept;
+
+   /*
+   ** Hard code the error handling within the UNLOADTABLE loop, as
+   ** we want to cleanly exit the loop.
+   */
+   EXEC SQL WHENEVER SQLERROR CONTINUE;
+
+   update_error = 0;
+   xact_aborted = 0;
+
+   EXEC FRS MESSAGE 'Exiting Person Application . . .';
+   EXEC FRS UNLOADTABLE personfrm persontbl 
+            (:pname = name, :page = age,
+             :pnumber = number, :state = _state);
+   EXEC FRS BEGIN;
+
+      /* Appended by user. Insert with new unique id. */
+      if (state == stNEW)
+      {
+         maxid = maxid + 1;
+         EXEC SQL INSERT INTO person (name, age, number)
+                        VALUES (:pname, :page, :maxid);
+      }
+      /* Updated by user. Reflect in table. */
+      else if (state == stCHANGE)
+      {
+         EXEC SQL UPDATE person SET
+                    name = :pname, age = :page
+                    WHERE number = :pnumber;
+      }
+      /*
+      ** Deleted by user, so delete from table. Note that only
+      ** original rows, not rows appended at run-time, are
+      ** saved by the program.
+      */
+      else if (state == stDELETE)
+      {
+         EXEC SQL DELETE FROM person
+                        WHERE number = :pnumber;
+      }
+      /* Else undefined or unchanged - No updates */
+
+      /*
+      ** Handle error conditions - 
+      ** If an error occurred, abort the transaction.
+      ** If no rows were updated, inform user and prompt
+      ** for continuation.
+      */
+      if (sqlca.sqlcode < 0) /* Error */
+      {
+         EXEC SQL INQUIRE_SQL (:msgbuf = ERRORTEXT);
+         EXEC SQL ROLLBACK TO savept;
+         update_error = 1;
+         xact_aborted = 1;
+         EXEC FRS ENDLOOP;
+      }
+      else if (sqlca.sqlcode == NOT_FOUND)
+      {
+         sprintf(msgbuf,
+                     "Person \"%s\" not updated. Abort all updates? ",
+                      pname);
+         EXEC FRS PROMPT (:msgbuf, :respbuf);
+         if (respbuf[0] == 'Y' || respbuf[0] == 'y')
+         {
+            EXEC SQL ROLLBACK TO savept;
+            xact_aborted = 1;
+            EXEC FRS ENDLOOP;
+         }
+      }
+
+   EXEC FRS END;
+
+   if (!xact_aborted)
+       EXEC SQL COMMIT; /* Commit the updates */
+
+   EXEC FRS ENDFORMS; /* Terminate the FORMS and INGRES */
+   EXEC SQL DISCONNECT;
+
+   if (update_error)
+   {
+      printf( "Your updates were aborted because of error:\n" );
+      printf( msgbuf );
+      printf( "\n" );
+   }
+
+   exit(0);
+} /* Main Program */
+
+/*
+** Procedure: Load_Table
+** Purpose:   Load the table field from the "person" table. The
+**            columns "name" and "age" will be displayed, and 
+**            "number" will be hidden.
+** Parameters:
+**             None
+** Returns:
+**             Maximum employee number
+*/
+
+int
+Load_Table()
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      /* Person information */
+      char pname[21];   /* Full name */
+      int  page,        /* Age of person */
+           pnumber;     /* Unique person number */
+      int  maxid;       /* Max person id number to return */
+   EXEC SQL END DECLARE SECTION;
+
+   EXEC SQL DECLARE loadtab CURSOR FOR 
+             SELECT name, age, number
+               FROM person;
+
+   /* Set up error handling for loading procedure */
+   EXEC SQL WHENEVER SQLERROR STOP;
+   EXEC SQL WHENEVER NOT FOUND GOTO Load_End;
+
+   EXEC FRS message 'Loading Person Information . . .';
+
+   /* Fetch the maximum person id number for later use */
+   EXEC SQL SELECT MAX(number)
+              INTO :maxid
+              FROM person;
+
+   EXEC SQL open loadtab;
+
+   while (sqlca.sqlcode == 0)
+   {
+      /* Fetch data into record and load table field */
+      EXEC SQL FETCH loadtab INTO :pname, :page, :pnumber;
+
+      EXEC FRS LOADTABLE personfrm persontbl 
+               (name = :pname, age = :page, number = :pnumber);
+   }
+
+Load_End:
+   EXEC SQL WHENEVER SQLERROR CONTINUE;
+   EXEC SQL CLOSE loadtab;
+
+   return maxid;
+
+} /* Load_Table */
+!!
+? quel SEPPARAMDB 
+<<
+~
+>>
+* destroy person\g
+<<
+~
+>>
+* \i apxc.qry 
+<<
+create person (name = c20, age = i2, number = i4)
+copy person (name = c0tab, age = c0tab, number=c0nl) from
+	"person.dat"
+(9 rows)
+print person
+
+person table
+
++--------------------+------+-------------+
+|name                |age   |number       |
++--------------------+------+-------------+
+|neil goodman        |    28|          100|
+|mark wittenberg     |    32|          101|
+|barbara banks       |    39|          102|
+|joe cortopassi      |    26|          103|
+|peter shmitz        |    27|          104|
+|duck daffey         |    18|          105|
+|qaddafy muamar      |    46|          106|
+|billie goodman      |     3|          109|
+|arthur hochberg     |    33|          110|
++--------------------+------+-------------+
+(9 rows)
+continue
+* 
+>>
+* \q 
+<<
+~
+>>
+? fill person.frm 
+!!
+COPYFORM:	6.0	18-mar-1988
+FORM:	personfrm		
+	80	23	0	0	1	0	1	6	0	0	0	0	0	0	0	3
+FIELD:
+	0	persontbl	0	4	0	2	8	27	7	16	1	3	0		0	0	0	33	0	0	0					1	0
+	0	name	32	20	0	20	1	20	0	1	20	0	1	Name	1	1	0	0	0	0	0		c20			2	1
+	1	age	30	4	0	4	1	4	0	22	4	0	22	Age	22	1	0	0	0	0	0		-i4			2	2
+TRIM:
+	16	5	Person Form: Browser	0	0	0	0
+!!
+? copyform -i -r SEPPARAMDB person.frm 
+<<
+INGRES COPYFORM Copyright (c) 1984, 1991 Ingres Corporation
+Copied form 'personfrm' to database.
+Encoding forms into database . . .
+>>
+<< IF (NT_GENERIC) 
+INGRES COPYFORM Copyright (c) 1984, 1997 Ingres Corporation
+>>
+? esqlc apxc.sc 
+<<
+>>
+<<
+ESQL apxc.sc:
+>>
+? sepcc apxc 
+<<
+>>
+<<
+apxc.c
+>>
+? seplnk apxc 
+<<
+>>
+? ferun apxc.exe SEPPARAMDB 
+<<
+~
+>>
+^^ MASSTER_OF_ALL`CR'`ESC'
+<<
+
+%% PROMPT: Password for table editor: 
+
+%% PROMPT RESPONSE: MASSTER_OF_ALL
+
+%%  
+%% No permission for task. Exiting . . .
+>>
+? ferun apxc.exe SEPPARAMDB 
+<<
+~
+>>
+^^ MASTER_OF_ALL`CR'`ESC'
+<<
+
+%% PROMPT: Password for table editor: 
+
+%% PROMPT RESPONSE: MASTER_OF_ALL
+
+%%  
+%% Initializing Person Form . . .
+%% Loading Person Information . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |_neil goodman        |28  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<<
+
+%% PROMPT: Password for table editor: 
+
+%% PROMPT RESPONSE: MASTER_OF_ALL
+
+%%  
+%% Initializing Person Form . . .
+%% Loading Person Information . . .
+%%    
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |_neil goodman        |28  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% PROMPT: Password for table editor: 
+
+%% PROMPT RESPONSE: MASTER_OF_ALL
+
+%%  
+%% Initializing Person Form . . .
+%% Loading Person Information . . .
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |_neil goodman        |28  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ bottom`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Bottom
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Bottom"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |duck daffey         |18  |                                     |
+|                |qaddafy muamar      |46  |                                     |
+|                |billie goodman      |3   |                                     |
+|                |_arthur hochberg     |33  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Bottom
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Bottom"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |duck daffey         |18  |                                     |
+|                |qaddafy muamar      |46  |                                     |
+|                |billie goodman      |3   |                                     |
+|                |_arthur hochberg     |33  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ remove`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Remove
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Remove"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |peter shmitz        |27  |                                     |
+|                |duck daffey         |18  |                                     |
+|                |qaddafy muamar      |46  |                                     |
+|                |_billie goodman      |3   |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Remove
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Remove"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |peter shmitz        |27  |                                     |
+|                |duck daffey         |18  |                                     |
+|                |qaddafy muamar      |46  |                                     |
+|                |_billie goodman      |3   |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ remove`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Remove
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Remove"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |joe cortopassi      |26  |                                     |
+|                |peter shmitz        |27  |                                     |
+|                |duck daffey         |18  |                                     |
+|                |_qaddafy muamar      |46  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Remove
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `2' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `2' is "Remove"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |joe cortopassi      |26  |                                     |
+|                |peter shmitz        |27  |                                     |
+|                |duck daffey         |18  |                                     |
+|                |_qaddafy muamar      |46  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ top`CR'SAM NEILL`TAB'46`ESC'
+<<
+
+%% MENU RESPONSE: Top
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Top"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |_neil goodman        |28  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |SAM NEILL_man        |28  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Age
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |SAM NEILLman        |46_  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Top
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Top"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |_neil goodman        |28  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% CHANGED FIELD Name
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |SAM NEILL_man        |28  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+
+%% CHANGED FIELD Age
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |SAM NEILLman        |46_  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+>>
+^^ find`CR'billie goodman`CR'`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Find
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Find"
+
+%% PROMPT: Person's name : 
+
+%% PROMPT RESPONSE: billie goodman
+
+%%  
+%% PROMPT: Person "billie goodman" not found in table [HIT RETURN] 
+
+%% PROMPT RESPONSE: 
+
+%%  
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |SAM NEILLman        |_46  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Find
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Find"
+
+%% PROMPT: Person's name : 
+
+%% PROMPT RESPONSE: billie goodman
+
+%%  
+%% PROMPT: Person "billie goodman" not found in table [HIT RETURN] 
+
+%% PROMPT RESPONSE: 
+
+%%  
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |SAM NEILLman        |_46  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ find`CR'duck daffey`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Find
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Find"
+
+%% PROMPT: Person's name : 
+
+%% PROMPT RESPONSE: duck daffey
+
+%%  
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                |peter shmitz        |27  |                                     |
+|                |_duck daffey         |18  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Find
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `3' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `3' is "Find"
+
+%% PROMPT: Person's name : 
+
+%% PROMPT RESPONSE: duck daffey
+
+%%  
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                |peter shmitz        |27  |                                     |
+|                |_duck daffey         |18  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ exit`CR'
+<<
+
+%% MENU RESPONSE: Exit
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `4' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `4' is "Exit"
+
+%% Exiting Person Application . . .
+>>
+? ferun apxc.exe SEPPARAMDB 
+<<
+~
+>>
+^^ MASTER_OF_ALL`CR'`ESC'
+<<
+~
+>>
+^^ Bottom`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Bottom
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Bottom"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |joe cortopassi      |26  |                                     |
+|                |peter shmitz        |27  |                                     |
+|                |duck daffey         |18  |                                     |
+|                |_qaddafy muamar      |46  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Bottom
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `1' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `1' is "Bottom"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |joe cortopassi      |26  |                                     |
+|                |peter shmitz        |27  |                                     |
+|                |duck daffey         |18  |                                     |
+|                |_qaddafy muamar      |46  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ Top`CR'`ESC'
+<<
+
+%% MENU RESPONSE: Top
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Top"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |_SAM NEILLman        |46  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+<< IF (NT_GENERIC) 
+
+%% MENU RESPONSE: Top
+%% MENU:   Top  Bottom  Remove  Find  Exit
+%% MENU AT POSITION `0' SELECTED VIA A FUNCTION/PF KEY
+
+%% MENU AT POSITION `0' is "Top"
+
+%% INSERT loop:
+##
+__________________________________________________________________________________
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                Person Form: Browser                                            |
+|                                                                                |
+|                +-------------------------+                                     |
+|                |Name                |Age |                                     |
+|                |--------------------+----|                                     |
+|                |_SAM NEILLman        |46  |                                     |
+|                |mark wittenberg     |32  |                                     |
+|                |barbara banks       |39  |                                     |
+|                |joe cortopassi      |26  |                                     |
+|                +-------------------------+                                     |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|                                                                                |
+|  Top  Bottom  Remove  Find  Exit                                               |
+__________________________________________________________________________________
+@@
+
+%% MENU KEY selected
+>>
+^^ exit`CR'
+<<
+~
+>>
+? delete apxc.c 
+<<
+~
+>>
+? delete apxc.exe 
+<<
+~
+>>
+? delete apxc.o 
+<<
+~
+>>
+? delete apxc.obj 
+<<
+~
+>>
+
+
+Ending at: Tue Apr 07 11:13:09 1998

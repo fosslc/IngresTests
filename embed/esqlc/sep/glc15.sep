@@ -1,0 +1,295 @@
+/*
+	Test Name: pza14sc.sep
+	Time: Tue Oct  5 16:15:40 1993
+	User Name: jbryson
+	Terminal type: septerm
+ 
+	Test ID : pza14sc
+	Module  : 3gl
+	Filename: pza14sc.sep
+	Purpose	: test the Long Varchar Data Type (BLOB)
+	Input Files  :
+	Output Files :
+	Database     : SEPPARAMDB
+	Tables       : blobtable
+	Synopsis     : Uses the Callback Method (DATAHANDER) for
+		       the BLOB datatype.  Attempts to do some
+		       distructive DATAHANDER usage with regard
+		       to multi-session and BLOBS.  Will generate
+		       several errors where appropriate.
+
+ History: 5-Oct-1993	(jbryson)	Created
+          02-Apr-1997  Modified (chiel02)
+                       Added an alternate canon for the sepcc command.
+                       Removed the platform specifications of the canons 
+                       for the esqlc command to make it work under NT. 
+*/
+? delete pza14sc.c 
+<<
+~
+>>
+? delete pza14sc.o 
+<<
+~
+>>
+? delete pza14sc.obj 
+<<
+~
+>>
+? delete pza14sc.exe 
+<<
+~
+>>
+? fill pza14sc.sql 
+!!
+create table blobtable (
+       intcol integer,
+       lvchcol long varchar)\p\g
+insert into blobtable values
+   (1,'This is blob row #1')\p\g
+insert into blobtable values
+   (2,'This is blob row #2 - just a little longer!')\p\g
+insert into blobtable values
+   (3,'This is blob row #3')\p\g
+insert into blobtable values
+   (4,'This is blob row #4')\p\g
+insert into blobtable values
+   (5,null)\p\g
+insert into blobtable values
+   (6,'This is blob row #6 after a NULL row.')\p\g
+
+!!
+? sql -s SEPPARAMDB 
+<<
+~
+>>
+* drop table blobtable\g 
+<<
+~
+>>
+* \i pza14sc.sql 
+<<
+ 
+ create table blobtable (
+       intcol integer,
+       lvchcol long varchar)
+insert into blobtable values
+   (1,'This is blob row #1')
+(1 row)
+insert into blobtable values
+   (2,'This is blob row #2 - just a little longer!')
+(1 row)
+insert into blobtable values
+   (3,'This is blob row #3')
+(1 row)
+insert into blobtable values
+   (4,'This is blob row #4')
+(1 row)
+insert into blobtable values
+   (5,null)
+(1 row)
+insert into blobtable values
+   (6,'This is blob row #6 after a NULL row.')
+(1 row)
+>>
+* \q 
+<<
+~
+>>
+? fill pza14sc.sc 
+!!
+#include    <stdio.h>
+#include    <string.h>	
+exec sql include sqlca;
+
+int     My_OutputHdlr();
+
+EXEC SQL BEGIN DECLARE SECTION;
+char dbname[31];
+EXEC SQL END DECLARE SECTION;
+
+main(argc,argv)
+int     argc;
+char*   argv[];
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+	char    blob[31];
+	short	ind;
+	int     i;
+	int	seg_len = 30;
+        int     got_seglen;
+        int     data_end;
+   EXEC SQL END DECLARE SECTION;
+
+   if (argc < 2)
+   {
+      printf("Usage: %s <database name>\n",argv[0]);
+      exit(1);
+   }
+   EXEC SQL WHENEVER SQLERROR STOP;
+
+   strcpy(dbname,argv[1]);
+   EXEC SQL CONNECT :dbname SESSION 1;
+
+   EXEC SQL WHENEVER SQLERROR CALL SQLPRINT;
+
+   EXEC SQL declare c1 cursor for SELECT intcol,lvchcol
+	FROM blobtable;
+
+   printf("Cursor select from blob table...\n");
+   EXEC SQL OPEN c1 FOR READONLY;
+   while(1)
+   {
+      EXEC SQL FETCH c1 into :i,DATAHANDLER(My_OutputHdlr(blob)):ind;
+      if (sqlca.sqlcode)
+         break;
+
+      printit(i,blob,ind);
+   }
+   EXEC SQL CLOSE c1;
+
+   printf("**** GET DATA out of datahandler\n");
+   EXEC SQL GET DATA(:blob = SEGMENT, :got_seglen = SEGMENTLENGTH,
+		      :data_end = DATAEND) WITH MAXLENGTH = :seg_len;
+
+   printf("**** ENDDATA out of datahandler\n");
+   EXEC SQL ENDDATA;
+
+   printf("**** PUT DATA out of datahandler\n");
+   EXEC SQL PUT DATA (SEGMENT = :blob,
+		      SEGMENTLENGTH = :seg_len);
+
+   EXEC SQL DISCONNECT ALL;
+}
+
+/******************************************************/
+printit(i,blob,ind)
+EXEC SQL BEGIN DECLARE SECTION;
+   char*   blob;
+   int     i;
+   short   ind;
+EXEC SQL END DECLARE SECTION;
+{
+
+   switch(ind)
+   {
+      case 0:
+         printf("blob#%d blob=%s=\n",i,blob);
+	 break;
+      case -1: 
+         printf("blob#%d **blobind=%d **NULL**\n",i,ind);
+	 break;
+      default:
+	 printf("blob#%d length=%d blob=%.*s=\n",i,ind,ind,blob);
+   }
+
+   if(sqlca.sqlwarn.sqlwarn1 != ' ')
+   {
+      printf("sqlca.sqlwarn.sqlwarn1=%c=\n",sqlca.sqlwarn.sqlwarn1);
+      sqlca.sqlwarn.sqlwarn1 = ' ';
+   }
+
+}
+
+/******************************************************/
+some_routine()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+   int i;
+EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL CONNECT :dbname SESSION 2;
+
+    EXEC SQL SELECT COUNT(*) INTO :i FROM blobtable;
+    printf("the count=%d\n",i);
+    
+    EXEC SQL DISCONNECT SESSION 2;
+    EXEC SQL SET_SQL (SESSION = 1);
+}
+
+/******************************************************/
+My_OutputHdlr(segment)
+EXEC SQL BEGIN DECLARE SECTION;
+   char *segment;
+EXEC SQL END DECLARE SECTION;
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+	int	seg_len = 30;
+        int     got_seglen;
+        int     data_end;
+    EXEC SQL END DECLARE SECTION;
+
+    data_end = 0;
+
+    EXEC SQL GET DATA(:segment = SEGMENT, :got_seglen = SEGMENTLENGTH,
+		      :data_end = DATAEND) WITH MAXLENGTH = :seg_len;
+
+    segment[got_seglen] = '\0';
+
+    some_routine();
+
+    if(!data_end)
+        EXEC SQL ENDDATA;
+}
+!!
+? esqlc pza14sc.sc 
+<< 
+ESQL pza14sc.sc:
+>>
+<< 
+>>
+? sepcc pza14sc 
+<<
+>>
+<<
+pza14sc.c
+>>
+? seplnk pza14sc 
+<<
+>>
+? run pza14sc.exe SEPPARAMDB 
+<<
+Cursor select from blob table...
+the count=6
+blob#1 blob=This is blob row #1=
+the count=6
+blob#2 blob=This is blob row #2 - just a l=
+the count=6
+blob#3 blob=This is blob row #3=
+the count=6
+blob#4 blob=This is blob row #4=
+blob#5 **blobind=-1 **NULL**
+the count=6
+blob#6 blob=This is blob row #6 after a NU=
+**** GET DATA out of datahandler
+E_LQ00E2 The GET DATA statement may only be issued from within a
+    datahandler specified for retrieving data.
+
+**** ENDDATA out of datahandler
+E_LQ00E2 The ENDDATA statement may only be issued from within a
+    datahandler specified for retrieving data.
+
+**** PUT DATA out of datahandler
+E_LQ00E5 The PUT DATA statement may only be issued from within a
+    datahandler specified for inserting data.
+
+>>
+? delete pza14sc.c 
+<<
+~
+>>
+? delete pza14sc.o 
+<<
+~
+>>
+? delete pza14sc.obj 
+<<
+~
+>>
+? delete pza14sc.exe 
+<<
+~
+>>
+
+
+Ending at: Tue Oct  5 17:02:05 1993

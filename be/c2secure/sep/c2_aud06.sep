@@ -1,0 +1,257 @@
+/*
+	Test Name: 
+	Time: Wed Jan 20 12:21:14 1993
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : (TBD)
+	Module  : 
+	Filename:	c2csa02.sep
+	Purpose	:	to test CREATE SECURITY_ALARM
+	Input Files  :
+	Output Files :
+	Database     :	SEPPARAMDB,iidbdb
+	Tables       :	test1,test2,test3,test4
+                        ingtest1,ingtest2,ingtest3
+                        catalogtab
+	Synopsis     :	Creating a security_alarm when the creator:
+                        - is /is not the DBA
+                        - is /is not the table owner
+                        (DBA of SEPPARAMDB is user testenv)
+                        (only user $ingres can create a security_alarm on
+                         catalog-tables in iidbdb, in order to test this
+                         a new table will be created, so no other users
+                         will be affected)
+
+
+ History: 18-Jan-1993	(jrimpler)	Created
+           4-Jan-1995   (holla02)       Modified - made sql calls silent,
+                                        updated canons
+          28-Feb-1995	(holla02)  Took new canons after E_PS04D1 text was
+                                   altered as fix for bug #66256
+	  01-Apr-1999	(vande02) Hard-coded VPG_SZ to 4K
+*/
+? fill init1.qry 
+!!
+create table test1 (col1 integer) with page_size=4096;\g
+create table test2 (col1 integer) with page_size=4096;\g
+create table test3 (col1 integer) with page_size=4096;\g
+grant all on table test3 to public;\g
+!!
+? fill init2.qry 
+!!
+create table ingtab1 (col1 integer) with page_size=4096;\g
+create table ingtab2 (col1 integer) with page_size=4096;\g
+create table ingtab3 (col1 integer) with page_size=4096;\g
+grant all on table ingtab3 to public;\g
+!!
+? fill init3.qry 
+!!
+create table catalogtab (col1 integer) with page_size=4096;\g
+!!
+? fill drop1.qry 
+!!
+drop table test1;\g
+drop table test2;\g
+drop table test3;\g
+!!
+? fill drop2.qry 
+!!
+drop table ingtab1;\g
+drop table ingtab2;\g
+drop table ingtab3;\g
+!!
+? sql -utestenv -s SEPPARAMDB 
+<<
+>>
+* \i init1.qry 
+<<
+>>
+* \q 
+<<
+>>
+? sql -uingres -s SEPPARAMDB 
+<<
+>>
+* \i init2.qry 
+<<
+>>
+* create security_alarm on table test2;\g 
+<<
+E_PS04D1 'test2' is not owned by you. Security alarms may not be
+    created/dropped on objects not owned by you.
+    (Tue Feb 28 17:42:22 1995)
+
+>>
+* create security_alarm on table ingtab3;\g 
+<<
+>>
+* \q 
+<<
+>>
+? sql -utestenv -s SEPPARAMDB 
+<<
+>>
+* create security_alarm on table 'ingres'.ingtab2;\g 
+<<
+E_PS04D1 'ingtab2' is not owned by you. Security alarms may not be
+    created/dropped on objects not owned by you.
+    (Tue Feb 28 17:42:39 1995)
+
+>>
+* create security_alarm on table 'ingres'.ingtab3;\g 
+<<
+E_PS04D1 'ingtab3' is not owned by you. Security alarms may not be
+    created/dropped on objects not owned by you.
+    (Tue Feb 28 17:42:57 1995)
+
+>>
+* create security_alarm on table test3;\g 
+<<
+>>
+* create security_alarm on table test3 if failure;\g 
+<<
+>>
+* create security_alarm on test3 if success;\g 
+<<
+>>
+* create security_alarm on test3 if success, failure;\g 
+<<
+>>
+* create security_alarm on test3 when select;\g 
+<<
+>>
+* create security_alarm on test3 when select, delete, insert, update;\g 
+<<
+>>
+* create security_alarm on test3 by user ingres;\g 
+<<
+>>
+* create security_alarm on test3 by public;\g 
+<<
+>>
+* create security_alarm on test3 by ingres;\g 
+<<
+>>
+* create security_alarm on table test3 if success when select by user ingres;\g 
+<<
+>>
+* help security_alarm test3;\g 
+<<
+Security alarms on test3 are:
+
+
+Security alarm 1:
+create security_alarm on table test3  if success, failure when select,
+insert, delete, update by public                                      
+
+Security alarm 2:
+create security_alarm on table test3  if failure when select, insert, 
+delete, update by public                                              
+
+Security alarm 3:
+create security_alarm on table test3  if success when select, insert, 
+delete, update by public                                              
+
+Security alarm 4:
+create security_alarm on table test3  if success, failure when select,
+insert, delete, update by public                                      
+
+Security alarm 5:
+create security_alarm on table test3  if success, failure when select 
+by public                                                             
+
+Security alarm 6:
+create security_alarm on table test3  if success, failure when select,
+insert, delete, update by public                                      
+
+Security alarm 7:
+create security_alarm on table test3  if success, failure when select,
+insert, delete, update by user ingres                                 
+
+Security alarm 8:
+create security_alarm on table test3  if success, failure when select,
+insert, delete, update by public                                      
+
+Security alarm 9:
+create security_alarm on table test3  if success, failure when select,
+insert, delete, update by user ingres                                 
+
+Security alarm 10:
+create security_alarm on table test3  if success when select by user  
+ingres                                                                
+
+
+>>
+* \q 
+<<
+>>
+? sql -u$ingres -s iidbdb 
+<<
+>>
+* \i init3.qry 
+<<
+>>
+* \q 
+<<
+>>
+? sql -utestenv -s iidbdb 
+<<
+>>
+* create security_alarm on table catalogtab;\g 
+<<
+E_PS04D1 'catalogtab' is not owned by you. Security alarms may not be
+    created/dropped on objects not owned by you.
+    (Tue Feb 28 17:46:05 1995)
+
+>>
+* \q 
+<<
+>>
+? sql -u$ingres -s iidbdb 
+<<
+>>
+* create security_alarm on table catalogtab;\g 
+<<
+>>
+* drop table catalogtab;\g 
+<<
+>>
+* \q 
+<<
+>>
+? sql -uingres -s SEPPARAMDB 
+<<
+>>
+* create security_alarm on table test2;\g 
+<<
+E_PS04D1 'test2' is not owned by you. Security alarms may not be
+    created/dropped on objects not owned by you.
+    (Tue Feb 28 17:46:53 1995)
+
+>>
+* create security_alarm on test3;\g 
+<<
+E_PS04D1 'test3' is not owned by you. Security alarms may not be
+    created/dropped on objects not owned by you.
+    (Tue Feb 28 17:47:01 1995)
+
+>>
+* \i drop2.qry 
+<<
+>>
+* \q 
+<<
+>>
+? sql -utestenv -s SEPPARAMDB 
+<<
+>>
+* \i drop1.qry 
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Tue Feb 28 17:47:26 1995

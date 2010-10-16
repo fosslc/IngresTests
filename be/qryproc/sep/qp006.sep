@@ -1,0 +1,254 @@
+/*
+	Test Name: eba01.sep
+	Time: 28-JUL-1989 17:45:20
+	User Name: testenv      
+ 
+	Test ID : eba01 (formerly ag002.upd)
+	Module  : be/qryproc/subselect
+	Filename: eba01.sep
+	Purpose	:
+	Input Files  : none
+	Output Files : none
+	Database     : SEPPARAMDB
+	Tables       : s, sp, spj
+	Synopsis     : selects using subselects and joins
+	History	: ??? ??/?? claire l. created.
+		  mar 28/89 sgp modified to add to test suite.
+		  jul 28/89 lah converted to sep
+		  nov 11/91 converted to using set up file. CAMACHO
+	Setup Test   : eaa00.sep
+	
+	23-Mar-1999   (vande02) Changed 'sql -s SEPPARAMDB' canon to be empty,
+				in order to catch the msg. "TM could not connect
+				..." if the test database did not exist.
+*/
+? sql -s SEPPARAMDB
+<<
+
+>>
+* select * from s;\g
+<<
+
++------+------+------+----------+
+|sno   |sname |status|city      |
++------+------+------+----------+
+|s5    |adams |    30|athens    |
+|s3    |blake |    30|paris     |
+|s4    |clark |    20|london    |
+|s2    |jones |    10|paris     |
+|s1    |smith |    20|london    |
++------+------+------+----------+
+(5 rows)
+>>
+* select * from sp;\g
+<<
+
++------+------+------+
+|sno   |pno   |qty   |
++------+------+------+
+|s1    |p1    |   300|
+|s1    |p2    |   200|
+|s1    |p3    |   400|
+|s1    |p4    |   200|
+|s1    |p5    |   100|
+|s1    |p6    |   100|
+|s2    |p1    |   300|
+|s2    |p2    |   400|
+|s3    |p2    |   200|
+|s4    |p2    |   200|
+|s4    |p4    |   300|
+|s4    |p5    |   400|
++------+------+------+
+(12 rows)
+>>
+* select * from spj;\g
+<<
+
++------+------+------+------+
+|sno   |pno   |jno   |qty   |
++------+------+------+------+
+|s1    |p1    |j1    |   200|
+|s1    |p1    |j4    |   700|
+|s2    |p3    |j1    |   400|
+|s2    |p3    |j2    |   200|
+|s2    |p3    |j3    |   200|
+|s2    |p3    |j4    |   500|
+|s2    |p3    |j5    |   600|
+|s2    |p3    |j6    |   400|
+|s2    |p3    |j7    |   800|
+|s2    |p5    |j2    |   100|
+|s3    |p3    |j1    |   200|
+|s3    |p4    |j2    |   500|
+|s4    |p6    |j3    |   300|
+|s4    |p6    |j7    |   300|
+|s5    |p2    |j2    |   200|
+|s5    |p2    |j4    |   100|
+|s5    |p5    |j5    |   500|
+|s5    |p5    |j7    |   100|
+|s5    |p6    |j2    |   200|
+|s5    |p1    |j4    |   100|
+|s5    |p3    |j4    |   200|
+|s5    |p4    |j4    |   800|
+|s5    |p5    |j4    |   400|
+|s5    |p6    |j4    |   500|
++------+------+------+------+
+(24 rows)
+>>
+* select pno from sp;\g
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p3    |
+|p4    |
+|p5    |
+|p6    |
+|p1    |
+|p2    |
+|p2    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(12 rows)
+>>
+* select distinct pno from sp;\g
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p3    |
+|p4    |
+|p5    |
+|p6    |
++------+
+(6 rows)
+>>
+* select pno from sp group by pno;\g
+/*
+ no aggregate function so GROUP BY maps to DISTINCT 
+*/
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p3    |
+|p4    |
+|p5    |
+|p6    |
++------+
+(6 rows)
+>>
+* select distinct s.sname from s, sp where s.sno = sp.sno and sp.pno = 'p2';\g
+/*
+ no aggregate function so GROUP BY maps to DISTINCT 
+*/
+<<
+
++------+
+|sname |
++------+
+|blake |
+|clark |
+|jones |
+|smith |
++------+
+(4 rows)
+>>
+* select distinct spx.pno from sp spx where spx.pno in 	
+<<
+>>
+*	( select spy.pno from sp spy where spy.sno != spx.sno );\g
+/*
+ distinct select doesn't work, should return 4 rows: fixed 
+ part numbers for all parts supplied by more than 1 supplier 
+*/
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+* select distinct sno  from sp spx where not exists 
+<<
+>>
+*	( select * from sp spy where sno = 's2' and not exists 	
+<<
+>>
+*	( select *  from sp spz where spz.sno = spx.sno 
+<<
+>>
+*					and spz.pno = spy.pno ));\g
+/*
+   subselect join : fixed 
+   get supplier numbers for suppliers who supply at least all those
+   parts supplied by suplier s2 
+*/
+<<
+
++------+
+|sno   |
++------+
+|s1    |
+|s2    |
++------+
+(2 rows)
+>>
+* select distinct spjx.jno from spj spjx where not exists 
+<<
+>>
+*	(select * from spj spjy where spjy.jno = spjx.jno 
+<<
+>>
+*	and not exists 	(select * from spj spjz 
+<<
+>>
+*	where spjz.pno = spjy.pno and spjz.sno = 's1'))\g
+/*
+ this query generates e_op0082 consistency check error: fixed 
+*/
+<<
+
++------+
+|jno   |
++------+
++------+
+(0 rows)
+>>
+* select distinct pno from sp spx where 1 < 
+<<
+>>
+*	( select count(*) from sp spy where spy.pno = spx.pno );\g
+<<
+
++------+
+|pno   |
++------+
+|p1    |
+|p2    |
+|p4    |
+|p5    |
++------+
+(4 rows)
+>>
+*\q
+<<
+>>
+
+
+Ending at: 18-AUG-1989 15:31:55
