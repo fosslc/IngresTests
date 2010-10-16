@@ -14,7 +14,7 @@ REM                          file path option to qp1, qp3; lowered
 REM                          iteration counts to reduce overall execution time
 REM    01-Oct-2009 (sarjo01) Changed ordent iso level to default (serializable);
 REM                          Added new test dbpv1.
-
+REM    06-Jan-2010 (sarjo01) Added zsum; increase parallel depth for qp1, qp3. 
 REM
 
 setlocal
@@ -25,7 +25,7 @@ if "%1"=="" (
     echo Usage: 
     echo        runappsuite.bat test [ test test ... ]
     echo where test is one or more of:
-    echo        dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1
+    echo        dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1 zsum
     echo.
     echo or
     echo        runappsuite.bat all
@@ -133,7 +133,7 @@ echo.
 
 qp1.exe %SEPPARAMDB% init -d%ING_TST%\stress\appsuite\ > .\qp1.out
 optimizedb -zk %SEPPARAMDB% >> .\qp1.out
-qp1.exe %SEPPARAMDB% run -t10 -v0 -i250 -p >> .\qp1.out
+qp1.exe %SEPPARAMDB% run -t10 -v0 -i250 -p4 >> .\qp1.out
 qp1.exe %SEPPARAMDB% cleanup >> .\qp1.out
 
 if "%1"=="all" goto :RUN_QP3
@@ -149,7 +149,7 @@ echo.
 
 qp3.exe %SEPPARAMDB% init -d%ING_TST%\stress\appsuite\ > .\qp3.out
 optimizedb -zk %SEPPARAMDB% >> .\qp3.out
-qp3.exe %SEPPARAMDB% run -t4 -v0 -i15 -p >> .\qp3.out
+qp3.exe %SEPPARAMDB% run -t4 -v0 -i15 -p4 >> .\qp3.out
 qp3.exe %SEPPARAMDB% cleanup >> .\qp3.out
 
 if "%1"=="all" goto :RUN_SELV1
@@ -174,13 +174,23 @@ goto :CONTINUE
 
 :RUN_UPDV1
 
-if not "%1"=="all" if not "%1"=="updv1" GOTO :CONTINUE2
+if not "%1"=="all" if not "%1"=="updv1" GOTO :RUN_ZSUM
 echo %DATE% %TIME%: Running test UPDV1
 echo.
 
 updv1.exe %SEPPARAMDB% init -p10 -c > .\updv1.out
 updv1.exe %SEPPARAMDB% run -t24 -v0 -i20000 -b5 >> .\updv1.out
 updv1.exe %SEPPARAMDB% cleanup >> .\updv1.out
+
+:RUN_ZSUM
+
+if not "%1"=="all" if not "%1"=="zsum" GOTO :CONTINUE2
+echo %DATE% %TIME%: Running test ZSUM
+echo.
+
+zsum.exe %SEPPARAMDB% init -a25000 -cb -d -u > .\zsum.out
+zsum.exe %SEPPARAMDB% run -t20 -i25000 -lr >> .\zsum.out
+zsum.exe %SEPPARAMDB% cleanup >> .\zsum.out
 
 :CONTINUE2
 echo %DATE% %TIME%: Appsuite Tests completed 

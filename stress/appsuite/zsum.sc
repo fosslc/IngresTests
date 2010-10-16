@@ -13,6 +13,7 @@
 **  30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
 **  31-May-2007 (Ralph Loen) Bug 118428
 **     Ported to VMS.
+**  06-Jan-2010 sarjo01: Added cleanup function. 
 */
 #ifdef _WIN32
    #include <windows.h>
@@ -34,6 +35,7 @@ exec sql include sqlca;
 
 void doit(int *p);
 void checkit();
+void cleanup();
 int print_err();
 void createobjs(int count);
 
@@ -54,8 +56,9 @@ char  *syntax =
  "\n" \
  "Syntax:     zsum <database> <function> [ <option> <option> ... ]\n\n" \
  "<database>  target database name\n" \
- "<function>  init   - initialize database\n" \
- "            run    - execute zsum program, display results\n" \
+ "<function>  init    - initialize database\n" \
+ "            run     - execute zsum program, display results\n" \
+ "            cleanup - delete all zsum database objects\n"
  "<option>    program option of the form -x[value]\n\n" \
  " Option Function Description                    Param Values     Default\n" \
  " ------ -------- ------------------------------ ---------------- -------\n" \
@@ -185,9 +188,14 @@ main(int argc, char *argv[])
    exec sql whenever sqlerror stop;
    exec sql connect :dbname as 'mastercon';
    exec sql set autocommit on; 
-/*
-** Only allowable functions are 'run' and 'init'
-*/ 
+
+   if (stricmp(argv[2], "cleanup") == 0)
+   {
+      cleanup();
+      EXEC SQL disconnect 'mastercon';
+      printf("\n");
+      exit(0);
+   }
    if (stricmp(argv[2], "init") == 0)
    {
       createobjs(caccts);
@@ -494,6 +502,13 @@ void doidx(char *tblname)
 /*
 ** Function to create tables needed by the program
 */
+void cleanup()
+{
+   EXEC SQL WHENEVER SQLERROR CONTINUE;
+   printf("Cleaning up...\n");
+   EXEC SQL drop zsumadmin1, zsumacct1, zsumacct2, zsumtransrec;
+}
+ 
 void createobjs(int count)
 {
    EXEC SQL begin declare section;
@@ -507,8 +522,7 @@ void createobjs(int count)
 
    EXEC SQL WHENEVER SQLERROR CONTINUE;
 
-   printf("Cleaning up...\n");
-   EXEC SQL drop zsumadmin1, zsumacct1, zsumacct2, zsumtransrec;
+   cleanup();
 
    EXEC SQL WHENEVER SQLERROR STOP;
 

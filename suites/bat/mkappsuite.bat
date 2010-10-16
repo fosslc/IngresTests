@@ -7,6 +7,7 @@ REM
 REM History:
 REM         15-May-2008 (sarjo01) Created. 
 REM         01-Oct-2009 (sarjo01) Added dbpv1.
+REM         06-Jan-2010 (sarjo01) Added zsum.
 REM
 
 setlocal
@@ -15,7 +16,7 @@ if "%1"=="" (
     echo Usage:
     echo     %%TST_SHELL%%\mkappsuite.bat test [ test test ... ]
     echo        where test is any of
-    echo     dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1
+    echo     dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1 zsum
     echo or
     echo     %%TST_SHELL%%\mkappsuite.bat all
     echo.
@@ -143,7 +144,7 @@ if "%1"=="" (
 
 :DO_UPDV1
 
-    if not "%1"=="all" if not "%1"=="updv1" goto :END
+    if not "%1"=="all" if not "%1"=="updv1" goto :DO_ZSUM
 
     call %TST_SHELL%\mk1app.bat updv1
 
@@ -157,6 +158,23 @@ if "%1"=="" (
         goto :CONTINUE
     )
     mv .\updv1.exe %ING_TOOLS%\bin
+
+:DO_ZSUM
+
+    if not "%1"=="all" if not "%1"=="zsum" goto :END
+
+    call %TST_SHELL%\mk1app.bat zsum
+
+    if not exist ".\zsum.exe" (
+        echo Aborting, failed to build zsum.exe.
+        GOTO :END
+    )
+
+    if not "%1"=="all" (
+        shift
+        goto :CONTINUE
+    )
+    mv .\zsum.exe %ING_TOOLS%\bin
 
 :END
 endlocal

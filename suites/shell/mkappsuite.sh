@@ -7,6 +7,7 @@
 #
 #  13-May-2008 (sarjo01) Created. 
 #  01-Oct-2008 (sarjo01) Added dbpv1. 
+#  06-Jan-2010 (sarjo01) Added zsum. 
 #
 
 #
@@ -36,12 +37,12 @@ errorHelp() {
     echo "     or"
     echo "  sh \$TST_SHELL/mkappsuite.sh test [ test test ... ]"
     echo "     where test is any of"
-    echo "           dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1"
+    echo "           dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1 zsum"
     echo ""
     exit 1
 }
 
-appsuitelist="dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1"
+appsuitelist="dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1 zsum"
 dolist=
 appname=
 

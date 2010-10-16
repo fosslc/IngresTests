@@ -12,6 +12,8 @@
 #  24-Jul-2009 (sarjo01) Added -p32 to ordent init (finds more bugs). 
 #  01-Oct-2009 (sarjo01) Changed ordent iso level to default (serializable); 
 #                        Added new test dbpv1.
+#  06-Jan-2010 (sarjo01) Added zsum to default test set; increase parallel
+#                        depth for qp1, qp3.
 #
 
 #
@@ -25,12 +27,12 @@ errorHelp() {
     echo "     or"
     echo "  sh \$TST_SHELL/runappsuite.sh test [ test test ... ]"
     echo "     where test is any of"
-    echo "           dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1"
+    echo "           dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1 zsum"
     echo ""
     exit 1
 }
 
-appsuitelist="dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1"
+appsuitelist="dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1 zsum"
 dolist=
 appname=
 appsuitedb=
@@ -91,7 +93,7 @@ sh $TST_SHELL/mkappsuite.sh all >> $outputdir/appsuite.out
 for appname in $dolist
 do
     case $appname in
-                  dbpv1|ddlv1|insdel|ordent|qp1|qp3|selv1|updv1)
+                  dbpv1|ddlv1|insdel|ordent|qp1|qp3|selv1|updv1|zsum)
                       ;;
                   *)
                       errorHelp
@@ -122,12 +124,12 @@ do
          qp1)
              qp1.exe $appsuitedb init -d$ING_TST/stress/appsuite/ > ./$appname.out
              optimizedb -zk $appsuitedb
-             qp1.exe $appsuitedb run -t10 -v0 -i250 -p >> ./$appname.out
+             qp1.exe $appsuitedb run -t10 -v0 -i250 -p4 >> ./$appname.out
              ;;
          qp3)
              qp3.exe $appsuitedb init -d$ING_TST/stress/appsuite/ > ./$appname.out
              optimizedb -zk $appsuitedb
-             qp3.exe $appsuitedb run -t4 -v0 -i15 -p >> ./$appname.out
+             qp3.exe $appsuitedb run -t4 -v0 -i15 -p4 >> ./$appname.out
              ;;
          selv1)
              selv1.exe $appsuitedb init -r50000 -p32 -o500 > ./$appname.out
@@ -136,6 +138,10 @@ do
          updv1)
              updv1.exe $appsuitedb init -p10 -c > ./$appname.out
              updv1.exe $appsuitedb run -t24 -v0 -i20000 -b5 >> ./$appname.out
+             ;;
+         zsum)
+             zsum.exe $appsuitedb init -a25000 -cb -d -u > ./$appname.out
+             zsum.exe $appsuitedb run -t24 -i50000 -lr >> ./$appname.out
              ;;
          *)
               echo "$appname...?"

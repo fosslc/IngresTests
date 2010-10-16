@@ -13,6 +13,7 @@
 **     Ported to VMS.
 **  01-Aug-2007 sarjo01: Redo -p (set parallel) to allow running against 2.6
 **  03-Jan-2008 sarjo01: Added -d to specify data file path
+**  13-Jan-2010 sarjo01: Expand -p flag to accept a greater depth.
 */
 #ifdef _WIN32
    #include <windows.h>
@@ -78,7 +79,7 @@ char  *syntax =
  "                 thread)\n"
  "   -l   run      Set lockmode                   n(olock),s(ystem) n\n"
  "   -n   run      Add nodename to tracking list  nodename         none\n"
- "   -p   run      Enable set parallel            0,1              enabled\n"
+ "   -p   run      Set parallel depth             0 to 8           Sys deflt\n"
  "   -t   run      Set no. of client threads      1 to 100         4\n"
  "   -v   run      Set verbose output level       0 to 2           0\n"
  "                                                0=no output\n"
@@ -153,7 +154,7 @@ main(int argc, char *argv[])
                nodes++;
                break;
             case 'P':
-               parallel = irng(intparm, 0, 1);
+               parallel = irng(intparm, 0, 8);
                break;
             case 'T':
                nthreads = irng(intparm, 1, MAXCHILDTHREADS);
@@ -316,10 +317,14 @@ retry2:
          EXEC SQL whenever sqlerror goto CONNerrorhandler; 
          EXEC SQL connect :dbname as :connectName; 
          reconn = 0;
-         if (parallel == 1)
-            EXEC SQL set parallel;
-         else if (parallel == 0)
+         if (parallel == 0)
             EXEC SQL set noparallel;
+         else if (parallel > 0 )
+         {
+            sprintf(stmtbuff,
+                    "set parallel %d", parallel);
+            EXEC SQL execute immediate :stmtbuff;
+         }
          EXEC SQL set joinop newenum; 
          EXEC SQL whenever sqlerror goto SQLerrorhandler; 
          EXEC SQL set session with on_error = rollback transaction;
