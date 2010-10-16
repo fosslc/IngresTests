@@ -71,6 +71,10 @@ REM     03-Jul-2007 (vande02)
 REM             Added SEP_DIFF_SLEEP and SEP_CMD_SLEEP syntax to be set to
 REM             default of 250 so the SEP commands can complete before the
 REM             next one is executed.
+REM	11-Dec-2008 (wanfr01)
+REM		SIR 121355
+REM		Allow SEPPARAM_SLEEP and SEPPARAM_SLEEP_2 to be set by shell
+REM		and change default to 5 seconds
 REM
 
 
@@ -441,8 +445,8 @@ set SEPPARAMDRIVERDB_1=repdb1
 set SEPPARAMDRIVERDB_2=repdb2
 set SEPPARAMDRIVERDB_3=repdb3
 set SEPPARAMDRIVERDB_4=repdb4
-set SEPPARAM_SLEEP=60
-set SEPPARAM_SLEEP_2=120
+if "%SEPPARAM_SLEEP%"=="" set SEPPARAM_SLEEP=5
+if "%SEPPARAM_SLEEP_2%"=="" set SEPPARAM_SLEEP_2=5
 set SEP_CMD_SLEEP=250
 set SEP_DIFF_SLEEP=250
 if "%2"=="backup" goto BACKUP

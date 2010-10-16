@@ -52,6 +52,10 @@
 #		Added SEP_DIFF_SLEEP and SEP_CMD_SLEEP syntax to be set to
 #		default of 250 so the SEP commands can complete before the
 #		next one is executed.
+#	11-Dec-2008 (wanfr01)
+#		SIR 121355
+#               Allow SEPPARAM_SLEEP and SEPPARAM_SLEEP_2 to be set by shell
+#               and change default to 5 seconds
 #---------------------------------------------------------------------------
 #			Setup Area
 #---------------------------------------------------------------------------
@@ -342,8 +346,16 @@ then
 	SEPPARAMDB_3=repdb3
 	SEPPARAMDB_4=repdb4
 	SEPPARAMDB_5=repdb5
-	SEPPARAM_SLEEP=60
-	SEPPARAM_SLEEP_2=120
+	SEPPARAMDB_6=repdb6
+	SEPPARAMDB_7=repdb7
+	if [ "$SEPPARAM_SLEEP" = "" ]
+	then
+	    SEPPARAM_SLEEP=5
+	fi
+	if [ "$SEPPARAM_SLEEP_2" = "" ]
+	then
+	    SEPPARAM_SLEEP_2=5
+	fi
 	SEPPARAMDRIVERDB_1=repdb1
 	SEPPARAMDRIVERDB_2=repdb2
 	SEPPARAMDRIVERDB_3=repdb3
