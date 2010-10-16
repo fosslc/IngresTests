@@ -1,0 +1,518 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: qp304.sep
+	Time: Wed Feb 19 11:29:30 2003
+	User Name: testenv
+	Terminal type: septerm
+ 
+        Test ID : qp304
+        Module  : BE/QRYPROC
+        Filename: qp304.sep
+        Purpose : To test create sequence with integer and decimal
+		  data types.
+        Input Files  : select.sql
+        Output Files : None
+        Database     : SEPPARAMDB
+        Tables       : None
+        Synopsis     : This test will verify that create sequence works
+                       properly with both the integer and decimal data
+		       types and that proper error handling occurs when
+                       trying to create sequences outside of their given
+                       parameters. It will also test the drop sequence
+                       option as well.
+
+** Error-handling test cases:
+**
+**    Error if START < or > MINVALUE/MAXVALUE range (integer and decimal data 
+**     type)
+**    Error if MINVALUE > MAXVALUE (integer and decimal data type)
+**    Error if MINVALUE = MAXVALUE (integer and decimal data type)
+**    Error if INCREMENT BY value > (- or +) MINVALUE/MAXVALUE range (integer
+**     and decimal data type)
+**    Error if MINVALUE or MAXVALUE > default boundary (integer and decimal 
+**     data type)
+**    Error if START > default MINVALUE/MAXVALUE boundary (integer and decimal 
+**     data type)
+**    Error if MAXVALUE and NOMAXVALUE/NO MAXVALUE values set
+**    Error if MINVALUE and NOMINVALUE/NO MINVALUE values set
+**    Error if CYCLE and NOCYCLE/NO CYCLE values set
+**    Error if CACHE and NOCACHE/NO CACHE values set
+**    Error if ORDER and NOORDER/NO ORDER values set
+**
+
+ History: 19-Feb-2003   (marwi08)       Created
+          31-Oct-2008	(vande02) Updated 3 canons now that sequence objects
+				  support bigint (integer8) values SIR 120452.
+*/
+/* 
+	First create input file to select data from sequence catalog
+*/
+? fill select.sql 
+!!
+select seq_name, start_value, increment_value, min_value, max_value, cache_size, cyc-
+le_flag, order_flag from iisequences where seq_name like 'qp304_%' order by seq_name-
+\g
+!!
+? sql -s SEPPARAMDB 
+<<
+>>
+* set autocommit on\g 
+<<
+>>
+/*
+	Make sure sequences don't already exist
+*/
+* drop sequence qp304_intseq1\g 
+<<
+E_US1913 ALTER/DROP SEQUENCE: The sequence 'qp304_intseq1' was not found.
+    (Wed Feb 19 11:30:46 2003)
+
+>>
+* drop sequence qp304_intseq2\g 
+<<
+E_US1913 ALTER/DROP SEQUENCE: The sequence 'qp304_intseq2' was not found.
+    (Wed Feb 19 11:30:57 2003)
+
+>>
+* drop sequence qp304_intseq3\g 
+<<
+E_US1913 ALTER/DROP SEQUENCE: The sequence 'qp304_intseq3' was not found.
+    (Wed Feb 19 11:31:07 2003)
+
+>>
+* drop sequence qp304_decseq1\g 
+<<
+E_US1913 ALTER/DROP SEQUENCE: The sequence 'qp304_decseq1' was not found.
+    (Wed Feb 19 11:31:21 2003)
+
+>>
+* drop sequence qp304_decseq2\g 
+<<
+E_US1913 ALTER/DROP SEQUENCE: The sequence 'qp304_decseq2' was not found.
+    (Wed Feb 19 11:31:32 2003)
+
+>>
+* drop sequence qp304_decseq3\g 
+<<
+E_US1913 ALTER/DROP SEQUENCE: The sequence 'qp304_decseq3' was not found.
+    (Wed Feb 19 11:31:43 2003)
+
+>>
+/*
+	Create integer and decimal sequences with default values
+*/
+* create sequence qp304_intseq1\g 
+<<
+>>
+* create sequence qp304_decseq1 as decimal\g 
+<<
+>>
+/*
+	Test the help sequence command
+*/
+* help sequence\g
+<<
+
+Legal Syntax is:
+        HELP SEQUENCE [owner.]sequencename[,[owner.]sequencename]
+
+        Terminate all statements with a semicolon.
+
+
+>>
+* help sequence qp304_intseq1, qp304_decseq1\g
+<<
+Sequence:             qp304_intseq1
+Owner:                testenv
+
+Sequence Definition:
+Create sequence testenv.qp304_intseq1 as integer8 start with 1
+     increment by 1 no minvalue no maxvalue
+     no cycle no order
+
+
+Sequence:             qp304_decseq1
+Owner:                testenv
+
+Sequence Definition:
+Create sequence testenv.qp304_decseq1 as decimal(5) start with 1
+     increment by 1 no minvalue no maxvalue
+     no cycle no order
+
+
+
+>>
+/*
+	Check sequence catalog for new sequences
+*/
+* \i select.sql
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+--------------------------------+---
+-----------+------+------+
+|seq_name                        |start_value                     |increment_value  -
+               |min_value                       |max_value                       |ca-
+che_size   |cycle_|order_|
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+--------------------------------+---
+-----------+------+------+
+|qp304_decseq1                   |                               1|                 -
+              1|                               1|                           99999|  -
+         20|N     |N     |
+|qp304_intseq1                   |                               1|                 -
+              1|                               1|             9223372036854775807|  -
+         20|N     |N     |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+--------------------------------+---
+-----------+------+------+
+(2 rows)
+>>
+/*
+	Now do some error-handling tests
+	First, start outside of min - max interval with integer type
+*/
+* create sequence qp304_errseq start with 5 minvalue 10 maxvalue 20\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/MINVALUE/START/INCREMENT'
+    options are inconsistent and cannot be used together.
+    (Wed Feb 19 11:33:48 2003)
+
+>>
+* create sequence qp304_errseq start with 25 minvalue 10 maxvalue 20\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/MINVALUE/START/INCREMENT'
+    options are inconsistent and cannot be used together.
+    (Wed Feb 19 11:33:48 2003)
+
+>>
+/*
+	Same test as above but for decimal type 
+*/
+* create sequence qp304_errseq as decimal start with 5 minvalue 10 maxvalue 20\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/MINVALUE/START/INCREMENT'
+    options are inconsistent and cannot be used together.
+    (Wed Feb 19 11:34:11 2003)
+
+>>
+* create sequence qp304_errseq as decimal start with 25 minvalue 10 maxvalue 20\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/MINVALUE/START/INCREMENT'
+    options are inconsistent and cannot be used together.
+    (Wed Feb 19 11:34:11 2003)
+
+>>
+/*
+	Now with min value > max value - integer type
+*/
+* create sequence qp304_errseq start with 10 minvalue 10 maxvalue 5\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/MINVALUE/START/INCREMENT'
+    options are inconsistent and cannot be used together.
+    (Wed Feb 19 11:34:23 2003)
+
+>>
+/*
+	Same as above but for decimal type
+*/
+* create sequence qp304_errseq as decimal start with 10 minvalue 10 maxvalue 5\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/MINVALUE/START/INCREMENT'
+    options are inconsistent and cannot be used together.
+    (Wed Feb 19 11:34:35 2003)
+
+>>
+/*
+	Now with min value = max value - integer type
+*/
+* create sequence qp304_errseq start with 10 minvalue 10 maxvalue 10\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/MINVALUE/START/INCREMENT'
+    options are inconsistent and cannot be used together.
+    (Wed Feb 19 11:34:23 2003)
+
+>>
+/*
+	Same as above but for decimal type
+*/
+* create sequence qp304_errseq as decimal start with 10 minvalue 10 maxvalue 10\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/MINVALUE/START/INCREMENT'
+    options are inconsistent and cannot be used together.
+    (Wed Feb 19 11:34:35 2003)
+
+>>
+/*
+	Now try interval between min and max values < increment value
+	Integer type
+*/
+* create sequence qp304_errseq start with 10 minvalue 10 maxvalue 25 increment by 30-
+\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/MINVALUE/START/INCREMENT'
+    options are inconsistent and cannot be used together.
+    (Wed Feb 19 11:35:00 2003)
+
+>>
+/*
+	Same as above but for decimal
+*/
+* create sequence qp304_errseq as decimal start with 10 minvalue 10 maxvalue 25 incr-
+ement by 30\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/MINVALUE/START/INCREMENT'
+    options are inconsistent and cannot be used together.
+    (Wed Feb 19 11:35:44 2003)
+
+>>
+/*
+	Now try MINVALUE or MAXVALUE too big for decimal(3) type
+*/
+* create sequence qp304_errseq as decimal(3) start with 10 minvalue -2500 maxvalue 1-
+0\g 
+<<
+E_US18B0 CREATE/ALTER SEQUENCE: The magnitude of the 'MINVALUE' option 
+    is too large for the declared sequence type.
+    (Wed Feb 19 11:36:19 2003)
+
+>>
+* create sequence qp304_errseq as decimal(3) start with 10 minvalue 10 maxvalue 2500-
+\g 
+<<
+E_US18B0 CREATE/ALTER SEQUENCE: The magnitude of the 'MAXVALUE' option 
+    is too large for the declared sequence type.
+    (Wed Feb 19 11:36:19 2003)
+
+>>
+/*
+	Now MINVALUE or MAXVALUE too big for integer type
+*/
+* create sequence qp304_errseq as integer start with 5 increment by 25 minvalue -999-
+999999999 maxvalue 5\g
+<<
+E_US18B0 CREATE/ALTER SEQUENCE: The magnitude of the 'MINVAL' option 
+    is too large for the declared sequence type.
+    (Wed Feb 19 11:36:51 2003)
+
+>>
+* create sequence qp304_errseq as integer start with 5 increment by 25 minvalue 5 ma-
+xvalue 999999999999\g 
+<<
+E_US18B0 CREATE/ALTER SEQUENCE: The magnitude of the 'MAXVAL' option 
+    is too large for the declared sequence type.
+    (Wed Feb 19 11:36:51 2003)
+
+>>
+/*
+	Now try start > MINVALUE/MAXVALUE boundary for decimal(3) type
+*/
+* create sequence qp304_errseq as decimal(3) start with 1000 minvalue 10 increment b-
+y -5\g 
+<<
+E_US18B0 CREATE/ALTER SEQUENCE: The magnitude of the 'START' option 
+    is too large for the declared sequence type.
+    (Wed Feb 19 11:37:42 2003)
+
+>>
+* create sequence qp304_errseq as decimal(3) start with -1000 maxvalue 10 increment -
+by 5\g 
+<<
+E_US18B0 CREATE/ALTER SEQUENCE: The magnitude of the 'START' option 
+    is too large for the declared sequence type.
+    (Wed Feb 19 11:37:42 2003)
+
+>>
+/*
+	Now start > MINVALUE/MAXVALUE boundary for integer type
+*/
+* create sequence qp304_errseq as integer start with 100000000000 minvalue 10 increm-
+ent by -5\g 
+<<
+E_US18B0 CREATE/ALTER SEQUENCE: The magnitude of the 'START' option 
+    is too large for the declared sequence type.
+    (Wed Feb 19 11:38:14 2003)
+
+>>
+* create sequence qp304_errseq as integer start with -100000000000 maxvalue 10 incre-
+ment by 5\g 
+<<
+E_US18B0 CREATE/ALTER SEQUENCE: The magnitude of the 'START' option 
+    is too large for the declared sequence type.
+    (Wed Feb 19 11:38:14 2003)
+
+>>
+/*
+	Now try some conflicting parameter tests
+*/
+* create sequence qp304_errseq as decimal start with 5 maxvalue 10000 increment by 2-
+ nomaxvalue\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/NOMAXVALUE' options are
+    inconsistent and cannot be used together.
+    (Wed Feb 19 11:38:42 2003)
+
+>>
+* create sequence qp304_errseq start with 5 maxvalue 10000 increment by 2 no maxvalu-
+e\g
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MAXVALUE/NOMAXVALUE' options are
+    inconsistent and cannot be used together.
+    (Wed Feb 19 11:38:42 2003)
+
+>>
+/*
+	Now try MINVALUE with NOMINVALUE/NO MINVALUE
+*/
+* create sequence qp304_errseq as decimal start with 5 minvalue 5 increment by 2 nom-
+invalue\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MINVALUE/NOMINVALUE' options are
+    inconsistent and cannot be used together.
+    (Wed Feb 19 11:38:42 2003)
+
+>>
+* create sequence qp304_errseq start with 5 minvalue 5 increment by 2 no minvalue\g
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'MINVALUE/NOMINVALUE' options are
+    inconsistent and cannot be used together.
+    (Wed Feb 19 11:38:42 2003)
+
+>>
+/*
+	Now try CYCLE with NOCYCLE/NO CYCLE
+*/
+* create sequence qp304_errseq cycle nocache nocycle\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'CYCLE/NOCYCLE' options are
+    inconsistent and cannot be used together.
+    (Wed Feb 19 11:38:55 2003)
+
+>>
+* create sequence qp304_errseq as decimal cycle no cache no cycle\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'CYCLE/NOCYCLE' options are
+    inconsistent and cannot be used together.
+    (Wed Feb 19 11:38:55 2003)
+
+>>
+/*
+	Now try CACHE with NOCACHE/NO CACHE
+*/
+* create sequence qp304_errseq cache 20 nocycle nocache\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'CACHE/NOCACHE' options are
+    inconsistent and cannot be used together.
+    (Wed Feb 19 11:38:55 2003)
+
+>>
+* create sequence qp304_errseq as decimal cache 20 no cycle no cache\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'CACHE/NOCACHE' options are
+    inconsistent and cannot be used together.
+    (Wed Feb 19 11:38:55 2003)
+
+>>
+/*
+	Now try ORDER with NOORDER/NO ORDER
+*/
+* create sequence qp304_errseq nocycle order nocache noorder\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'ORDER/NOORDER' options are
+    inconsistent and cannot be used together.
+    (Wed Feb 19 11:38:55 2003)
+
+>>
+* create sequence qp304_errseq as decimal no cycle order no cache no order\g 
+<<
+E_US18AD CREATE/ALTER SEQUENCE: The 'ORDER/NOORDER' options are
+    inconsistent and cannot be used together.
+    (Wed Feb 19 11:38:55 2003)
+
+>>
+/*
+	Now create some various combos of integer and decimal sequences
+	with ascending and descending increments
+*/
+* create sequence qp304_intseq2 as integer start with 10 minvalue 5 maxvalue 2500 in-
+crement by 10\g 
+<<
+>>
+* create sequence qp304_decseq2 as decimal start with 10 minvalue 5 maxvalue 2500 in-
+crement by 10\g 
+<<
+>>
+* create sequence qp304_intseq3 as integer start with 2500 maxvalue 2500 increment b-
+y -10 cache 150\g 
+<<
+>>
+* create sequence qp304_decseq3 as decimal start with 2500 maxvalue 2500 increment b-
+y -10 cache 150\g 
+<<
+>>
+/*
+	Verify new sequences are in sequence catalog
+*/
+* \i select.sql 
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+--------------------------------+---
+-----------+------+------+
+|seq_name                        |start_value                     |increment_value  -
+               |min_value                       |max_value                       |ca-
+che_size   |cycle_|order_|
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+--------------------------------+---
+-----------+------+------+
+|qp304_decseq1                   |                               1|                 -
+              1|                               1|                           99999|  -
+         20|N     |N     |
+|qp304_decseq2                   |                              10|                 -
+             10|                               5|                            2500|  -
+         20|N     |N     |
+|qp304_decseq3                   |                            2500|                 -
+            -10|                          -99999|                            2500|  -
+        150|N     |N     |
+|qp304_intseq1                   |                               1|                 -
+              1|                               1|             9223372036854775807|  -
+         20|N     |N     |
+|qp304_intseq2                   |                              10|                 -
+             10|                               5|                            2500|  -
+         20|N     |N     |
+|qp304_intseq3                   |                            2500|                 -
+            -10|                     -2147483648|                            2500|  -
+        150|N     |N     |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+--------------------------------+---
+-----------+------+------+
+(6 rows)
+>>
+/*
+	Cleanup of database by dropping sequences
+*/
+* drop sequence qp304_intseq1\g 
+<<
+>>
+* drop sequence qp304_intseq2\g 
+<<
+>>
+* drop sequence qp304_intseq3\g 
+<<
+>>
+* drop sequence qp304_decseq1\g 
+<<
+>>
+* drop sequence qp304_decseq2\g 
+<<
+>>
+* drop sequence qp304_decseq3\g 
+<<
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Fri Oct 31 12:14:22 2008
