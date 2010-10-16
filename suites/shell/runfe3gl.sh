@@ -59,12 +59,20 @@
 #               unicode types. 
 #	07-Mar-07 (sarjo01)
 #	        Fixed last comment (bad year, missing '#'). 
+#	02-Feb-09 (sarjo01)
+#	        Set ING_CHARSET, SEPPARAM_CHARSET.
 #
 #------------------------------------------------------------------------------
 #			Setup Area
 #------------------------------------------------------------------------------
 umask 2 
 umask 
+
+# Set a variable that can be used to check the character set
+#
+ii_code=`ingprenv II_INSTALLATION`
+SEPPARAM_CHARSET=`ingprenv II_CHARSET$ii_code`
+export SEPPARAM_CHARSET
 
 # Set the output directory for test results.
 #
