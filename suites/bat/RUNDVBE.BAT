@@ -15,8 +15,17 @@ REM       16-Jun-2008  (vande02) Added check if MKS or CYGWIN is being used to
 REM                              then use the appropriate awk command.
 REM       25-Jun-2008  (vande02) Changed %ING_CONFIG% to what it literally needs
 REM                              to be %II_SYSTEM%\ingres\files.
+REM       28-Jun-2010  (kschendel)  Use %AWK_CMD% for correct awk.
 
 setlocal
+
+REM AWK_CMD should be set by bldenv, but check here just in case it's not.
+REM Certainly USE_CYGWIN needs to be set (the build depends on it being right).
+REM
+if not "%AWK_CMD%"=="" goto AWKOK
+set AWK_CMD=gawk
+if "%USE_CYGWIN%"=="" set AWK_CMD=awk
+:AWKOK
 
 set total=%PS%
 set x=64
@@ -133,24 +142,24 @@ echo.
 echo.
 
 REM Check if MKS is being used.
+REM Believe the USE_CYGWIN setting which bldenv generates, if available.
+if not "%USE_CYGWIN"=="" goto QA_USE_CYGWIN
 if "%QA_USE_MKS%"=="TRUE" goto QA_USE_MKS
 SET QA_USE_MKS=
-which ls.exe > %TST_ROOT_OUTPUT%\ckusemks.tmp
-grep mks %TST_ROOT_OUTPUT%\ckusemks.tmp > c:\nul 2>&1
-if errorlevel 1 goto QA_USE_CYGWIN
+which cygpath.exe > nul: 2>&1
+if errorlevel 0 goto QA_USE_CYGWIN
 SET QA_USE_MKS=TRUE
 
 :QA_USE_MKS
 echo Use MKS Toolkit version of this awk command
-type %TST_LISTEXEC%\bevps.lis|%fedcmd% -F: -v page=%PAGE% -v table=%TABLE% -v area=%AREA% -v lisfile=%LIS_FILE% -v ingtst=%%ING_TST%% -v listexec=%%TST_LISTEXEC%% -v output=%%TST_ROOT_OUTPUT%% -v size=%x% '{print "@echo sed -e s/VPG_SZ/"page"/g -e s/STR_ST/"table"/g "ingtst"\\be\\"area"\\sep\\"$3" > "output"\\be\\"area"\\"size"K\\"table"\\"$3}' > %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\convert.bat
+type %TST_LISTEXEC%\bevps.lis|%AWK_CMD% -F: -v page=%PAGE% -v table=%TABLE% -v area=%AREA% -v lisfile=%LIS_FILE% -v ingtst=%%ING_TST%% -v listexec=%%TST_LISTEXEC%% -v output=%%TST_ROOT_OUTPUT%% -v size=%x% '{print "@echo sed -e s/VPG_SZ/"page"/g -e s/STR_ST/"table"/g "ingtst"\\be\\"area"\\sep\\"$3" > "output"\\be\\"area"\\"size"K\\"table"\\"$3}' > %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\convert.bat
 goto CONTINUE2
 
 :QA_USE_CYGWIN
 echo Use Cygwin version of this awk command
-type %TST_LISTEXEC%\bevps.lis|%fedcmd% -F: -v page=%PAGE% -v table=%TABLE% -v area=%AREA% -v lisfile=%LIS_FILE% -v ingtst=%%ING_TST%% -v listexec=%%TST_LISTEXEC%% -v output=%%TST_ROOT_OUTPUT%% -v size=%x% '{print "@echo sed -e s/VPG_SZ/"page"/g -e s/STR_ST/"table"/g "ingtst"\\\be\\\"area"\\\sep\\\"$3" > "output"\\\be\\\"area"\\\"size"K\\\"table"\\\"$3}' > %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\convert.bat
+type %TST_LISTEXEC%\bevps.lis|%AWK_CMD% -F: -v page=%PAGE% -v table=%TABLE% -v area=%AREA% -v lisfile=%LIS_FILE% -v ingtst=%%ING_TST%% -v listexec=%%TST_LISTEXEC%% -v output=%%TST_ROOT_OUTPUT%% -v size=%x% '{print "@echo sed -e s/VPG_SZ/"page"/g -e s/STR_ST/"table"/g "ingtst"\\\be\\\"area"\\\sep\\\"$3" > "output"\\\be\\\"area"\\\"size"K\\\"table"\\\"$3}' > %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\convert.bat
 
 :CONTINUE2
-rm %TST_ROOT_OUTPUT%\ckusemks.tmp
 call %TST_OUTPUT%\convert
 echo executor %TST_CFG%\%CFG_FILE% > %TST_OUTPUT%%OUT_FILE%
 executor %TST_CFG%\%CFG_FILE% > %TST_OUTPUT%\%OUT_FILE%

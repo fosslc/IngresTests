@@ -22,9 +22,21 @@ REM		Added clean up code to destroy databases when desired.
 REM	22-Sep-2004 (legru01)
 REM		Added code so that script works with the 
 REM		MKS toolkit awk or the Cygwin gawk command.
+REM	29-Jan-2010 (kschendel) b123194
+REM		Use proper awk for Cygwin (ie gawk).
+REM
+
 REM ----------------------------------------------------------------------------
 REM                        Setup Area
 REM ----------------------------------------------------------------------------
+
+REM AWK_CMD should be set by bldenv, but check here just in case it's not.
+REM Certainly USE_CYGWIN needs to be set (the build depends on it being right).
+REM
+if not "%AWK_CMD%"=="" goto AWKOK
+set AWK_CMD=gawk
+if "%USE_CYGWIN%"=="" set AWK_CMD=awk
+:AWKOK
 
 REM Set the output directory for test results.
 REM
@@ -102,9 +114,9 @@ REM set variable for the correct file editing command
 	
 	  call ipset tmpdir ingprenv II_TEMPORARY
 	  cat %TST_CFG%\sinitldb.lis > %tmpdir%\runstar.tmp
-	  %fedcmd% 'BEGIN {FS = ":" } {print $3 }' %tmpdir%\runstar.tmp > %tmpdir%\runstar2.tmp
+	  %AWK_CMD% 'BEGIN {FS = ":" } {print $3 }' %tmpdir%\runstar.tmp > %tmpdir%\runstar2.tmp
 	  del %tmpdir%\runstar.tmp
-	  %fedcmd% 'BEGIN {FS = "." } {print $1}' %tmpdir%\runstar2.tmp > %tmpdir%\runstar.tmp
+	  %AWK_CMD% 'BEGIN {FS = "." } {print $1}' %tmpdir%\runstar2.tmp > %tmpdir%\runstar.tmp
 	  del %tmpdir%\runstar2.tmp
 
 REM Everything we do here is straightforward, but we do it seven
