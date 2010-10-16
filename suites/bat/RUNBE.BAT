@@ -113,6 +113,8 @@ REM             run section for new test, api13.sep
 REM     02-Nov-2007 (vande02)
 REM             Skipped the 06-Apr-2007 change during last integration (old change
 REM             486205).  Decided to add ANSIDATE data type suite datetime.
+REM     26-Feb-2009 (vande02)
+REM             Corrected TST_TESTTOOLS to TST_TESTOOLS.
 REM
 REM ---------------------------------------------------------------------------
 REM			Setup Area
@@ -414,7 +416,7 @@ if "%2"=="" goto END
 	  set SEPPARAMDB=accntldb
 	  set SEPPARAMDB3=grantdb
 	  set SEPPARAMDRIVERDB=-dgrantdb
-	  set TST_TESTTOOLS=%ING_TST%\testtool
+	  set TST_TESTOOLS=%ING_TST%\testtool
 	  set AREA=accntl
 	  set CFG_FILE=beacc.cfg
 	  set LIS_FILE=beacc.lis
@@ -494,7 +496,7 @@ if "%2"=="" goto END
 :TTPP
 	if not "%2"=="all" if not "%2"=="ttpp" goto  QRYPROC
 	  set SEPPARAMDB=ttppdb
-	  set TST_TESTTOOLS=%ING_TST%\testtool
+	  set TST_TESTOOLS=%ING_TST%\testtool
 	  set AREA=ttpp
 	  set CFG_FILE=bettpp.cfg
 	  set LIS_FILE=bettpp.lis
@@ -511,7 +513,7 @@ if "%2"=="" goto END
 	if not "%2"=="all" if not "%2"=="qryproc" goto API
 	  set SEPPARAMDB=qryprocdb
 	  set SEPPARAMDRIVERDB=-dqryprocdb
-	  set TST_TESTTOOLS=%ING_TST%\testtool
+	  set TST_TESTOOLS=%ING_TST%\testtool
 	  set AREA=qryproc
 	  set CFG_FILE=beqp.cfg
 	  set LIS_FILE=beqp.lis
@@ -520,13 +522,108 @@ if "%2"=="" goto END
 	  PCecho " Running the QRYPROC tests @ %datevar%    . . ."
 	  title   Running the QRYPROC tests @ %datevar%    . . .
 	  call rundobe
+<<<< THEIR VERSION
+	  if "%2"=="all" goto UDT
+	  shift
+	  goto RUNTEST
+:UDT
+	if not "%2"=="udt" if not "%2"=="sol" goto RLL
+	if %IILIBUDTDLLSIZE% LEQ %IILIBUDTDISTSIZE% goto PrintOut1
+	if not "%2"=="udt" goto SOL
+          set SEPPARAMDB=beudtdb
+	  set SEPPARAMDBU=beudtdb
+	  set SEPPARAMDRIVERDB=-dbeudtdb
+	  set TST_TESTOOLS=%ING_TST%\testtool
+	  set AREA=udt
+	  set CFG_FILE=beudt.cfg
+	  set LIS_FILE=beudt.lis
+	  set OUT_FILE=beudt.out
+	  call ipset datevar PCdate
+	  PCecho " Running the UDT fun tests @ %datevar%   . . ."
+	title   Running the UDT fun tests @ %datevar%   . . .
+	  call rundobe
+	  shift
+	  goto RUNTEST
+:SOL
+	  set SEPPARAMDB=besoldb
+	  set TST_TESTOOLS=%ING_TST%\testtool
+	  set AREA=sol
+	  set CFG_FILE=besol.cfg
+	  set LIS_FILE=besol.lis
+	  set OUT_FILE=besol.out
+	  call ipset datevar PCdate
+	  PCecho " Running the SOL tests @ %datevar%   . . ."
+	title   Running the SOL tests @ %datevar%   . . .
+	  call rundobe
+	  shift
+	  goto RUNTEST
+
+:PrintOut1
+	echo WARNING - Did you remember to run iilink as user ingres to include UDTs and...
+        echo Spatial Objects in the DBMS Server?
+        echo.
+	echo WARNING - Do not run iilink from command prompt using 'qasetuser ingres iilink'
+	echo WARNING - Log into the machine as user 'ingres'.
+        echo.
+	echo From a command Window execute the 'iilink' utility
+	echo. 
+        echo Press the Yes button
+	echo.
+	echo Press the Next button
+	echo.
+	echo Check the box next to Include Spatial Objects to include...
+	echo Spatial Objects before running suites UDT and SOL
+	echo.
+        echo Press the Next button
+	echo.
+	echo Press the Finish button
+	echo.
+	echo Press the OK button
+	echo.
+        echo Don't forget to STOP and RESTART your INGRES...
+        echo installation after executing iilink!
+        echo.
+        qawtl WARNING - INITIALIZING DATABASE FOR UDT OR SOL SUITE
+  	qawtl WARNING - DO NOT FORGET TO RUN IILINK
+        qawtl WARNING - You must run iilink as user ingres to include UDTs and...
+        qawtl WARNING - Spatial Objects in the DBMS Server
+	qawtl WARNING - Do not run iilink from command prompt using 'qasetuser ingres iilink'
+	qawtl WARNING - Log into the machine as user 'ingres'.
+	qawtl From a command Window execute the 'iilink' utility
+        qawtl Press the Yes button
+	qawtl Press the Next button
+	qawtl Check the box next to Include Spatial Objects to include... 
+	qawtl Spatial Objects before running suites UDT and SOL
+	qawtl Press the Next button
+	qawtl press the Finish button
+	qawtl Press the OK button
+	qawtl wARNING - INGSTOP - INGSTART YOUR INGRES INSTANCE BEFORE RUNNING THE SOL SUITE 
+
+:RLL
+	if not "%2"=="all" if not "%2"=="rll" goto API
+	  set SEPPARAMDB=rlldb
+REM Cluster requires these variables set, sep requires them set empty if they
+REM are not being used
+	  if not defined SEPPARAMCLASS (set SEPPARAMCLASS= )
+	  if not defined SEPPARAMHOST (set SEPPARAMHOST= )
+	  set TST_TESTOOLS=%ING_TST%\testtool
+	  set AREA=rll
+	  set CFG_FILE=berll.cfg
+	  set LIS_FILE=berll.lis
+	  set OUT_FILE=berll.out
+	  call ipset datevar PCdate
+	  PCecho " Running the RLL tests @ %datevar%   . . ."
+	title   Running the RLL tests @ %datevar%   . . .
+	  call rundobe
+====
+>>>> YOUR VERSION
 	  if "%2"=="all" goto API
 	  shift
 	  goto RUNTEST
 	
 :API
 	if not "%2"=="all" if not "%2"=="api" goto UTIL
-	  set TST_TESTTOOLS=%ING_TST%\testtool
+	  set TST_TESTOOLS=%ING_TST%\testtool
 	  set AREA=api
 	  set CFG_FILE=beapi.cfg
 	  set LIS_FILE=beapi.lis
