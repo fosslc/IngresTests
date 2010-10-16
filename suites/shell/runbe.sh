@@ -209,6 +209,8 @@
 # 10-Sep-2007 (sarjo01)
 #               Added setting of SEPPARAMDB, SEPPARAMAPI_INC variables to API
 #               run section for new test, api13.sep
+# 08-Apr-2008 (sarjo01)
+#               Added setting of shell variable SEPPARAM_CHARSET.
 # 08-Sep-2008 (sarjo01)
 #               Moved setting of SEPPARAMAPI_INC to global location. 
 # 09-Sep-2008 (sarjo01)
@@ -281,6 +283,12 @@ errorHelp() {
 }
 
 umask 2 
+
+# Set a variable that can be used to check the character set
+#
+ii_code=`ingprenv II_INSTALLATION`
+SEPPARAM_CHARSET=`ingprenv II_CHARSET$ii_code`
+export SEPPARAM_CHARSET
 
 # Set variable needed for api program compilation
 SEPPARAMAPI_INC=-I$II_SYSTEM/ingres/files

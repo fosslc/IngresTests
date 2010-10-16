@@ -111,8 +111,14 @@ REM     10-Sep-2007 (sarjo01)
 REM             Added setting of SEPPARAMDB, SEPPARAMAPI_INC variables to API
 REM             run section for new test, api13.sep
 REM     02-Nov-2007 (vande02)
-REM             Skipped the 06-Apr-2007 change during last integration (old change
+REM             Skipped 06-Apr-2007 change during last integration (old change
 REM             486205).  Decided to add ANSIDATE data type suite datetime.
+REM	14-Feb-2008 (vande02)
+REM             Added set/reset of config C2 Security Auditing for c2secure and
+REM             removed all the ^M characters which made this file look messy.
+REM             Removed the welcome echo statements.
+REM     08-Apr-2008 (sarjo01)
+REM             Added setting of shell variable SEPPARAM_CHARSET.
 REM     08-Sep-2008 (sarjo01)
 REM             Moved setting of SEPPARAMAPI_INC to global location
 REM     20-Oct-2008 (vande02)
@@ -132,6 +138,11 @@ color 0b
 
 REM    Set the output directory for test results.
 REM
+
+REM Set a variable that can be used to check the character set
+REM
+call ipset ii_code ingprenv II_INSTALLATION
+call ipset SEPPARAM_CHARSET ingprenv II_CHARSET%ii_code%
 
 REM Set variable for api program compilation
 set SEPPARAMAPI_INC=-I%II_SYSTEM%\ingres\files
