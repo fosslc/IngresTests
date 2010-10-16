@@ -1,11 +1,12 @@
 #!/bin/sh
 #
-#  Copyright (c) 2008 Ingres Corporation. All Rights Reserved.
+#  Copyright (c) 2009 Ingres Corporation. All Rights Reserved.
 #
 #
 #  Appsuite Stress Test executable build script 
 #
 #  13-May-2008 (sarjo01) Created. 
+#  01-Oct-2008 (sarjo01) Added dbpv1. 
 #
 
 #
@@ -35,12 +36,12 @@ errorHelp() {
     echo "     or"
     echo "  sh \$TST_SHELL/mkappsuite.sh test [ test test ... ]"
     echo "     where test is any of"
-    echo "           ddlv1 insdel ordent qp1 qp3 selv1 updv1"
+    echo "           dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1"
     echo ""
     exit 1
 }
 
-appsuitelist="ddlv1 insdel ordent qp1 qp3 selv1 updv1"
+appsuitelist="dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1"
 dolist=
 appname=
 

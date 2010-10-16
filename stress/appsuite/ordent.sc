@@ -16,6 +16,7 @@
 **  30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.  
 **  31-May-2007 (Ralph Loen) Bug 118428
 **     Ported to VMS.
+**  01-Oct-2009 sarjo01: Added new iso levels, MVCC mode 
 */
 #ifdef _WIN32
    #include <windows.h>
@@ -69,6 +70,7 @@ int rowcount = 25000;
 int running;
 int abortfatal = 0; 
 char isolevel = 'S';
+char lockmode = 'R';
 
 int cweight = 0;
 int cweights[5][6] =
@@ -95,8 +97,10 @@ char  *syntax =
  "                 primary key constraints\n"
  "   -i    run     Set transaction count (per      1 to 1000000    1000\n"
  "                 thread)\n"
- "   -l    run     Set isolation level             R(epeatable),   S\n"
- "                                                 S(erializable)\n"
+ "   -k    run     Set lock mode                   R(ow),          R\n"
+ "                                                 M(VCC)\n"
+ "   -l    run     Set isolation level             S(erializable), S\n"
+ "                                                 R(ead Committed)\n"
  "   -m    run     Remodify tables                 none            disabled\n"
  "   -n    init    Set item table row count        1 to 100000     25000\n"
  "   -p    init    Enable partitions               1 to 64         1\n"
@@ -171,6 +175,12 @@ main(int argc, char *argv[])
                break;
             case 'I':
                iters = irng(intparm, 1, 1000000);
+               break;
+            case 'K':
+               lockmode = toupper(*(argv[i]+2));
+               if (lockmode != 'R' &&
+                   lockmode != 'M')
+                  lockmode = 'R';
                break;
             case 'L':
                isolevel = toupper(*(argv[i]+2));
@@ -391,6 +401,9 @@ void doit(int *p)
    EXEC SQL end declare section;
 
    int loopcnt, q, cmd, xs, xst, i, error_code, reconn, neverdisc;
+   char *lmode;
+
+   lmode = (lockmode == 'R') ? "row" : "mvcc";
 
    pval = *p;
    hk = highkey;
@@ -424,23 +437,30 @@ retry2:
          EXEC SQL set session with on_error = rollback transaction;
          EXEC SQL set autocommit off; 
 
-         EXEC SQL set lockmode on oe_cust
-                      where level=row, readlock=exclusive; 
+         sprintf(stmtbuff,
+                 "set lockmode on oe_cust where level=%s, readlock=exclusive",
+                 lmode);
+         EXEC SQL execute immediate :stmtbuff;
 
          if (lockwait == 99)
-            EXEC SQL set lockmode session where level=row, timeout=nowait; 
+         {
+            sprintf(stmtbuff,
+                    "set lockmode session where level=%s, timeout=nowait",
+                    lmode); 
+            EXEC SQL execute immediate :stmtbuff;
+         }
          else
          {
             sprintf(stmtbuff,
-                    "set lockmode session where level=row, timeout=%d",
-                    lockwait);
+                    "set lockmode session where level=%s, timeout=%d",
+                    lmode, lockwait);
             EXEC SQL execute immediate :stmtbuff;
          }
 
          if (isolevel == 'S')
             EXEC SQL set session isolation level serializable;
          else
-            EXEC SQL set session isolation level repeatable read; 
+            EXEC SQL set session isolation level read committed; 
       }
 /*
 ** Get a customer ID and command 

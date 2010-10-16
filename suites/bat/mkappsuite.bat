@@ -1,11 +1,12 @@
 @echo off
 REM
-REM Copyright (c) 2008 Ingres Corporation
+REM Copyright (c) 2009 Ingres Corporation
 REM
 REM Script to build Appsuite stress test executables 
 REM
 REM History:
 REM         15-May-2008 (sarjo01) Created. 
+REM         01-Oct-2009 (sarjo01) Added dbpv1.
 REM
 
 setlocal
@@ -13,7 +14,8 @@ setlocal
 if "%1"=="" (
     echo Usage:
     echo     %%TST_SHELL%%\mkappsuite.bat test [ test test ... ]
-    echo        where test is any of: ddlv1 insdel ordent qp1 qp3 selv1 updv1
+    echo        where test is any of
+    echo     dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1
     echo or
     echo     %%TST_SHELL%%\mkappsuite.bat all
     echo.
@@ -21,6 +23,23 @@ if "%1"=="" (
 )
 
 :CONTINUE
+
+    if not "%1"=="all" if not "%1"=="ddlv1" goto :DO_DDLV1
+
+    call %TST_SHELL%\mk1app.bat dbpv1
+
+    if not exist ".\dbpv1.exe" (
+       echo Aborting, failed to build dbpv1.exe.
+       goto :END
+    )
+
+    if not "%1"=="all" (
+        shift
+        goto :CONTINUE
+    )
+    mv .\dbpv1.exe %ING_TOOLS%\bin
+
+:DO_DDLV1
 
     if not "%1"=="all" if not "%1"=="ddlv1" goto :DO_INSDEL
 

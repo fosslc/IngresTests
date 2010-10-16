@@ -8,11 +8,13 @@ REM         test with some default parameters passed to each stress test by
 REM         this script.
 REM
 REM History:
-REM         05-Dec-2007 (vande02) Created. 
-REM         02-Jun-2006 (sarjo01) Modified to use mkappsuite.bat; added data
-REM                               file path option to qp1, qp3; lowered
-REM                               iteration counts to reduce overall
-REM                               execution time.
+REM    05-Dec-2007 (vande02) Created. 
+REM    02-Jun-2006 (sarjo01) Modified to use mkappsuite.bat; added data
+REM                          file path option to qp1, qp3; lowered
+REM                          iteration counts to reduce overall execution time
+REM    01-Oct-2009 (sarjo01) Changed ordent iso level to default (serializable);
+REM                          Added new test dbpv1.
+
 REM
 
 setlocal
@@ -23,7 +25,7 @@ if "%1"=="" (
     echo Usage: 
     echo        runappsuite.bat test [ test test ... ]
     echo where test is one or more of:
-    echo        ddlv1 insdel ordent qp1 qp3 selv1 updv1
+    echo        dbpv1 ddlv1 insdel ordent qp1 qp3 selv1 updv1
     echo.
     echo or
     echo        runappsuite.bat all
@@ -66,6 +68,18 @@ call %TST_SHELL%\mkappsuite.bat all >> .\appsuite.out
 
 :CONTINUE
 
+if not "%1"=="all" if not "%1"=="dbpv1" goto :RUN_DDLV1
+echo %DATE% %TIME%: Running test DBPV1
+echo.
+
+dbpv1.exe %SEPPARAMDB% init -n10000 -p1 > .\dbpv1.out
+dbpv1.exe %SEPPARAMDB% run -t16 -v0 -i10000 -x100 >> .\dbpv1.out 
+dbpv1.exe %SEPPARAMDB% cleanup >> .\dbpv1.out 
+
+if "%1"=="all" goto :RUN_DDLV1
+shift
+goto :CONTINUE
+
 :RUN_DDLV1
 
 if not "%1"=="all" if not "%1"=="ddlv1" goto :RUN_INSDEL
@@ -102,8 +116,8 @@ if not "%1"=="all" if not "%1"=="ordent" goto :RUN_QP1
 echo %DATE% %TIME%: Running test ORDENT
 echo.
 
-ordent.exe %SEPPARAMDB% init -d > .\ordent.out
-ordent.exe %SEPPARAMDB% run -t24 -v0 -i50000 -w1 -lr >> .\ordent.out 
+ordent.exe %SEPPARAMDB% init -d -p32 > .\ordent.out
+ordent.exe %SEPPARAMDB% run -t24 -v0 -i50000 -w1 >> .\ordent.out 
 ordent.exe %SEPPARAMDB% cleanup >> .\ordent.out 
 
 if "%1"=="all" goto :RUN_QP1

@@ -1,5 +1,5 @@
 /*
-**  Copyright (c) 2005, 2007 Ingres Corporation
+**  Copyright (c) 2009 Ingres Corporation
 **
 **  Stress Test Application Suite
 **
@@ -12,6 +12,7 @@
 **  30-Jan-2006	(boija02) Updated copyright info for Ingres Corp.
 **  31-May-2007 (Ralph Loen) Bug 118428
 **     Ported to VMS.
+**  01-Oct-2009 sarjo01: Added new iso levels, MVCC mode
 */
 #ifdef _WIN32
    #include <windows.h>
@@ -57,10 +58,7 @@ int lockwait = 0;
 int dodelete = 0;
 int secondary = 0;
 int parts = 1;
-int nodes = 0;
 int compression = 0;
-char *cnodes[16];
-int nodestats[16];
 int verbose = MINVERBOSE; 
 int xperconn = 0; 
 int running;
@@ -69,6 +67,8 @@ int abortfatal = 0;
 int remod = 0;
 int rbfreq = 0;
 char tblstruct = 'B';
+char lockmode = 'R';
+char isolevel = 'S';
 
 int startkey = 1;
 int sfactor = 1;
@@ -84,6 +84,8 @@ char  *syntax =
  "<option>    program option of the form -x[value]\n\n"
  " Option Function Description                    Param Values     Default\n"
  " ------ -------- ------------------------------ ---------------- -------\n"
+ "   -a   run      Set isolation level            S(erializable),  S\n"
+ "                                                R(ead Committed)\n"
  "   -b   run      Set forced rollback frequency  0 to 100         0\n"
  "   -d   run      Set delete frequency           0 to 100         0\n"
  "   -f   init/run Set key sparseness factor      1 to 100000      1\n"
@@ -94,7 +96,8 @@ char  *syntax =
  "   -k   init     Set starting key value         1 to 100000      1\n"
  "   -l   run      Set low key value              1 to 100000      1\n"
  "   -m   run      Remodify tables                none             disabled\n"
- "   -n   run      Add nodename to tracking list  nodename         none\n"
+ "   -o   run      Set lock mode                  R(ow),           R\n"
+ "                                                M(VCC)\n"
  "   -p   init     Enable partitions              1 to 64          1\n"
  "   -r   init     Set initial row count          1 to 100000      10000\n"
  "   -s   init/run Set table structure            B(tree),I(sam),  B\n"
@@ -158,6 +161,12 @@ main(int argc, char *argv[])
          intparm = atoi(argv[i]+2);
          switch (toupper(*(argv[i]+1)))
          {
+            case 'A':
+               isolevel = toupper(*(argv[i]+2));
+               if (isolevel != 'S' &&
+                   isolevel != 'R')
+                  isolevel = 'S';
+               break;
             case 'B':
                rbfreq = irng(intparm, 0, 100);
                break;
@@ -182,9 +191,11 @@ main(int argc, char *argv[])
             case 'M':
                remod = 1;
                break;
-            case 'N':
-               cnodes[nodes] = argv[i]+2;
-               nodes++;
+            case 'O':
+               lockmode = toupper(*(argv[i]+2));
+               if (lockmode != 'R' &&
+                   lockmode != 'M')
+                  lockmode = 'R';
                break;
             case 'P':
                parts = irng(intparm, 1, 64); 
@@ -252,7 +263,6 @@ main(int argc, char *argv[])
 
    memset(addcount, 0, sizeof(addcount));
    memset(delcount, 0, sizeof(delcount));
-   memset(nodestats, 0, sizeof(nodestats));
    memset(xactscompleted, 0, sizeof(xactscompleted));
    memset(deadlocks, 0, sizeof(deadlocks)); 
    memset(lockwaits, 0, sizeof(lockwaits)); 
@@ -351,7 +361,9 @@ void doit(int *p)
 
    int loopcnt, q, xs, xst, i,j,k, error_code, reconn, neverdisc;
    int opr, deled, rows, trows, dorb;
-   char *rbstr, *opstr;
+   char *rbstr, *opstr, *lmode;
+
+   lmode = (lockmode == 'R') ? "row" : "mvcc";
 
    pval = *p;
    hk = highkey;
@@ -385,25 +397,25 @@ retry2:
          EXEC SQL set session with on_error = rollback transaction;
 
          if (lockwait == 99)
-            EXEC SQL set lockmode session where level=row, timeout=nowait; 
+         {
+            sprintf(stmtbuff,
+                    "set lockmode session where level=%s, timeout=nowait",
+                    lmode);
+            EXEC SQL execute immediate :stmtbuff;
+         }
          else
          {
             sprintf(stmtbuff,
-                    "set lockmode session where level=row, timeout=%d",
-                    lockwait);
+                    "set lockmode session where level=%s, timeout=%d",
+                    lmode, lockwait);
             EXEC SQL execute immediate :stmtbuff;
          }
-         EXEC SQL select dbmsinfo('db_cluster_node') into :nodename;
-         if (nodes)
-         {
-            for (k = 0; k < nodes; k++)
-            {
-               if (stricmp(nodename, cnodes[k]) == 0)
-                  break;
-            }
-            if (k < nodes)
-               (nodestats[k])++;
-         }
+
+         if (isolevel == 'S')
+            EXEC SQL set session isolation level serializable;
+         else
+            EXEC SQL set session isolation level read committed;
+
       }
 /*
 ** Transaction's queries begin here
@@ -687,13 +699,6 @@ void checkit()
    printf(" End time                 : %s\n", endtime);
    printf(" Elapsed time             : %s\n", etime);
    printf(" Threads started          : %d\n", nthreads);
-
-   if (nodes)
-   {
-      for (i = 0; i < nodes; i++)
-         printf(" %s          : %d connections\n", cnodes[i], nodestats[i]);
-   }
-
    printf(" Deadlocks                : %d\n", totdeadlocks);
    printf(" Lockwait timeouts        : %d\n", totlockwaits);
    printf(" Fatal SQL errors         : %d\n", totfatal);
