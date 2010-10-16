@@ -217,6 +217,8 @@
 #               Added Unicode enabled database for new qryproc regression tests.
 # 30-Oct-2008 (vande02)
 #               Changed Unicode enabled db variable for qryproc to SEPPARAMDB3.
+# 16-Dec-2008 (wanfr01)
+#		'be clean lar' doesn't clean lar98db
 #
 betestlist="access accntl alttbl api blob c2secure datetime datatypes miscfunc fastload lar qryproc ttpp util"
 diflvl=
@@ -1256,6 +1258,7 @@ then
 			destroydb lar44db >>$TST_OUTPUT/beclean.out
 			destroydb lar45db >>$TST_OUTPUT/beclean.out
 			destroydb lar58db >>$TST_OUTPUT/beclean.out
+			destroydb lar98db >>$TST_OUTPUT/beclean.out
 			destroydb lar11_ckp_table >>$TST_OUTPUT/beclean.out
 			destroydb lar_ckp_table >>$TST_OUTPUT/beclean.out
 			destroydb b77231db >>$TST_OUTPUT/beclean.out
