@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2004 Ingres Corporation
+# Copyright (c) 2008 Ingres Corporation
 #
 #
 # 01-mar-1998 (vande02) Created based on QA's runbe.sh for porting's
@@ -213,7 +213,8 @@
 #               Moved setting of SEPPARAMAPI_INC to global location. 
 # 09-Sep-2008 (sarjo01)
 #               Broke up SEPPARAMAPI_INC setting into 2 commands for Solaris 
-
+# 20-Oct-2008 (vande02)
+#               Added Unicode enabled database for new qryproc regression tests.
 #
 betestlist="access accntl alttbl api blob c2secure datetime datatypes miscfunc fastload lar qryproc ttpp util"
 diflvl=
@@ -600,6 +601,14 @@ then
 			  echo See $TST_OUTPUT/beinit.out for error messages.
 			  exit 1
 			fi
+			destroydb qryprocunidb >>$TST_OUTPUT/beinit.out
+			createdb -n qryprocunidb >>$TST_OUTPUT/beinit.out
+			if [ $? != 0 ]
+			then
+			  echo Creation of Backend database qryprocdb Failed.
+			  echo See $TST_OUTPUT/beinit.out for error messages.
+			  exit 1
+			fi
 		fi
 
 #
@@ -917,9 +926,11 @@ then
 # Run the QRYPROC tests
 #
 			SEPPARAMDB=qryprocdb
+			SEPPARAMDB2=qryprocunidb
 			SEPPARAMDRIVERDB=-dqryprocdb
 			TST_TESTOOLS=$ING_TST/testtool
-			export SEPPARAMDB SEPPARAMDRIVERDB TST_TESTOOLS
+			export SEPPARAMDB SEPPARAMDB2 SEPPARAMDRIVERDB
+			export TST_TESTOOLS
 		
 			AREA=qryproc
 			CFG_FILE=beqp.cfg
@@ -1259,7 +1270,8 @@ then
 			echo "Destroying BE/QryProc databases @ ", `date`
                         echo ""
 			destroydb qryprocdb >>$TST_OUTPUT/beclean.out
-			qasetuser ingres destroydb eia40db >>$TST_OUTPUT/beclean.out
+			destroydb qryprocunidb >>$TST_OUTPUT/beclean.out
+			qasetuser ingres destroydb eia40db >>$TST_OUTPUT/beclean
 			AREA=qryproc
 			export AREA
 		fi
