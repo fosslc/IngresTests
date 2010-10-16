@@ -1,5 +1,5 @@
 @ECHO OFF
-REM Copyright (c) 2008 Ingres Corporation
+REM Copyright (c) 2009 Ingres Corporation
 REM
 REM
 REM 		Sample script to facilitate running ALL or a combination
@@ -22,11 +22,16 @@ REM             Added datetime suite.
 REM 27-Aug-2008 (vande02)
 REM             Removed the Replicator Service remove/repinst commands from this
 REM             script and put them in RUNREP.BAT in the init/clean blocks.
+REM 26-Feb-2009 (vande02)
+REM             Moved execution of runfe.bat before runbe.bat (BE tests).
 REM
 
 call %TST_SHELL%\runlbnet.bat init  all
 call %TST_SHELL%\runlbnet.bat lbnet all
 call %TST_SHELL%\runlbnet.bat clean all
+call %TST_SHELL%\runfe.bat init  all
+call %TST_SHELL%\runfe.bat fe    all
+call %TST_SHELL%\runfe.bat clean all
 call %TST_SHELL%\runbe.bat init  access accntl alttbl api blob
 call %TST_SHELL%\runbe.bat be    access accntl alttbl api blob
 call %TST_SHELL%\runbe.bat clean access accntl alttbl api blob
@@ -46,9 +51,6 @@ call %TST_SHELL%\runbe.bat clean miscfunc
 call %TST_SHELL%\runbe.bat init  c2secure
 call %TST_SHELL%\runbe.bat be    c2secure
 call %TST_SHELL%\runbe.bat clean c2secure
-call %TST_SHELL%\runfe.bat init  all
-call %TST_SHELL%\runfe.bat fe    all
-call %TST_SHELL%\runfe.bat clean all
 call %TST_SHELL%\runfe3gl.bat init all
 call %TST_SHELL%\runfe3gl.bat 3gl  c
 
