@@ -1,4 +1,4 @@
-// Copyright (c) 2004 Ingres Corporation
+// Copyright (c) 2010 Ingres Corporation
 //
 // ****************************************************************************
 // File: ConnectionSanity.java
@@ -15,6 +15,7 @@
 //		02-Feb-2006 (boija02) Updated copyright for Ingres Corp
 //		31-Mar-2008 (boija02) Suppressed unchecked warnings for messy
 //			    generics method.
+//		01-Apr-2010 (sarjo01) Changed deprecated ca.* package to com.* 
 // ****************************************************************************
 
 import java.lang.*;
@@ -47,7 +48,7 @@ public class ConnectionSanity {
 	    throws SQLException {
             Connection conn = null;
             try {
-            Class.forName("ca.ingres.jdbc.IngresDriver").newInstance();
+            Class.forName("com.ingres.jdbc.IngresDriver").newInstance();
             System.out.println("Driver Loaded ...");
             conn = DriverManager.getConnection(connectionURL,username,password);
             System.out.println("Connection made ...");
