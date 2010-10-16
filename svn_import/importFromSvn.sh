@@ -43,6 +43,8 @@
 # =====================
 # Urgent
 # ------
+# - use svn log on the URL to get the revision numbers of changes
+#   that affected it. This is *much* more efficient.
 # - Add error handling function with msg & return params
 # - put the stuff we want to exclude into a file instead
 
