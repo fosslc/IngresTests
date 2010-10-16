@@ -1,5 +1,5 @@
 @echo off
-REM Copyright (c) 2008 Ingres Corporation
+REM Copyright (c) 2010 Ingres Corporation
 REM
 REM Usage:
 REM       Script to run back-end VPS SEP Tests for Windows and this script
@@ -15,7 +15,12 @@ REM       16-Jun-2008  (vande02) Added check if MKS or CYGWIN is being used to
 REM                              then use the appropriate awk command.
 REM       25-Jun-2008  (vande02) Changed %ING_CONFIG% to what it literally needs
 REM                              to be %II_SYSTEM%\ingres\files.
-REM       28-Jun-2010  (kschendel)  Use %AWK_CMD% for correct awk.
+REM	  28-Jun-2010  (kschendel)  Use %AWK_CMD% for correct awk.
+REM	  12-Mar-2010  (bonro01) Fix typo and errors introduced by previous
+REM				 change which causes tests to fail when using
+REM				 the MKS tools.  Also fixed an older bug which
+REM				 caused errors when # comments are in the *.lis
+REM				 files.  Also simplified some of the file paths.
 
 setlocal
 
@@ -126,7 +131,7 @@ goto SUBEND
 
 REM  ============ do main work here =============
 
-set TST_OUTPUT=%TST_OUTPUT%\%AREA%\%x%K\%TABLE%
+set TST_OUTPUT=%TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%
 if exist %TST_OUTPUT% goto CONTINUE
 echo.
 echo Will not process %AREA% tests on %x%K pages with %TABLE% storage structure.
@@ -143,30 +148,30 @@ echo.
 
 REM Check if MKS is being used.
 REM Believe the USE_CYGWIN setting which bldenv generates, if available.
-if not "%USE_CYGWIN"=="" goto QA_USE_CYGWIN
+if "%USE_CYGWIN%"=="TRUE" goto QA_USE_CYGWIN
 if "%QA_USE_MKS%"=="TRUE" goto QA_USE_MKS
 SET QA_USE_MKS=
 which cygpath.exe > nul: 2>&1
-if errorlevel 0 goto QA_USE_CYGWIN
+if not errorlevel 1 goto QA_USE_CYGWIN
 SET QA_USE_MKS=TRUE
 
 :QA_USE_MKS
 echo Use MKS Toolkit version of this awk command
-type %TST_LISTEXEC%\bevps.lis|%AWK_CMD% -F: -v page=%PAGE% -v table=%TABLE% -v area=%AREA% -v lisfile=%LIS_FILE% -v ingtst=%%ING_TST%% -v listexec=%%TST_LISTEXEC%% -v output=%%TST_ROOT_OUTPUT%% -v size=%x% '{print "@echo sed -e s/VPG_SZ/"page"/g -e s/STR_ST/"table"/g "ingtst"\\be\\"area"\\sep\\"$3" > "output"\\be\\"area"\\"size"K\\"table"\\"$3}' > %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\convert.bat
+type %TST_LISTEXEC%\bevps.lis|%AWK_CMD% -F: -v page=%PAGE% -v table=%TABLE% -v area=%AREA% -v lisfile=%LIS_FILE% -v ingtst=%%ING_TST%% -v listexec=%%TST_LISTEXEC%% -v output=%%TST_ROOT_OUTPUT%% -v size=%x% '/^#/ {next} {print "@echo sed -e s/VPG_SZ/"page"/g -e s/STR_ST/"table"/g "ingtst"\\be\\"area"\\sep\\"$3" > "output"\\be\\"area"\\"size"K\\"table"\\"$3}' > %TST_OUTPUT%\convert.bat
 goto CONTINUE2
 
 :QA_USE_CYGWIN
 echo Use Cygwin version of this awk command
-type %TST_LISTEXEC%\bevps.lis|%AWK_CMD% -F: -v page=%PAGE% -v table=%TABLE% -v area=%AREA% -v lisfile=%LIS_FILE% -v ingtst=%%ING_TST%% -v listexec=%%TST_LISTEXEC%% -v output=%%TST_ROOT_OUTPUT%% -v size=%x% '{print "@echo sed -e s/VPG_SZ/"page"/g -e s/STR_ST/"table"/g "ingtst"\\\be\\\"area"\\\sep\\\"$3" > "output"\\\be\\\"area"\\\"size"K\\\"table"\\\"$3}' > %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\convert.bat
+type %TST_LISTEXEC%\bevps.lis|%AWK_CMD% -F: -v page=%PAGE% -v table=%TABLE% -v area=%AREA% -v lisfile=%LIS_FILE% -v ingtst=%%ING_TST%% -v listexec=%%TST_LISTEXEC%% -v output=%%TST_ROOT_OUTPUT%% -v size=%x% '/^#/ {next} {print "@echo sed -e s/VPG_SZ/"page"/g -e s/STR_ST/"table"/g "ingtst"\\\be\\\"area"\\\sep\\\"$3" > "output"\\\be\\\"area"\\\"size"K\\\"table"\\\"$3}' > %TST_OUTPUT%\convert.bat
 
 :CONTINUE2
 call %TST_OUTPUT%\convert
-echo executor %TST_CFG%\%CFG_FILE% > %TST_OUTPUT%%OUT_FILE%
+echo executor %TST_CFG%\%CFG_FILE% > %TST_OUTPUT%\%OUT_FILE%
 executor %TST_CFG%\%CFG_FILE% > %TST_OUTPUT%\%OUT_FILE%
 
-erase %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\convert.bat  
-if exist %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\*.stf erase %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\*.stf
-if exist %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\*.syn erase %TST_ROOT_OUTPUT%\be\%AREA%\%x%K\%TABLE%\*.syn 
+erase %TST_OUTPUT%\convert.bat  
+if exist %TST_OUTPUT%\*.stf erase %TST_OUTPUT%\*.stf
+if exist %TST_OUTPUT%\*.syn erase %TST_OUTPUT%\*.syn 
 if exist %TST_OUTPUT%\*.sep erase %TST_OUTPUT%\*.sep
 goto DOT1
 
