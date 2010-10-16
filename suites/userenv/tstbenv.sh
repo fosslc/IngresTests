@@ -1,8 +1,9 @@
-# Copyright (c) 2007 Ingres Corporation
+# Copyright (c) 2009 Ingres Corporation
 #
 #           BASH Environment Variables and Paths Testing Icebreaker
 #
 # 12-Apr-2007 (vande02) Created
+# 01-Sep-2009 (vande02) Corrected syntax for variable SEP_COBOL_LD.  
 # 
 # Edit this file and customize as needed.
 #
@@ -148,7 +149,7 @@ TERM=vt100;				export TERM
 # F77=< .. > 		; export F77
 # COBDIR=< .. >		; export COBDIR
 # Set Cobol linker path if testing cobol.
-# SEP_COBOL_LD='II_SYSTEM/ingres/lib/libingres.a -lsocket -lnsl -lm -lc'
+# SEP_COBOL_LD="$II_SYSTEM/ingres/lib/libingres.a -lsocket -lnsl -lm -lc"
 # export SEP_COBOL_LD;
 # ADA=< .. >		; export ADA
 # SEP_ADA_LD=$II_SYSTEM/ingres/lib/libingres.a;	    export SEP_ADA_LD
