@@ -1,0 +1,490 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : dt94.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN 
+
+  Databases     : SEPPARAMDB (datatypedb)
+  Tables        : dt94_t1
+  Filled Files  : 
+  Copied Files  : 
+  Output Files  :
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : Basic functionality test: 
+		:   * Simple valid BOOLEAN CASTs to character data types.
+		:   * Invalid BOOLEAN CASTs.
+		:   * Valid CASTs to BOOLEAN in a WHERE clause.
+		:   * Invalid CASTs from BOOLEAN to numeric data types.
+
+  Known Issues  : Issue 141968 - CAST(boolean AS BOOLEAN and
+                  select BOOLEAN([true|false]) are not yet supported.
+		  See comment below.
+
+  History       : 05-Jan-2010 (vande02) Created.
+		: 22-Feb-2010 (vande02) Added IS NOT TRUE | FALSE.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop dt94_t1\g
+<<
+~
+>>
+/*
+Simple valid BOOLEAN CASTs to character data types.
+CAST(TRUE AS CHAR) gets interpreted as CAST(TRUE AS CHAR(1)) so you only
+get back the single 'T' or 'F' from BOOLEAN.
+
+CAST(TRUE AS CHAR(4)) or CAST(FALSE AS CHAR(5)) return the BOOLEAN strings
+as shown below of TRUE or FALSe.
+
+The other 3 types of casts below are returning the SQL literal TRUE or FALSE.
+*/
+* select cast(true as char)\g
+<<
+
++------+
+|col1  |
++------+
+|T     |
++------+
+(1 row)
+>>
+* select cast(FALSE as char)\g
+<<
+
++------+
+|col1  |
++------+
+|F     |
++------+
+(1 row)
+>>
+* select cast(true as char(4))\g
+<<
+
++------+
+|col1  |
++------+
+|TRUE  |
++------+
+(1 row)
+>>
+* select cast(false as char(5))\g
+<<
+
++------+
+|col1  |
++------+
+|FALSE |
++------+
+(1 row)
+>>
+/*
+Simple valid BOOLEAN CASTs to character data types.
+These CASTs below are returning the SQL literal TRUE or FALSE.
+*/
+* select cast(1 as boolean)\g
+<<
+
++-----+
+|col1 |
++-----+
+|TRUE |
++-----+
+(1 row)
+>>
+* select cast(0 as boolean)\g
+<<
+
++-----+
+|col1 |
++-----+
+|FALSE|
++-----+
+(1 row)
+>>
+* select boolean(1)\g
+<<
+
++-----+
+|col1 |
++-----+
+|TRUE |
++-----+
+(1 row)
+>>
+* select boolean(0)\g
+<<
+
++-----+
+|col1 |
++-----+
+|FALSE|
++-----+
+(1 row)
+>>
+* select boolean('true')\g
+<<
+
++-----+
+|col1 |
++-----+
+|TRUE |
++-----+
+(1 row)
+>>
+* select boolean('false')\g 
+<<
+
++-----+
+|col1 |
++-----+
+|FALSE|
++-----+
+(1 row)
+>>
+* select boolean(null)\g
+<<
+
++-----+
+|col1 |
++-----+
+|     |
++-----+
+(1 row)
+>>
+/*
+When issue 141968 is fixed, uncomment these queries
+* select boolean(true)\g
+* select boolean(false)\g
+*/
+* select boolean(unknown)\g
+<<
+
+E_US0837 line 1, FROM clause is mandatory when a column ('unknown') has
+    been specified in the target list.
+    (Fri Feb  5 13:29:50 2010)
+>>
+* select cast(null as boolean)\g
+<<
+
++-----+
+|col1 |
++-----+
+|     |
++-----+
+(1 row)
+>>
+* select cast(null as char(4))\g
+<<
+
++------+
+|col1  |
++------+
+|      |
++------+
+(1 row)
+>>
+/*
+Invalid BOOLEAN CASTs.
+*/
+* select cast(10 as boolean)\g
+<<
+E_AD106B '10' is not a valid integer value for casting to BOOLEAN.
+    (Tue Jan  5 19:01:20 2010)
+>>
+* select cast(99 as boolean)\g
+<<
+E_AD106B '99' is not a valid integer value for casting to BOOLEAN.
+    (Tue Jan  5 18:17:21 2010)
+>>
+* select cast(junk as char(4))\g
+<<
+E_US0837 line 1, FROM clause is mandatory when a column ('junk') has been
+    specified in the target list.
+    (Tue Jan  5 18:18:25 2010)
+>>
+* select cast('null' as boolean)\g
+<<
+E_AD106A 'null' is not a valid character value for casting to BOOLEAN.
+    (Tue Jan  5 18:21:34 2010)
+>>
+* create table dt94_t1 (c1_id integer, c2_bool boolean)\g
+<<
+>>
+/*
+Valid inserts into a BOOLEAN column.
+*/
+* insert into dt94_t1 values (11, true)\g
+<<
+(1 row)
+>>
+* insert into dt94_t1 values (22, false)\g
+<<
+(1 row)
+>>
+* insert into dt94_t1 values (33, null)\g
+<<
+(1 row)
+>>
+* insert into dt94_t1 values (44, null)\g
+<<
+(1 row)
+>>
+* insert into dt94_t1 values (55, 'TRUE')\g
+<<
+(1 row)
+>>
+* insert into dt94_t1 values (66, 'FALSE')\g
+<<
+(1 row)
+>>
+* insert into dt94_t1 values (77, 1)\g
+<<
+(1 row)
+>>
+* insert into dt94_t1 values (88, 0)\g
+<<
+(1 row)
+>>
+/*
+Now that issue 141961 is fixed, these queries return the NULL rows.
+*/
+* select * from dt94_t1 where c2_bool IS NOT TRUE and c2_bool IS NOT FALSE\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           33|     |
+|           44|     |
++-------------+-----+
+(2 rows)
+>>
+* select * from dt94_t1 where c2_bool IS NOT TRUE\g
+<<
+
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           22|FALSE|
+|           33|     |
+|           44|     |
+|           66|FALSE|
+|           88|FALSE|
++-------------+-----+
+(5 rows)
+>>
+* select * from dt94_t1 where c2_bool IS NOT FALSE\g
+<<
+
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           11|TRUE |
+|           33|     |
+|           44|     |
+|           55|TRUE |
+|           77|TRUE |
++-------------+-----+
+(5 rows)
+>>
+/*
+Valid CASTs to BOOLEAN in a WHERE clause.
+*/
+* select * from dt94_t1 where c2_bool = cast(0 as boolean)\g
+<<
+
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           22|FALSE|
+|           66|FALSE|
+|           88|FALSE|
++-------------+-----+
+(3 rows)
+>>
+* select c1_id,c2_bool from dt94_t1 where c2_bool != boolean(1)\g
+<<
+
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           22|FALSE|
+|           66|FALSE|
+|           88|FALSE|
++-------------+-----+
+(3 rows)
+>>
+* select c1_id,c2_bool from dt94_t1 where c2_bool < boolean(1)\g
+<<
+
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           22|FALSE|
+|           66|FALSE|
+|           88|FALSE|
++-------------+-----+
+(3 rows)
+>>
+* select c1_id,c2_bool from dt94_t1 where c2_bool = cast(1 as boolean)\g
+<<
+
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           11|TRUE |
+|           55|TRUE |
+|           77|TRUE |
++-------------+-----+
+(3 rows)
+>>
+* select c1_id,c2_bool from dt94_t1 where c2_bool > cast(0 as boolean)\g
+<<
+
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           11|TRUE |
+|           55|TRUE |
+|           77|TRUE |
++-------------+-----+
+(3 rows)
+>>
+* select c1_id,c2_bool from dt94_t1 where c2_bool = boolean(1)\g
+<<
+
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           11|TRUE |
+|           55|TRUE |
+|           77|TRUE |
++-------------+-----+
+(3 rows)
+>>
+* select c2_bool from dt94_t1 where c2_bool != boolean(0)\g
+<<
+
++-----+
+|c2_bo|
++-----+
+|TRUE |
+|TRUE |
+|TRUE |
++-----+
+(3 rows)
+>>
+* select * from dt94_t1 where c2_bool = boolean(0)\g
+<<
+
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           22|FALSE|
+|           66|FALSE|
+|           88|FALSE|
++-------------+-----+
+(3 rows)
+>>
+* select c1_id from dt94_t1 where c2_bool = boolean(1) AND c1_id = 55\g
+<<
+
++-------------+
+|c1_id        |
++-------------+
+|           55|
++-------------+
+(1 row)
+>>
+* select * from dt94_t1 where c2_bool = cast(FALSE as char(5))\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           22|FALSE|
+|           66|FALSE|
+|           88|FALSE|
++-------------+-----+
+(3 rows)
+>>
+* select * from dt94_t1 where c2_bool = cast(true as char(4))\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           11|TRUE |
+|           55|TRUE |
+|           77|TRUE |
++-------------+-----+
+(3 rows)
+>>
+/*
+Invalid CASTs from BOOLEAN to numeric data types.
+
+7-Jan-2010 (vande02) Per Joe these invalid INTEGER data type casts
+may be implemented so as to be "VALID", i.e. will require implementing
+the missing CAST(BOOLEAN as 1|0) and Scalar Functions.
+*/
+* select cast(boolean as 1)\g
+<<
+
+E_US09C5 line 1, Syntax error on '1'.  The correct syntax is:
+    SELECT [ALL|DISTINCT] target_list
+      FROM table(s)
+      [WHERE search_cond]
+      [GROUP BY col(s)]
+      [HAVING search_cond]
+ [UNION subselect]
+ [ORDER BY col(s)]
+    (Tue Jan 12 14:18:38 2010)
+>>
+* select cast(boolean as 0)\g
+<<
+
+E_US09C5 line 1, Syntax error on '0'.  The correct syntax is:
+    SELECT [ALL|DISTINCT] target_list
+      FROM table(s)
+      [WHERE search_cond]
+      [GROUP BY col(s)]
+      [HAVING search_cond]
+ [UNION subselect]
+ [ORDER BY col(s)]
+    (Tue Jan 12 14:18:26 2010)
+>>
+* select cast(true as int)\g
+<<
+E_US0B5B line 1, Function 'int' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Tue Jan  5 18:42:06 2010)
+>>
+* select cast(false as tinyint)\g
+<<
+E_US0B5B line 1, Function 'int1' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Tue Jan  5 18:53:17 2010)
+>>
+* select cast(true as smallint)\g
+<<
+E_US0B5B line 1, Function 'int2' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Tue Jan  5 18:53:36 2010)
+>>
+* select cast(false as bigint)\g
+<<
+E_US0B5B line 1, Function 'bigint' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Tue Jan  5 18:53:43 2010)
+>>
+* select cast(true as integer1)\g
+<<
+E_US0B5B line 1, Function 'int1' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Tue Jan  5 18:53:54 2010)
+>>
+* \q
+<<
+>>

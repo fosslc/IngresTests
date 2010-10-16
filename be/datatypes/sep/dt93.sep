@@ -1,0 +1,799 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : dt93.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN 
+
+  Databases     : SEPPARAMDB (datatypedb)
+  Tables        : dt93_t1, dt93_t2, dt93_t3, dt93_t4, dt93_t5, dt93_t6
+  Filled Files  : 
+  Copied Files  : 
+  Output Files  :
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : Basic functionality test: 
+		    * Simple BOOLEAN literals TRUE|FALSE.
+                    * Valid and Invalid table create and inserts.
+		    * Invalid and Valid inserts.
+                    * Data retrieved correctly with order by default, asc, desc.
+		    * Valid selects converting boolean to chacter data types.
+                    * Simple predicates with  =, !=, <, >, IS NULL, IS NOT NULL.
+		    * Create table, insert valid and invalid rows, valid select:
+			not null not default
+			not null with default
+			not null with default <value> true|false
+		        null with default
+		        null with default NULL
+			null with default <value> true|false
+
+  Known Issues: : None
+
+  History	: 05-Jan-2010	(vande02) Created.
+		  25-Feb-2010	(vande02) Removed coversion to boolean column
+					  to char and selecting min/max because
+					  such aggregates as min/max are not
+					  useful to boolean.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop dt93_t1, dt93_t2, dt93_t3, dt93_t4, dt93_t5, dt93_t6\g
+<<
+~
+>>
+* select TRUE\g
+<<
++------+
+|col1  |
++------+
+|TRUE  |
++------+
+(1 row)
+>>
+* select FALSE\g
+<<
++------+
+|col1  |
++------+
+|FALSE |
++------+
+(1 row)
+>>
+* select true\g
+<<
++-----+
+|col1 |
++-----+
+|TRUE |
++-----+
+(1 row)
+>>
+* select false\g
+<<
++-----+
+|col1 |
++-----+
+|FALSE|
++-----+
+(1 row)
+>>
+* create table dt93_t6 (myfirstboolean boolean)\g
+<<
+>>
+* select attname, attfrmt from iiattribute where attname like 'myfirstbool%'\g 
+<<
+
++--------------------------------+------+
+|attname                         |attfrm|
++--------------------------------+------+
+|myfirstboolean                  |   -38|
++--------------------------------+------+
+(1 row)
+>>
+* create table dt93_t1 (c1_id integer, c2_bool boolean)\g
+<<
+>>
+/*
+Invalid table create and inserts with boolean.
+*/
+* create table dt93_t2 (c1_id integer, c2_bool b)\g
+<<
+E_US07DE CREATE or ALTER TABLE: invalid column format 'b' on column
+    'c2_bool'.
+    (Mon Jan  4 14:37:32 2010)
+
+>>
+* create table dt93_t2 (c1_id integer, c2_bool bool)\g
+<<
+
+E_US07DE CREATE or ALTER TABLE: invalid column format 'bool' on column
+    'c2_bool'.
+    (Mon Jan  4 14:37:55 2010)
+
+>>
+* insert into dt93_t1 values (11, 1_true)\g
+<<
+
+E_US09C7 line 1, Syntax error on '_true'.  The correct syntax is:
+    INSERT INTO tablename [(column {, ... })]
+       VALUES [OVERRIDING {SYSTEM | USER} VALUE] (expression {, ... })
+
+     INSERT INTO tablename [(column {, ... })]
+       [OVERRIDING {SYSTEM | USER} VALUE] subselect
+    (Mon Jan  4 16:07:58 2010)
+
+>>
+* insert into dt93_t1 values (22, 0_false)\g
+<<
+
+E_US09C7 line 1, Syntax error on '_false'.  The correct syntax is:
+    INSERT INTO tablename [(column {, ... })]
+       VALUES [OVERRIDING {SYSTEM | USER} VALUE] (expression {, ... })
+
+     INSERT INTO tablename [(column {, ... })]
+       [OVERRIDING {SYSTEM | USER} VALUE] subselect
+    (Mon Jan  4 16:08:28 2010)
+
+>>
+* insert into dt93_t1 values (33, _null_)\g
+<<
+
+E_US0836 line 1, Column '_null_' not found in any specified table.
+    (Mon Jan  4 16:08:47 2010)
+
+>>
+* insert into dt93_t1 values (11, 2)\g
+<<
+
+E_AD106B '2' is not a valid integer value for casting to BOOLEAN.
+    (Fri Jan  8 22:16:34 2010)
+>>
+* insert into dt93_t1 values (22, 999)\g
+<<
+
+E_AD106B '999' is not a valid integer value for casting to BOOLEAN.
+    (Fri Jan  8 22:17:09 2010)
+>>
+* insert into dt93_t1 values (11,'1')\g
+<<
+
+E_AD106A '1' is not a valid character value for casting to BOOLEAN.
+    (Mon Jan  4 16:00:30 2010)
+
+>>
+* insert into dt93_t1 values (22,'0')\g
+<<
+
+E_AD106A '0' is not a valid character value for casting to BOOLEAN.
+    (Mon Jan  4 16:00:40 2010)
+>>
+* insert into dt93_t1 values (44,unknown)\g
+<<
+
+E_US0836 line 1, Column 'unknown' not found in any specified table.
+    (Mon Mar  1 12:45:57 2010)
+>>
+* delete from dt93_t1\g
+<<
+~
+>>
+/*
+Valid inserts into a boolean column.
+*/
+* insert into dt93_t1 values (10, true)\g
+<<
+(1 row)
+>>
+* insert into dt93_t1 values (20, FALSE)\g
+<<
+(1 row)
+>>
+* insert into dt93_t1 values (30, null)\g
+<<
+(1 row)
+>>
+* insert into dt93_t1 values (40, NULL)\g
+<<
+(1 row)
+>>
+* insert into dt93_t1 values (50, 'TRUE')\g
+<<
+(1 row)
+>>
+* insert into dt93_t1 values (60, 'false')\g
+<<
+(1 row)
+>>
+* insert into dt93_t1 values (70, 1)\g
+<<
+(1 row)
+>>
+* insert into dt93_t1 values (80, 0)\g
+<<
+(1 row)
+>>
+* select c1_id,c2_bool from dt93_t1 order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           10|TRUE |
+|           20|FALSE|
+|           30|     |
+|           40|     |
+|           50|TRUE |
+|           60|FALSE|
+|           70|TRUE |
+|           80|FALSE|
++-------------+-----+
+(8 rows)
+>>
+/*
+Valid select with order by default, asc, desc.
+*/
+* select c2_bool from dt93_t1 order by 1\g
+<<
++-----+
+|c2_bo|
++-----+
+|FALSE|
+|FALSE|
+|FALSE|
+|TRUE |
+|TRUE |
+|TRUE |
+|     |
+|     |
++-----+
+(8 rows)
+>>
+* select c2_bool from dt93_t1 order by 1 asc\g
+<<
++-----+
+|c2_bo|
++-----+
+|FALSE|
+|FALSE|
+|FALSE|
+|TRUE |
+|TRUE |
+|TRUE |
+|     |
+|     |
++-----+
+(8 rows)
+>>
+* select c2_bool from dt93_t1 order by 1 desc\g
+<<
++-----+
+|c2_bo|
++-----+
+|     |
+|     |
+|TRUE |
+|TRUE |
+|TRUE |
+|FALSE|
+|FALSE|
+|FALSE|
++-----+
+(8 rows)
+>>
+/*
+Valid selects converting boolean to chacter data types.
+*/
+* select c(c2_bool) from dt93_t1 order by 1\g
+<<
++------+
+|col1  |
++------+
+|F     |
+|F     |
+|F     |
+|T     |
+|T     |
+|T     |
+|      |
+|      |
++------+
+(8 rows)
+>>
+* select char(c2_bool) from dt93_t1 order by 1\g
+<<
++------+
+|col1  |
++------+
+|F     |
+|F     |
+|F     |
+|T     |
+|T     |
+|T     |
+|      |
+|      |
++------+
+(8 rows)
+>>
+* select varchar(c2_bool) from dt93_t1 order by 1 desc\g
+<<
++------+
+|col1  |
++------+
+|      |
+|      |
+|T     |
+|T     |
+|T     |
+|F     |
+|F     |
+|F     |
++------+
+(8 rows)
+>>
+* select text(c2_bool) from dt93_t1 order by 1 desc\g
+<<
++------+
+|col1  |
++------+
+|      |
+|      |
+|T     |
+|T     |
+|T     |
+|F     |
+|F     |
+|F     |
++------+
+(8 rows)
+>>
+/*
+Valid selects with simple predicates for =, !=, <, >, IS NULL, IS NOT NULL.
+*/
+* select * from dt93_t1 where c2_bool between 0 and 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           10|TRUE |
+|           20|FALSE|
+|           50|TRUE |
+|           60|FALSE|
+|           70|TRUE |
+|           80|FALSE|
++-------------+-----+
+(6 rows)
+>>
+* select * from dt93_t1 where c2_bool = 'TRUE' order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           10|TRUE |
+|           50|TRUE |
+|           70|TRUE |
++-------------+-----+
+(3 rows)
+>>
+* select * from dt93_t1 where c2_bool = 'FALSE' order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           20|FALSE|
+|           60|FALSE|
+|           80|FALSE|
++-------------+-----+
+(3 rows)
+>>
+* select * from dt93_t1 where c2_bool = 1 order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           10|TRUE |
+|           50|TRUE |
+|           70|TRUE |
++-------------+-----+
+(3 rows)
+>>
+* select * from dt93_t1 where c2_bool = 0 order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           20|FALSE|
+|           60|FALSE|
+|           80|FALSE|
++-------------+-----+
+(3 rows)
+>>
+* select * from dt93_t1 where c2_bool = true order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           10|TRUE |
+|           50|TRUE |
+|           70|TRUE |
++-------------+-----+
+(3 rows)
+>>
+* select * from dt93_t1 where c2_bool = false order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           20|FALSE|
+|           60|FALSE|
+|           80|FALSE|
++-------------+-----+
+(3 rows)
+>>
+* select * from dt93_t1 where c2_bool != true order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           20|FALSE|
+|           60|FALSE|
+|           80|FALSE|
++-------------+-----+
+(3 rows)
+>>
+* select * from dt93_t1 where c2_bool != false order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           10|TRUE |
+|           50|TRUE |
+|           70|TRUE |
++-------------+-----+
+(3 rows)
+>>
+* select * from dt93_t1 where c2_bool < TRUE order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           20|FALSE|
+|           60|FALSE|
+|           80|FALSE|
++-------------+-----+
+(3 rows)
+>>
+* select * from dt93_t1 where c2_bool > FALSE order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           10|TRUE |
+|           50|TRUE |
+|           70|TRUE |
++-------------+-----+
+(3 rows)
+>>
+* select * from dt93_t1 where c2_bool IS NULL order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           30|     |
+|           40|     |
++-------------+-----+
+(2 rows)
+>>
+* select * from dt93_t1 where c2_bool IS NOT NULL order by 1\g
+<<
++-------------+-----+
+|c1_id        |c2_bo|
++-------------+-----+
+|           10|TRUE |
+|           20|FALSE|
+|           50|TRUE |
+|           60|FALSE|
+|           70|TRUE |
+|           80|FALSE|
++-------------+-----+
+(6 rows)
+>>
+/*
+These are invalid selects with ' ' or NULL.
+*/
+* select * from dt93_t1 where c2_bool = ' ' order by 1\g
+<<
+
+E_AD106A '' is not a valid character value for casting to BOOLEAN.
+    (Fri Feb  5 14:29:05 2010)
+
+>>
+* select * from dt93_t1 where c2_bool = NULL\g
+<<
+
+E_US0836 line 1, Column 'null' not found in any specified table.
+    (Fri Feb  5 14:27:26 2010)
+
+>>
+/*
+Valid and invalid inserts to not null not default and null with default.
+*/
+* create table dt93_t2 (col1_id bigint,-
+  col2_bool_notnull boolean not null not default,-
+  col3_bool_null boolean null with default)\g
+<<
+>>
+* insert into dt93_t2 values(1234567890,true,false)\g
+<<
+(1 row)
+>>
+* insert into dt93_t2 values(123456789,false,true)\g
+<<
+(1 row)
+>>
+* insert into dt93_t2 values(12345678,true,null)\g
+<<
+(1 row)
+>>
+* insert into dt93_t2 values(1234567,false,null)\g
+<<
+(1 row)
+>>
+* insert into dt93_t2 values(123456,null,true)\g
+<<
+
+E_US0AD9 INSERT: Must not insert NULL value into a nonnullable column
+    'col2_bool_notnull'.
+    (Mon Jan  4 17:51:14 2010)
+
+>>
+* insert into dt93_t2 values(123456,default,default)\g
+<<
+
+E_US0ADB No value specified for mandatory column 'col2_bool_notnull'.
+    (Mon Jan  4 18:47:51 2010)
+
+>>
+* insert into dt93_t2 values(123456,true,null)\g
+<<
+(1 row)
+>>
+* insert into dt93_t2 values(12345,false,null)\g
+<<
+(1 row)
+>>
+* insert into dt93_t2 values(1234,1,default)\g
+<<
+(1 row)
+>>
+* insert into dt93_t2 values(123,0,default)\g
+<<
+(1 row)
+>>
+/*
+When a BOOLEAN has WITH DEFAULT and no value is provided, the default
+value is FALSE.
+*/
+* select * from dt93_t2 order by 1 desc\g
+<<
+
++----------------------+-----+-----+
+|col1_id               |col2_|col3_|
++----------------------+-----+-----+
+|            1234567890|TRUE |FALSE|
+|             123456789|FALSE|TRUE |
+|              12345678|TRUE |     |
+|               1234567|FALSE|     |
+|                123456|TRUE |     |
+|                 12345|FALSE|     |
+|                  1234|TRUE |FALSE|
+|                   123|FALSE|FALSE|
++----------------------+-----+-----+
+(8 rows)
+>>
+/*
+Valid and invalid inserts to null and not null with default <value>.
+*/
+* create table dt93_t3 (col1_id bigint,-
+  col2_bool_null boolean null,-
+  col3_bool_nn boolean not null default false)\g
+<<
+>>
+* insert into dt93_t3 values(2345678901,null,null)\g
+<<
+
+E_US0AD9 INSERT: Must not insert NULL value into a nonnullable column
+    'col3_bool_nn'.
+    (Mon Jan  4 18:30:59 2010)
+
+>>
+* insert into dt93_t3 values(2345678901,null,null)\g
+<<
+
+E_US0AD9 INSERT: Must not insert NULL value into a nonnullable column
+    'col3_bool_nn'.
+    (Mon Jan  4 18:30:59 2010)
+
+>>
+* insert into dt93_t3 values(234567890,null,true)\g
+<<
+(1 row)
+>>
+* insert into dt93_t3 values(23456789,null,1)\g
+<<
+(1 row)
+>>
+* insert into dt93_t3 values(2345678,true,true)\g
+<<
+(1 row)
+>>
+* insert into dt93_t3 values(234567,null,false)\g
+<<
+(1 row)
+>>
+* insert into dt93_t3 values(23456,null,0)\g
+<<
+(1 row)
+>>
+* insert into dt93_t3 values(2345,false,false)\g
+<<
+(1 row)
+>>
+* insert into dt93_t3 values(234,default,default)\g
+<<
+(1 row)
+>>
+* select * from dt93_t3 order by 1 desc\g
+<<
+
++----------------------+-----+-----+
+|col1_id               |col2_|col3_|
++----------------------+-----+-----+
+|             234567890|     |TRUE |
+|              23456789|     |TRUE |
+|               2345678|TRUE |TRUE |
+|                234567|     |FALSE|
+|                 23456|     |FALSE|
+|                  2345|FALSE|FALSE|
+|                   234|     |FALSE|
++----------------------+-----+-----+
+(7 rows)
+>>
+/*
+Valid and invalid inserts to null with default <value> and
+not null with default <value>.
+*/
+* create table dt93_t4 (col1_id bigint,-
+  col2_bool_null boolean null with default FALSE,-
+  col3_bool_nn boolean not null default true)\g
+<<
+>>
+* insert into dt93_t4 values(3456789012,null,null)\g
+<<
+E_US0AD9 INSERT: Must not insert NULL value into a nonnullable column
+    'col3_bool_nn'.
+    (Mon Jan  4 18:30:59 2010)
+
+>>
+* insert into dt93_t4 values(345678901,null,null)\g
+<<
+E_US0AD9 INSERT: Must not insert NULL value into a nonnullable column
+    'col3_bool_nn'.
+    (Mon Jan  4 18:30:59 2010)
+
+>>
+* insert into dt93_t4 values(34567890,null,true)\g
+<<
+(1 row)
+>>
+* insert into dt93_t4 values(3456789,null,1)\g
+<<
+(1 row)
+>>
+* insert into dt93_t4 values(345678,true,true)\g
+<<
+(1 row)
+>>
+* insert into dt93_t4 values(34567,null,false)\g
+<<
+(1 row)
+>>
+* insert into dt93_t4 values(3456,null,0)\g
+<<
+(1 row)
+>>
+* insert into dt93_t4 values(345,false,false)\g
+<<
+(1 row)
+>>
+* insert into dt93_t4 values(34,default,default)\g
+<<
+(1 row)
+>>
+* select * from dt93_t4 order by 1 desc\g
+<<
+
++----------------------+-----+-----+
+|col1_id               |col2_|col3_|
++----------------------+-----+-----+
+|              34567890|     |TRUE |
+|               3456789|     |TRUE |
+|                345678|TRUE |TRUE |
+|                 34567|     |FALSE|
+|                  3456|     |FALSE|
+|                   345|FALSE|FALSE|
+|                    34|FALSE|TRUE |
++----------------------+-----+-----+
+(7 rows)
+>>
+* create table dt93_t5 (col1_id bigint,-
+  col2_bool_null_deftrue boolean null with default TRUE,-
+  col3_bool_null_defnull boolean null default null,-
+  col4_bool_nn_nodef boolean not null with default)\g
+<<
+>>
+* insert into dt93_t5 values(4567890123,null,null,null)\g
+<<
+
+E_US0AD9 INSERT: Must not insert NULL value into a nonnullable column
+    'col4_bool_nn_nodef'.
+    (Thu Jan 14 12:54:37 2010)
+>>
+* insert into dt93_t5 values(4567890123,null,null,null)\g
+<<
+
+E_US0AD9 INSERT: Must not insert NULL value into a nonnullable column
+    'col4_bool_nn_nodef'.
+    (Thu Jan 14 12:55:46 2010)
+>>
+* insert into dt93_t5 values(4567890123,null,null,true)\g
+<<
+(1 row)
+>>
+* insert into dt93_t5 values(456789012,null,null,1)\g
+<<
+(1 row)
+>>
+* insert into dt93_t5 values(45678901,true,true,true)\g
+<<
+(1 row)
+>>
+* insert into dt93_t5 values(4567890,1,1,1)\g
+<<
+(1 row)
+>>
+* insert into dt93_t5 values(456789,false,false,false)\g
+<<
+(1 row)
+>>
+* insert into dt93_t5 values(45678,0,0,0)\g
+<<
+(1 row)
+>>
+* insert into dt93_t5 values(4567,default,default,default)\g
+<<
+(1 row)
+>>
+/*
+When a BOOLEAN has WITH DEFAULT and no value is provided, the default
+value is FALSE.
+*/
+* select * from dt93_t5 order by 1 desc\g
+<<
+
++----------------------+-----+-----+-----+
+|col1_id               |col2_|col3_|col4_|
++----------------------+-----+-----+-----+
+|            4567890123|     |     |TRUE |
+|             456789012|     |     |TRUE |
+|              45678901|TRUE |TRUE |TRUE |
+|               4567890|TRUE |TRUE |TRUE |
+|                456789|FALSE|FALSE|FALSE|
+|                 45678|FALSE|FALSE|FALSE|
+|                  4567|TRUE |     |FALSE|
++----------------------+-----+-----+-----+
+(7 rows)
+>>
+* \q
+<<
+>>

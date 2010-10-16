@@ -1,0 +1,1383 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : dt95.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN 
+
+  Databases     : SEPPARAMDB (datatypedb)
+  Tables        : dt95_t1
+  Filled Files  : 
+  Copied Files  : 
+  Output Files  :
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : Basic functionality test: 
+                :   * Valid insert/update/delete statements.
+                :   * Simple predicates with  =, !=, <, >, IS NULL, IS NOT NULL,
+                      IS FALSE|TRUE, IS NOT FALSE|TRUE, BETWEEN, AND, OR.
+		    * Invalid delete/update statements.
+
+  Known Issues  : None.
+
+  History       : 05-Jan-2010 (vande02) Created.
+		  22-Feb-2010 (vande02) Additional queries were added.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop dt95_t1\g
+<<
+~
+>>
+* create table dt95_t1 (c1_id smallint, c2_bool boolean)\g
+<<
+>>
+/*
+Valid inserts into a boolean column.
+*/
+* insert into dt95_t1 values (100, true)\g
+<<
+(1 row)
+>>
+* insert into dt95_t1 values (200, false)\g
+<<
+(1 row)
+>>
+* insert into dt95_t1 values (300, null)\g
+<<
+(1 row)
+>>
+* insert into dt95_t1 values (400, null)\g
+<<
+(1 row)
+>>
+* insert into dt95_t1 values (500, 'TRUE')\g
+<<
+(1 row)
+>>
+* insert into dt95_t1 values (600, 'FALSE')\g
+<<
+(1 row)
+>>
+* insert into dt95_t1 values (700, 1)\g
+<<
+(1 row)
+>>
+* insert into dt95_t1 values (800, 0)\g
+<<
+(1 row)
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+/*
+FYI - This query is expected to not return the 2 rows with NULL values b/c
+the TRUE rows qualify because c2_bool is TRUE and it thus matches c2_bool
+!= false.  The FALSE rows quality because c2_bool is FALSE and it thus
+matches c2_bool != true.  The 2 rows with NULL do not qualify because c2_bool
+is NULL/UNKNOWN and the truth value of equal/not equal comparisons against
+NULL is always Unknown and OR'ing two Unknowns results in another Unknown
+which does not qualify.
+*/
+* select * from dt95_t1 where c2_bool != true OR c2_bool != false order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(6 rows)
+>>
+* select * from dt95_t1 where c2_bool between false and true\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(6 rows)
+>>
+* commit\g
+<<
+>>
+/*
+Valid update statements.
+*/
+* update dt95_t1 set c2_bool = false where c2_bool = true \g
+<<
+(3 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|FALSE|
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|FALSE|
+|   600|FALSE|
+|   700|FALSE|
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = true where c2_bool = false \g
+<<
+(6 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = 'false' where c2_bool IS TRUE\g
+<<
+(6 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|FALSE|
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|FALSE|
+|   600|FALSE|
+|   700|FALSE|
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = 'true'  where c2_bool IS NOT TRUE\g
+<<
+(8 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|TRUE |
+|   400|TRUE |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = 'false' where c2_bool IS NOT FALSE\g
+<<
+(8 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|FALSE|
+|   200|FALSE|
+|   300|FALSE|
+|   400|FALSE|
+|   500|FALSE|
+|   600|FALSE|
+|   700|FALSE|
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = TRUE where c2_bool IS FALSE\g
+<<
+(8 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|TRUE |
+|   400|TRUE |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = NULL where c1_id=300 or c1_id=400\g
+<<
+(2 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+/*
+This update to string 'unknown' is not valid for BOOLEAN.
+*/
+* update dt95_t1 set c2_bool = 'unknown' where c2_bool IS NULL \g
+<<
+
+E_AD106A 'unknown' is not a valid character value for casting to BOOLEAN.
+    (Fri Jan 29 13:08:35 2010)
+
+>>
+* update dt95_t1 set c2_bool = unknown where c2_bool IS NULL \g
+<<
+
+E_US0836 line 1, Column 'unknown' not found in any specified table.
+    (Fri Feb  5 12:30:09 2010)
+
+>>
+* update dt95_t1 set c2_bool = 'true' where c2_bool IS NULL \g
+<<
+(2 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|TRUE |
+|   400|TRUE |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* rollback\g
+<<
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = true where c2_bool = 0\g
+<<
+(3 rows)
+>>
+* update dt95_t1 set c2_bool ='TRUE' where c2_bool IS NULL\g
+<<
+(2 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|TRUE |
+|   400|TRUE |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = false where c2_bool = 1 \g
+<<
+(8 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|FALSE|
+|   200|FALSE|
+|   300|FALSE|
+|   400|FALSE|
+|   500|FALSE|
+|   600|FALSE|
+|   700|FALSE|
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = 'true' where c2_bool = 0 \g
+<<
+(8 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|TRUE |
+|   400|TRUE |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* rollback\g
+<<
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = NULL where c2_bool = 0\g
+<<
+(3 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|     |
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|     |
+|   700|TRUE |
+|   800|     |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = NULL where c2_bool IS NOT NULL\g
+<<
+(3 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|     |
+|   200|     |
+|   300|     |
+|   400|     |
+|   500|     |
+|   600|     |
+|   700|     |
+|   800|     |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = FALSE where c2_bool IS NULL\g
+<<
+(8 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|FALSE|
+|   200|FALSE|
+|   300|FALSE|
+|   400|FALSE|
+|   500|FALSE|
+|   600|FALSE|
+|   700|FALSE|
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = 'true' where c2_bool IS NOT NULL\g
+<<
+(8 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|TRUE |
+|   400|TRUE |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = NULL where c1_id between 699 and 800\g
+<<
+(2 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|TRUE |
+|   400|TRUE |
+|   500|TRUE |
+|   600|TRUE |
+|   700|     |
+|   800|     |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = FALSE where c1_id between 399 and 601\g
+<<
+(3 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|TRUE |
+|   400|FALSE|
+|   500|FALSE|
+|   600|FALSE|
+|   700|     |
+|   800|     |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = NULL where c2_bool between false and true\g
+<<
+(6 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|     |
+|   200|     |
+|   300|     |
+|   400|     |
+|   500|     |
+|   600|     |
+|   700|     |
+|   800|     |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = 'TRUE' where c2_bool IS NULL \g
+<<
+(8 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|TRUE |
+|   400|TRUE |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = 'FALSE' where c2_bool = 'TRUE' \g
+<<
+(8 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|FALSE|
+|   200|FALSE|
+|   300|FALSE|
+|   400|FALSE|
+|   500|FALSE|
+|   600|FALSE|
+|   700|FALSE|
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = true where c2_bool = 'FALSE' \g
+<<
+(8 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|TRUE |
+|   400|TRUE |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = 0 where c2_bool = 1 \g
+<<
+(8 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|FALSE|
+|   200|FALSE|
+|   300|FALSE|
+|   400|FALSE|
+|   500|FALSE|
+|   600|FALSE|
+|   700|FALSE|
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = NULL where c2_bool = 0 \g
+<<
+(8 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|     |
+|   200|     |
+|   300|     |
+|   400|     |
+|   500|     |
+|   600|     |
+|   700|     |
+|   800|     |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = TRUE where c2_bool = 'NULL' \g
+<<
+E_AD106A 'NULL' is not a valid character value for casting to BOOLEAN.
+    (Thu Jan 28 15:29:41 2010)
+>>
+* update dt95_t1 set c2_bool = FALSE where c2_bool = 'UNKNOWN' \g
+<<
+E_AD106A 'UNKNOWN' is not a valid character value for casting to BOOLEAN.
+    (Thu Jan 28 15:31:54 2010)
+>>
+* rollback\g
+<<
+>>
+* update dt95_t1 set c2_bool = 1 where c2_bool IS NOT UNKNOWN\g
+<<
+(6 rows)
+>>
+<<
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* update dt95_t1 set c2_bool = 0 where c2_bool IS UNKNOWN\g
+<<
+(2 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|TRUE |
+|   300|FALSE|
+|   400|FALSE|
+|   500|TRUE |
+|   600|TRUE |
+|   700|TRUE |
+|   800|TRUE |
++------+-----+
+(8 rows)
+>>
+* rollback\g
+<<
+>>
+/*
+Valid delete statements. Where did the two null rows go?
+*/
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* delete from dt95_t1 where c2_bool IS NULL\g
+<<
+(2 rows)
+>>
+* delete from dt95_t1 where c2_bool = TRUE\g
+<<
+(3 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   200|FALSE|
+|   600|FALSE|
+|   800|FALSE|
++------+-----+
+(3 rows)
+>>
+* delete from dt95_t1 where c2_bool = FALSE \g
+<<
+(3 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
++------+-----+
+(0 rows)
+>>
+* rollback\g
+<<
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* select count(*) from dt95_t1 where c2_bool IS FALSE\g
+<<
++-------------+
+|col1         |
++-------------+
+|            3|
++-------------+
+(1 row)
+>>
+* delete from dt95_t1 where c2_bool IS FALSE\g
+<<
+(3 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   700|TRUE |
++------+-----+
+(5 rows)
+>>
+* select count(*) from dt95_t1 where c2_bool IS TRUE\g
+<<
++-------------+
+|col1         |
++-------------+
+|            3|
++-------------+
+(1 row)
+>>
+* delete from dt95_t1 where c2_bool IS TRUE\g
+<<
+(3 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   300|     |
+|   400|     |
++------+-----+
+(2 rows)
+>>
+* rollback\g
+<<
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+/*
+The NULL rows above should be included in the query with IS NOT FALSE|TRUE.
+See closed issue 141961.
+*/
+* select count(*) from dt95_t1 where c2_bool IS NOT FALSE\g
+<<
++-------------+
+|col1         |
++-------------+
+|            5|
++-------------+
+(1 row)
+>>
+* delete from dt95_t1 where c2_bool IS NOT FALSE\g
+<<
+(5 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   200|FALSE|
+|   600|FALSE|
+|   800|FALSE|
++------+-----+
+(3 rows)
+>>
+* rollback\g
+<<
+>>
+* select count(*) from dt95_t1 where c2_bool IS NOT TRUE\g
+<<
++-------------+
+|col1         |
++-------------+
+|            5|
++-------------+
+(1 row)
+>>
+* delete from dt95_t1 where c2_bool IS NOT TRUE\g
+<<
+(5 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   500|TRUE |
+|   700|TRUE |
++------+-----+
+(3 rows)
+>>
+* rollback\g
+<<
+>>
+/*
+Valid deletes with simple predicates for =, !=, <, >, IS NULL, IS NOT NULL.
+*/
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* delete from dt95_t1 where c2_bool = true\g
+<<
+(3 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   600|FALSE|
+|   800|FALSE|
++------+-----+
+(5 rows)
+>>
+* delete from dt95_t1 where c2_bool = false\g
+<<
+(3 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   300|     |
+|   400|     |
++------+-----+
+(2 rows)
+>>
+* rollback\g
+<<
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* delete from dt95_t1 where c2_bool != true\g
+<<
+(3 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   700|TRUE |
++------+-----+
+(5 rows)
+>>
+* delete from dt95_t1 where c2_bool != false\g
+<<
+(3 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   300|     |
+|   400|     |
++------+-----+
+(2 rows)
+>>
+* rollback\g
+<<
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* delete from dt95_t1 where c2_bool < TRUE\g
+<<
+(3 rows)
+>>
+* select * from dt95_t1 order by 2,1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   500|TRUE |
+|   700|TRUE |
+|   300|     |
+|   400|     |
++------+-----+
+(5 rows)
+>>
+* delete from dt95_t1 where c2_bool > FALSE\g
+<<
+(3 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   300|     |
+|   400|     |
++------+-----+
+(2 rows)
+>>
+* delete from dt95_t1 where c2_bool IS NULL\g
+<<
+(2 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
++------+-----+
+(0 rows)
+>>
+* rollback\g
+<<
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* delete from dt95_t1 where c2_bool IS NOT NULL\g
+<<
+(6 rows)
+>>
+* select * from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   300|     |
+|   400|     |
++------+-----+
+(2 rows)
+>>
+* rollback\g
+<<
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+/*
+This will not find any rows to delete because this is an invalid
+range.  FALSE is less than TRUE, therefore, FALSE should come first.
+*/
+* delete from dt95_t1 where c2_bool between true and false\g
+<<
+(0 rows)
+>>
+* delete from dt95_t1 where c2_bool between false and true\g
+<<
+(6 rows)
+>>
+* select c1_id, c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   300|     |
+|   400|     |
++------+-----+
+(2 rows)
+>>
+* rollback\g
+<<
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* delete from dt95_t1 where c2_bool = 'true'\g
+<<
+(3 rows)
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   600|FALSE|
+|   800|FALSE|
++------+-----+
+(5 rows)
+>>
+* delete from dt95_t1 where c2_bool = 'false'\g
+<<
+(3 rows)
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   300|     |
+|   400|     |
++------+-----+
+(2 rows)
+>>
+* delete from dt95_t1 where c2_bool IS NULL\g
+<<
+(2 rows)
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
++------+-----+
+(0 rows)
+>>
+* rollback\g
+<<
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* delete from dt95_t1 where c2_bool IS UNKNOWN\g
+<<
+(2 rows)
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(6 rows)
+>>
+* delete from dt95_t1 where c2_bool = 0\g
+<<
+(3 rows)
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   500|TRUE |
+|   700|TRUE |
++------+-----+
+(3 rows)
+>>
+* delete from dt95_t1 where c2_bool = 1\g
+<<
+(3 rows)
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
++------+-----+
+(0 rows)
+>>
+* rollback\g
+<<
+>>
+* delete from dt95_t1 where c2_bool = ' '\g
+<<
+E_AD106A '' is not a valid character value for casting to BOOLEAN.
+    (Thu Jan 28 15:35:08 2010)
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* delete from dt95_t1 where c2_bool IS NOT UNKNOWN\g
+<<
+(6 rows)
+>>
+* select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   300|     |
+|   400|     |
++------+-----+
+(2 rows)
+>>
+* rollback\g
+<<
+>>
+*  select c1_id,c2_bool from dt95_t1 order by 1\g
+<<
+
++------+-----+
+|c1_id |c2_bo|
++------+-----+
+|   100|TRUE |
+|   200|FALSE|
+|   300|     |
+|   400|     |
+|   500|TRUE |
+|   600|FALSE|
+|   700|TRUE |
+|   800|FALSE|
++------+-----+
+(8 rows)
+>>
+* \q
+<<
+>>

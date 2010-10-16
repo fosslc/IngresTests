@@ -1,0 +1,884 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : dt97.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN 
+
+  Databases     : SEPPARAMDB (datatypedb)
+  Tables        : dt97_t1, dt97_t2, dt97_t3
+  Filled Files  : 
+  Copied Files  : 
+  Output Files  :
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : Basic functionality test: 
+		    * Invalid insert with Key Word UNKNOWN.
+                    * Valid data type conversion with BOOLEAN() function syntax
+		      with operand types of:
+                      integer1, smallint, integer, bigint
+		      where the "Result Type" will be "boolean".
+		    * Valid updates/selects/deletes using BOOLEAN values 0 or 1
+		      in predicate and conversion BOOLEAN() function.
+		    * Invalid deletes/selects with BOOLEAN() function in 
+		      predicate then in the selection list.
+		    * Valid deletes with BOOLEAN() function after removing
+		      the row with invalid numeric values.
+		    * Valid selects/deletes with IS [NOT] UNKNOWN.
+                    * Valid aggregate selects i.e. count(*), any, group by.
+                    * Invalid numeric data types conversion functions.
+
+  Known Issues  : None.
+
+  History       : 11-Jan-2010 (vande02) Created.
+		  29-Jan-2010 (vande02) Additional valid/invalid selects/deletes
+		  25-Feb-2010 (vande02) Removed redundant boolean() queries.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop dt97_t1, dt97_t2, dt97_t3\g
+<<
+~
+>>
+* create table dt97_t1 (id int4, c2_int1 integer1,-
+  c3_small smallint, c4_int integer, c5_big bigint)\g
+<<
+
+>>
+* insert into dt97_t1 values (1000,0,0,0,0)\g
+<<
+(1 row)
+>>
+* insert into dt97_t1 values (2000,1,1,1,1)\g
+<<
+(1 row)
+>>
+* insert into dt97_t1 values (3000,null,null,null,null)\g
+<<
+(1 row)
+>>
+/*
+Invalid insert with Key Word UNKNOWN
+*/
+* insert into dt97_t1 values (8000,unknown,unknown,unknown,unknown)\g
+<<
+
+E_US0836 line 1, Column 'unknown' not found in any specified table.
+    (Mon Mar  1 12:46:53 2010)
+>>
+* select * from dt97_t1 order by 1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(3 rows)
+>>
+/*
+Valid selects and data type conversion with BOOLEAN() function syntax with
+operand types of:
+
+	integer1, smallint, integer, bigint
+
+where the "Result Type" will be "boolean".
+*/
+* select id,boolean(c2_int1), boolean(c3_small),-
+  boolean(c4_int), boolean(c5_big) from dt97_t1 order by 1\g
+<<
+
++-------------+-----+-----+-----+-----+
+|id           |col2 |col3 |col4 |col5 |
++-------------+-----+-----+-----+-----+
+|         1000|FALSE|FALSE|FALSE|FALSE|
+|         2000|TRUE |TRUE |TRUE |TRUE |
+|         3000|     |     |     |     |
++-------------+-----+-----+-----+-----+
+(3 rows)
+>>
+* select id,boolean(c2_int1), boolean(c3_small),-
+  boolean(c4_int), boolean(c5_big) from dt97_t1-
+  where c2_int1 IS NOT NULL order by 1\g
+<<
+
++-------------+-----+-----+-----+-----+
+|id           |col2 |col3 |col4 |col5 |
++-------------+-----+-----+-----+-----+
+|         1000|FALSE|FALSE|FALSE|FALSE|
+|         2000|TRUE |TRUE |TRUE |TRUE |
++-------------+-----+-----+-----+-----+
+(2 rows)
+>>
+* select id,boolean(c2_int1), boolean(c3_small),-
+  boolean(c4_int), boolean(c5_big) from dt97_t1-
+  where c2_int1 IS NULL order by 1\g
+<<
+
++-------------+-----+-----+-----+-----+
+|id           |col2 |col3 |col4 |col5 |
++-------------+-----+-----+-----+-----+
+|         3000|     |     |     |     |
++-------------+-----+-----+-----+-----+
+(1 row)
+>>
+* commit\g
+<<
+>>
+/*
+Valid updates/selects/deletes using BOOLEAN values 0 or 1 in predicate and
+conversion now that issue 141875 has been fixed.
+*/
+* update dt97_t1 set c5_big=1 where boolean(c5_big) = 0\g
+<<
+(1 row)
+>>
+* select * from dt97_t1 where boolean(c5_big) = 1 order by 1\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     1|
+|         2000|     1|     1|            1|                     1|
++-------------+------+------+-------------+----------------------+
+(2 rows)
+>>
+* select id,boolean(c5_big) from dt97_t1 where c5_big = 1 order by 1\g
+<<
++-------------+-----+
+|id           |col2 |
++-------------+-----+
+|         1000|TRUE |
+|         2000|TRUE |
++-------------+-----+
+(2 rows)
+>>
+* update dt97_t1 set c2_int1=1 where boolean(c2_int1) = 0\g
+<<
+(1 row)
+>>
+* select * from dt97_t1 where boolean(c2_int1) = 1 order by 1\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     1|     0|            0|                     1|
+|         2000|     1|     1|            1|                     1|
++-------------+------+------+-------------+----------------------+
+(2 rows)
+>>
+* select id,boolean(c2_int1) from dt97_t1 where c2_int1 = 1 order by 1\g
+<<
++-------------+-----+
+|id           |col2 |
++-------------+-----+
+|         1000|TRUE |
+|         2000|TRUE |
++-------------+-----+
+(2 rows)
+>>
+* update dt97_t1 set c3_small=0 where boolean(c3_small) = 1\g
+<<
+(1 row)
+>>
+* select * from dt97_t1 where boolean(c3_small) = 0 order by 1\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     1|     0|            0|                     1|
+|         2000|     1|     0|            1|                     1|
++-------------+------+------+-------------+----------------------+
+(2 rows)
+>>
+* select id,boolean(c3_small) from dt97_t1 where c3_small = 0 order by 1\g
+<<
++-------------+-----+
+|id           |col2 |
++-------------+-----+
+|         1000|FALSE|
+|         2000|FALSE|
++-------------+-----+
+(2 rows)
+>>
+* update dt97_t1 set c4_int=0 where boolean(c4_int) = 1\g
+<<
+(1 row)
+>>
+* select * from dt97_t1 where boolean(c4_int) = 0 order by 1\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     1|     0|            0|                     1|
+|         2000|     1|     0|            0|                     1|
++-------------+------+------+-------------+----------------------+
+(2 rows)
+>>
+* select id,boolean(c4_int) from dt97_t1 where c4_int = 0 order by 1\g
+<<
++-------------+-----+
+|id           |col2 |
++-------------+-----+
+|         1000|FALSE|
+|         2000|FALSE|
++-------------+-----+
+(2 rows)
+>>
+/*
+Rollback to original set of values to execute a few more updates which
+do not touch the BOOLEAN functionality, but they setup the table for
+the valid deletes with BOOLEAN() that follow.
+*/
+* rollback\g
+<<
+>>
+* select * from dt97_t1 order by 1\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(3 rows)
+>>
+* update dt97_t1 set c2_int1 = 1, c3_small = 1, c4_int = 1, c5_big = 1-
+  where c2_int1 != 1 and c3_small != 1 and c4_int != 1 and c5_big != 1\g
+<<
+(1 row)
+>>
+* select * from dt97_t1 order by 1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     1|     1|            1|                     1|
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(3 rows)
+>>
+* update dt97_t1 set c2_int1 = 0, c3_small = 0, c4_int = 0, c5_big = 0-
+  where c2_int1 = 1 and c3_small = 1 and c4_int = 1 and c5_big = 1\g
+<<
+(2 rows)
+>>
+* select * from dt97_t1 order by 1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     0|     0|            0|                     0|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(3 rows)
+>>
+* delete from dt97_t1 where boolean(c2_int1)=false\g
+<<
+(2 rows)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(1 row)
+>>
+* delete from dt97_t1 where boolean(c3_small) IS NULL\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
++-------------+------+------+-------------+----------------------+
+(0 rows)
+>>
+* rollback\g
+<<
+>>
+* select * from dt97_t1 order by 1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(3 rows)
+>>
+* delete from dt97_t1 where boolean(c4_int)=TRUE\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(2 rows)
+>>
+* delete from dt97_t1 where boolean(c5_big) IS NOT NULL\g
+<<
+(1 row)
+>>
+*  select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(1 row)
+>>
+* rollback\g
+<<
+>>
+* select count(*) from dt97_t1\g
+<<
+
++-------------+
+|col1         |
++-------------+
+|            3|
++-------------+
+(1 row)
+>>
+/*
+Test select/delete with BOOLEAN() function in predicate where the table
+includes one row with invalid values in the numeric columns.
+
+Per Development, the row with values out of the range of BOOLEAN are invalid
+because the only numeric values that can be converted to boolean are 0 and 1,
+everything else is off limits.
+*/
+* insert into dt97_t1 values (4000,2,44,5000,999999999)\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
+|         4000|     2|    44|         5000|             999999999|
++-------------+------+------+-------------+----------------------+
+(4 rows)
+>>
+* commit\g
+<<
+>>
+/*
+Invalid deletes/selects of integers for the BOOLEAN() function in
+where clause then in the selection list.
+*/
+* delete from dt97_t1 where boolean(c2_int1)=0\g
+<<
+
+E_AD106B '2' is not a valid integer value for casting to BOOLEAN.
+    (Fri Jan 29 11:21:53 2010)
+>>
+* delete from dt97_t1 where boolean(c3_small)=1\g
+<<
+
+E_AD106B '44' is not a valid integer value for casting to BOOLEAN.
+    (Fri Jan 29 11:22:21 2010)
+>>
+* delete from dt97_t1 where boolean(c4_int)='false'\g
+<<
+
+E_AD106B '5000' is not a valid integer value for casting to BOOLEAN.
+    (Fri Jan 29 11:22:50 2010)
+>>
+* delete from dt97_t1 where boolean(c5_big)='true'\g
+<<
+
+E_AD106B '999999999' is not a valid integer value for casting to BOOLEAN.
+    (Fri Jan 29 11:23:08 2010)
+>>
+* delete from dt97_t1 where boolean(c4_int)=FALSE\g
+<<
+
+E_AD106B '5000' is not a valid integer value for casting to BOOLEAN.
+    (Fri Jan 29 11:24:31 2010)
+>>
+* delete from dt97_t1 where boolean(c5_big)=true\g
+<<
+
+E_AD106B '999999999' is not a valid integer value for casting to BOOLEAN.
+    (Fri Jan 29 11:24:54 2010)
+>>
+* select id,boolean(c2_int1) from dt97_t1 order by 1\g
+<<
+
+E_AD106B '2' is not a valid integer value for casting to BOOLEAN.
+    (Tue Jan 12 17:23:11 2010)
+>>
+* select id,boolean(c3_small) from dt97_t1 order by 1\g
+<<
+
+E_AD106B '44' is not a valid integer value for casting to BOOLEAN.
+    (Tue Jan 12 17:26:18 2010)
+>>
+* select id,boolean(c4_int) from dt97_t1 order by 1\g
+<<
+
+E_AD106B '5000' is not a valid integer value for casting to BOOLEAN.
+    (Tue Jan 12 17:27:06 2010)
+>>
+* select id,boolean(c5_big) from dt97_t1 order by 1\g
+<<
+
+E_AD106B '999999999' is not a valid integer value for casting to BOOLEAN.
+    (Tue Jan 12 17:29:42 2010)
+>>
+* select id,boolean(2) from dt97_t1 order by 1\g
+<<
+
+E_AD106B '2' is not a valid integer value for casting to BOOLEAN.
+    (Tue Jan 12 17:32:16 2010)
+>>
+/*
+Valid deletes with the BOOLEAN() function on numeric columns after
+removing the row with invalid values.
+*/
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
+|         4000|     2|    44|         5000|             999999999|
++-------------+------+------+-------------+----------------------+
+(4 rows)
+>>
+* delete from dt97_t1 where id = 4000\g
+<<
+(1 row)
+>>
+* commit\g
+<<
+>>
+* delete from dt97_t1 where boolean(c2_int1) IS UNKNOWN\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
++-------------+------+------+-------------+----------------------+
+(2 rows)
+>>
+* delete from dt97_t1 where boolean(c2_int1)=0\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         2000|     1|     1|            1|                     1|
++-------------+------+------+-------------+----------------------+
+(1 row)
+>>
+* delete from dt97_t1 where boolean(c3_small)=1\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
++-------------+------+------+-------------+----------------------+
+(0 rows)
+>>
+* rollback\g
+<<
+>>
+* select * from dt97_t1\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(3 rows)
+>>
+* delete from dt97_t1 where boolean(c4_int)='false'\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(2 rows)
+>>
+* delete from dt97_t1 where boolean(c5_big)='true'\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(1 row)
+>>
+* delete from dt97_t1 where boolean(c3_small) IS NULL\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
++-------------+------+------+-------------+----------------------+
+(0 rows)
+>>
+* rollback\g
+<<
+>>
+* select * from dt97_t1\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(3 rows)
+>>
+* delete from dt97_t1 where boolean(c4_int)=false\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(2 rows)
+>>
+* delete from dt97_t1 where boolean(c5_big)=TRUE\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(1 row)
+>>
+* rollback\g
+<<
+>>
+* select * from dt97_t1 where boolean(c3_small) IS UNKNOWN\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(1 row)
+>>
+* delete from dt97_t1 where boolean(c3_small) IS UNKNOWN\g
+<<
+(1 row)
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
++-------------+------+------+-------------+----------------------+
+(2 rows)
+>>
+* rollback\g
+<<
+>>
+* select * from dt97_t1\g
+<<
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(3 rows)
+>>
+* select * from dt97_t1 where boolean(c5_big) IS NOT UNKNOWN\g
+<<
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         1000|     0|     0|            0|                     0|
+|         2000|     1|     1|            1|                     1|
++-------------+------+------+-------------+----------------------+
+(2 rows)
+>>
+* delete from dt97_t1 where boolean(c4_int) IS NOT UNKNOWN\g
+<<
+(2 rows)
+>>
+* select * from dt97_t1\g
+
++-------------+------+------+-------------+----------------------+
+|id           |c2_int|c3_sma|c4_int       |c5_big                |
++-------------+------+------+-------------+----------------------+
+|         3000|      |      |             |                      |
++-------------+------+------+-------------+----------------------+
+(1 row)
+>>
+* rollback\g
+<<
+>>
+* create table dt97_t2 (id int8,c2_bool boolean)\g
+<<
+>>
+* insert into dt97_t2 values (1000000,true)\g
+<<
+(1 row)
+>>
+* insert into dt97_t2 values (2000000,FALSE)\g
+<<
+(1 row)
+>>
+* insert into dt97_t2 values (3000000,'TRUE')\g
+<<
+(1 row)
+>>
+* insert into dt97_t2 values (4000000,'false')\g
+<<
+(1 row)
+>>
+* insert into dt97_t2 values (5000000,1)\g
+<<
+(1 row)
+>>
+* insert into dt97_t2 values (6000000,0)\g
+<<
+(1 row)
+>>
+* insert into dt97_t2 values (7000000,null)\g
+<<
+(1 row)
+>>
+* select * from dt97_t2 where c2_bool IS UNKNOWN order by 1\g
+<<
++----------------------+-----+
+|id                    |c2_bo|
++----------------------+-----+
+|               7000000|     |
++----------------------+-----+
+(1 row)
+>>
+* select * from dt97_t2 where c2_bool IS NOT UNKNOWN order by 1\g
+<<
++----------------------+-----+
+|id                    |c2_bo|
++----------------------+-----+
+|               1000000|TRUE |
+|               2000000|FALSE|
+|               3000000|TRUE |
+|               4000000|FALSE|
+|               5000000|TRUE |
+|               6000000|FALSE|
++----------------------+-----+
+(6 rows)
+>>
+/*
+Valid aggregate functions for BOOLEAN i.e. count, any, group by.
+*/
+* select c2_bool,count(*) from dt97_t2 group by c2_bool order by 1\g
+<<
+
++-----+-------------+
+|c2_bo|col2         |
++-----+-------------+
+|FALSE|            3|
+|TRUE |            3|
+|     |            1|
++-----+-------------+
+(3 rows)
+>>
+* select c2_bool,any(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+
++-----+------+
+|c2_bo|col2  |
++-----+------+
+|FALSE|     1|
+|TRUE |     1|
+|     |     0|
++-----+------+
+(3 rows)
+>>
+* select c2_bool from dt97_t2 group by c2_bool order by 1\g
+<<
+
++-----+
+|c2_bo|
++-----+
+|FALSE|
+|TRUE |
+|     |
++-----+
+(3 rows)
+>>
+* select distinct(c2_bool) from dt97_t2 order by 1 desc\g
+<<
++-----+
+|c2_bo|
++-----+
+|     |
+|TRUE |
+|FALSE|
++-----+
+(3 rows)
+>>
+/*
+Invalid numeric data type functions for BOOLEAN.
+7-Jan-2010 (vande02) per Joe, this may change and the missing scalar
+functions i.e. BOOLEAN to INTEGER data type conversion functions may
+be implemented.  Hibernate users wanted to use BOOLEAN in their databases
+as TINYINTs.  Joe is checking on this.  For now, they are invalid conversions.
+*/
+* select bigint(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+
+E_US0B5B line 1, Function 'bigint' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Mon Jan 11 22:38:21 2010)
+>>
+* select int4(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+E_US0B5B line 1, Function 'int' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Mon Jan 11 22:39:17 2010)
+>>
+* select integer(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+E_US0B5B line 1, Function 'int' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Mon Jan 11 22:39:57 2010)
+>>
+* select smallint(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+E_US0B5B line 1, Function 'int2' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Mon Jan 11 22:40:27 2010)
+>>
+* select tinyint(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+E_US0B5B line 1, Function 'int1' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Mon Jan 11 22:40:50 2010)
+>>
+* select max(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+E_US0B5B line 1, Function 'max' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Mon Jan 11 22:41:20 2010)
+>>
+* select min(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+E_US0B5B line 1, Function 'min' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Mon Jan 11 22:42:10 2010)
+>>
+* select sum(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+E_US0B5B line 1, Function 'sum' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Mon Jan 11 22:42:32 2010)
+>>
+* select stddev_pop (c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+E_US0B5B line 1, Function 'stddev_pop' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Fri Jan  8 19:58:01 2010)
+>>
+* select var_pop(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+E_US0B5B line 1, Function 'var_pop' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Fri Jan  8 19:58:41 2010)
+>>
+* select stddev_samp(c2_bool) from dt97_t2 group by c2_bool order by 1\g
+<<
+E_US0B5B line 1, Function 'stddev_samp' does not take an argument of type
+    'boolean'. Explicitly convert the argument to the desired type.
+    (Fri Jan  8 20:00:09 2010)
+>>
+* select ifnull(c2_bool,1) from dt97_t2 order by 1\g
+<<
+E_US0B5C line 1, Function 'ifnull' is not defined for arguments of type
+    'boolean' and 'integer'. Explicitly convert its arguments to the desired
+    type(s).
+    (Mon Jan 11 22:43:47 2010)
+>>
+* \q
+<<
+>>
