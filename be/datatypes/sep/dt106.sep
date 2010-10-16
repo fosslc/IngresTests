@@ -1,0 +1,193 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : dt106.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN with CASE statements.
+
+  Databases     : SEPPARAMDB (datatypedb)
+  Tables        : dt106_t1, dt106_t2, dt106_view, dt106_view2
+  Indexes	: 
+  Filled Files  : 
+  Copied Files  : 
+  Output Files  : 
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : Basic functionality test:
+			* select case when <BOOLEAN search condition> then 
+			  <BOOLEAN VALUE> else <BOOLEAN VALUE>
+			* create view as select <column, column, column>,
+			  case when <BOOLEAN search condition> then
+			  <BOOLEAN VALUE> when <BOOLEAN search condition> then
+			  <BOOLEAN VALUE> else <BOOLEAN VALUE>
+  Known Issues  : None
+
+  History       : 23-Feb-2010 (vande02) Created.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop dt106_t1, dt106_t2\g
+<<
+~
+>>
+* create table dt106_t1(part char(10) not null, hired boolean,-
+  emplastname char(25) null, empfirstname char(25) null)-
+  with page_size=4096\g
+<<
+>>
+* insert into dt106_t1 values ('Rat Pack', 1, 'Martin', 'Dean')\g 
+<<
+(1 row)
+>>
+* insert into dt106_t1 values ('Rat Pack', 1, 'Sinatra','Frank')\g 
+<<
+(1 row)
+>>
+* insert into dt106_t1 values ('star', null, 'Lee', 'Peggy')\g 
+<<
+(1 row)
+>>
+* insert into dt106_t1 values ('Rat Pack', TRUE, 'Davis,Jr.', 'Sammy')\g 
+<<
+(1 row)
+>>
+* insert into dt106_t1 values ('singer', null, 'Diamond', 'Neil')\g
+<<
+(1 row)
+>>
+* insert into dt106_t1 values ('Rat Pack', true, 'Bishop', 'Joey')\g 
+<<
+(1 row)
+>>
+* insert into dt106_t1 values ('Rat Pack', 'true', 'Lawford', 'Peter')\g 
+<<
+(1 row)
+>>
+* insert into dt106_t1 values ('star', null, 'Jones', 'Tom')\g 
+<<
+(1 row)
+>>
+* insert into dt106_t1 values ('manager', false, 'Sullivan', 'Ed')\g 
+<<
+(1 row)
+>>
+* insert into dt106_t1 values ('co-star', null, 'Gayle', 'Crystal')\g 
+<<
+(1 row)
+>>
+* select empfirstname, emplastname,-
+  case when hired = 1 then TRUE else FALSE end as listcast,-
+  case when hired = 0 then FALSE else TRUE end as otherstars,-
+  case when hired IS NULL then 'SINGER' when hired = FALSE then 'MANAGER'-
+  else 'RAT PACK' end as thecast from dt106_t1 order by 4, 2\g
+<<
+
++-------------------------+-------------------------+-----+-----+--------+
+|empfirstname             |emplastname              |listc|other|thecast |
++-------------------------+-------------------------+-----+-----+--------+
+|Ed                       |Sullivan                 |FALSE|FALSE|MANAGER |
+|Joey                     |Bishop                   |TRUE |TRUE |RAT PACK|
+|Sammy                    |Davis,Jr.                |TRUE |TRUE |RAT PACK|
+|Neil                     |Diamond                  |FALSE|TRUE |SINGER  |
+|Crystal                  |Gayle                    |FALSE|TRUE |SINGER  |
+|Tom                      |Jones                    |FALSE|TRUE |SINGER  |
+|Peter                    |Lawford                  |TRUE |TRUE |RAT PACK|
+|Peggy                    |Lee                      |FALSE|TRUE |SINGER  |
+|Dean                     |Martin                   |TRUE |TRUE |RAT PACK|
+|Frank                    |Sinatra                  |TRUE |TRUE |RAT PACK|
++-------------------------+-------------------------+-----+-----+--------+
+(10 rows)
+>>
+* drop view dt106_view\g
+<<
+~
+>>
+* create view dt106_view-
+  as select empfirstname, emplastname, part,-
+  case when hired = false then TRUE when hired IS NULL then 'TRUE'-
+  else 'FALSE' end as available from dt106_t1\g
+<<
+>>
+* select * from dt106_view order by 4,2,1\g
+<<
+
++-------------------------+-------------------------+----------+-----+
+|empfirstname             |emplastname              |part      |avail|
++-------------------------+-------------------------+----------+-----+
+|Joey                     |Bishop                   |Rat Pack  |FALSE|
+|Sammy                    |Davis,Jr.                |Rat Pack  |FALSE|
+|Peter                    |Lawford                  |Rat Pack  |FALSE|
+|Dean                     |Martin                   |Rat Pack  |FALSE|
+|Frank                    |Sinatra                  |Rat Pack  |FALSE|
+|Neil                     |Diamond                  |singer    |TRUE |
+|Crystal                  |Gayle                    |co-star   |TRUE |
+|Tom                      |Jones                    |star      |TRUE |
+|Peggy                    |Lee                      |star      |TRUE |
+|Ed                       |Sullivan                 |manager   |TRUE |
++-------------------------+-------------------------+----------+-----+
+(10 rows)
+>>
+/*
+This should fail because 'RAT PACK' is not a valid character value for BOOLEAN.
+*/
+* create table dt106_t2 as select empfirstname, emplastname, part,-
+  case when hired = TRUE then 'RAT PACK' else FALSE end as myratpack-
+  from dt106_t1\g
+<<
+
+E_AD106A 'RAT PACK' is not a valid character value for casting to BOOLEAN.
+    (Tue Feb 23 18:07:31 2010)
+>>
+* create table dt106_t2 as select empfirstname, emplastname, part,-
+  case when hired = TRUE then 'true' else 'false' end as rats-
+  from dt106_t1\g
+<<
+(10 rows)
+>>
+* select * from dt106_t2 order by part, emplastname\g
+<<
+
++-------------------------+-------------------------+----------+------+
+|empfirstname             |emplastname              |part      |rats  |
++-------------------------+-------------------------+----------+------+
+|Joey                     |Bishop                   |Rat Pack  |true  |
+|Sammy                    |Davis,Jr.                |Rat Pack  |true  |
+|Peter                    |Lawford                  |Rat Pack  |true  |
+|Dean                     |Martin                   |Rat Pack  |true  |
+|Frank                    |Sinatra                  |Rat Pack  |true  |
+|Crystal                  |Gayle                    |co-star   |false |
+|Ed                       |Sullivan                 |manager   |false |
+|Neil                     |Diamond                  |singer    |false |
+|Tom                      |Jones                    |star      |false |
+|Peggy                    |Lee                      |star      |false |
++-------------------------+-------------------------+----------+------+
+(10 rows)
+>>
+* drop view dt106_view2\g
+<<
+~
+>>
+* create view dt106_view2-
+  as select empfirstname, emplastname, part,-
+  case when hired <= 0 then 'TRUE' when hired IS NULL then true-
+  else FALSE end as stars from dt106_t1\g
+<<
+>>
+* select * from dt106_view2 where stars IS TRUE order by empfirstname\g
+<<
+
++-------------------------+-------------------------+----------+-----+
+|empfirstname             |emplastname              |part      |stars|
++-------------------------+-------------------------+----------+-----+
+|Crystal                  |Gayle                    |co-star   |TRUE |
+|Ed                       |Sullivan                 |manager   |TRUE |
+|Neil                     |Diamond                  |singer    |TRUE |
+|Peggy                    |Lee                      |star      |TRUE |
+|Tom                      |Jones                    |star      |TRUE |
++-------------------------+-------------------------+----------+-----+
+(5 rows)
+>>
+* \q 
+<<
+>>

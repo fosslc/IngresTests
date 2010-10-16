@@ -1,0 +1,247 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : dt99.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN with indexes.
+
+  Databases     : SEPPARAMDB (datatypedb)
+  Tables        : dt99_t1, dt99_t2, dt99_t3, dt99_t4
+  Indexes       : dt99_idx (unique seconary index)
+  Filled Files  : None
+  Copied Files  : 
+  Output Files  : None
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : Basic functionality test:
+			* create table with integer and BOOLEAN columns
+			* modify table to btree on BOOLEAN column (filled)
+			* create multple-column secondary index using
+			  BOOLEAN and integer columns key=(filled,orderno)
+			* create table AS Select where first table
+			  has a BOOLEAN column.
+			* modify each new table to either ISAM, HASH, or BTREE
+			  using the BOOLEAN column first in the index
+			    * modify dt99_t2 to isam on filled, orderno\g
+			    * modify dt99_t3 to hash on filled, orderno\g
+			    * modify dt99_t4 to btree on filled, orderno\g
+  Known Issues  : None
+
+  History       : 26-Jan-2010 (vande02) Created.
+		  26-Feb-2010 (vande02) Adding more rows to ensure the BOOLEAN
+					column is used in sorting when using
+					secondary index dt99_idx and to ensure
+					the index structure is used after the
+					modify...to...on filled, orderno.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop dt99_t1, dt99_t2, dt99_t3, dt99_t4\g
+<<
+~
+>>
+* create table dt99_t1(orderno integer not null not default,-
+  filled boolean not null with default false,-
+  customername char(512) not null not default)-
+  with journaling, page_size=4096\g
+<<
+>>
+* insert into dt99_t1 values(5001,true,'Sharpie Pencils')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(5001,false,'Sharpie Pencils')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(3050,false,'Dependable Pens')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(3050,true,'Dependable Pens')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(1001,1,'Bright Highlighters')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(1001,0,'Bright Highlighters')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(6050,0,'Fast Calculators')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(6050,1,'Fast Calculators')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(4001,'TRUE','Bulk Paper')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(4001,'false','Bulk Paper')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(2050,'FALSE','Daily Planners')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values(2050,'true','Daily Planners')\g
+<<
+(1 row)
+>>
+* insert into dt99_t1 values (7050,default,'Fancy Desks')\g 
+<<
+(1 row)
+>>
+* insert into dt99_t1 values (7001,null,'No Name Customer')\g 
+<<
+
+E_US0AD9 INSERT: Must not insert NULL value into a nonnullable column
+    'filled'.
+    (Tue Jan 26 16:50:03 2010)
+>>
+* modify dt99_t1 to btree on filled\g
+<<
+(13 rows)
+>>
+* select count(*) from dt99_t1 order by 1\g
+<<
++-------------+
+|col1         |
++-------------+
+|           13|
++-------------+
+(1 row)
+>>
+* create unique index dt99_idx on dt99_t1 (filled,orderno ASC)-
+  with structure=btree, persistence, key=(filled,orderno)\g
+<<
+(13 rows)
+>>
+/*
+During test creation, checked the QEP to see the dt99_idx I(dt99_t1)
+B-Tree(NU) indexes on the BOOLEAN column 'filled' were being used during
+the sorted (order by) select below.  And the rows spanned 4 pages due to
+long customername char(512) column.
+*/
+* select orderno,filled from dt99_t1 order by 2,1\g
+<<
+
++-------------+-----+
+|orderno      |fille|
++-------------+-----+
+|         1001|FALSE|
+|         2050|FALSE|
+|         3050|FALSE|
+|         4001|FALSE|
+|         5001|FALSE|
+|         6050|FALSE|
+|         7050|FALSE|
+|         1001|TRUE |
+|         2050|TRUE |
+|         3050|TRUE |
+|         4001|TRUE |
+|         5001|TRUE |
+|         6050|TRUE |
++-------------+-----+
+(13 rows)
+>>
+* create table dt99_t2 AS SELECT orderno, filled, customername from dt99_t1\g
+<<
+(13 rows)
+>>
+* modify dt99_t2 to isam on filled, orderno\g
+<<
+(13 rows)
+>>
+* select orderno,filled from dt99_t2 order by 2,1\g
+<<
+
++-------------+-----+
+|orderno      |fille|
++-------------+-----+
+|         1001|FALSE|
+|         2050|FALSE|
+|         3050|FALSE|
+|         4001|FALSE|
+|         5001|FALSE|
+|         6050|FALSE|
+|         7050|FALSE|
+|         1001|TRUE |
+|         2050|TRUE |
+|         3050|TRUE |
+|         4001|TRUE |
+|         5001|TRUE |
+|         6050|TRUE |
++-------------+-----+
+(13 rows)
+>>
+* create table dt99_t3 AS SELECT orderno, filled, customername from dt99_t1\g
+<<
+(13 rows)
+>>
+* modify dt99_t3 to hash on filled, orderno\g
+<<
+(13 rows)
+>>
+* select orderno,filled from dt99_t3 order by 2,1\g
+<<
+
++-------------+-----+
+|orderno      |fille|
++-------------+-----+
+|         1001|FALSE|
+|         2050|FALSE|
+|         3050|FALSE|
+|         4001|FALSE|
+|         5001|FALSE|
+|         6050|FALSE|
+|         7050|FALSE|
+|         1001|TRUE |
+|         2050|TRUE |
+|         3050|TRUE |
+|         4001|TRUE |
+|         5001|TRUE |
+|         6050|TRUE |
++-------------+-----+
+(13 rows)
+>>
+* create table dt99_t4 AS SELECT orderno, filled, customername from dt99_t1\g
+<<
+(13 rows)
+>>
+* modify dt99_t4 to btree on filled, orderno\g
+<<
+(13 rows)
+>>
+* select orderno,filled from dt99_t4 order by 2,1\g
+<<
+
++-------------+-----+
+|orderno      |fille|
++-------------+-----+
+|         1001|FALSE|
+|         2050|FALSE|
+|         3050|FALSE|
+|         4001|FALSE|
+|         5001|FALSE|
+|         6050|FALSE|
+|         7050|FALSE|
+|         1001|TRUE |
+|         2050|TRUE |
+|         3050|TRUE |
+|         4001|TRUE |
+|         5001|TRUE |
+|         6050|TRUE |
++-------------+-----+
+(13 rows)
+>>
+* \q 
+<<
+>>

@@ -1,0 +1,263 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : dt100.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN with indexes, alter table
+		  constraint, integrity constraint.
+
+  Databases     : SEPPARAMDB (datatypedb)
+  Tables        : dt100_t1, dt100_t2, dt100_t3
+  Indexex	: unique index dt100_idx
+  Filled Files  : None
+  Copied Files  : 
+  Output Files  : None
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : Basic functionality test:
+			* create BOOLEAN column primary key
+			* Valid/invalid inserts
+			* alter table add constraint check(col2bool is not null)
+			* create unique index with three columns, one BOOLEAN
+			* select/sort using above index
+			* create BOOLEAN integrity constraint IS TRUE|IS FALSE
+  Known Issues  : None
+
+  History       : 28-Jan-2010 (vande02) Created.
+*/
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop dt100_t1, dt100_t2, dt100_t3\g
+<<
+~
+>>
+/*
+Test primary key on a BOOLEAN column.
+*/
+* create table dt100_t1(part varchar(15) not null,-
+  active boolean primary key not null not default,-
+  emplastname varchar(25) not null,-
+  empfirstname varchar(25) not null,-
+  comment char(512) null) with page_size=4096\g 
+<<
+>>
+* insert into dt100_t1 values ('star', 0, 'Jones', 'Tom',null)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t1 values ('star', 1, 'Lee', 'Peggy',null)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t1 values ('co-star', true, 'Jones', 'Tom',null)\g 
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Tue Jan 28 19:24:12 2010)
+>>
+* insert into dt100_t1 values ('co-star', false, 'Lee', 'Peggy',null)\g 
+<<
+E_US1194 Duplicate key on INSERT detected.
+    (Tue Jan 28 19:24:18 2010)
+>>
+* insert into dt100_t1 values ('co-star', null, 'Gayle', 'Crystal',null)\g 
+<<
+E_US0AD9 INSERT: Must not insert NULL value into a nonnullable column
+    'active'.
+    (Tue Jan 28 19:24:55 2010)
+>>
+* modify dt100_t1 to btree on active\g
+<<
+(2 rows)
+>>
+* select part,active,emplastname,empfirstname from dt100_t1-
+  order by active desc\g
+<<
+
++---------------+-----+-------------------------+-------------------------+
+|part           |activ|emplastname              |empfirstname             |
++---------------+-----+-------------------------+-------------------------+
+|star           |TRUE |Lee                      |Peggy                    |
+|star           |FALSE|Jones                    |Tom                      |
++---------------+-----+-------------------------+-------------------------+
+(2 rows)
+>>
+/*
+Test check constraint on BOOLEAN column.
+*/
+* create table dt100_t2(part char(15) not null,-
+  active boolean null not default, emplastname char(25) not null unique,-
+  empfirstname char(25) not null,comment char(512) null) with page_size=4096\g 
+<<
+>>
+* alter table dt100_t2 add constraint dt100_con1 check (active is not null)\g
+<<
+>>
+* insert into dt100_t2 values ('Rat Pack',null,'Davis,Jr.','Sammy',null)\g 
+<<
+
+E_US1905 Check integrity constraint '"dt100_con1"'
+    on table '"dt100_t2"' was violated.
+    (Wed Jan 28 19:44:16 2010)
+>>
+* insert into dt100_t2 values ('Rat Pack',true,'Davis,Jr.','Sammy',null)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t2 values ('Rat Pack',1,'Martin','Dean',null)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t2 values ('Rat Pack','TRUE','Sinatra','Frank',null)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t2 values ('co-star',false,'Newman','Paul',null)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t2 values ('Rat Pack','TRUE','Lawford','Peter',null)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t2 values ('Rat Pack',1,'Bishop','Joey',null)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t2 values ('co-star', 0, 'Gayle', 'Crystal',null)\g 
+<<
+(1 row)
+>>
+* create unique index dt100_idx on dt100_t2 (active,emplastname,empfirstname)-
+  with structure=btree, persistence, key=(active,emplastname,empfirstname)\g
+<<
+(7 rows)
+>>
+/*
+Turned 'set qep' on during test creation to see the dt100_idx index
+was actually used when the following select sorts the query with the
+order by clause which names the columns in the index.  The QEP had
+Sorted(active, emplastname, empfirstname) and dt100_idx I(dt100_t2).
+*/
+* select active,emplastname,empfirstname from dt100_t2-
+  order by active, emplastname, empfirstname\g
+<<
+
++-----+-------------------------+-------------------------+
+|activ|emplastname              |empfirstname             |
++-----+-------------------------+-------------------------+
+|FALSE|Gayle                    |Crystal                  |
+|FALSE|Newman                   |Paul                     |
+|TRUE |Bishop                   |Joey                     |
+|TRUE |Davis,Jr.                |Sammy                    |
+|TRUE |Lawford                  |Peter                    |
+|TRUE |Martin                   |Dean                     |
+|TRUE |Sinatra                  |Frank                    |
++-----+-------------------------+-------------------------+
+(7 rows)
+>>
+/*
+Test INTEGRITY constraint on BOOLEAN column IS TRUE|IS FALSE.
+A violation of an integrity does not result in an error message,
+it just does not insert the row.
+*/
+* create table dt100_t3(part varchar(15) not null,-
+  hired boolean null not default)\g
+<<
+>>
+* create integrity on dt100_t3 IS hired IS TRUE\g
+<<
+>>
+* insert into dt100_t3 values ('star', 0)\g 
+<<
+(0 rows)
+>>
+* insert into dt100_t3 values ('comedian', 'FALSE')\g 
+<<
+(0 rows)
+>>
+* insert into dt100_t3 values ('tap dancer', false)\g 
+<<
+(0 rows)
+>>
+* insert into dt100_t3 values ('juggler', null)\g 
+<<
+(0 rows)
+>>
+* insert into dt100_t3 values ('co-star', 1)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t3 values ('singer', true)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t3 values ('dancer', 'TRUE')\g 
+<<
+(1 row)
+>>
+* select * from dt100_t3 order by part\g
+<<
+
++---------------+-----+
+|part           |hired|
++---------------+-----+
+|co-star        |TRUE |
+|dancer         |TRUE |
+|singer         |TRUE |
++---------------+-----+
+(3 rows)
+>>
+* drop integrity on dt100_t3 1\g
+<<
+>>
+* delete from dt100_t3\g
+<<
+(3 rows)
+>>
+* create integrity on dt100_t3 IS hired IS FALSE\g
+<<
+>>
+* insert into dt100_t3 values ('co-star', 1)\g 
+<<
+(0 rows)
+>>
+* insert into dt100_t3 values ('singer', true)\g 
+<<
+(0 rows)
+>>
+* insert into dt100_t3 values ('dancer', 'TRUE')\g 
+<<
+(0 rows)
+>>
+* insert into dt100_t3 values ('juggler', null)\g 
+<<
+(0 rows)
+>>
+* insert into dt100_t3 values ('star', 0)\g 
+<<
+(1 row)
+>>
+* insert into dt100_t3 values ('comedian', 'FALSE')\g 
+<<
+(1 row)
+>>
+* insert into dt100_t3 values ('tap dancer', false)\g 
+<<
+(1 row)
+>>
+* select * from dt100_t3 order by part\g
+<<
+
++---------------+-----+
+|part           |hired|
++---------------+-----+
+|comedian       |FALSE|
+|star           |FALSE|
+|tap dancer     |FALSE|
++---------------+-----+
+(3 rows)
+>>
+* \q 
+<<
+>>

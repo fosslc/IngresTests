@@ -1,0 +1,286 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : dt102.sep
+  Suite         : be!datatypes
+  Focus         : Test for Ingres 10.0 New Feature: BOOLEAN Datatype 
+                : Tests basic ESQLC functionality 
+                :
+  Databases     : SEPPARAMDB (datatypedb)
+  Tables        : dt102_tbl1
+  Filled Files  : dt102.sc
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Tests basic ESQLC functionality: CREATE PROCEDURE, 
+                : EXECUTE PROCEDURE, TABLE PROCEDURE, ROW PRODUCING
+                : PROCEDURE, SELECT using CURSOR 
+                :
+  Known Issues	: 142012 - Test will diff pending resolution.  Consistency error
+                           on select of BOOLEAN col from table proc in ESQLC.
+                :
+  History       : 07-Jan-2010 (sarjo01) Created.
+		: 01-Feb-2010 (vande02) Formalized for datatypes suite.
+*/
+? fill dt102.sc
+!!
+#include <stdio.h>
+
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+IISQLDA _sqlda;
+IISQLDA *sqlda = &_sqlda;
+
+char *bstr(int bval, int bvalind)
+{
+   if (bvalind == -1)
+      return "NULL ";
+   if (bval == 0)
+      return "FALSE";
+   if (bval == 1)
+      return "TRUE ";
+   return "BAD  ";
+}
+int main(int argc,char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int ival, i;
+      int bval;
+      short bvalind, ivalind;
+      char *dbname, bvalch[10];
+   EXEC SQL END DECLARE SECTION;
+
+   sqlda->sqln = 10;
+
+   EXEC SQL whenever sqlerror call sqlprint;
+   dbname = argv[1];
+   EXEC SQL connect :dbname;
+   EXEC SQL whenever sqlerror continue;
+   EXEC SQL drop procedure dt102_p1;
+   EXEC SQL drop procedure dt102_p2;
+   EXEC SQL drop procedure dt102_p3;
+   EXEC SQL drop table dt102_tbl1;
+
+   EXEC SQL whenever sqlerror call sqlprint;
+   EXEC SQL whenever sqlmessage call sqlprint;
+
+   EXEC SQL create table dt102_tbl1 (a1 int, a2 boolean);
+   EXEC SQL insert into dt102_tbl1 values (1, false);
+   EXEC SQL insert into dt102_tbl1 values (2, true);
+   EXEC SQL insert into dt102_tbl1 values (3, null);
+
+   printf("Test CREATE PROCEDURE 1:\n");
+
+   EXEC SQL create procedure dt102_p1 (param1 boolean) as
+            declare
+               bval boolean;
+            begin
+               bval = param1;
+               if bval is false then
+                  message 'param1 = FALSE';
+               elseif bval is true then
+                  message 'param1 = TRUE';
+               elseif bval is null then
+                  message 'param1 = NULL';
+               else
+                  message 'param1 is invalid';
+               endif;
+            end;
+
+   printf("Test EXEC PROCEDURE 1:\n");
+   EXEC SQL execute procedure dt102_p1 (param1 = false);
+   EXEC SQL execute procedure dt102_p1 (param1 = true);
+   EXEC SQL execute procedure dt102_p1 (param1 = null);
+   bval = 0;
+   EXEC SQL execute procedure dt102_p1 (param1 = :bval);
+   bval = 1;
+   EXEC SQL execute procedure dt102_p1 (param1 = :bval);
+   bvalind = -1;
+   EXEC SQL execute procedure dt102_p1 (param1 = :bval:bvalind);
+   strcpy(bvalch, "false");
+   EXEC SQL execute procedure dt102_p1 (param1 = :bvalch);
+   strcpy(bvalch, "true");
+   EXEC SQL execute procedure dt102_p1 (param1 = :bvalch);
+
+   printf("Test CREATE PROCEDURE 2:\n");
+
+   EXEC SQL create procedure dt102_p2 result row (int, boolean) as
+            declare
+               ival integer;
+               bval boolean;
+            begin
+               for select * into :ival, :bval from dt102_tbl1
+                      order by 1
+               do
+                  return row(:ival, :bval);
+               endfor;
+            end;
+
+   printf("Test EXEC PROCEDURE 2:\n");
+
+   bvalind = bval = 99;
+   EXEC SQL execute procedure dt102_p2 result row(:ival, :bval:bvalind);
+   EXEC SQL begin;
+      printf("%02d: %s (%d)\n", ival, bstr(bval, bvalind), bval);
+      bvalind = bval = 99;
+   EXEC SQL end;
+
+   printf("Test CREATE PROCEDURE 3:\n");
+
+   EXEC SQL create procedure dt102_p3 (param1 boolean, param2 int) as
+            begin
+               if param2 = 0 then
+                  param1 = false;
+               elseif param2 = 1 then
+                  param1 = true;
+               else
+                  param1 = null;
+               endif;
+            end;
+
+   printf("Test EXEC PROCEDURE 3:\n");
+
+   ival = 0;
+   bval = 1;
+   EXEC SQL execute procedure dt102_p3
+            (param1 = byref(:bval:bvalind), param2 = :ival);
+   printf("%s\n", bstr(bval, bvalind));
+   ival = 1;
+   bval = 0;
+   EXEC SQL execute procedure dt102_p3
+            (param1 = byref(:bval:bvalind), param2 = :ival);
+   printf("%s\n", bstr(bval, bvalind));
+   ival = 99;
+   EXEC SQL execute procedure dt102_p3
+            (param1 = byref(:bval:bvalind), param2 = :ival);
+   printf("%s\n", bstr(bval, bvalind));
+
+   printf("Test SELECT from TABLE PROCEDURE 2:\n");
+
+   bvalind = bval = 99;
+   EXEC SQL select a1, a2 into :ival, :bval:bvalind from dt102_p2();
+   EXEC SQL begin;
+      printf("%02d: %s (%d)\n", ival, bstr(bval, bvalind), bval);
+      bvalind = bval = 99;
+   EXEC SQL end;
+
+   printf("Test SELECT with CURSOR 1:\n");
+
+   EXEC SQL declare c1 cursor for 'select * from dt102_tbl1 order by 1';
+   EXEC SQL open c1;
+   while (1)
+   {
+      bvalind = bval = 99;
+      EXEC SQL fetch c1 into :ival, :bval:bvalind;
+      if (sqlca.sqlcode == 100)
+         break;
+      printf("%02d: %s (%d)\n", ival, bstr(bval, bvalind), bval);
+
+   }
+
+   printf("Test SELECT with CURSOR 2:\n");
+
+   EXEC SQL declare c2 cursor for s2;
+   EXEC SQL prepare s2 from 'select * from dt102_tbl1 order by 1';
+   sqlda->sqln = 3;
+   EXEC SQL describe s2 into :sqlda;
+   for (i = 0; i < sqlda->sqld; ++i)
+   {
+      switch (abs(sqlda->sqlvar[i].sqltype))
+      {
+         case IISQ_INT_TYPE:
+            sqlda->sqlvar[i].sqldata = (char *)&ival;
+            sqlda->sqlvar[i].sqlind = &ivalind;
+            break;
+         case IISQ_BOO_TYPE:
+            sqlda->sqlvar[i].sqltype = -IISQ_INT_TYPE;
+            sqlda->sqlvar[i].sqllen = sizeof(int);
+            sqlda->sqlvar[i].sqldata = (char *)&bval;
+            sqlda->sqlvar[i].sqlind = &bvalind;
+            break;
+      }
+   }
+   EXEC SQL open c2;
+   while (1)
+   {
+      bvalind = bval = 99;
+      EXEC SQL fetch c2 using descriptor :sqlda;
+      if (sqlca.sqlcode == 100)
+         break;
+      printf("%02d: %s (%d)\n", ival, bstr(bval, bvalind), bval);
+
+   }
+
+   EXEC SQL commit;
+   EXEC SQL disconnect;
+
+}
+!!
+? esqlc dt102.sc
+<<
+ESQL dt102.sc:
+>>
+<<
+>>
+? sepcc dt102.c
+<<
+>>
+<<
+dt102.c
+>>
+? seplnk dt102
+<<
+>>
+? run dt102.exe SEPPARAMDB
+<<
+Test CREATE PROCEDURE 1:
+Test EXEC PROCEDURE 1:
+MESSAGE 0: param1 = FALSE
+MESSAGE 0: param1 = TRUE
+MESSAGE 0: param1 = NULL
+MESSAGE 0: param1 = FALSE
+MESSAGE 0: param1 = TRUE
+MESSAGE 0: param1 = NULL
+MESSAGE 0: param1 = FALSE
+MESSAGE 0: param1 = TRUE
+Test CREATE PROCEDURE 2:
+Test EXEC PROCEDURE 2:
+01: FALSE (0)
+02: TRUE  (1)
+03: NULL  (99)
+Test CREATE PROCEDURE 3:
+Test EXEC PROCEDURE 3:
+FALSE
+TRUE
+NULL
+Test SELECT from TABLE PROCEDURE 2:
+01: FALSE (0)
+02: TRUE  (1)
+03: NULL  (99)
+Test SELECT with CURSOR 1:
+01: FALSE (0)
+02: TRUE  (1)
+03: NULL  (99)
+Test SELECT with CURSOR 2:
+01: FALSE (0)
+02: TRUE  (1)
+03: NULL  (99)
+>>
+? delete dt102.c
+<<
+~
+>>
+? delete dt102.o
+<<
+~
+>>
+? delete dt102.obj
+<<
+~
+>>
+? delete dt102.exe
+<<
+~
+>>

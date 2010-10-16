@@ -1,0 +1,265 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : dt101.sep
+  Suite         : be!datatypes
+  Focus         : Test for Ingres 10.0 New Feature: BOOLEAN Datatype 
+                : Tests basic ESQLC functionality 
+                :
+  Databases     : SEPPARAMDB (datatypedb)
+  Tables        : dt101_tbl1 
+  Filled Files  : dt101.sc
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Tests basic ESQLC functionality: CREATE TABLE, SELECT,
+                : INSERT, UPDATE, DESCRIBE, DESCRIBE INPUT 
+                :
+  Known Issues  : None.
+
+  History       : 07-Jan-2010 (sarjo01) Created.
+		: 01-Feb-2010 (vande02) Formalized for datatypes suite.
+		: 01-Mar-2010 (vande02) Changed unknown to null.
+*/
+? fill dt101.sc
+!!
+#include <stdio.h>
+
+EXEC SQL include sqlca;
+EXEC SQL include sqlda;
+
+IISQLDA _sqlda;
+IISQLDA *sqlda = &_sqlda;
+
+char *bstr(int bval, int bvalind)
+{
+   if (bvalind == -1)
+      return "NULL ";
+   if (bval == 0)
+      return "FALSE";
+   if (bval == 1)
+      return "TRUE ";
+   return "BAD  ";
+}
+int main(int argc,char *argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      int ival;
+      int bval; 
+      short bvalind;
+      char *dbname, bvalch[10];
+   EXEC SQL END DECLARE SECTION;
+
+   sqlda->sqln = 10;
+
+   EXEC SQL whenever sqlerror call sqlprint;
+   dbname = argv[1];
+   EXEC SQL connect :dbname; 
+   EXEC SQL whenever sqlerror continue; 
+   EXEC SQL drop table dt101_tbl1; 
+   EXEC SQL whenever sqlerror call sqlprint;
+
+   EXEC SQL create table dt101_tbl1 (a1 int, a2 boolean); 
+   EXEC SQL prepare s1 from 'insert into dt101_tbl1 values (?,?)'; 
+
+   printf("Test INSERT/SELECT:\n");
+
+   ival = 1;
+   bval = 0;
+   EXEC SQL execute s1 using :ival, :bval; 
+   ival = 2;
+   bval = 1;
+   EXEC SQL execute s1 using :ival, :bval; 
+
+   bvalind = 0;
+   ival = 3;
+   bval = 0;
+   EXEC SQL execute s1 using :ival, :bval:bvalind; 
+   ival = 4;
+   bval = 1;
+   EXEC SQL execute s1 using :ival, :bval:bvalind; 
+
+   bvalind = -1;
+   ival = 5;
+   bval = 0;
+   EXEC SQL execute s1 using :ival, :bval:bvalind; 
+   ival = 6;
+   bval = 1;
+   EXEC SQL execute s1 using :ival, :bval:bvalind; 
+
+   EXEC SQL insert into dt101_tbl1 values (7, false);
+   EXEC SQL insert into dt101_tbl1 values (8, true);
+   EXEC SQL insert into dt101_tbl1 values (9, null);
+   EXEC SQL insert into dt101_tbl1 values (10, null);
+
+   bval = 0;
+   EXEC SQL insert into dt101_tbl1 values (11, :bval);
+   bval = 1;
+   EXEC SQL insert into dt101_tbl1 values (12, :bval);
+   bval = 99;
+   bvalind = -1;
+   EXEC SQL insert into dt101_tbl1 values (13, :bval:bvalind);
+
+   ival = 14;
+   strcpy(bvalch, "true");
+   EXEC SQL execute s1 using :ival, :bvalch;
+   EXEC SQL insert into dt101_tbl1 values (15, :bvalch);
+   ival = 16;
+   strcpy(bvalch, "false");
+   EXEC SQL execute s1 using :ival, :bvalch;
+   EXEC SQL insert into dt101_tbl1 values (17, :bvalch);
+
+   EXEC SQL insert into dt101_tbl1 values (18, true);
+   EXEC SQL insert into dt101_tbl1 values (19, false);
+   EXEC SQL insert into dt101_tbl1 values (20, null);
+
+   bvalind = bval = 99;
+   EXEC SQL select a1, a2 into :ival, :bval:bvalind from dt101_tbl1 order by 1; 
+   EXEC SQL begin; 
+      printf("%02d: %s (%d)\n", ival, bstr(bval, bvalind), bval);
+      bvalind = bval = 99;
+   EXEC SQL end; 
+
+   printf("\nTest DESCRIBE:\n");
+   EXEC SQL prepare s2 from 'select a2, boolean(1) from dt101_tbl1 order by 1';
+   EXEC SQL describe s2 using descriptor :sqlda;
+   printf("BOOLEAN col:  sqltype: %d, sqllen: %d\n",
+           sqlda->sqlvar[0].sqltype,
+           sqlda->sqlvar[0].sqllen);
+   printf("BOOLEAN expr: sqltype: %d, sqllen: %d\n",
+           sqlda->sqlvar[1].sqltype,
+           sqlda->sqlvar[1].sqllen);
+
+   printf("\nTest DESCRIBE INPUT:\n");
+   EXEC SQL prepare s3 from 'insert into dt101_tbl1 (a2) values (?)';
+   EXEC SQL describe input s3 using descriptor :sqlda;
+   printf("BOOLEAN input val:  sqltype: %d, sqllen: %d\n",
+           sqlda->sqlvar[0].sqltype,
+           sqlda->sqlvar[0].sqllen);
+   EXEC SQL prepare s4 from 'select a2 from dt101_tbl1 where a2 = ?';
+   EXEC SQL describe input s4 using descriptor :sqlda;
+   printf("BOOLEAN input val:  sqltype: %d, sqllen: %d\n",
+           sqlda->sqlvar[0].sqltype,
+           sqlda->sqlvar[0].sqllen);
+
+   printf("\nTest UPDATE:\n");
+
+   EXEC SQL prepare s5 from 'update dt101_tbl1 set a2 = ? where a1 = ?'; 
+
+   ival = 1;
+   bval = 1;
+   EXEC SQL execute s5 using :bval, :ival;
+   ival = 2;
+   bval = 0;
+   EXEC SQL execute s5 using :bval, :ival;
+   ival = 3;
+   bval = 0;
+   bvalind = -1;
+   EXEC SQL execute s5 using :bval:bvalind, :ival;
+   ival = 4;
+   strcpy(bvalch, "false");
+   EXEC SQL execute s5 using :bvalch, :ival;
+   ival = 5;
+   strcpy(bvalch, "true");
+   EXEC SQL execute s5 using :bvalch, :ival;
+   EXEC SQL update dt101_tbl1 set a2 = true where a1 = 6; 
+   EXEC SQL update dt101_tbl1 set a2 = false where a1 = 8; 
+
+   bvalind = bval = 99;
+   EXEC SQL select a1, a2 into :ival, :bval:bvalind from dt101_tbl1 order by 1;
+   EXEC SQL begin;
+      printf("%02d: %s (%d)\n", ival, bstr(bval, bvalind), bval);
+      bvalind = bval = 99;
+   EXEC SQL end;
+
+   EXEC SQL commit;
+   EXEC SQL disconnect;
+
+}
+!!
+? esqlc dt101.sc
+<<
+ESQL dt101.sc:
+>>
+<<
+>>
+? sepcc dt101.c
+<<
+>>
+<<
+dt101.c
+>>
+? seplnk dt101
+<<
+>>
+? run dt101.exe SEPPARAMDB
+<<
+Test INSERT/SELECT:
+01: FALSE (0)
+02: TRUE  (1)
+03: FALSE (0)
+04: TRUE  (1)
+05: NULL  (99)
+06: NULL  (99)
+07: FALSE (0)
+08: TRUE  (1)
+09: NULL  (99)
+10: NULL  (99)
+11: FALSE (0)
+12: TRUE  (1)
+13: NULL  (99)
+14: TRUE  (1)
+15: TRUE  (1)
+16: FALSE (0)
+17: FALSE (0)
+18: TRUE  (1)
+19: FALSE (0)
+20: NULL  (99)
+
+Test DESCRIBE:
+BOOLEAN col:  sqltype: -38, sqllen: 1
+BOOLEAN expr: sqltype: 38, sqllen: 1
+
+Test DESCRIBE INPUT:
+BOOLEAN input val:  sqltype: -38, sqllen: 1
+BOOLEAN input val:  sqltype: -38, sqllen: 1
+
+Test UPDATE:
+01: TRUE  (1)
+02: FALSE (0)
+03: NULL  (99)
+04: FALSE (0)
+05: TRUE  (1)
+06: TRUE  (1)
+07: FALSE (0)
+08: FALSE (0)
+09: NULL  (99)
+10: NULL  (99)
+11: FALSE (0)
+12: TRUE  (1)
+13: NULL  (99)
+14: TRUE  (1)
+15: TRUE  (1)
+16: FALSE (0)
+17: FALSE (0)
+18: TRUE  (1)
+19: FALSE (0)
+20: NULL  (99)
+>>
+? delete dt101.c
+<<
+~
+>>
+? delete dt101.o
+<<
+~
+>>
+? delete dt101.obj
+<<
+~
+>>
+? delete dt101.exe
+<<
+~
+>>

@@ -1,0 +1,418 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : dt103.sep
+  Suite         : be!datatypes
+  Focus         : Test for Ingres 10.0 New Feature: BOOLEAN Datatype 
+                : basic procedure/rule, create view with procedure test.
+                :
+  Databases     : SEPPARAMDB (datatypedb)
+  Tables        : dt103_tbl1
+  Filled Files  : 
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Tests basic functionality in Terminal Monitor:
+		  CREATE PROCEDURE, EXECUTE PROCEDURE, CREATE RULE, CREATE VIEW.
+		  * Procedure with a BOOLEAN parameter
+		  * Procedure with a BOOLEAN variable
+		  * Procedure with BOOLEAN variables/assignments for
+		    all acceptable input to BOOLEAN.
+		  * Procedure with a BOOLEAN parameter and IF/ELSE conditions
+		    for all valid input and some invalid input values.
+		  * Create a table procedure and rule (AFTER/BEFORE INSERT
+		    statements) using BOOLEAN.
+		  * Create a ROW producing procedure then call it as a
+		    TABLE procedure to select all the rows.
+		  * Create a VIEW using a TABLE procedure.
+
+  Known Issues	: None
+                :
+  History       : 01-Feb-2010 (vande02) Created.
+*/
+? sql -s SEPPARAMDB
+<<
+>>
+* drop table dt103_tbl1\g
+<<
+~
+>>
+* drop procedure dt103_p1\g
+<<
+~
+>>
+* drop procedure dt103_p2\g
+<<
+~
+>>
+* drop procedure dt103_p3\g
+<<
+~
+>>
+* drop procedure dt103_p4\g
+<<
+~
+>>
+* drop procedure dt103_p5\g
+<<
+~
+>>
+* drop procedure dt103_p6\g
+<<
+~
+>>
+* drop procedure dt103_p7\g
+<<
+~
+>>
+* drop rule dt103_r1\g
+<<
+~
+>>
+* drop rule dt103_r2\g
+<<
+~
+>>
+* drop view dt103_view\g
+<<
+~
+>>
+/*
+Simple procedure check with a BOOLEAN parameter to ensure no errors are
+received using the column format 'boolean'.
+*/
+* create procedure dt103_p1 (param1 boolean) as-
+      begin-
+        return 1;-
+      end;\g
+<<
+>>
+* execute procedure dt103_p1\g
+<<
+>>
+/*
+Simple procedure check with a BOOLEAN variable to ensure no errors are
+received using the column format 'boolean'.
+*/
+* create procedure dt103_p2 as-
+      declare var1 boolean;-
+      begin-
+        return 1;-
+      end;\g
+<<
+>>
+* execute procedure dt103_p2\g
+<<
+>>
+/*
+Simple procedure with BOOLEAN variables and assignments for all acceptable
+input to BOOLEAN.  Create/execute the procedure and it should return nothing,
+no syntax errors.
+*/
+* create procedure dt103_p3 as-
+      declare var1, var2, var3, var4, var5, var6, var7 boolean;-
+      begin-
+        var1 := true;-
+        var2 := false;-
+        var3 := 'TRUE';-
+        var4 := 'FALSE';-
+        var5 := 1;-
+        var6 := 0;-
+        var7 := null;-
+        return 1;-
+      end;\g
+<<
+>>
+* execute procedure dt103_p3\g
+<<
+>>
+/*
+Procedure with a BOOLEAN parameter and IF/ELSE conditions to check
+each acceptable (valid) and invalid input values.
+*/
+* create procedure dt103_p4 (param1 boolean) as-
+      declare bval boolean;-
+        begin bval = param1;-
+          if bval is false then-
+             message 'param1 = FALSE';-
+          elseif bval is true then-
+             message 'param1 = TRUE';-
+          elseif bval is null then-
+             message 'param1 = NULL';-
+          else-
+             message 'param1 is invalid';-
+          endif;-
+        end;\g
+<<
+>>
+/*
+Execute procedure dt103_p4 with valid and invalid input.
+*/
+* execute procedure dt103_p4 (param1 = false)\g
+<<
+MESSAGE 0: param1 = FALSE
+>>
+* execute procedure dt103_p4 (param1 = true)\g
+<<
+MESSAGE 0: param1 = TRUE
+>>
+* execute procedure dt103_p4 (param1 = null)\g
+<<
+MESSAGE 0: param1 = NULL
+>>
+* execute procedure dt103_p4 (param1 = 'FALSE')\g
+<<
+MESSAGE 0: param1 = FALSE
+>>
+* execute procedure dt103_p4 (param1 = 'TRUE')\g
+<<
+MESSAGE 0: param1 = TRUE
+>>
+* execute procedure dt103_p4 (param1 = 0 )\g
+<<
+MESSAGE 0: param1 = FALSE
+>>
+* execute procedure dt103_p4 (param1 = 1)\g
+<<
+MESSAGE 0: param1 = TRUE
+>>
+* execute procedure dt103_p4 (param1 = 2)\g
+<<
+
+E_AD106B '2' is not a valid integer value for casting to BOOLEAN.
+    (Mon Feb  1 17:42:19 2010)
+
+>>
+* execute procedure dt103_p4 (param1 = -1)\g
+<<
+
+E_AD106B '-1' is not a valid integer value for casting to BOOLEAN.
+    (Mon Feb  1 17:42:29 2010)
+
+>>
+* execute procedure dt103_p4 (param1 = junk)\g
+<<
+
+E_US0986 Invalid correlation or column name 'junk' in EXECUTE PROCEDURE
+    statement. Column expressions of the form [table.]column are not allowed
+    in the target list.
+    (Tue Feb  2 14:41:45 2010)
+>>
+* execute procedure dt103_p4 (param1 = unknown)\g
+<<
+
+E_US0986 Invalid correlation or column name 'unknown' in EXECUTE PROCEDURE
+    statement. Column expressions of the form [table.]column are not allowed
+    in the target list.
+    (Mon Feb  1 17:42:40 2010)
+>>
+/*
+Create a table procedure and rule using BOOLEAN.  Execute dt103_p5 procedure
+from a rule dt103_r1 after inserts into table dt103_tbl1.
+
+This test case is successful when the final select has 10 rows.
+Rows 102, 106, and 110 were inserted by procedure dt103_p5 and
+the other 7 rows were inserted by the usual INSERT statements.
+*/
+* create table dt103_tbl1 (icol1 integer, bcol2 boolean)\g
+<<
+>>
+* create procedure dt103_p5(icol1 integer) as-
+      begin-
+        insert into dt103_tbl1 values (:icol1 +1, FALSE);-
+      end;\g
+<<
+>>
+* create rule dt103_r1 after insert of dt103_tbl1-
+  where new.bcol2 IS TRUE-
+  execute procedure dt103_p5(icol1 = old.icol1)\g
+<<
+>>
+* create procedure dt103_p7 (param1 boolean) as-
+     declare bval boolean;-
+        begin bval = param1;-
+          if bval is false then-
+             message 'param1 = FALSE';-
+          elseif bval is true then-
+             message 'param1 = TRUE';-
+          elseif bval is null then-
+             message 'param1 = NULL';-
+          else-
+             message 'param1 is NOT BOOLEAN`';-
+          endif;-
+        end;\g
+<<
+>>
+* create rule dt103_r2 before insert of dt103_tbl1-
+  execute procedure dt103_p7(param1 = old.bcol2)\g
+<<
+>>
+* insert into dt103_tbl1 values (100, FALSE)\g
+<<
+MESSAGE 0: param1 = FALSE
+(1 row)
+>>
+* insert into dt103_tbl1 values (101, true)\g
+<<
+MESSAGE 0: param1 = TRUE
+MESSAGE 0: param1 = FALSE
+(1 row)
+>>
+* insert into dt103_tbl1 values (104, 'false')\g
+<<
+MESSAGE 0: param1 = FALSE
+(1 row)
+>>
+* insert into dt103_tbl1 values (105, 'TRUE')\g
+<<
+MESSAGE 0: param1 = TRUE
+MESSAGE 0: param1 = FALSE
+(1 row)
+>>
+* insert into dt103_tbl1 values (108, 0)\g
+<<
+MESSAGE 0: param1 = FALSE
+(1 row)
+>>
+* insert into dt103_tbl1 values (109, 1)\g
+<<
+MESSAGE 0: param1 = TRUE
+MESSAGE 0: param1 = FALSE
+(1 row)
+>>
+* insert into dt103_tbl1 values (199, null)\g
+<<
+MESSAGE 0: param1 = NULL
+(1 row)
+>>
+/*
+Table row producing procedure dt103_p6 then call it as a
+Table procedure dt103_p6() to select all the rows from above.
+*/
+* create procedure dt103_p6 result row (int, boolean) as-
+      declare ival integer;-
+              bval boolean;-
+      begin-
+         for select * into :ival, :bval from dt103_tbl1 order by 1-
+               do-
+                  return row(:ival, :bval);-
+         endfor;-
+      end;\g
+<<
+>>
+* select * from dt103_p6()\g
+<<
+
++-------------+-----+
+|result_column|resul|
++-------------+-----+
+|          100|FALSE|
+|          101|TRUE |
+|          102|FALSE|
+|          104|FALSE|
+|          105|TRUE |
+|          106|FALSE|
+|          108|FALSE|
+|          109|TRUE |
+|          110|FALSE|
+|          199|     |
++-------------+-----+
+(10 rows)
+>>
+/*
+Create a VIEW using the Table procedure (dt103_p6()).
+*/
+* create view dt103_view as select * from dt103_p6()\g
+<<
+>>
+* select * from dt103_view\g
+<<
++-------------+-----+
+|result_column|resul|
++-------------+-----+
+|          100|FALSE|
+|          101|TRUE |
+|          102|FALSE|
+|          104|FALSE|
+|          105|TRUE |
+|          106|FALSE|
+|          108|FALSE|
+|          109|TRUE |
+|          110|FALSE|
+|          199|     |
++-------------+-----+
+(10 rows)
+>>
+* insert into dt103_tbl1 values (299,null)\g
+<<
+MESSAGE 0: param1 = NULL
+(1 row)
+>>
+* select * from dt103_view\g
+<<
++-------------+-----+
+|result_column|resul|
++-------------+-----+
+|          100|FALSE|
+|          101|TRUE |
+|          102|FALSE|
+|          104|FALSE|
+|          105|TRUE |
+|          106|FALSE|
+|          108|FALSE|
+|          109|TRUE |
+|          110|FALSE|
+|          199|     |
+|          299|     |
++-------------+-----+
+(11 rows)
+>>
+* update dt103_tbl1 set bcol2 = FALSE where icol1 = 299\g
+<<
+(1 row)
+>>
+* select * from dt103_view\g
+<<
++-------------+-----+
+|result_column|resul|
++-------------+-----+
+|          100|FALSE|
+|          101|TRUE |
+|          102|FALSE|
+|          104|FALSE|
+|          105|TRUE |
+|          106|FALSE|
+|          108|FALSE|
+|          109|TRUE |
+|          110|FALSE|
+|          199|     |
+|          299|FALSE|
++-------------+-----+
+(11 rows)
+>>
+* delete from dt103_tbl1 where icol1 = 299\g
+<<
+(1 row)
+>>
+* select * from dt103_view\g
+<<
++-------------+-----+
+|result_column|resul|
++-------------+-----+
+|          100|FALSE|
+|          101|TRUE |
+|          102|FALSE|
+|          104|FALSE|
+|          105|TRUE |
+|          106|FALSE|
+|          108|FALSE|
+|          109|TRUE |
+|          110|FALSE|
+|          199|     |
++-------------+-----+
+(10 rows)
+>>
+* \q
+<<
+>>
