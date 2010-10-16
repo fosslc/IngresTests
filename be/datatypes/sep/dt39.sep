@@ -1,4 +1,6 @@
 /*
+Copyright (c) 2008 Ingres Corporation
+
 	Test Name: dt39.sep
 	Time: Thu Apr 19 15:40:58 2001
 	User Name: testenv
@@ -7,7 +9,8 @@
 	Test ID : dt39.sep
 	Module  : be/datatypes
 	Filename: dt39.sep
-	Purpose	: To test the maximum size of 32K for character data types.
+	Purpose	: To test the maximum size of 32K for character data type
+                  in a default instance and test maximum size of 16K in UTF8.
 	Input Files  : vartype.sc
 	Output Files : vartype.exe
 	Database     : datatypedb2
@@ -17,9 +20,19 @@
                        And using various string functions to retrieve the data
                        from the table.
 
- History: 19-Apr-2001	(wu$ca01)	Created
+ History: 19-Apr-2001	(wu$ca01) Created
+           5-Nov-2008   (vande02) The test program was changed to accept an
+                                  additional argument SEPPARAM_CHARSET and set
+                                  the max column size to 16K for UTF8 or 32K
+                                  (default) for non-UTF8.  Conditional canon
+                                  for UTF8 was also created.  Changed one query
+                                  which was locating the '31999'th character
+                                  which is invalid for UTF8 to the first char.
+                                  Modified some of the queries slightly so the
+                                  results would be consistent for UTF8 and
+                                  non-UTF8.
 */
-? fill vartype.sc
+? fill vartype.sc 
 !!
 /* This program is to test the 'varchar' character data type with the maximum 
 ** size of 32K bytes per column, and the retrieval of the data using various 
@@ -29,25 +42,35 @@
 #include <stdio.h>
 exec sql include sqlca;
 
+#define MAXVCSZ 32000
+#define MAXUTF8SZ 16000
+
 main(int argc, char* argv[])
 {
     exec sql begin declare section;
       char   *dbname;
 	varchar struct {
 	    short	buf_size;
-	    char	buf[32000];
+	    char	buf[MAXVCSZ+1];
 	} vch;
 
 	varchar struct {
 	    short	buf_size;
-	    char	buf[32000];
+	    char	buf[MAXVCSZ+1];
 	} vch2;
-   
+    int vcsz;
+    char  *charset;
+    char stmtbuff[256];
     exec sql end declare section;
 
     exec sql whenever sqlerror call sqlprint;
 
     dbname = argv[1];
+    charset = argv[2];
+    if (strcmp(charset, "UTF8") == 0)
+      vcsz = MAXUTF8SZ;
+    else
+      vcsz = MAXVCSZ;
 
     exec sql connect :dbname;
     /* Ignore errors from drop table */
@@ -55,15 +78,16 @@ main(int argc, char* argv[])
     exec sql drop table dt39_table;
 
     exec sql whenever sqlerror call sqlprint;
-    exec sql create table dt39_table(col_var varchar(32000));
+    sprintf(stmtbuff, "create table dt39_table(col_var varchar(%d))", vcsz);
+    exec sql execute immediate :stmtbuff;
 
     /* To set all the bytes in a block of memory with the character 'J' */
-    memset(vch.buf, 'J', 32000);
-    vch.buf_size = 32000;
+    memset(vch.buf, 'J', vcsz);
+    vch.buf_size = vcsz;
     /* Replace the first character with '_' */
     memset(vch.buf, '_', 1);
-    /* Replace the last two characters with '&' */
-    memset(vch.buf+31998, '&', 2);
+    /* Replace the last 5 characters '&' */
+    memset(vch.buf+vcsz-5, '&', 5);
 
     exec sql insert into dt39_table values (:vch);
 
@@ -72,51 +96,63 @@ main(int argc, char* argv[])
     /* If the table is successfully created, print success. Follow by */
     /* testing various string functions. Otherwise, print failure. */ 
     if (vch.buf_size == vch2.buf_size &&
-	memcmp(vch.buf, vch2.buf, 32000) == 0)
+	memcmp(vch.buf, vch2.buf, vcsz) == 0)
     {
         printf("Success!!!\n");
 
         printf("Test the left() function.\n"); 
-        printf("Query:select varchar(left(col_var, 10), 60) from dt39_table.\n");
+        printf("Query:select varchar(left(col_var,10),60) from dt39_table.\n");
         /* All the string functions are enclosed by a varchar() function */
         /* to make the displayed output easier to read instead of ending */
         /* up with 32K byte record(with trailing blanks and all) put to */
         /* standard output with each select statement. */ 
-        exec sql select varchar(left(col_var, 10), 60) into :vch2.buf from dt39_table;
+        exec sql select varchar(left(col_var,10),60) into :vch2.buf from dt39_table;
         printf("%s\n", vch2.buf);
 
         printf("Test the right()function.\n");
-        printf("Query:select varchar(right(col_var, 3), 60)from dt39_table.\n");
-        exec sql select varchar(right(col_var, 3), 60) into :vch2.buf from dt39_table;
+        printf("Query:select varchar(right(col_var,5), 60)from dt39_table.\n");
+        exec sql select varchar(right(col_var,5), 60) into :vch2.buf from dt39_table-
+;
         printf("%s\n", vch2.buf);
 
         printf("Test the locate() function.\n");
         printf("Query:select varchar(locate(col_var,'J'),60) from dt39_table.\n");
-        exec sql select varchar(locate(col_var, 'J'), 60) into :vch2.buf from dt39_table;
+        exec sql select varchar(locate(col_var, 'J'), 60) into :vch2.buf from dt39_t-
+able;
         printf("The first occurrence of 'J' is in location: %s\n", vch2.buf);
         printf("Query:select varchar(locate(col_var,'&'),60) from dt39_table.\n");
-        exec sql select varchar(locate(col_var, '&'), 60) into :vch2.buf from dt39_table;
+        exec sql select varchar(locate(col_var, '&'), 60) into :vch2.buf from dt39_t-
+able;
         printf("The first occurrence of '&' is in location: %s\n", vch2.buf);
         printf("Query:select varchar(locate(col_var,'_'),60) from dt39_table.\n");
-        exec sql select varchar(locate(col_var, '_'), 60) into :vch2.buf from dt39_table;
+        exec sql select varchar(locate(col_var, '_'), 60) into :vch2.buf from dt39_t-
+able;
         printf("The first occurrence of '_' is in location: %s\n", vch2.buf);
 
         printf("Test the shift() function.\n");
-        printf("Query:select varchar(shift(left(col_var,11),1),60) from dt39_table.\n");
-        exec sql select varchar(shift(left(col_var, 11), 1), 60) into :vch2.buf from dt39_table;
+        printf("Query:select varchar(shift(left(col_var,11),1),60) from dt39_table.\-
+n");
+        exec sql select varchar(shift(left(col_var, 11), 1), 60) into :vch2.buf from-
+ dt39_table;
         printf("%s\n", vch2.buf);
-        printf("Query:select varchar(shift(right(col_var, 3),-1),60) from dt39_table.\n");
-        exec sql select varchar(shift(right(col_var, 3), -1), 60) into :vch2.buf from dt39_table;
+        printf("Query:select varchar(shift(right(col_var, 3),-1),60) from dt39_table-
+.\n");
+        exec sql select varchar(shift(right(col_var, 3), -1), 60) into :vch2.buf fro-
+m dt39_table;
         printf("%s\n", vch2.buf);
 
         printf("Test the charextract() function.\n");
-        printf("Query:select varchar(charextract(col_var,2000),60) from dt39_table.\n");
-        exec sql select varchar(charextract(col_var, 2000), 60) into :vch2.buf from dt39_table;
-        printf("The 2000th character is: %s\n", vch2.buf);
+        printf("Query:select varchar(charextract(col_var,1),60) from dt39_table.-
+\n");
+        exec sql select varchar(charextract(col_var,1), 60) into :vch2.buf from -
+dt39_table;
+        printf("The first character is: %s\n", vch2.buf);
 
         printf("Test the concat() function.\n");
-        printf("Query:select varchar(concat(left(col_var,3), right(col_var, 2)),60) from dt39_table.\n"); 
-        exec sql select varchar(concat(left(col_var,3), right(col_var, 2)),60) into :vch2.buf from dt39_table;
+        printf("Query:select varchar(concat(left(col_var,3),'Put These Together'),60-
+) from dt39_table.\n"); 
+        exec sql select varchar(concat(left(col_var,3),' Put These Together'),60) in-
+to :vch2.buf from dt39_table;
         printf("%s\n", vch2.buf);
 
         printf("Test the length() function.\n");
@@ -126,17 +162,22 @@ main(int argc, char* argv[])
 
         printf("Test the pad() function.\n");
         printf("Query:select varchar(length(pad(col_var)), 60) from dt39_table.\n");
-        exec sql select varchar(length(pad(col_var)), 60) into :vch2.buf from dt39_table;
+        exec sql select varchar(length(pad(col_var)), 60) into :vch2.buf from dt39_t-
+able;
         printf("%s\n", vch2.buf);
 
         printf("Test the lowercase() function.\n");
-        printf("Query:select varchar(lowercase(right(col_var,10)), 60) from dt39_table.\n");
-        exec sql select varchar(lowercase(right(col_var,10)), 60) into :vch2.buf from dt39_table;
+        printf("Query:select varchar(lowercase(right(col_var,10)), 60) from dt39_tabl-
+e.\n");
+        exec sql select varchar(lowercase(right(col_var,10)), 60) into :vch2.buf from-
+ dt39_table;
         printf("%s\n", vch2.buf);
 
         printf("Test the uppercase() function.\n");
-        printf("Query:select varchar(uppercase(right(col_var,10)), 60) from dt39_table.\n");
-        exec sql select varchar(uppercase(right(col_var,10)), 60) into :vch2.buf from dt39_table;
+        printf("Query:select varchar(uppercase(right(col_var,10)), 60) from dt39_tabl-
+e.\n");
+        exec sql select varchar(uppercase(right(col_var,10)), 60) into :vch2.buf from-
+ dt39_table;
         printf("%s\n", vch2.buf);
 
         printf("Test the size() function.\n");
@@ -146,12 +187,14 @@ main(int argc, char* argv[])
 
         printf("Test the soundex() function.\n");
         printf("Query:select varchar(soundex(col_var), 60) from dt39_table.\n");
-        exec sql select varchar(soundex(col_var), 60) into :vch2.buf from dt39_table;
+        exec sql select varchar(soundex(col_var), 60) into :vch2.buf from dt39_table-
+;
         printf("%s\n", vch2.buf);
 
         printf("Test the squeeze() function.\n");
         printf("Query:select varchar(squeeze(col_var), 60) from dt39_table.\n");
-        exec sql select varchar(squeeze(col_var), 60) into :vch2.buf from dt39_table;
+        exec sql select varchar(squeeze(col_var), 60) into :vch2.buf from dt39_table-
+;
         printf("%s\n", vch2.buf);
 
         printf("Test the trim() function.\n");
@@ -179,20 +222,20 @@ main(int argc, char* argv[])
 <<
 ~
 >>
-? run vartype.exe SEPPARAMDB 
-<<
+? run vartype.exe SEPPARAMDB SEPPARAM_CHARSET 
+<< IF (ING_CHARSET == "UTF8") 
 Success!!!
 Test the left() function.
-Query:select varchar(left(col_var, 10), 60) from dt39_table.
+Query:select varchar(left(col_var,10),60) from dt39_table.
 _JJJJJJJJJ
 Test the right()function.
-Query:select varchar(right(col_var, 3), 60)from dt39_table.
-J&&
+Query:select varchar(right(col_var,5), 60)from dt39_table.
+&&&&&
 Test the locate() function.
 Query:select varchar(locate(col_var,'J'),60) from dt39_table.
 The first occurrence of 'J' is in location: 2
 Query:select varchar(locate(col_var,'&'),60) from dt39_table.
-The first occurrence of '&' is in location: 31999
+The first occurrence of '&' is in location: 15996
 Query:select varchar(locate(col_var,'_'),60) from dt39_table.
 The first occurrence of '_' is in location: 1
 Test the shift() function.
@@ -201,11 +244,65 @@ Query:select varchar(shift(left(col_var,11),1),60) from dt39_table.
 Query:select varchar(shift(right(col_var, 3),-1),60) from dt39_table.
 &&
 Test the charextract() function.
-Query:select varchar(charextract(col_var,2000),60) from dt39_table.
-The 2000th character is: J
+Query:select varchar(charextract(col_var,1),60) from dt39_table.
+The first character is: _
 Test the concat() function.
-Query:select varchar(concat(left(col_var,3), right(col_var, 2)),60) from dt39_table.
-_JJ&&
+Query:select varchar(concat(left(col_var,3),'Put These Together'),60) from dt39_tabl-
+e.
+_JJ Put These Together
+Test the length() function.
+Query:select varchar(length(col_var), 60) from dt39_table.
+16000
+Test the pad() function.
+Query:select varchar(length(pad(col_var)), 60) from dt39_table.
+16000
+Test the lowercase() function.
+Query:select varchar(lowercase(right(col_var,10)), 60) from dt39_table.
+jjjjj&&&&&
+Test the uppercase() function.
+Query:select varchar(uppercase(right(col_var,10)), 60) from dt39_table.
+JJJJJ&&&&&
+Test the size() function.
+Query:select varchar(size(col_var),60) from dt39_table.
+16000
+Test the soundex() function.
+Query:select varchar(soundex(col_var), 60) from dt39_table.
+J000
+Test the squeeze() function.
+Query:select varchar(squeeze(col_var), 60) from dt39_table.
+_JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ
+Test the trim() function.
+Query:select varchar(trim(col_var), 60) from dt39_table.
+_JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ
+End Testing.
+>>
+<<
+Success!!!
+Test the left() function.
+Query:select varchar(left(col_var, 10), 60) from dt39_table.
+_JJJJJJJJJ
+Test the right()function.
+Query:select varchar(right(col_var, 5), 60)from dt39_table.
+&&&&&
+Test the locate() function.
+Query:select varchar(locate(col_var,'J'),60) from dt39_table.
+The first occurrence of 'J' is in location: 2
+Query:select varchar(locate(col_var,'&'),60) from dt39_table.
+The first occurrence of '&' is in location: 31996
+Query:select varchar(locate(col_var,'_'),60) from dt39_table.
+The first occurrence of '_' is in location: 1
+Test the shift() function.
+Query:select varchar(shift(left(col_var,11),1),60) from dt39_table.
+ _JJJJJJJJJJ
+Query:select varchar(shift(right(col_var, 3),-1),60) from dt39_table.
+&&
+Test the charextract() function.
+Query:select varchar(charextract(col_var,1),60) from dt39_table.
+The first character is: _
+Test the concat() function.
+Query:select varchar(concat(left(col_var,3),'Put These Together'),60) from dt39_tabl-
+e.
+_JJ Put These Together
 Test the length() function.
 Query:select varchar(length(col_var), 60) from dt39_table.
 32000
@@ -214,10 +311,10 @@ Query:select varchar(length(pad(col_var)), 60) from dt39_table.
 32000
 Test the lowercase() function.
 Query:select varchar(lowercase(right(col_var,10)), 60) from dt39_table.
-jjjjjjjj&&
+jjjjj&&&&&
 Test the uppercase() function.
 Query:select varchar(uppercase(right(col_var,10)), 60) from dt39_table.
-JJJJJJJJ&&
+JJJJJ&&&&&
 Test the size() function.
 Query:select varchar(size(col_var),60) from dt39_table.
 32000
@@ -254,4 +351,4 @@ End Testing.
 >>
 
 
-Ending at: Thu Apr 19 15:43:04 2001
+Ending at: Mon Nov  3 20:48:01 2008

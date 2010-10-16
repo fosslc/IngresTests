@@ -1,4 +1,6 @@
 /*
+Copyright (c) 2008 Ingres Corporation
+
 	Test Name: dt36.sep
 	Time: Thu Apr 19 11:59:58 2001
 	User Name: testenv
@@ -7,7 +9,8 @@
 	Test ID : dt36.sep
 	Module  : be/datatypes
 	Filename: dt36.sep
-	Purpose	: To test the maximum size of 32K for character data types.
+        Purpose : To test the maximum size of 32K for character data types
+                  in a default instance and test maximum size of 16K in UTF8.
 	Input Files  : ctype.sc
 	Output Files : ctype.exe
 	Database     : datatypedb2
@@ -17,7 +20,12 @@
                        various string functions to retrieve the data from the 
                        table.
 
- History: 19-Apr-2001	(wu$ca01)	Created
+ History: 19-Apr-2001	(wu$ca01) Created
+           3-Nov-2008	(vande02) The test program was changed to accept an
+				  additional argument SEPPARAM_CHARSET and set
+                                  the max column size to 16K for UTF8 or 32K
+                                  (default) for non-UTF8.  Conditional canon
+                                  for UTF8 was also created.
 */
 ? fill ctype.sc 
 !!
@@ -29,25 +37,36 @@
 #include <stdio.h>
 exec sql include sqlca;
 
+#define MAXVCSZ 32000 
+#define MAXUTF8SZ 16000
+
+
 main(int argc, char* argv[])
 {
     exec sql begin declare section;
       char   *dbname;
 	varchar struct {
 	    short	buf_size;
-	    char	buf[32000];
+	    char	buf[MAXVCSZ+1];
 	} vch;
 
 	varchar struct {
 	    short	buf_size;
-	    char	buf[32000];
+	    char	buf[MAXVCSZ+1];
 	} vch2;
-   
+    int vcsz;
+    char  *charset;
+    char stmtbuff[256];   
     exec sql end declare section;
 
     exec sql whenever sqlerror call sqlprint;
 
     dbname = argv[1];
+    charset = argv[2];
+    if (strcmp(charset, "UTF8") == 0)
+      vcsz = MAXUTF8SZ;
+    else
+      vcsz = MAXVCSZ;
 
     exec sql connect :dbname;
     /* Ignore errors from drop table */
@@ -55,15 +74,16 @@ main(int argc, char* argv[])
     exec sql drop table dt36_table;
 
     exec sql whenever sqlerror call sqlprint;
-    exec sql create table dt36_table(col_c c(32000));
+    sprintf(stmtbuff, "create table dt36_table(col_c c(%d))", vcsz);
+    exec sql execute immediate :stmtbuff; 
 
     /* To set all the bytes in a block of memory with the character 'a' */
-    memset(vch.buf, 'a', 32000);
-    vch.buf_size = 32000;
+    memset(vch.buf, 'a', vcsz);
+    vch.buf_size = vcsz;
     /* Between the 6th through 15th character, change the character to '@' */
     memset(vch.buf+5, '@', 10);
     /* Replace the last ten characters with '!' */
-    memset(vch.buf+31990, '!', 10);
+    memset(vch.buf+vcsz-10, '!', 10);
 
     exec sql insert into dt36_table values (:vch);
 
@@ -72,7 +92,7 @@ main(int argc, char* argv[])
     /* If the table is successfully created, print success. Follow by */
     /* testing various string functions. Otherwise, print failure. */ 
     if (vch.buf_size == vch2.buf_size &&
-	memcmp(vch.buf, vch2.buf, 32000) == 0)
+	memcmp(vch.buf, vch2.buf, vcsz) == 0)
     {
         printf("Success!!!\n");
 
@@ -87,36 +107,47 @@ main(int argc, char* argv[])
 
         printf("Test the right()function.\n");
         printf("Query:select varchar(right(col_c, 20), 60)from dt36_table.\n");
-        exec sql select varchar(right(col_c, 20), 60) into :vch2.buf from dt36_table;
+        exec sql select varchar(right(col_c, 20), 60) into :vch2.buf from dt36_table-
+;
         printf("%s\n", vch2.buf);
 
         printf("Test the locate() function.\n");
         printf("Query:select varchar(locate(col_c,'a'),60) from dt36_table.\n");
-        exec sql select varchar(locate(col_c, 'a'), 60) into :vch2.buf from dt36_table;
+        exec sql select varchar(locate(col_c, 'a'), 60) into :vch2.buf from dt36_tab-
+le;
         printf("The first occurrence of 'a' is in location: %s\n", vch2.buf);
         printf("Query:select varchar(locate(col_c,'@'),60) from dt36_table.\n");
-        exec sql select varchar(locate(col_c, '@'), 60) into :vch2.buf from dt36_table;
+        exec sql select varchar(locate(col_c, '@'), 60) into :vch2.buf from dt36_tab-
+le;
         printf("The first occurrence of '@' is in location: %s\n", vch2.buf);
         printf("Query:select varchar(locate(col_c,'!'),60) from dt36_table.\n");
-        exec sql select varchar(locate(col_c, '!'), 60) into :vch2.buf from dt36_table;
+        exec sql select varchar(locate(col_c, '!'), 60) into :vch2.buf from dt36_tab-
+le;
         printf("The first occurrence of '!' is in location: %s\n", vch2.buf);
 
         printf("Test the shift() function.\n");
-        printf("Query:select varchar(shift(left(col_c,20),5),60) from dt36_table.\n");
-        exec sql select varchar(shift(left(col_c, 20), 5), 60) into :vch2.buf from dt36_table;
+        printf("Query:select varchar(shift(left(col_c,20),5),60) from dt36_table.\n"-
+);
+        exec sql select varchar(shift(left(col_c, 20), 5), 60) into :vch2.buf from d-
+t36_table;
         printf("%s\n", vch2.buf);
-        printf("Query:select varchar(shift(left(col_c, 20),-5),60) from dt36_table.\n");
-        exec sql select varchar(shift(left(col_c, 20), -5), 60) into :vch2.buf from dt36_table;
+        printf("Query:select varchar(shift(left(col_c, 20),-5),60) from dt36_table.\-
+n");
+        exec sql select varchar(shift(left(col_c, 20), -5), 60) into :vch2.buf from -
+dt36_table;
         printf("%s\n", vch2.buf);
 
         printf("Test the charextract() function.\n");
         printf("Query:select varchar(charextract(col_c,7),60) from dt36_table.\n");
-        exec sql select varchar(charextract(col_c, 7), 60) into :vch2.buf from dt36_table;
+        exec sql select varchar(charextract(col_c, 7), 60) into :vch2.buf from dt36_-
+table;
         printf("The 7th character is: %s\n", vch2.buf);
 
         printf("Test the concat() function.\n");
-        printf("Query:select varchar(concat(right(col_c,1),'The End!'),60) from dt36_table.\n"); 
-        exec sql select varchar(concat(right(col_c, 1), 'The End!'), 60) into :vch2.buf from dt36_table;
+        printf("Query:select varchar(concat(right(col_c,1),'The End!'),60) from dt36-
+_table.\n"); 
+        exec sql select varchar(concat(right(col_c, 1), 'The End!'), 60) into :vch2.-
+buf from dt36_table;
         printf("%s\n", vch2.buf);
 
         printf("Test the length() function.\n");
@@ -126,17 +157,22 @@ main(int argc, char* argv[])
 
         printf("Test the pad() function.\n");
         printf("Query:select varchar(length(pad(col_c)), 60) from dt36_table.\n");
-        exec sql select varchar(length(pad(col_c)), 60) into :vch2.buf from dt36_table;
+        exec sql select varchar(length(pad(col_c)), 60) into :vch2.buf from dt36_tab-
+le;
         printf("%s\n", vch2.buf);
 
         printf("Test the lowercase() function.\n");
-        printf("Query:select varchar(lowercase(left(col_c,5)), 60) from dt36_table.\n");
-        exec sql select varchar(lowercase(left(col_c,5)), 60) into :vch2.buf from dt36_table;
+        printf("Query:select varchar(lowercase(left(col_c,5)), 60) from dt36_table.\-
+n");
+        exec sql select varchar(lowercase(left(col_c,5)), 60) into :vch2.buf from dt-
+36_table;
         printf("%s\n", vch2.buf);
 
         printf("Test the uppercase() function.\n");
-        printf("Query:select varchar(uppercase(left(col_c,5)), 60) from dt36_table.\n");
-        exec sql select varchar(uppercase(left(col_c,5)), 60) into :vch2.buf from dt36_table;
+        printf("Query:select varchar(uppercase(left(col_c,5)), 60) from dt36_table.\-
+n");
+        exec sql select varchar(uppercase(left(col_c,5)), 60) into :vch2.buf from dt-
+36_table;
         printf("%s\n", vch2.buf);
 
         printf("Test the size() function.\n");
@@ -179,7 +215,59 @@ main(int argc, char* argv[])
 <<
 ~
 >>
-? run ctype.exe SEPPARAMDB 
+? run ctype.exe SEPPARAMDB SEPPARAM_CHARSET 
+<< IF (ING_CHARSET == "UTF8") 
+Success!!!
+Test the left() function.
+Query:select varchar(left(col_c, 20), 60) from dt36_table.
+aaaaa@@@@@@@@@@aaaaa
+Test the right()function.
+Query:select varchar(right(col_c, 20), 60)from dt36_table.
+aaaaaaaaaa!!!!!!!!!!
+Test the locate() function.
+Query:select varchar(locate(col_c,'a'),60) from dt36_table.
+The first occurrence of 'a' is in location: 1
+Query:select varchar(locate(col_c,'@'),60) from dt36_table.
+The first occurrence of '@' is in location: 6
+Query:select varchar(locate(col_c,'!'),60) from dt36_table.
+The first occurrence of '!' is in location: 15991
+Test the shift() function.
+Query:select varchar(shift(left(col_c,20),5),60) from dt36_table.
+     aaaaa@@@@@@@@@@aaaaa
+Query:select varchar(shift(left(col_c, 20),-5),60) from dt36_table.
+@@@@@@@@@@aaaaa
+Test the charextract() function.
+Query:select varchar(charextract(col_c,7),60) from dt36_table.
+The 7th character is: @
+Test the concat() function.
+Query:select varchar(concat(right(col_c,1),'The End!'),60) from dt36_table.
+!The End!
+Test the length() function.
+Query:select varchar(length(col_c), 60) from dt36_table.
+16000
+Test the pad() function.
+Query:select varchar(length(pad(col_c)), 60) from dt36_table.
+16000
+Test the lowercase() function.
+Query:select varchar(lowercase(left(col_c,5)), 60) from dt36_table.
+aaaaa
+Test the uppercase() function.
+Query:select varchar(uppercase(left(col_c,5)), 60) from dt36_table.
+AAAAA
+Test the size() function.
+Query:select varchar(size(col_c),60) from dt36_table.
+16000
+Test the soundex() function.
+Query:select varchar(soundex(col_c), 60) from dt36_table.
+A000
+Test the squeeze() function.
+Query:select varchar(squeeze(col_c), 60) from dt36_table.
+aaaaa@@@@@@@@@@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Test the trim() function.
+Query:select varchar(trim(col_c), 60) from dt36_table.
+aaaaa@@@@@@@@@@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+End Testing.
+>>
 <<
 Success!!!
 Test the left() function.
@@ -232,26 +320,26 @@ Query:select varchar(trim(col_c), 60) from dt36_table.
 aaaaa@@@@@@@@@@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 End Testing.
 >>
-? delete ctype.sc
+? delete ctype.sc 
 <<
 ~
 >>
-? delete ctype.c
+? delete ctype.c 
 <<
 ~
 >>
-? delete ctype.o
+? delete ctype.o 
 <<
 ~
 >>
-? delete ctype.obj
+? delete ctype.obj 
 <<
 ~
 >>
-? delete ctype.exe
+? delete ctype.exe 
 <<
 ~
 >>
 
 
-Ending at: Thu Apr 19 12:01:34 2001
+Ending at: Mon Nov  3 12:39:59 2008

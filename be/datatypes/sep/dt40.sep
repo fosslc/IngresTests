@@ -1,4 +1,6 @@
 /*
+Copyright (c) 2008 Ingres Corporation
+
 	Test Name: dt40.sep
 	Time: Mon Apr 23 16:44:03 2001
 	User Name: testenv
@@ -7,7 +9,8 @@
 	Test ID : dt40.sep 
 	Module  : be/datatypes
 	Filename: dt40.sep
-	Purpose	: To test the maximum size of 32K for character data types.
+	Purpose	: To test the maximum size of 32K for character data type
+                  in a default instance and test maximum size of 16K in UTF8.
 	Input Files  : longvar.sc
 	Output Files : longvar.exe
 	Database     : datatypedb2 
@@ -17,47 +20,66 @@
                        column. And using various string functions to retrieve 
                        the data from the table. 
 
- History: 23-Apr-2001	(wu$ca01)	Created
+ History: 23-Apr-2001	(wu$ca01) Created
           05-Jun-2001	(wu$ca01) Test will fail on NT platform. See issue
-                        10928220. Once the issue is fixed, the 
-                        <<IF (NT_GENERIC)>> CANON can be remove from this test.
+                        10928220. Once the issue is fixed, <<IF (NT_GENERIC)>>
+                                  CANON can be remove from this test.
 	  20-Jul-2001	(wu$ca01) Remove NT_GENERIC canon due to issue 10928220
-                        resolved.
+                                  resolved.
+           4-Nov-2008   (vande02) The test program was changed to accept an
+                                  additional argument SEPPARAM_CHARSET and set
+                                  the max column size to 32010 for both UTF8 and
+                                  non-UTF8.  Conditional canon for UTF8 was
+                                  created. Some string functions must be coerced
+                                  to another data type such as varchar to allow
+                                  them to return a value from long varchar cols,
+                                  therefore, the column length will return
+                                  16000 when it is really 32010.  Changed query
+                                  locating the character at locations 31998,
+                                  31999, 32000, 32001, 32002 to the 15998,
+                                  15998,16000. These locations would be invalid
+                                  for UTF8 after coercion to varchar.
 */
 ? fill longvar.sc 
 !!
 /* This program is to test the 'long varchar' character data type with the
-** maximum size of 32K bytes per column, and the retrieval of the data using
-** various string functions.
+** size of 32010 bytes per column, and the retrieval of the data using
+** various string functions.  The maximum size of a long varchar for both
+** UTF8 and non-UTF8 is actually 2GB.
 */
 
 #include <stdio.h>
 exec sql include sqlca;
 
-exec sql begin declare section;
+#define MAXVCSZ 32010
+#define MAXUTF8SZ 32010
+
+main(int argc, char* argv[])
+{
+    exec sql begin declare section;
         char   *dbname;
         varchar struct {
             short       buf_size;
-            char        buf[32010];
+            char        buf[MAXVCSZ+1];
         } vch;
 
         varchar struct {
             short       buf_size;
-            char        buf[32010];
+            char        buf[MAXVCSZ+1];
         } vch2;
-
-exec sql end declare section;
-
-short  lenval[] = { 31998, 31999, 32000, 32001, 32002, 0 };
-
-main(int argc, char* argv[])
-{
-    int     i;
-    short   curlen;
+    int vcsz;
+    char  *charset;
+    char stmtbuff[256];
+    exec sql end declare section;
 
     exec sql whenever sqlerror call sqlprint;
 
     dbname = argv[1];
+    charset = argv[2];
+    if (strcmp(charset, "UTF8") == 0)
+      vcsz = MAXUTF8SZ;
+    else
+      vcsz = MAXVCSZ;
 
     exec sql connect :dbname;
     /* Ignore errors from drop table */
@@ -67,17 +89,13 @@ main(int argc, char* argv[])
     exec sql whenever sqlerror call sqlprint;
     exec sql create table dt40_table(col_longvar long varchar);
 
-    for (i = 0; (curlen=lenval[i]) != 0; i++)
-    {
-       exec sql delete from dt40_table;
-
        /* To set all the bytes in a block of memory with the character '^' */
-       memset(vch.buf, '^', curlen);
-       vch.buf_size = curlen;
+       memset(vch.buf, '^', vcsz);
+       vch.buf_size = vcsz;
        /* Replace the first character with 'L' */
        memset(vch.buf, 'L', 1);
-       /* Replace the last character with '3' */
-       memset(vch.buf+curlen-1, '3', 1);
+       /* Replace the 15998th, 15999th, and 16000th characters with '3' */
+       memset(vch.buf+15997, '3', 3);
 
        exec sql insert into dt40_table values (:vch);
 
@@ -90,13 +108,10 @@ main(int argc, char* argv[])
     /* character data type. Therefore, it first need to coerce the column */
     /* to an acceptable data type. In this case, it is convert to */
     /* 'varchar' data type. */
-       printf("Buffer size %d ... ", curlen);
        if (vch.buf_size == vch2.buf_size &&
-           memcmp(vch.buf, vch2.buf, curlen) == 0)
+           memcmp(vch.buf, vch2.buf, vcsz) == 0)
+    {
           printf("Success!!!\n");
-       else
-          printf("Failure!!!\n");
-    }
 
     printf("Test the left() function.\n");
     printf("Query:select left(col_longvar, 10) from dt40_table.\n");
@@ -109,32 +124,46 @@ main(int argc, char* argv[])
     printf("%s\n", vch2.buf);
 
     printf("Test the locate() function.\n");
-    printf("Query:select varchar(locate(varchar(col_longvar),'L'),60) from dt40_table.\n");
-    exec sql select varchar(locate(varchar(col_longvar), 'L'),60) into :vch2.buf from dt40_table;
+    printf("Query:select varchar(locate(varchar(col_longvar),'L'),60) from dt40_tabl-
+e.\n");
+    exec sql select varchar(locate(varchar(col_longvar), 'L'),60) into :vch2.buf fro-
+m dt40_table;
     printf("The first occurrence of 'L' is in location: %s\n", vch2.buf);
-    printf("Query:select varchar(locate(varchar(col_longvar),'^'),60) from dt40_table.\n");
-    exec sql select varchar(locate(varchar(col_longvar), '^'),60) into :vch2.buf from dt40_table;
+    printf("Query:select varchar(locate(varchar(col_longvar),'^'),60) from dt40_tabl-
+e.\n");
+    exec sql select varchar(locate(varchar(col_longvar), '^'),60) into :vch2.buf fro-
+m dt40_table;
     printf("The first occurrence of '^' is in location: %s\n", vch2.buf);
-    printf("Query:select varchar(locate(varchar(col_longvar),'3'),60) from dt40_table.\n");
-    exec sql select varchar(locate(varchar(col_longvar), '3'),60) into :vch2.buf from dt40_table;
+    printf("Query:select varchar(locate(varchar(col_longvar),'3'),60) from dt40_tabl-
+e.\n");
+    exec sql select varchar(locate(varchar(col_longvar), '3'),60) into :vch2.buf fro-
+m dt40_table;
     printf("The first occurrence of '3' is in location: %s\n", vch2.buf);
 
     printf("Test the shift() function.\n");
-    printf("Query:select varchar(shift(left(varchar(col_longvar),5),2),60) from dt40_table.\n");
-    exec sql select varchar(shift(left(varchar(col_longvar),5),2),60) into :vch2.buf from dt40_table;
+    printf("Query:select varchar(shift(left(varchar(col_longvar),5),2),60) from dt40-
+_table.\n");
+    exec sql select varchar(shift(left(varchar(col_longvar),5),2),60) into :vch2.buf-
+ from dt40_table;
     printf("%s\n", vch2.buf);
-    printf("Query:select varchar(shift(left(varchar(col_longvar),5),-1),60) from dt40_table.\n");
-    exec sql select varchar(shift(left(varchar(col_longvar),5),-1),60) into :vch2.buf from dt40_table;
+    printf("Query:select varchar(shift(left(varchar(col_longvar),5),-1),60) from dt4-
+0_table.\n");
+    exec sql select varchar(shift(left(varchar(col_longvar),5),-1),60) into :vch2.bu-
+f from dt40_table;
     printf("%s\n", vch2.buf);
 
     printf("Test the charextract() function.\n");
-    printf("Query:select charextract(varchar(col_longvar),32000) from dt40_table.\n");
-    exec sql select charextract(varchar(col_longvar), 32000) into :vch2.buf from dt40_table;
-    printf("The 32000th character is: %s\n", vch2.buf);
+    printf("Query:select charextract(varchar(col_longvar),16000) from dt40_table.\n"-
+);
+    exec sql select charextract(varchar(col_longvar),16000) into :vch2.buf from dt40-
+_table;
+    printf("The 16000th character is: %s\n", vch2.buf);
 
     printf("Test the concat() function.\n");
-    printf("Query:select concat(left(col_longvar,3), right(col_longvar, 2)) from dt40_table.\n");
-    exec sql select concat(left(col_longvar,3), right(col_longvar, 2)) into :vch2.buf from dt40_table;
+    printf("Query:select concat(left(col_longvar,3), right(col_longvar, 2)) from dt4-
+0_table.\n");
+    exec sql select concat(left(col_longvar,3), right(col_longvar, 2)) into :vch2.bu-
+f from dt40_table;
     printf("%s\n", vch2.buf);
 
     printf("Test the length() function.\n");
@@ -143,8 +172,10 @@ main(int argc, char* argv[])
     printf("%s\n", vch2.buf);
 
     printf("Test the pad() function.\n");
-    printf("Query:select varchar(length(pad(varchar(col_longvar)))) from dt40_table.\n");
-    exec sql select varchar(length(pad(varchar(col_longvar)))) into :vch2.buf from dt40_table;
+    printf("Query:select varchar(length(pad(varchar(col_longvar)))) from dt40_table.-
+\n");
+    exec sql select varchar(length(pad(varchar(col_longvar)))) into :vch2.buf from d-
+t40_table;
     printf("%s\n", vch2.buf);
 
     printf("Test the lowercase() function.\n");
@@ -168,18 +199,26 @@ main(int argc, char* argv[])
     printf("%s\n", vch2.buf);
 
     printf("Test the squeeze() function.\n");
-    printf("Query:select varchar(squeeze(varchar(col_longvar)),60) from dt40_table.\n");
-    exec sql select varchar(squeeze(varchar(col_longvar)),60) into :vch2.buf from dt40_table;
+    printf("Query:select varchar(squeeze(varchar(col_longvar)),60) from dt40_table.\-
+n");
+    exec sql select varchar(squeeze(varchar(col_longvar)),60) into :vch2.buf from dt-
+40_table;
     printf("%s\n", vch2.buf);
 
     printf("Test the trim() function.\n");
-    printf("Query:select varchar(trim(varchar(col_longvar)),60) from dt40_table.\n");
-    exec sql select varchar(trim(varchar(col_longvar)),60) into :vch2.buf from dt40_table;
+    printf("Query:select varchar(trim(varchar(col_longvar)),60) from dt40_table.\n")-
+;
+    exec sql select varchar(trim(varchar(col_longvar)),60) into :vch2.buf from dt40_-
+table;
     printf("%s\n", vch2.buf);
 
     printf("End Testing.\n");
+    }
+    else
+        printf("Failure!!!\n");
     exec sql disconnect;
 }
+
 !!
 ? esqlc longvar.sc 
 <<
@@ -193,40 +232,88 @@ main(int argc, char* argv[])
 <<
 ~
 >>
-? run longvar.exe SEPPARAMDB 
-<<
-Buffer size 31998 ... Success!!!
-Buffer size 31999 ... Success!!!
-Buffer size 32000 ... Success!!!
-Buffer size 32001 ... Success!!!
-Buffer size 32002 ... Success!!!
+? run longvar.exe SEPPARAMDB SEPPARAM_CHARSET 
+<< IF (ING_CHARSET == "UTF8") 
+Success!!!
 Test the left() function.
 Query:select left(col_longvar, 10) from dt40_table.
 L^^^^^^^^^
 Test the right()function.
 Query:select right(col_longvar, 10) from dt40_table.
-^^^^^^^^^3
+^^^^^^^^^^
 Test the locate() function.
 Query:select varchar(locate(varchar(col_longvar),'L'),60) from dt40_table.
 The first occurrence of 'L' is in location: 1
 Query:select varchar(locate(varchar(col_longvar),'^'),60) from dt40_table.
 The first occurrence of '^' is in location: 2
 Query:select varchar(locate(varchar(col_longvar),'3'),60) from dt40_table.
-The first occurrence of '3' is in location: 32001
+The first occurrence of '3' is in location: 15998
 Test the shift() function.
 Query:select varchar(shift(left(varchar(col_longvar),5),2),60) from dt40_table.
   L^^^^
 Query:select varchar(shift(left(varchar(col_longvar),5),-1),60) from dt40_table.
 ^^^^
 Test the charextract() function.
-Query:select charextract(varchar(col_longvar),32000) from dt40_table.
-The 32000th character is: ^
+Query:select charextract(varchar(col_longvar),16000) from dt40_table.
+The 16000th character is: 3
 Test the concat() function.
 Query:select concat(left(col_longvar,3), right(col_longvar, 2)) from dt40_table.
-L^^^3
+L^^^^
 Test the length() function.
 Query:select varchar(length(col_longvar),60) from dt40_table.
-32002
+32010
+Test the pad() function.
+Query:select varchar(length(pad(varchar(col_longvar)))) from dt40_table.
+16000
+Test the lowercase() function.
+Query:select lowercase(left(col_longvar,10)) from dt40_table.
+l^^^^^^^^^
+Test the uppercase() function.
+Query:select uppercase(left(col_longvar,10)) from dt40_table.
+L^^^^^^^^^
+Test the size() function.
+Query:select varchar(size(col_longvar),60) from dt40_table.
+0
+Test the soundex() function.
+Query:select soundex(varchar(col_longvar)) from dt40_table.
+L000
+Test the squeeze() function.
+Query:select varchar(squeeze(varchar(col_longvar)),60) from dt40_table.
+L^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Test the trim() function.
+Query:select varchar(trim(varchar(col_longvar)),60) from dt40_table.
+L^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+End Testing.
+>>
+<<
+Success!!!
+Test the left() function.
+Query:select left(col_longvar, 10) from dt40_table.
+L^^^^^^^^^
+Test the right()function.
+Query:select right(col_longvar, 10) from dt40_table.
+^^^^^^^^^^
+Test the locate() function.
+Query:select varchar(locate(varchar(col_longvar),'L'),60) from dt40_table.
+The first occurrence of 'L' is in location: 1
+Query:select varchar(locate(varchar(col_longvar),'^'),60) from dt40_table.
+The first occurrence of '^' is in location: 2
+Query:select varchar(locate(varchar(col_longvar),'3'),60) from dt40_table.
+The first occurrence of '3' is in location: 15998
+Test the shift() function.
+Query:select varchar(shift(left(varchar(col_longvar),5),2),60) from dt40_table.
+  L^^^^
+Query:select varchar(shift(left(varchar(col_longvar),5),-1),60) from dt40_table.
+^^^^
+Test the charextract() function.
+Query:select charextract(varchar(col_longvar),16000) from dt40_table.
+The 16000th character is: 3
+Test the concat() function.
+Query:select concat(left(col_longvar,3), right(col_longvar, 2)) from dt40_table.
+L^^^^
+Test the length() function.
+Query:select varchar(length(col_longvar),60) from dt40_table.
+32010
 Test the pad() function.
 Query:select varchar(length(pad(varchar(col_longvar)))) from dt40_table.
 32000
@@ -272,4 +359,4 @@ End Testing.
 >>
 
 
-Ending at: Mon Jun 04 14:48:19 2001
+Ending at: Tue Nov  4 15:38:07 2008
