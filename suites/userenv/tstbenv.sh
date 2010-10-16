@@ -1,4 +1,4 @@
-# Copyright (c) 2009 Ingres Corporation
+# Copyright (c) 2010 Ingres Corporation
 #
 #           BASH Environment Variables and Paths Testing Icebreaker
 #
@@ -15,6 +15,8 @@
 # 29-Sep-2008 (vande02) Added the ING_CHARSET variable to enble UTF8 testing.
 #
 # 22-Apr-2009 (vande02) Replacing ING_CHARSET references with SEPPARAM_CHARSET.
+#
+# 22-Jan-2010 (vande02) Increased II_DATE_CENTURY_BOUNDARY to 20.
 #=======================================================================
 #           GENERAL INGRES SYSTEM SETTINGS FOR TEST ENVIRONMENT
 #=======================================================================
@@ -31,7 +33,7 @@ TST_LISTEXEC=$ING_TST/suites/acceptst;  export TST_LISTEXEC
 # Where Ingres should get configuration info.
 II_CONFIG=$II_SYSTEM/ingres/files;	export II_CONFIG
 # Two digit year above this value are in the previous century.
-II_DATE_CENTURY_BOUNDARY=10;		export II_DATE_CENTURY_BOUNDARY
+II_DATE_CENTURY_BOUNDARY=20;		export II_DATE_CENTURY_BOUNDARY
 # On BSD change this to /usr/ucb/vi
 ING_EDIT=/usr/bin/vi;			export ING_EDIT
 # Set this variable to character set under test (i.e. ISO88591, UTF8)
