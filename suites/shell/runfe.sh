@@ -195,11 +195,32 @@
 #	    it can cause syncing problems in the FRS,VISION and VIFRED tests. 
 #	    To avoid this before the FRS tests are run DIFF_SLEEP is saved, 
 #	    unset and then reset after the tests have completed.
+#       08-Apr-2005 (vande02)
+#           Taking out comment characters for fefutil so you can run fefutil
+#	    now that the tests have been cleaned up to the Ingres r3 level.
+#       14-Jun-2006 (hanal04)
+#           Destroy ima_db before doing fefutil tests to avoid differences
+#           caused by BE tests.
+#       15-June-2006 (hanal04)
+#           Remove incorrect space in -u option of previous change.
+#	14-Sep-2006 (bonro01)
+#	    Remove garbage left from previous change 482144
+#       02-Feb-2009 (sarjo01)
+#           Set ING_CHARSET, SEPPARAM_CHARSET.
+#
 #---------------------------------------------------------------------------
 #			Setup Area
 #---------------------------------------------------------------------------
 umask 2 
 umask 
+
+# Set a variable that can be used to check the character set
+#
+ii_code=`ingprenv II_INSTALLATION`
+SEPPARAM_CHARSET=`ingprenv II_CHARSET$ii_code`
+export SEPPARAM_CHARSET
+ING_CHARSET=$SEPPARAM_CHARSET
+export ING_CHARSET
 
 # Set the output directory for test results.
 #
@@ -750,27 +771,27 @@ then
 			qawtl END FE/COPY TESTS
 		fi
 
-# 		if [ "$fac" = "all" -o "$fac" = "fefutil" ]
-# 		then
+ 		if [ "$fac" = "all" -o "$fac" = "fefutil" ]
+ 		then
 # 
 # Run the FORMUTIL tests
 # 
-#                        if [ ! -d $TST_OUTPUT/fefutil ]
-# 		         then
-# 		           echo "Creating Directory - $TST_OUTPUT/fefutil"
+                        if [ ! -d $TST_OUTPUT/fefutil ]
+ 		         then
+ 		           echo "Creating Directory - $TST_OUTPUT/fefutil"
                            echo ""
-# 		           mkdir $TST_OUTPUT/fefutil
-# 		         fi
-# 
-# 			echo "Running the FORMUTIL tests @ ", `date` 
-# 			echo ""
-#			qawtl RUNNING FE/FORMUTIL TESTS
-# 			executor $TST_CFG/fefutil.cfg >$TST_OUTPUT/fefutil/fefutil.out
-# 
-# 			echo Finished the Formutil tests @ `date`
-# 			echo ""
-#			qawtl END FE/FORMUTIL TESTS
-# 		fi
+ 		           mkdir $TST_OUTPUT/fefutil
+ 		         fi
+ 
+                        destroydb -u'$ingres' ima_db
+ 			echo "Running the FORMUTIL tests @ ", `date` 
+ 			echo ""
+			qawtl RUNNING FE/FORMUTIL TESTS
+ 			executor $TST_CFG/fefutil.cfg >$TST_OUTPUT/fefutil/fefutil.out
+ 			echo Finished the Formutil tests @ `date`
+ 			echo ""
+			qawtl END FE/FORMUTIL TESTS
+ 		fi
 
 		if [ "$fac" = "all" -o "$fac" = "frs" ]
 		then
