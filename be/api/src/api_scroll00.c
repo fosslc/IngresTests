@@ -1,6 +1,7 @@
 # include <stdio.h>
 # include <stdlib.h>
-# include "iiapi.h"
+# include <iiapi.h>
+/*2009-28-04 boija02 <> method now works everywhere*/
 
 # define	ROW_COUNT	10000
 # define	COL_COUNT	3
