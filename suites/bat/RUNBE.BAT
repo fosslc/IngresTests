@@ -127,7 +127,8 @@ REM     30-Oct-2008 (vande02)
 REM             Changed Unicode enabled db variable for qryproc to SEPPARAMDB3.
 REM     26-Feb-2009 (vande02)
 REM             Corrected TST_TESTTOOLS to TST_TESTOOLS.
-REM
+REM     27-Feb-2009 (boija02) Replacing all ING_CHARSETs with SEPPARAM_CHARSETs.
+
 REM ---------------------------------------------------------------------------
 REM			Setup Area
 REM ---------------------------------------------------------------------------

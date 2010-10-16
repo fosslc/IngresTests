@@ -58,6 +58,11 @@
 #		SIR 121355
 #               Allow SEPPARAM_SLEEP and SEPPARAM_SLEEP_2 to be set by shell
 #               and change default to 5 seconds
+#       02-Feb-2009 (sarjo01)
+#               Set ING_CHARSET to match SEPPARAM_CHARSET.
+#	27-Feb-2009 (boija02)
+#		Replacing all ING_CHARSET references with SEPPARAM_CHARSET
+
 #---------------------------------------------------------------------------
 #			Setup Area
 #---------------------------------------------------------------------------

@@ -25,10 +25,18 @@ REM             Added COPY and corrected IMAGE.
 REM	23-Sep-2004 (legru01)
 REM		Modified script so it pertains to the Open Source Acceptance
 REM		Package test suites.
+REM     02-Feb-2009 (sarjo01)
+REM             Set ING_CHARSET, SEPPARAM_CHARSET.
+REM     27-Feb-2009 (boija02) Replacing all ING_CHARSETs with SEPPARAM_CHARSETs.
 REM
 REM ---------------------------------------------------------------------------
 REM			Setup Area
 REM --------------------------------------------------------------------------
+
+REM Set a variable that can be used to check the character set
+REM
+call ipset ii_code ingprenv II_INSTALLATION
+call ipset SEPPARAM_CHARSET ingprenv II_CHARSET%ii_code%
 
 REM Set the output directory for test results.
 REM

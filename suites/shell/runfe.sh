@@ -207,6 +207,8 @@
 #	    Remove garbage left from previous change 482144
 #       02-Feb-2009 (sarjo01)
 #           Set ING_CHARSET, SEPPARAM_CHARSET.
+##	27-Feb-2009 (boija02)
+##		Replacing all ING_CHARSET references with SEPPARAM_CHARSET
 #
 #---------------------------------------------------------------------------
 #			Setup Area
@@ -219,8 +221,6 @@ umask
 ii_code=`ingprenv II_INSTALLATION`
 SEPPARAM_CHARSET=`ingprenv II_CHARSET$ii_code`
 export SEPPARAM_CHARSET
-ING_CHARSET=$SEPPARAM_CHARSET
-export ING_CHARSET
 
 # Set the output directory for test results.
 #

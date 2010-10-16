@@ -221,6 +221,10 @@
 #               Changed Unicode enabled db variable for qryproc to SEPPARAMDB3.
 # 16-Dec-2008 (wanfr01)
 #		'be clean lar' doesn't clean lar98db
+# 02-Feb-2009 (sarjo01)
+#	        Set ING_CHARSET to match SEPPARAM_CHARSET.
+# 27-Feb-2009 (boija02)
+#		Replacing all ING_CHARSET references with SEPPARAM_CHARSET
 #
 betestlist="access accntl alttbl api blob c2secure datetime datatypes miscfunc fastload lar qryproc ttpp util"
 diflvl=

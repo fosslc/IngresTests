@@ -18,6 +18,9 @@ REM	13-Feb-2008 (vande02) Added cleanup/startup 10 Replicator services and
 REM                           repinst remove in the clean block.
 REM     07-Nov-2008 (vande02) Added SEPPARAM_CHARSET to enable tests to run
 REM                           with UTF8.
+REM     02-Feb-2009 (sarjo01) Set ING_CHARSET to match SEPPARAM_CHARSET.
+REM     27-Feb-2009 (boija02) Replacing all ING_CHARSETs with SEPPARAM_CHARSETs.
+
 REM
 REM ---------------------------------------------------------------------------
 REM			Setup Area
