@@ -115,6 +115,8 @@ REM             Skipped the 06-Apr-2007 change during last integration (old chan
 REM             486205).  Decided to add ANSIDATE data type suite datetime.
 REM     08-Sep-2008 (sarjo01)
 REM             Moved setting of SEPPARAMAPI_INC to global location
+REM     20-Oct-2008 (vande02)
+REM             Added Unicode enabled database for new qryproc regression tests.
 REM     26-Feb-2009 (vande02)
 REM             Corrected TST_TESTTOOLS to TST_TESTOOLS.
 REM
@@ -302,6 +304,8 @@ if "%2"=="" goto END
 	  title   Creating BE\Qryproc database @ %datevar% . . .
 	  destroydb qryprocdb >>%TST_OUTPUT%\beinit.out
 	  createdb qryprocdb >>%TST_OUTPUT%\beinit.out
+	  destroydb qryprocunidb >>%TST_OUTPUT%\beinit.out
+	  createdb -n qryprocunidb >>%TST_OUTPUT%\beinit.out
 	  set AREA=qryproc
 	  if "%2"=="all" goto InitApi
 	  shift
@@ -519,6 +523,7 @@ if "%2"=="" goto END
 :QRYPROC
 	if not "%2"=="all" if not "%2"=="qryproc" goto API
 	  set SEPPARAMDB=qryprocdb
+	  set SEPPARAMDB2=qryprocunidb
 	  set SEPPARAMDRIVERDB=-dqryprocdb
 	  set TST_TESTOOLS=%ING_TST%\testtool
 	  set AREA=qryproc
@@ -735,6 +740,7 @@ if not "%2" == "" goto CleanLoop
 	title  Destroying BE/QryProc database @ %datevar%
 	echo.
 	destroydb qryprocdb >>%TST_OUTPUT%\beclean.out
+	destroydb qryprocunidb >>%TST_OUTPUT%\beclean.out
 	qasetuser ingres destroydb eia40db >>%TST_OUTPUT%\beclean
 	if "%2"=="all" goto CleanUtil
 	shift
