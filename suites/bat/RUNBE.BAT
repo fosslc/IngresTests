@@ -117,6 +117,8 @@ REM     08-Sep-2008 (sarjo01)
 REM             Moved setting of SEPPARAMAPI_INC to global location
 REM     20-Oct-2008 (vande02)
 REM             Added Unicode enabled database for new qryproc regression tests.
+REM     30-Oct-2008 (vande02)
+REM             Changed Unicode enabled db variable for qryproc to SEPPARAMDB3.
 REM     26-Feb-2009 (vande02)
 REM             Corrected TST_TESTTOOLS to TST_TESTOOLS.
 REM
@@ -523,7 +525,7 @@ if "%2"=="" goto END
 :QRYPROC
 	if not "%2"=="all" if not "%2"=="qryproc" goto API
 	  set SEPPARAMDB=qryprocdb
-	  set SEPPARAMDB2=qryprocunidb
+	  set SEPPARAMDB3=qryprocunidb
 	  set SEPPARAMDRIVERDB=-dqryprocdb
 	  set TST_TESTOOLS=%ING_TST%\testtool
 	  set AREA=qryproc

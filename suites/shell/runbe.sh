@@ -215,6 +215,8 @@
 #               Broke up SEPPARAMAPI_INC setting into 2 commands for Solaris 
 # 20-Oct-2008 (vande02)
 #               Added Unicode enabled database for new qryproc regression tests.
+# 30-Oct-2008 (vande02)
+#               Changed Unicode enabled db variable for qryproc to SEPPARAMDB3.
 #
 betestlist="access accntl alttbl api blob c2secure datetime datatypes miscfunc fastload lar qryproc ttpp util"
 diflvl=
@@ -926,10 +928,10 @@ then
 # Run the QRYPROC tests
 #
 			SEPPARAMDB=qryprocdb
-			SEPPARAMDB2=qryprocunidb
+			SEPPARAMDB3=qryprocunidb
 			SEPPARAMDRIVERDB=-dqryprocdb
 			TST_TESTOOLS=$ING_TST/testtool
-			export SEPPARAMDB SEPPARAMDB2 SEPPARAMDRIVERDB
+			export SEPPARAMDB SEPPARAMDB3 SEPPARAMDRIVERDB
 			export TST_TESTOOLS
 		
 			AREA=qryproc
