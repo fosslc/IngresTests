@@ -1,0 +1,137 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : dtu56.sep
+  Suite         : be!datatypes
+  Focus         : Ingres Regression Test
+                : Test for bug 120734 - incorrect results are returned from a 
+                : repeated select query in an UTF installation
+                :
+  Databases     : SEPPARAMDB3, SEPPARAMDB
+  Tables        : b120734_*
+  Filled Files  : 
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv 
+  Summary       : Verifies fix for bug 120734
+                :
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 13-Oct-2008 (wanfr01) Created.
+                : 13-Oct-2008 (sarjo01) Formalized for piccolo.
+                : 20-Oct-2008 (wanfr01) Test uses both SEPPARAMDB/SEPPARAMDB3
+                : 03-Nov-2008 (wanfr01) Cleaned up compiler warnings
+*/
+? sql -s SEPPARAMDB
+<< 
+
+>> 
+* drop table b120734_1t\g
+<<
+~
+>>
+* create table b120734_1t (relid char(32) not null with default) \g
+<<
+>>
+* insert into b120734_1t values ('zzz') \g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? sql -s SEPPARAMDB3
+<< 
+
+>> 
+* drop table b120734_1t\g
+<<
+~
+>>
+* create table b120734_1t (relid char(32) not null with default) \g
+<<
+>>
+* insert into b120734_1t values ('zzz') \g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? fill b120734.sc
+!!
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+exec sql include sqlca;
+
+int main(argc, argv)
+int	argc;
+char	*argv[];
+{
+	exec sql begin declare section;
+	    char *vparm;
+	    char junk[33];
+            char dbname[100];
+	exec sql end declare section;
+
+    sprintf ( dbname, argv[1]);
+    EXEC SQL connect :dbname;
+
+junk[0] = '\0';
+vparm = "zzz                         ";
+exec sql  repeated  select relid into :junk from b120734_1t where
+	    relid = lowercase(:vparm);
+printf("after repeated select relid='%s'\n", junk);
+exec sql select relid into :junk from b120734_1t where
+           relid = lowercase(:vparm);
+printf("after select relid='%s'\n", junk);
+exec sql disconnect;
+    return (0);
+}
+
+!!
+? esqlc b120734.sc
+<<
+ESQL b120734.sc:
+>>
+<<
+>>
+? sepcc b120734.c
+<<
+>>
+<<
+b120734.c
+>>
+? seplnk b120734
+<<
+>>
+? run b120734.exe SEPPARAMDB3
+<<
+after repeated select relid='zzz                             '
+after select relid='zzz                             '
+>>
+? run b120734.exe SEPPARAMDB
+<<
+after repeated select relid='zzz                             '
+after select relid='zzz                             '
+>>
+? delete b120734.c
+<<
+~
+>>
+? delete b120734.o
+<<
+~
+>>
+? delete b120734.obj
+<<
+~
+>>
+? delete b120734.exe
+<<
+~
+>>

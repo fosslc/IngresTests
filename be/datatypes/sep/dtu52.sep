@@ -1,0 +1,532 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : dtu52.sep
+  Suite         : be!qryproc
+  Focus         : Ingres Regression Test
+                : Test for bug 118141 - Unicode substitution persisting beyond 
+                : session lifetime
+                :
+                : Note the run for b118141-3.exe is commented out as it prints
+                : a binary character and will end up diffing due to ascii 
+                : transfer
+                :
+  Databases     : SEPPARAMDB3 - Requires unicode
+  Tables        : b118141_*
+  Filled Files  : 
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv 
+  Summary       : Verifies fix for bug 118141
+                :
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 27-Aug-2007 (Prodigy) Created.
+                : 30-Sep-2008 (wanfr01) Reformatted. 
+                : 30-Sep-2008 (sarjo01) Formalized for piccolo.
+                : 12-Oct-2008 (wanfr01) This test should not be run on UTF8
+                : 22-Oct-2008 (wanfr01) Test does not currently run on VMS
+                : 03-Nov-2008 (wanfr01) Cleaned up compiler warnings
+*/
+.if !(VMS)
+.if SEPPARAM_CHARSET != "UTF8"
+? sql -s SEPPARAMDB3
+<<
+>>
+* drop table b118141_t1\g
+<<
+~
+>>
+* \q
+<<
+>>
+? fill b118141-1.sc
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i, i1, i2;
+  wchar_t wc1[65], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, nv3, nv4, k2;
+  char st1[51], st2[11], st3[25];
+  wchar_t st[11];
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "===============================\n";
+void print_header(char *s)
+{
+   printf("%s\n%s", s, ln);
+}
+
+void print_trailer()
+{
+   printf(ln);
+}
+
+int main(int argc, char *argv[])
+{
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname /*OPTIONS = '-string_truncation=fail'*/;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+   EXEC SQL WHENEVER SQLWARNING call sqlprint;
+
+   printf("Creating unicode table ...\n");
+   EXEC SQL CREATE TABLE b118141_t1 (a NVARCHAR(10) collate unicode_case_insensitive);
+
+   st[0] = 0x61;
+   st[1] = 0xd73a;
+   st[2] = 0xd74a;
+   st[3] = 0x62;
+   st[4] = 0x00;
+   EXEC SQL insert into b118141_t1 values (:st);
+
+   print_header("Select char(a) from b118141_t1");
+   EXEC SQL SELECT char(a)
+     INTO :st2
+     FROM b118141_t1;
+   EXEC SQL BEGIN;
+     printf("|   %-27s   |\n", st2);
+   EXEC SQL END;
+   print_trailer();
+
+   printf("Operation complete\n");
+
+   EXEC SQL DISCONNECT;
+   return(0);
+}
+
+!!
+? esqlc b118141-1.sc
+<<
+ESQL b118141-1.sc:
+>>
+<<
+>>
+? sepcc b118141-1.c
+<<
+>>
+<<
+b118141-1.c
+>>
+? seplnk b118141-1
+<<
+>>
+? run b118141-1.exe SEPPARAMDB3
+<<
+Creating unicode table ...
+Select char(a) from b118141_t1
+===============================
+E_AD5016 Unicode code point 0000D73A cannot be mapped to local character
+    set.
+    (Wed Oct  1 04:31:27 2008)
+===============================
+Operation complete
+>>
+? delete b118141-1.c
+<<
+~
+>>
+? delete b118141-1.o
+<<
+~
+>>
+? delete b118141-1.obj
+<<
+~
+>>
+? fill b118141-2.sc
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i, i1, i2;
+  wchar_t wc1[65], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, nv3, nv4, k2;
+  char st1[51], st2[11], st3[25];
+  wchar_t st[11];
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "===============================\n";
+void print_header(char *s)
+{
+   printf("%s\n%s", s, ln);
+}
+
+void print_trailer()
+{
+   printf(ln);
+}
+
+int main(int argc, char *argv[])
+{
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname /*OPTIONS = '-string_truncation=fail'*/;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+   EXEC SQL WHENEVER SQLWARNING call sqlprint;
+
+   printf("Dropping tables ...\n");
+   EXEC SQL DROP TABLE b118141_t1;
+
+   printf("Creating unicode table ...\n");
+   EXEC SQL CREATE TABLE b118141_t1 (a NVARCHAR(10) collate unicode_case_insensitive);
+
+   st[0] = 0x61;
+   st[1] = 0xd73a;
+   st[2] = 0xd74a;
+   st[3] = 0x62;
+   st[4] = 0x00;
+   EXEC SQL insert into b118141_t1 values (:st);
+
+   EXEC SQL SET NOUNICODE_SUBSTITUTION;
+   print_header("Select char(a) from b118141_t1");
+   EXEC SQL SELECT char(a)
+     INTO :st2
+     FROM b118141_t1;
+   EXEC SQL BEGIN;
+     printf("|   %-27s   |\n", st2);
+   EXEC SQL END;
+   print_trailer();
+
+   printf("Operation complete\n");
+
+   EXEC SQL DISCONNECT;
+   return(0);
+}
+
+!!
+? esqlc b118141-2.sc
+<<
+ESQL b118141-2.sc:
+>>
+<<
+>>
+? sepcc b118141-2.c
+<<
+>>
+<<
+b118141-2.c
+>>
+? seplnk b118141-2
+<<
+>>
+? run b118141-2.exe SEPPARAMDB3
+<<
+Dropping tables ...
+Creating unicode table ...
+Select char(a) from b118141_t1
+===============================
+E_AD5016 Unicode code point 0000D73A cannot be mapped to local character
+    set.
+    (Wed Oct  1 04:31:28 2008)
+===============================
+Operation complete
+>>
+? delete b118141-2.c
+<<
+~
+>>
+? delete b118141-2.o
+<<
+~
+>>
+? delete b118141-2.obj
+<<
+~
+>>
+? delete b118141-2.exe
+<<
+~
+>>
+? fill b118141-3.sc
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i, i1, i2;
+  wchar_t wc1[65], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, nv3, nv4, k2;
+  char st1[51], st2[11], st3[25];
+  wchar_t st[11];
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "===============================\n";
+void print_header(char *s)
+{
+   printf("%s\n%s", s, ln);
+}
+
+void print_trailer()
+{
+   printf(ln);
+}
+
+int main(int argc, char *argv[])
+{
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname /*OPTIONS = '-string_truncation=fail'*/;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+   EXEC SQL WHENEVER SQLWARNING call sqlprint;
+
+   printf("Dropping tables ...\n");
+   EXEC SQL DROP TABLE b118141_t1;
+
+   printf("Creating unicode table ...\n");
+   EXEC SQL CREATE TABLE b118141_t1 (a NVARCHAR(10) collate unicode_case_insensitive);
+
+   st[0] = 0x61;
+   st[1] = 0xd73a;
+   st[2] = 0xd74a;
+   st[3] = 0x62;
+   st[4] = 0x00;
+   EXEC SQL insert into b118141_t1 values (:st);
+
+   EXEC SQL SET UNICODE_SUBSTITUTION;
+   print_header("Select char(a) from b118141_t1");
+   EXEC SQL SELECT char(a)
+     INTO :st2
+     FROM b118141_t1;
+   EXEC SQL BEGIN;
+     printf("|   %-27s   |\n", st2);
+   EXEC SQL END;
+   print_trailer();
+
+   printf("Operation complete\n");
+
+   EXEC SQL DISCONNECT;
+   return(0);
+}
+
+!!
+? esqlc b118141-3.sc
+<<
+ESQL b118141-3.sc:
+>>
+<<
+>>
+? sepcc b118141-3.c
+<<
+>>
+<<
+b118141-3.c
+>>
+? seplnk b118141-3
+<<
+>>
+/*
+? run b118141-3.exe SEPPARAMDB3
+<<
+Dropping tables ...
+Creating unicode table ...
+Select char(a) from b118141_t1
+===============================
+|   ab                          |
+===============================
+Operation complete
+>>
+*/
+? delete b118141-3.c
+<<
+~
+>>
+? delete b118141-3.o
+<<
+~
+>>
+? delete b118141-3.obj
+<<
+~
+>>
+? delete b118141-3.exe
+<<
+~
+>>
+? fill b118141-4.sc
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i, i1, i2;
+  wchar_t wc1[65], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, nv3, nv4, k2;
+  char st1[51], st2[11], st3[25];
+  wchar_t st[11];
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "===============================\n";
+void print_header(char *s)
+{
+   printf("%s\n%s", s, ln);
+}
+
+void print_trailer()
+{
+   printf(ln);
+}
+
+int main(int argc, char *argv[])
+{
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname /*OPTIONS = '-string_truncation=fail'*/;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+   EXEC SQL WHENEVER SQLWARNING call sqlprint;
+
+   printf("Dropping tables ...\n");
+   EXEC SQL DROP TABLE b118141_t1;
+
+   printf("Creating unicode table ...\n");
+   EXEC SQL CREATE TABLE b118141_t1 (a NVARCHAR(10) collate unicode_case_insensitive);
+
+   st[0] = 0x61;
+   st[1] = 0xd73a;
+   st[2] = 0xd74a;
+   st[3] = 0x62;
+   st[4] = 0x00;
+   EXEC SQL insert into b118141_t1 values (:st);
+
+   EXEC SQL SET UNICODE_SUBSTITUTION '~';
+   print_header("Select char(a) from b118141_t1");
+   EXEC SQL SELECT char(a)
+     INTO :st2
+     FROM b118141_t1;
+   EXEC SQL BEGIN;
+     printf("|   %-27s   |\n", st2);
+   EXEC SQL END;
+   print_trailer();
+
+   printf("Operation complete\n");
+
+   EXEC SQL DISCONNECT;
+   return(0);
+}
+
+!!
+? esqlc b118141-4.sc
+<<
+ESQL b118141-4.sc:
+>>
+<<
+>>
+? sepcc b118141-4.c
+<<
+>>
+<<
+b118141-4.c
+>>
+? seplnk b118141-4
+<<
+>>
+? run b118141-4.exe SEPPARAMDB3
+<<
+Dropping tables ...
+Creating unicode table ...
+Select char(a) from b118141_t1
+===============================
+|   a~~b                          |
+===============================
+Operation complete
+>>
+? delete b118141-4.c
+<<
+~
+>>
+? delete b118141-4.o
+<<
+~
+>>
+? delete b118141-4.obj
+<<
+~
+>>
+? delete b118141-4.exe
+<<
+~
+>>
+? sql -s SEPPARAMDB3
+<<
+>>
+* drop table b118141_t1\g
+<<
+~
+>>
+* \q
+<<
+>>
+? run b118141-1.exe SEPPARAMDB3
+<<
+Creating unicode table ...
+Select char(a) from b118141_t1
+===============================
+E_AD5016 Unicode code point 0000D73A cannot be mapped to local character
+    set.
+    (Wed Oct  1 04:31:27 2008)
+===============================
+Operation complete
+>>
+? delete b118141-1.exe
+<<
+~
+>>
+.endif
+.endif

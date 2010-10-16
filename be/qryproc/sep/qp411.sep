@@ -1,0 +1,246 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : qp411.sep
+  Suite         : be!qryproc
+  Focus         : Ingres Regression Test
+                : Test for bug 117040 - long varchar column in the result row of
+                : a row producing procedure causes garbled result data.
+                :
+  Databases     : SEPPARAMDB
+  Tables        : qp411_t*
+  Filled Files  : qp411.sc
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Verifies fix for bug 117040
+                :
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 31-Jul-2008 (wanfr01) Created.
+                : 31-Jul-2008 (sarjo01) Formalized for piccolo. 
+                : 03-Nov-2008 (wanfr01) Cleaned up compiler warnings
+*/
+? fill qp411.sc
+!!
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+int main(int argc,char *argv[])
+{
+
+EXEC SQL BEGIN DECLARE SECTION;
+    char   dbname[ 33 ];
+    int r_stat=0;
+    char p1[5+1];
+    char col1[20+1];
+    int col2;
+    char col3[10+1];
+    short n[4]; /* null indicator*/
+EXEC SQL END DECLARE SECTION;
+    EXEC SQL WHENEVER SQLERROR CALL sqlprint;
+    EXEC SQL WHENEVER SQLMESSAGE CALL sqlprint;
+
+#ifdef BLOB_FILE
+
+    if ( argc != 3 )
+
+#else
+
+    if ( argc != 2 )
+
+#endif
+    {
+        printf( "Bad arguments\n" );
+        exit(1);
+    }
+
+#ifdef BLOB_FILE
+
+    if ((in_file1 = open( argv[2], O_CREAT | O_TRUNC | O_WRONLY, 0666 )) ==
+-1)
+
+    {
+            printf( "Unable to open BLOB file '%s'\n", argv[2] );
+            exit(2);
+    }
+
+#endif
+
+    strcpy( dbname, argv[ 1 ] );
+    printf( "Connecting...\n");
+    EXEC SQL CONNECT :dbname;
+    printf( "Execute procedure...\n" );
+    strcpy(p1, "val1");
+    EXEC SQL execute procedure qp411_t1_proc(p1 = :p1)
+             result row (
+                          :col1:n[1],
+                          :col2:n[2],
+                          :col3:n[3] )
+/*
+                          :col1,
+                          :col2,
+                          :col3 )
+*/
+             into :r_stat;
+    EXEC SQL BEGIN;
+            printf ("row val = %s, %d, %s\n", col1, col2, col3);
+    EXEC SQL END;
+    printf ("p1 >%s<\n", p1);
+    printf( "Committing transaction\n" );
+    EXEC SQL COMMIT;
+    printf( "Disconnecting\n" );
+    EXEC SQL DISCONNECT; 
+
+    exit(0);
+}
+
+#ifdef xDEBUG
+static void My_InputHdlr(void)
+{
+
+EXEC SQL BEGIN DECLARE SECTION;
+    int                 i;
+    int                 dataend;
+    int                 length = 0;
+    int                 maxseg = 0;
+    char  *segbuf;
+    int                 BUF_SIZE = 1024*64;
+EXEC SQL END DECLARE SECTION;
+    EXEC SQL WHENEVER SQLERROR CALL sqlprint;
+    segbuf = malloc(BUF_SIZE);
+
+    if ( ! segbuf )
+    {
+            printf( "Memory error\n" );
+            exit(3);
+    }
+
+    while(1)
+    {
+            EXEC SQL GET DATA ( :segbuf = SEGMENT, :i = SEGMENTLENGTH, 
+                                        :dataend = DATAEND ) with maxlength
+= :BUF_SIZE;
+
+#ifdef BLOB_FILE
+            if ( write(in_file1, segbuf, i) == -1 )
+            {
+                printf( "Error writing file\n" );
+                break;
+            }
+
+#endif
+            length += i;
+            if ( i > maxseg )  maxseg = i;
+            if ( dataend == 1 )  break;
+    }
+
+    printf( "Got %d bytes (%d max seg)\n", length, maxseg );
+    free( segbuf );
+    return;
+}
+#endif
+!!
+? sql -s SEPPARAMDB
+<< 
+
+>> 
+
+* drop table qp411_t1\g
+<<
+~
+>>
+* create table qp411_t1(c1 long varchar, c2 integer4 not null not default, -
+  c3 varchar(5) not null not default)\g
+<<
+>>
+* insert into qp411_t1 values('rownumber one',1,'val1')\g
+<<
+(1 row)
+>>
+* insert into qp411_t1 values('rownumber two',2,'val2')\g
+<<
+(1 row)
+>>
+* insert into qp411_t1 values('rownumber three',3,'val3')\g
+<<
+(1 row)
+>>
+* drop procedure qp411_t1_proc\g
+<<
+~
+>>
+* create procedure qp411_t1_proc -
+( -
+  p1 = varchar(5) with null -
+) -
+result row -
+( -
+     long varchar, integer4, varchar(5) -
+) -
+as -
+declare -
+   col1   = long varchar with null; -
+   col2   = integer4  with null; -
+   col3   = varchar(5) with null; -
+{ -
+  for -
+  select c1, c2, c3 into :col1, :col2, :col3 from qp411_t1 order by c3 -
+  do -
+    return row (:col1, :col2, :col3) -
+  endfor; -
+}\g
+<<
+>>
+* \q
+<<
+>>
+
+? esqlc qp411.sc
+<<
+ESQL qp411.sc:
+>>
+<<
+>>
+? sepcc qp411.c
+<<
+>>
+<<
+qp411.c
+>>
+? seplnk qp411
+<<
+>>
+? run qp411.exe SEPPARAMDB
+<<
+Connecting...
+Execute procedure...
+row val = rownumber one, 1, val1
+row val = rownumber two, 2, val2
+row val = rownumber three, 3, val3
+p1 >val1<
+Committing transaction
+Disconnecting
+>>
+? delete qp411.c
+<<
+~
+>>
+? delete qp411.exe
+<<
+~
+>>
+? delete qp411.o
+<<
+~
+>>
+? delete qp411.obj
+<<
+~
+>>

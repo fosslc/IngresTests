@@ -1,0 +1,160 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : dtu31.sep
+  Suite         : be!datatypes
+  Focus         : Ingres Regression Test
+                : Test for bug 117342 - extra characters are printed
+                : out after the substitution character if the sql 
+                : command set unicode_substitution is used
+                :
+  Databases     : SEPPARAMDB3 (requires unicode database)
+  Tables        : dtu31_t1
+  Filled Files  : dtu31.sc 
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv 
+  Summary       : Verifies fix for bug 117342 
+                :
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 08-Aug-2008 (wanfr01) Created.
+                : 08-Aug-2008 (sarjo01) Formalized for piccolo.
+                : 21-Aug-2008 (sarjo01) Disabled for UTF8.
+                : 22-Oct-2008 (wanfr01) Test does not currently run on VMS
+                : 03-Nov-2008 (wanfr01) Cleaned up compiler warnings
+*/
+.if !(VMS)
+.if SEPPARAM_CHARSET != "UTF8"
+? fill dtu31.sc
+!!
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+EXEC SQL INCLUDE SQLCA;
+
+#define UC_ASSIGN(l, r) wcscpy((l.text), (r)); (l).len = wcslen((l).text)
+#define UC_TERM(v)      (v).text[(v).len] = L'\0'
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char      *dbname;
+  int       i, i1, i2;
+  wchar_t wc1[65], k1[9];
+  wchar_t wc2[65];
+  nvarchar struct
+  {
+    short len;
+    wchar_t text[65];
+  } nv1, nv2, nv3, nv4, k2;
+  char st1[51], st2[11], st3[25];
+  wchar_t st[11];
+EXEC SQL END DECLARE SECTION;
+
+static char ln[] = "===============================\n";
+void print_header(char *s)
+{
+   printf("%s\n%s", s, ln);
+}
+
+void print_trailer()
+{
+   printf(ln);
+}
+
+int main(int argc, char *argv[])
+{
+   dbname = argv[1];
+   EXEC SQL WHENEVER SQLERROR stop;
+   EXEC SQL CONNECT :dbname /*OPTIONS = '-string_truncation=fail'*/;
+
+   EXEC SQL WHENEVER SQLERROR call sqlprint;
+   EXEC SQL WHENEVER SQLWARNING call sqlprint;
+
+   st[0] = 0x61;
+   st[1] = 0xd73a;
+   st[2] = 0xd74a;
+   st[3] = 0x62;
+   st[4] = 0x00;
+   EXEC SQL insert into dtu31_t1 values (:st);
+
+   EXEC SQL SET UNICODE_SUBSTITUTION '$';
+   print_header("Select char(a) from dtu31_t1");
+   EXEC SQL SELECT char(a)
+     INTO :st2
+     FROM dtu31_t1;
+   EXEC SQL BEGIN;
+     printf("|   %-27s   |\n", st2);
+   EXEC SQL END;
+   print_trailer();
+
+   printf("Operation complete\n");
+
+   EXEC SQL DISCONNECT;
+   return(0);
+}
+!!
+? esqlc dtu31.sc
+<<
+ESQL dtu31.sc:
+>>
+<<
+>>
+? sepcc dtu31.c
+<<
+>>
+<<
+dtu31.c
+>>
+? seplnk dtu31
+<<
+>>
+? sql -s SEPPARAMDB3
+<<
+
+>>
+* drop table dtu31_t1\g
+<<
+~
+>>
+* create table dtu31_t1 (a NVARCHAR(10))\g
+<<
+
+>>
+* \q
+<<
+
+>>
+? run dtu31.exe SEPPARAMDB3
+<<
+Select char(a) from dtu31_t1
+===============================
+|   a$$b                          |
+===============================
+Operation complete
+>>
+? delete dtu31.c
+<<
+~
+>>
+? delete dtu31.o
+<<
+~
+>>
+? delete dtu31.obj
+<<
+~
+>>
+? delete dtu31.exe
+<<
+~
+>>
+.else
+? run echo This test is not relevant on UTF8 installs.
+<<
+This test is not relevant on UTF8 installs.
+>>
+.endif
+.endif

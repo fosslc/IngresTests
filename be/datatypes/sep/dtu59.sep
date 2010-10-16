@@ -1,0 +1,184 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : dtu59.sep
+  Suite         : be!datatypes
+  Focus         : Ingres Regression Test
+                : Test for bug 120620 - In a UTF8 install 'like' query on a C
+                : column does not ignore blanks in the comparison
+                :
+  Databases     : SEPPARAMDB
+  Tables        : b120620_*
+  Filled Files  : 
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv 
+  Summary       : Verifies fix for bug 120620
+                :
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 14-Oct-2008 (wanfr01) Created.
+                : 14-Oct-2008 (sarjo01) Formalized for piccolo.
+                : 03-Nov-2008 (wanfr01) Cleaned up compiler warnings
+*/
+? sql -s SEPPARAMDB
+<< 
+
+>> 
+* drop table b120620_1t\g
+<<
+~
+>>
+* create table b120620_1t( -
+	b120620_1t c2 not null default ' ', -
+	st_adr c30 not null default ' ', -
+	city c15 not null default ' ', -
+	state c2 not null default ' ', -
+	zip c5 not null default ' ' )  \g
+<<
+>>
+* insert into b120620_1t values ('A', '1000 University Ave', 'Berkeley', 'CA'-
+, '94000') \g
+<<
+(1 row)
+>>
+* insert into b120620_1t values ('B', '1800 Shattuck Ave', 'Berkeley', 'CA', -
+'94100') \g
+<<
+(1 row)
+>>
+* insert into b120620_1t values ('C', '900 Lake Shore Blvd', 'Chicago', 'IL',-
+ '60080') \g
+<<
+(1 row)
+>>
+* insert into b120620_1t values ('D', '24130 Pennsylvania Ave', 'Washington',-
+ 'DC', '20198') \g
+<<
+(1 row)
+>>
+* insert into b120620_1t values ('E', '42318 Woodsay Blvd', 'Houston', 'TX', -
+'77009') \g
+<<
+(1 row)
+>>
+* insert into b120620_1t values ('F', '1585 Eye St', 'Washington', 'DC', '201-
+99') \g
+<<
+(1 row)
+>>
+* drop procedure b120620_2p\g
+<<
+~
+>>
+* create procedure b120620_2p ( -
+                city    varchar(15)     not null with default -
+        ) as -
+        declare -
+                b120620_1t            varchar(2)      not null with default; -
+                mesg_buf        varchar(81)     not null with default; -
+        begin -
+                select b120620_1t -
+                        into :b120620_1t -
+                        from b120620_1t -
+                        where city like :city; -
+                mesg_buf = vchar(iirowcount) -
+                        + ' row(s) found for city like ' -
+                        + city; -
+                message mesg_buf; -
+                mesg_buf = b120620_1t + ' building found for city like ' + ci-
+ty; -
+                message mesg_buf;         end \g
+<<
+>>
+* \q
+<<
+>>
+? fill b120620.sc
+!!
+/*
+**	efa05.sc
+**
+**	basic functionality: select
+**
+**	history:
+**		oct 10/89 sgp
+**			- created.
+*/
+
+#define EFA05
+
+#include <stdio.h>
+
+exec sql include sqlca;
+
+int main(int argc, char *argv[])
+{
+	exec sql begin declare section;
+        char dbname[100];
+	exec sql end declare section;
+
+	exec sql whenever sqlerror call sqlprint;
+	exec sql whenever not found call sqlprint;
+	exec sql whenever sqlwarning call sqlprint;
+	exec sql whenever sqlmessage call sqlprint;
+
+	printf("  efa05: select statement\n");
+
+    sprintf ( dbname, argv[1]);
+    EXEC SQL connect :dbname;
+
+	exec sql execute procedure b120620_2p ( city = 'Ber_eley' );
+	exec sql execute procedure b120620_2p ( city = 'Chic%' );
+	exec sql execute procedure b120620_2p ( city = 'Washington' );
+	exec sql execute procedure b120620_2p ( city = 'Petaluma' );
+
+        exec sql disconnect;
+ 	return (0);
+} 
+!!
+? esqlc b120620.sc
+<<
+ESQL b120620.sc:
+>>
+<<
+>>
+? sepcc b120620.c
+<<
+>>
+<<
+b120620.c
+>>
+? seplnk b120620
+<<
+>>
+? run b120620.exe SEPPARAMDB
+<<
+  efa05: select statement
+MESSAGE 0: 1 row(s) found for city like Ber_eley
+MESSAGE 0: A building found for city like Ber_eley
+MESSAGE 0: 1 row(s) found for city like Chic%
+MESSAGE 0: C building found for city like Chic%
+MESSAGE 0: 1 row(s) found for city like Washington
+MESSAGE 0: D building found for city like Washington
+MESSAGE 0: 0 row(s) found for city like Petaluma
+MESSAGE 0:  building found for city like Petaluma
+>>
+? delete b120620.c
+<<
+~
+>>
+? delete b120620.o
+<<
+~
+>>
+? delete b120620.obj
+<<
+~
+>>
+? delete b120620.exe
+<<
+~
+>>
