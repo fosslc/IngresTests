@@ -20,6 +20,12 @@
 #				environment script sets it.  Having SEPPARAMDB
 #				in this script will override the other settings
 #				and you won't know it is happening.
+#
+#       04-Sep-08 (boija02)     ING_TST/output is unlikely to work, so changed
+#                               to II_SYSTEM. Don't create SEPPARAMDB if it's
+#                               defined, which is likely to mean remote testing
+#
+#
 #------------------------------------------------------------------------------
 #			Setup Area
 #------------------------------------------------------------------------------
@@ -38,18 +44,18 @@ then
 	  mkdir $TST_ROOT_OUTPUT/net
 	fi
 else 
-	TST_OUTPUT=$ING_TST/output/net/jdbc
+	TST_OUTPUT=$II_SYSTEM/output/net/jdbc
 
-	if [ ! -d $ING_TST/output ]
+	if [ ! -d $II_SYSTEM/output ]
         then
-          echo "Creating Directory - $ING_TST/output"
-          mkdir $ING_TST/output
+          echo "Creating Directory - $II_SYSTEM/output"
+          mkdir $II_SYSTEM/output
         fi
 
-	if [ ! -d $ING_TST/output/net ]
+	if [ ! -d $II_SYSTEM/output/net ]
 	then
-	  echo "Creating Directory - $ING_TST/output/net"
-	  mkdir $ING_TST/output/net
+	  echo "Creating Directory - $II_SYSTEM/output/net"
+	  mkdir $II_SYSTEM/output/net
 	fi
 fi
 
@@ -73,6 +79,8 @@ work=$1
 
 if [ "$work" = "init" ]
 then
+  if [ "$SEPPARAMDB" = ""]
+  then
     echo "Creating JDBC test database @ ",`date`
     echo ""
 
@@ -82,11 +90,25 @@ then
 
     echo "Finished creating JDBC test database @ ",`date`
     echo ""
+  else
+    echo "SEPPARAMDB defined as "$SEPPARAMDB
+    echo "Assuming this db exists and is unicode-enabled."
+    echo
+  fi
 else
 if [ "$work" = "jdbc" ]
 then
     echo "Starting JDBC SEP Tests @ ",`date`
     echo ""
+
+  if [ "$SEPPARAMDB" = ""]
+  then
+    SEPPARAMDB=jdbcdb
+    export SEPPARAMDB
+    echo "Using local jdbcdb as testing database"
+  else
+    echo "Using $SEPPARAMDB as testing database"
+  fi
 
     executor $TST_CFG/jdbc.cfg > $TST_OUTPUT/jdbc.out
 
@@ -95,6 +117,8 @@ then
 
 else
     echo "You must specify init or jdbc. "
+    echo "Note, init just creates local jdbcdb, which isn't necessary"
+    echo "when testing over net."
     echo ""
     echo " Example: sh $TST_SHELL/runjdbc.sh init "
     echo ""
