@@ -35,12 +35,16 @@
 **		  18-Jun-2007 (sarjo01)							 **
 **		      In  ODBC_fetchData(), changed intData variable from 'long int'     **
 **		      to 'SQLINTEGER' to fix problem on some 64-bit platforms		 ** 
+**		  15-Jul-2008 (boija02)							 **
+**		      malloc.h not present on VMS, so wrapping that include in an ifndef **
 **											 **
 ******************************************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
+#ifndef VMS
 #include <malloc.h>
+#endif
 #include <math.h>
 #ifdef _WIN32
 #include <string.h>

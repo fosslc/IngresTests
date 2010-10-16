@@ -13,6 +13,9 @@
 #          Fixed bad '\' chars, changed to '/'
 #	09-Oct-2002 (somsa01)
 #	   Added "clean" to shell script.
+#	18-Jul-2007 (boija02)
+#	   Replaced overloaded SEPPARAM_NODE variable with ODBC-specific 
+#	   SEPPARAM_ODB, to avoid confusion and aid portability.
 #
 #------------------------------------------------------------------------------
 #			Setup Area
@@ -63,21 +66,21 @@ work=$1
 #---------------------------------------------------------------------
 #      End of Setup
 #---------------------------------------------------------------------
-if [ "$SEPPARAM_NODE" = "" ]
+if [ "$SEPPARAM_ODB" = "" ]
 then
-    SEPPARAM_NODE="odbcdb"
+    SEPPARAM_ODB="odbcdb"
 fi
-export SEPPARAM_NODE
+export SEPPARAM_ODB
 
 if [ "$work" = "init" ]
 then
-    echo "Creating $SEPPARAM_NODE database @ ",`date`
+    echo "Creating $SEPPARAM_ODB database @ ",`date`
     echo ""
 
-    destroydb $SEPPARAM_NODE >>$TST_OUTPUT/odbcinit.out
-    createdb $SEPPARAM_NODE >>$TST_OUTPUT/odbcinit.out
+    destroydb $SEPPARAM_ODB >>$TST_OUTPUT/odbcinit.out
+    createdb $SEPPARAM_ODB >>$TST_OUTPUT/odbcinit.out
 
-    echo "Finished creating $SEPPARAM_NODE database @ ",`date`
+    echo "Finished creating $SEPPARAM_ODB database @ ",`date`
     echo ""
 else
 if [ "$work" = "odbc" ]
@@ -92,12 +95,12 @@ then
 else
 if [ "$work" = "clean" ]
 then
-    echo "Destroying $SEPPARAM_NODE database @ ",`date`
+    echo "Destroying $SEPPARAM_ODB database @ ",`date`
     echo ""
 
-    destroydb $SEPPARAM_NODE >>$TST_OUTPUT/odbcclean.out
+    destroydb $SEPPARAM_ODB >>$TST_OUTPUT/odbcclean.out
 
-    echo "Finished Destroying $SEPPARAM_NODE database @ ",`date`
+    echo "Finished Destroying $SEPPARAM_ODB database @ ",`date`
     echo ""
 
 else

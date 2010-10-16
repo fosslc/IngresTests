@@ -8,6 +8,9 @@ REM
 REM  History:
 REM	24-May-2001 (rogch01)
 REM		Created from runnet.bat.
+REM	18-Jul-2008 (boija02)
+REM		Replacing overloaded SEPPARAM_NODE variable with ODBC-specific
+REM		SEPPARAM_ODB, improving portability and avoiding confusion.
 REM ----------------------------------------------------------------------------
 REM                       Setup Area
 REM ----------------------------------------------------------------------------
@@ -53,18 +56,18 @@ if "%1"=="odbc" goto RUNTEST
 
 :INIT
 	call ipset datevar PCdate
-	if "%SEPPARAM_NODE%" == "" set SEPPARAM_NODE=odbcdb
-	PCecho "Creating %SEPPARAM_NODE% database @ %datevar%"
+	if "%SEPPARAM_ODB%" == "" set SEPPARAM_ODB=odbcdb
+	PCecho "Creating %SEPPARAM_ODB% database @ %datevar%"
 	echo.
 	call dbnet init odbc
 	call ipset datevar PCdate
-	PCecho "Finished creating %SEPPARAM_NODE% database @ %datevar%"
+	PCecho "Finished creating %SEPPARAM_ODB% database @ %datevar%"
 	echo.
 	goto END
 
 :RUNTEST
 	call ipset datevar PCdate
-	if "%SEPPARAM_NODE%" == "" set SEPPARAM_NODE=odbcdb
+	if "%SEPPARAM_ODB%" == "" set SEPPARAM_ODB=odbcdb
 	PCecho "Starting ODBC sep tests @ %datevar%"
 	echo.
 	call dbnet odbc odbc
