@@ -1,0 +1,2050 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: utl13.sep
+	Time: Wed Jul 22 18:37:15 1992
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl13 
+	Module  : be/util
+	Filename: utl13.sep
+	Purpose	: upgradefe test.
+	Input Files  :
+	Output Files :
+	Database     : utildb
+	Tables       :
+	Synopsis     :
+
+		confirms basic upgradefe functionality.
+
+ History: 22-Jul-1992	(sgp)	  Created
+           4-Aug-1992	(sgp)	  added SEPPARAM_W4GL to nuke w4gl specific
+				  things on w4gl-hostile machines.
+          23-Aug-1993	(judi)	  Accepted new canons for 6.5.
+          25-Oct-1993   (judi)	  Accept new canons for INGRES 6.5 changes for
+                                  createdb and the system catalogs.
+          15-Feb-1995	(oerde01) Accepted new canon for changed columns in
+				  iicolumns and iitables.
+          29-Mar-1995	(gauje01) Accepted new canons to include 
+				  iiphysical_columns in iitables and
+				  security_audit in iicolumns.
+          12-Dec-1995	(raora02) Accepted alternate canons because of different
+				  output ordering and changed messages.
+	   6-Nov-1997	(zhaqi01) The default for datatype is nullable
+          21-Sep-1999	(BOIJA02) Add alt canons for changed IILOG_HELP format.
+	  20-Dec-2000	(BOIJA02) Too many tildas, we don't want to run tests 
+				  successfully with ingres down. don't need to
+				  destroydb, use ckpdb/rollforwarddb instead.
+				  Separated out iilog_help alt canon to undo my
+				  terrible prior change.  Rollforwarddb fix
+				  reveals problem detailed in issue 10560948, so
+				  upgradefe is run twice to workaround that.
+				  running this through highlighted issue
+				  10885476, so I have put ignore canons. We're
+				  not testing ckpdb stuff here.
+          25-May-2001	(BOIJA02) 2.5 specific changes to oping20 XIP
+           4-Jun-2001	(BOIJA02) upgrade after rollforward now hangs forever:
+				  have reverted to original destroy/create twice
+				  option.  Potential future improvement if bug
+				  repaired.
+	   8-Jun-2001   (BOIJA02) .if SEPPARAM_W4GL to avoid running that 
+				  upgradefe on W4GL unfriendly machines
+          24-Aug-2001   (BOIJA02) Xing to main +2.6 specific tweaks
+	  30-Jan-2003	(hanch04) Updated canons to match Ingres 2.6/0303 SP2
+	  04-Feb-2003	(hanch04) update to run again 2.6/0303 and previous SP
+	   1-Jul-2004	(vande02) Updating canons with new expected behavior as
+                                  of Ingres r3.  Additional system catalogs have
+                                  changed which affects the results of selects
+                                  from iitables and iicolumns.  This change is
+				  for Ingres r3 and going forward.
+          09-Feb-2005   (vande02) As of Ingres r3, the following changes have
+                                  required canons to be updated - upgradefe
+				  output, index iixprotect has been removed so
+				  row count from iitables is one less, and table
+				  iiprotect no longer has an index 'iixprotect'.
+				  Simplified this test by removing queries from
+				  system catalog iicolumns.  Internal changes to
+				  Ingres continue to affect the results and
+				  attempting to detect what has changed
+				  internally and why from a canon of 3000+ lines
+				  is not practical. The 'select table_name ...
+				  from iitables' has a specific row count
+				  depending on what front-end flag were given to
+                                  createdb or upgradefe, so this query will
+                                  confirm the database was created with the
+                                  expected front-end components (see similar
+                                  test in this suite utl14 which tests modifyfe)
+                                  Embedded comments regarding updates for r3.0.2
+                                  and differences to be seen in r3.0.1 see issue
+                                  13921272.  Changes for r3.0.2 and forward.
+				  Aligned history, minor header corrections.
+	  13-Jun-2008   (kibro01) Tidying after change 492091 (SIR 120159)
+          18-Sep-2008	(vande02) Added conditional canons to allow for UTF8
+                                  collation sequence order.  Header cleanup.
+				  Added UTF8 canons when SEPPARAM_W4GL=TRUE.
+          23-Dec-2008   (vande02) Added iitables table iiproc_rescols to UTF8
+                                  canons and removed old embedded comments.
+*/
+? destroydb SEPPARAMDB 
+<<
+~
+>>
+? createdb SEPPARAMDB -f NOFECLIENTS 
+<<
+Creating database 'utildb' . . .
+ 
+  Creating DBMS System Catalogs . . . 
+  Modifying DBMS System Catalogs . . . 
+  Creating Standard Catalog Interface . . . 
+
+Creation of database 'utildb' completed successfully.
+ 
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select table_name, table_owner, table_type, table_subtype, system_use, is_readonly-
+, table_indexes from iitables where table_name like 'ii%' order by 1, 2;\g 
+<< IF (ING_CHARSET == "UTF8") 
+
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|table_name                      |table_owner                     |table_|table_|sys-
+tem|is_rea|table_|
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|iiaccess                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iialt_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiattribute                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaudittables                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iicolumns                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraint_indexes            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraints                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbcapabilities                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidb_comments                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbconstants                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbdepends                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidbms_comment                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidb_subcomments                |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidefault                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidefaultidx                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iidevices                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcol                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcols                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistscheme                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistschemes                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistval                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iievent                         |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iievents                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiextended_relation             |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iifile_info                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iigw06_attribute                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_relation                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistogram                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistograms                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindex                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex_columns                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindexes                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiingres_tables                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrities                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrity                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiintegrityidx                  |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iikey                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iikeys                          |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iilog_help                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iilpartitions                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iimulti_locations               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiocolumns                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiotables                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipartname                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iipermits                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_columns              |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_tables               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipriv                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprivlist                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiproc_access                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprocedure                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprocedure_parameter           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiprocedures                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_params                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_rescols                  |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprotect                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiqrytext                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirange                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiref_constraints               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiregistrations                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iirelation                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iirel_idx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirule                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiruleidx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiruleidx1                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirules                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iischema                        |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iischemaidx                     |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iisecalarm                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisectype                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisecurity_alarms               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisequence                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisequences                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisession_privileges            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iistatistics                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iistats                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisynonym                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iisynonyms                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitables                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitree                          |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiviews                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iixdbdepends                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixevent                        |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixpriv                         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixprocedure                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixsynonym                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+(87 rows)
+>>
+<<
+
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|table_name                      |table_owner                     |table_|table_|sys-
+tem|is_rea|table_|
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|iiaccess                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iialt_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiattribute                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaudittables                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iicolumns                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraint_indexes            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraints                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidb_comments                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidb_subcomments                |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbcapabilities                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidbconstants                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbdepends                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidbms_comment                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidefault                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidefaultidx                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iidevices                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcol                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcols                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistscheme                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistschemes                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistval                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iievent                         |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iievents                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiextended_relation             |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iifile_info                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iigw06_attribute                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_relation                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistogram                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistograms                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindex                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex_columns                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindexes                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiingres_tables                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrities                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrity                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiintegrityidx                  |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iikey                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iikeys                          |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iilog_help                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iilpartitions                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iimulti_locations               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiocolumns                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiotables                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipartname                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iipermits                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_columns              |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_tables               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipriv                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprivlist                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiproc_access                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_params                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_rescols                  |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprocedure                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprocedure_parameter           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiprocedures                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprotect                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiqrytext                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirange                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiref_constraints               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiregistrations                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iirel_idx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirelation                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iirule                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiruleidx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiruleidx1                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirules                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iischema                        |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iischemaidx                     |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iisecalarm                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisectype                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisecurity_alarms               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisequence                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisequences                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisession_privileges            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iistatistics                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iistats                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisynonym                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iisynonyms                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitables                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitree                          |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiviews                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iixdbdepends                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixevent                        |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixpriv                         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixprocedure                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixsynonym                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+(87 rows)
+>>
+* \q 
+<<
+>>
+? upgradefe SEPPARAMDB INGRES 
+<<
+  Creating front-end module CORE version 2 . . .
+  Modifying front-end module CORE version 2 . . .
+  (module CORE version 2 is already installed)
+  Creating front-end module APPLICATION_DEVELOPMENT_1 version 5 . . .
+  Modifying front-end module APPLICATION_DEVELOPMENT_1 version 5 . . .
+  Product INGRES version 4 installed.
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select table_name, table_owner, table_type, table_subtype, system_use, is_readonly-
+, table_indexes from iitables where table_name like 'ii%' order by 1, 2;\g 
+<< IF (ING_CHARSET == "UTF8") 
+
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|table_name                      |table_owner                     |table_|table_|sys-
+tem|is_rea|table_|
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|ii_abfclasses                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfdependencies              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfobjects                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaccess                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iialt_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_app_cntns_comp               |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_app_cntns_comp_index         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiattribute                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaudittables                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_client_dep_mod               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iicolumns                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraint_indexes            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraints                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbcapabilities                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidb_comments                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbconstants                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbdepends                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidbms_comment                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidb_subcomments                |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidefault                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidefaultidx                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iidevices                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_dict_modules                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcol                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcols                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistscheme                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistschemes                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistval                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encoded_forms                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encodings                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_entities                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_entities_index               |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iievent                         |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iievents                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiextended_relation             |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_fields                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iifile_info                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_forms                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_gropts                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_attribute                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_relation                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistogram                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistograms                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_id                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex_columns                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindexes                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiingres_tables                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrities                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrity                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiintegrityidx                  |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_joindefs                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iikeys                          |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_locks                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iilog_help                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_longremarks                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iilpartitions                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iimulti_locations               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_objects                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_objects_index                |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiocolumns                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiotables                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipartname                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iipermits                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_columns              |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_tables               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipriv                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprivlist                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiproc_access                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprocedure                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprocedure_parameter           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiprocedures                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_params                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_rescols                  |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprotect                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_qbfnames                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiqrytext                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirange                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_rcommands                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiref_constraints               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiregistrations                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iirelation                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iirel_idx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_reports                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirule                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiruleidx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiruleidx1                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirules                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iischema                        |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iischemaidx                     |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iisecalarm                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisectype                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisecurity_alarms               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisequence                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisequences                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_sequence_values              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisession_privileges            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iistatistics                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iistats                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisynonym                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iisynonyms                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitables                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitree                          |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_trim                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiviews                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iixdbdepends                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixevent                        |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixpriv                         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixprocedure                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixsynonym                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+(112 rows)
+>>
+<<
+
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|table_name                      |table_owner                     |table_|table_|sys-
+tem|is_rea|table_|
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|ii_abfclasses                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfdependencies              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfobjects                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_app_cntns_comp               |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_app_cntns_comp_index         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_client_dep_mod               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_dict_modules                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encoded_forms                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encodings                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_entities                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_entities_index               |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_fields                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_forms                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_gropts                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_id                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_joindefs                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_locks                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_longremarks                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_objects                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_objects_index                |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_qbfnames                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_rcommands                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_reports                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_sequence_values              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_trim                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaccess                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iialt_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiattribute                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaudittables                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iicolumns                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraint_indexes            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraints                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidb_comments                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidb_subcomments                |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbcapabilities                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidbconstants                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbdepends                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidbms_comment                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidefault                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidefaultidx                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iidevices                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcol                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcols                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistscheme                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistschemes                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistval                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iievent                         |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iievents                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiextended_relation             |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iifile_info                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iigw06_attribute                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_relation                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistogram                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistograms                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindex                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex_columns                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindexes                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiingres_tables                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrities                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrity                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiintegrityidx                  |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iikey                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iikeys                          |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iilog_help                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iilpartitions                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iimulti_locations               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiocolumns                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiotables                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipartname                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iipermits                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_columns              |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_tables               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipriv                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprivlist                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiproc_access                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_params                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_rescols                  |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprocedure                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprocedure_parameter           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiprocedures                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprotect                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiqrytext                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirange                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiref_constraints               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiregistrations                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iirel_idx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirelation                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iirule                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiruleidx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiruleidx1                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirules                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iischema                        |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iischemaidx                     |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iisecalarm                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisectype                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisecurity_alarms               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisequence                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisequences                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisession_privileges            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iistatistics                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iistats                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisynonym                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iisynonyms                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitables                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitree                          |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiviews                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iixdbdepends                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixevent                        |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixpriv                         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixprocedure                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixsynonym                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+(112 rows)
+>>
+* \q 
+<<
+>>
+? destroydb SEPPARAMDB 
+<<
+Destroying database 'utildb' . . .
+ 
+
+Destruction of database 'utildb' completed successfully.
+ 
+>>
+? createdb SEPPARAMDB -fnofeclients 
+<<
+Creating database 'utildb' . . .
+ 
+  Creating DBMS System Catalogs . . . 
+  Modifying DBMS System Catalogs . . . 
+  Creating Standard Catalog Interface . . . 
+
+Creation of database 'utildb' completed successfully.
+ 
+>>
+? upgradefe SEPPARAMDB vision 
+<<
+  Creating front-end module CORE version 2 . . .
+  Modifying front-end module CORE version 2 . . .
+  (module CORE version 2 is already installed)
+  Creating front-end module APPLICATION_DEVELOPMENT_1 version 4 . . .
+  Modifying front-end module APPLICATION_DEVELOPMENT_1 version 4 . . .
+  Creating front-end module APPLICATION_DEVELOPMENT_3 version 1 . . .
+  Modifying front-end module APPLICATION_DEVELOPMENT_3 version 1 . . .
+  Product VISION version 3 installed.
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select table_name, table_owner, table_type, table_subtype, system_use, is_readonly-
+, table_indexes from iitables where table_name like 'ii%' order by 1, 2;\g 
+<< IF (ING_CHARSET == "UTF8") 
+
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|table_name                      |table_owner                     |table_|table_|sys-
+tem|is_rea|table_|
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|ii_abfclasses                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfdependencies              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfobjects                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaccess                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iialt_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_app_cntns_comp               |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_app_cntns_comp_index         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiattribute                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaudittables                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_client_dep_mod               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iicolumns                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraint_indexes            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraints                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbcapabilities                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidb_comments                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbconstants                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbdepends                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidbms_comment                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidb_subcomments                |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidefault                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidefaultidx                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iidevices                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_dict_modules                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcol                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcols                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistscheme                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistschemes                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistval                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encoded_forms                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encodings                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_entities                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_entities_index               |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iievent                         |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iievents                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiextended_relation             |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_fields                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iifile_info                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_forms                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_framevars                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_gropts                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_attribute                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_relation                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistogram                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistograms                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_id                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex_columns                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindexes                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiingres_tables                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrities                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrity                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiintegrityidx                  |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_joindefs                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iikeys                          |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_locks                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iilog_help                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_longremarks                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iilpartitions                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_menuargs                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iimulti_locations               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_objects                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_objects_index                |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiocolumns                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiotables                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipartname                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iipermits                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_columns              |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_tables               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipriv                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprivlist                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiproc_access                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprocedure                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprocedure_parameter           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiprocedures                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_params                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_rescols                  |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprotect                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_qbfnames                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiqrytext                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirange                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_rcommands                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiref_constraints               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiregistrations                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iirelation                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iirel_idx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_reports                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirule                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiruleidx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiruleidx1                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirules                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iischema                        |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iischemaidx                     |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iisecalarm                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisectype                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisecurity_alarms               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisequence                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisequences                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_sequence_values              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisession_privileges            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iistatistics                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iistats                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisynonym                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iisynonyms                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitables                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitree                          |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_trim                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiviews                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_vqjoins                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_vqtabcols                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_vqtables                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iixdbdepends                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixevent                        |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixpriv                         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixprocedure                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixsynonym                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+(117 rows)
+>>
+<<
+
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|table_name                      |table_owner                     |table_|table_|sys-
+tem|is_rea|table_|
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|ii_abfclasses                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfdependencies              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfobjects                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_app_cntns_comp               |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_app_cntns_comp_index         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_client_dep_mod               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_dict_modules                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encoded_forms                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encodings                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_entities                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_entities_index               |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_fields                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_forms                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_framevars                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_gropts                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_id                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_joindefs                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_locks                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_longremarks                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_menuargs                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_objects                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_objects_index                |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_qbfnames                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_rcommands                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_reports                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_sequence_values              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_trim                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_vqjoins                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_vqtabcols                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_vqtables                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaccess                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iialt_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiattribute                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaudittables                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iicolumns                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraint_indexes            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraints                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidb_comments                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidb_subcomments                |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbcapabilities                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidbconstants                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbdepends                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidbms_comment                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidefault                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidefaultidx                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iidevices                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcol                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcols                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistscheme                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistschemes                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistval                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iievent                         |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iievents                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiextended_relation             |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iifile_info                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iigw06_attribute                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_relation                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistogram                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistograms                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindex                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex_columns                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindexes                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiingres_tables                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrities                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrity                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiintegrityidx                  |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iikey                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iikeys                          |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iilog_help                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iilpartitions                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iimulti_locations               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiocolumns                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiotables                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipartname                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iipermits                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_columns              |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_tables               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipriv                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprivlist                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiproc_access                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_params                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_rescols                  |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprocedure                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprocedure_parameter           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiprocedures                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprotect                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiqrytext                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirange                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiref_constraints               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiregistrations                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iirel_idx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirelation                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iirule                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiruleidx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiruleidx1                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirules                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iischema                        |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iischemaidx                     |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iisecalarm                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisectype                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisecurity_alarms               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisequence                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisequences                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisession_privileges            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iistatistics                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iistats                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisynonym                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iisynonyms                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitables                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitree                          |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiviews                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iixdbdepends                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixevent                        |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixpriv                         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixprocedure                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixsynonym                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+(117 rows)
+>>
+* \q
+<<
+>>
+.if SEPPARAM_W4GL != "FALSE" 
+? upgradefe SEPPARAMDB WINDOWS_4GL 
+<<
+  Creating front-end module APPLICATION_DEVELOPMENT_2 version 1 . . .
+  Modifying front-end module APPLICATION_DEVELOPMENT_2 version 1 . . .
+  (module CORE version 2 is already installed)
+  Product WINDOWS_4GL version 2 installed.
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select table_name, table_owner, table_type, table_subtype, system_use, is_readonly-
+, table_indexes from iitables where table_name like 'ii%' order by 1, 2;\g 
+<< IF (ING_CHARSET == "UTF8") 
+
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|table_name                      |table_owner                     |table_|table_|sys-
+tem|is_rea|table_|
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|ii_abfclasses                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfdependencies              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfobjects                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaccess                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iialt_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_app_cntns_comp               |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_app_cntns_comp_index         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_applications                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiattribute                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaudittables                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_client_dep_mod               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iicolumns                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_components                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiconstraint_indexes            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraints                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbcapabilities                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidb_comments                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbconstants                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbdepends                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidbms_comment                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidb_subcomments                |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidefault                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidefaultidx                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_dependencies                 |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_dependencies_index           |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_dependencies_index2          |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iidevices                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_dict_modules                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcol                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcols                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistscheme                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistschemes                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistval                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encoded_forms                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encodings                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_entities                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_entities_index               |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iievent                         |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iievents                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiextended_relation             |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_fields                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iifile_info                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_forms                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_framevars                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_gropts                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_attribute                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_relation                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistogram                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistograms                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_id                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_incl_apps                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex_columns                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindexes                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiingres_tables                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrities                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrity                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiintegrityidx                  |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_joindefs                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iikeys                          |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_locks                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iilog_help                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_longremarks                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iilpartitions                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_menuargs                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iimulti_locations               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_objects                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_objects_index                |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiocolumns                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiotables                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipartname                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iipermits                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_columns              |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_tables               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipriv                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprivlist                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiproc_access                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprocedure                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprocedure_parameter           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiprocedures                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_params                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_rescols                  |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprotect                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_qbfnames                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiqrytext                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirange                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_rcommands                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiref_constraints               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiregistrations                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iirelation                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iirel_idx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_reports                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirule                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiruleidx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiruleidx1                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirules                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iischema                        |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iischemaidx                     |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iisecalarm                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisectype                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisecurity_alarms               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisequence                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisequences                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_sequence_values              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisession_privileges            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_srcobj_encoded               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iistatistics                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iistats                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_stored_bitmaps               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_stored_strings               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisynonym                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iisynonyms                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitables                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitree                          |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_trim                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiviews                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|ii_vqjoins                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_vqtabcols                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_vqtables                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iixdbdepends                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixevent                        |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixpriv                         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixprocedure                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixsynonym                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+(126 rows)
+>>
+<<
+
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|table_name                      |table_owner                     |table_|table_|sys-
+tem|is_rea|table_|
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+|ii_abfclasses                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfdependencies              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_abfobjects                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_app_cntns_comp               |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_app_cntns_comp_index         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_applications                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_client_dep_mod               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_components                   |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_dependencies                 |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_dependencies_index           |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_dependencies_index2          |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_dict_modules                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encoded_forms                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_encodings                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_entities                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_entities_index               |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_fields                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_forms                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_framevars                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_gropts                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_id                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_incl_apps                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_joindefs                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_locks                        |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_longremarks                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_menuargs                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_objects                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|ii_objects_index                |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|ii_qbfnames                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_rcommands                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_reports                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_sequence_values              |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_srcobj_encoded               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_stored_bitmaps               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_stored_strings               |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_trim                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_vqjoins                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_vqtabcols                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|ii_vqtables                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaccess                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iialt_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiattribute                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiaudittables                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iicolumns                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraint_indexes            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiconstraints                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidb_comments                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidb_subcomments                |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbcapabilities                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidbconstants                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidbdepends                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidbms_comment                  |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidefault                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iidefaultidx                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iidevices                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcol                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistcols                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistscheme                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iidistschemes                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iidistval                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iievent                         |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iievents                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiextended_relation             |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iifile_info                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iigw06_attribute                |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iigw06_relation                 |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistogram                     |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iihistograms                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindex                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiindex_columns                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiindexes                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiingres_tables                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrities                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiintegrity                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiintegrityidx                  |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iikey                           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iikey_columns                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iikeys                          |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iilog_help                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iilpartitions                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iimulti_locations               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiocolumns                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiotables                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipartname                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iipermits                       |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_columns              |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiphysical_tables               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iipriv                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprivlist                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiproc_access                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_params                   |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiproc_rescols                  |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprocedure                     |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiprocedure_parameter           |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiprocedures                    |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiprotect                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiqrytext                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iirange                         |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiref_constraints               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iiregistrations                 |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iirel_idx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirelation                      |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iirule                          |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iiruleidx                       |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iiruleidx1                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iirules                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iischema                        |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iischemaidx                     |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iisecalarm                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisectype                       |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisecurity_alarms               |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisequence                      |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iisequences                     |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisession_privileges            |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iistatistics                    |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iistats                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iisynonym                       |$ingres                         |T     |N     |S  -
+   |N     |Y     |
+|iisynonyms                      |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitables                        |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iitree                          |$ingres                         |T     |N     |S  -
+   |N     |N     |
+|iiviews                         |$ingres                         |V     |N     |S  -
+   |N     |N     |
+|iixdbdepends                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixevent                        |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixpriv                         |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixprocedure                    |$ingres                         |I     |N     |S  -
+   |N     |N     |
+|iixsynonym                      |$ingres                         |I     |N     |S  -
+   |N     |N     |
++--------------------------------+--------------------------------+------+------+----
+---+------+------+
+(126 rows)
+>>
+* \q 
+<<
+>>
+.endif 
+
+
+Ending at: Thu Sep 18 14:48:57 2008

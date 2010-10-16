@@ -1,0 +1,786 @@
+/*
+Copyright (c) 2008 Ingres Corporation
+
+	Test Name: utl07.sep
+	Time: Thu Dec  5 13:57:20 1991
+	User Name: testenv
+	Terminal type: septerm
+ 
+	Test ID : utl07
+	Module  : be/util 
+	Filename: utl07.sep
+	Purpose	: createdb test.
+	Input Files  :
+	Output Files :
+	Database     : utildb
+	Tables       :
+	Synopsis     :
+
+		creates a database, checks -f NOFECLIENTS flag,
+		catalog contents.
+
+	History:
+	   5-Dec-1991	(sgp)	  Created
+          2-June-1993	(alices)  andre modified BTREE to unique to fix
+				  bug# 51852
+          23-Aug-1993	(judi)    Accepted new canons for 6.5.
+          25-Oct-1993   (judi)    Accept new canons for INGRES 6.5 changes to
+                                  createdb and the system catalogs.
+          17-May-1994	(garys)   Updated canons to include iixsynonym as
+                                  part of the system catalogs.
+           1-Feb-1995	(gauje01) updated canons to match current versions
+				  output, including some new columns in the
+				  system catalogs and new values for
+				  'dbcmptminor' which will probably not exist at
+				  all in the future. Currently, any diffs having
+				  to do with 'dbcmptmionor' can be ignored, as
+				  this column is no longer used by ingres.
+          20-Jun-1995	(ciodi01) Accepted new canons for "select * from
+				  iiviews" statements, since version displayed
+				  is now OPING1.1.
+          12-Dec-1995	(raora02) Accepted alternate canons because of
+				  different output ordering.
+           6-Nov-1997	(zhaqi01) The default for datatype is nullable
+          23-Feb-1999	(kamra01) created alternate canon to eliminate the diffs
+				  caused by the following select statement
+				  select dbcmptlvl,dbcmptminor from iidatabase
+				  where name ='dbname'; results in 8.5,0 in 2.5
+				  where as the result in 2.0 is 8.0,1.
+           2-Mar-1999	(yu$pe02)
+          21-Sep-1999	(BOIJA02) Add alt canons for changed IILOG_HELP format.
+          22-Nov-2000	(BOIJA02) Slash and burn time; I've stopped selecting
+				  the numbers of pages to avoid irrelevant
+				  changes in the catalogues leading to huge alt
+				  canons, removed all the tildas where they
+				  weren't appropriate, separated out the
+				  iilog_help create_date row from iicolumns so
+				  we have 2 12 line alt canons instead of 2
+				  30000 liners and coerced the
+				  column_default_value's 1500 characters into 20
+				  chars.  The test is now 1/8th the size and
+				  won't diff as easily I hope this compensates
+				  for my terrible previous change.  Also stopped
+				  selecting the entire contents of iiviews with
+				  3 alt canons twice!! No explanation for that
+				  one.
+          29-Nov-2000	(BOIJA02) Strip out iiprotect and iirelation rows. Bug
+				  96639 concerning hash tables inconsistency on
+				  byte/non byte platforms means that we need alt
+				  canons for these rows. If this gets fixed in
+				  future releases, we should edit the test to
+				  reflect that.
+          29-Nov-2000	(boija02) Sun canons for above
+          25-May-2001	(BOIJA02) 2.5 specific updates to oping20 XIP
+          11-Jun-2001	(BOIJA02) Solaris W4GL unfriendly canons
+          24-Aug-2001   (BOIJA02) Xing to main +2.6 specific tweaks
+          29-Aug-2001	(BOIJA02) Solaris W4GL true 2.6 alt canons
+          17-Jun-2002   (hanje04) Added 'text_sequence' to order be on select *
+				  from iiview and recanonised to stop diffs on
+				  order on 2.6
+	  30-Jan-2003	(hanch04) Updated canons to match Ingres 2.6/0303 SP2
+	  04-Feb-2003	(hanch04) update to run again 2.6/0303 and previous SP
+           1-Jul-2004	(vande02) Updating canons with new expected behavior as
+                                  of Ingres r3.  Additional system catalogs have
+                                  been added.  The internal version level has
+                                  changed which affects the results of selects
+                                  from iidatabase and iidbcapabilities.  This
+                                  change is for Ingres r3 and going forward.
+          11-Feb-2005	(vande02) As of Ingres r3, the following changes have
+				  required canons to be updated -  
+				  internal version, catalog level, index
+				  iixprotect has been removed which affected
+				  the row count from iitables.  Simplified this
+				  test by removing queries which selected all or
+				  many columns from iiviews, iiphysical_tables,
+				  iicolumns and iiindexes (always causes time
+				  stamp diffs). The first 'select table_name
+				  from iitables' has a specific row count
+				  depending on what flags were given to createdb
+				  so this query will confirm the database was
+				  created with the expected front-end components
+				  (see similar tests in this suite utl02-utl08).
+				  Added the 'distinct' syntax to the second
+				  select from iiviews to simplify that canon.
+                                  Added alternate canon for dbservice, 32 vs 64
+				  bit platforms. Header cleanup,aligned history.
+                                  Embedded comments regarding updates for r3.0.2
+                                  and differences to be seen in r3.0.1 see issue
+                                  13921272.Changes for r3.0.2 and going forward.
+          10-Mar-2005   (vande02) Removing 'dbservice' and 'dbcmptlvl' from
+                                  selection list from iidatabase and updating
+                                  canon.  Removing select from iidbcapabilities
+                                  and leaving it in only in utl02.sep to check
+                                  the internal compatibility level once.  See
+                                  issue 13969536.
+	  13-Jun-2008   (kibro01) Tidying after change 492091 (SIR 120159)
+          18-Sep-2008	(vande02) Added conditional canons to allow for UTF8
+                                  collation sequence order.  Header cleanup.
+          23-Dec-2008   (vande02) Added iitables table iiproc_rescols to UTF8
+                                  canons and removed old embedded comments.
+*/
+? destroydb SEPPARAMDB 
+<<
+~
+>>
+? createdb SEPPARAMDB -f NOFECLIENTS 
+<<
+Creating database 'utildb' . . .
+ 
+  Creating DBMS System Catalogs . . . 
+  Modifying DBMS System Catalogs . . . 
+  Creating Standard Catalog Interface . . . 
+
+Creation of database 'utildb' completed successfully.
+ 
+>>
+? sql -s iidbdb 
+<<
+>>
+* select name, own, dbdev, ckpdev, jnldev, sortdev, 
+<<
+>>
+* access, dbcmptminor, dmpdev
+<<
+>>
+* from iidatabase where name = 'utildb';\g
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+--------------------------------+---
+------------------------------+-------------+-------------+--------------------------
+-------+
+|name                            |own                             |dbdev            -
+               |ckpdev                          |jnldev                          |so-
+rtdev                         |access       |dbcmptminor  |dmpdev                   -
+       |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+--------------------------------+---
+------------------------------+-------------+-------------+--------------------------
+-------+
+|utildb                          |testenv                         |ii_database      -
+               |ii_checkpoint                   |ii_journal                      |ii-
+_work                         |           17|            0|ii_dump                  -
+       |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+--------------------------------+---
+------------------------------+-------------+-------------+--------------------------
+-------+
+(1 row)
+>>
+* \q 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* select dbname = dbmsinfo('database');\g
+<<
+
++--------------------------------+
+|dbname                          |
++--------------------------------+
+|utildb                            |
++--------------------------------+
+(1 row)
+>>
+* select table_name from iitables order by 1;\g 
+<< IF (ING_CHARSET == "UTF8") 
+
++--------------------------------+
+|table_name                      |
++--------------------------------+
+|iiaccess                        |
+|iialt_columns                   |
+|iiattribute                     |
+|iiaudittables                   |
+|iicolumns                       |
+|iiconstraint_indexes            |
+|iiconstraints                   |
+|iidbcapabilities                |
+|iidb_comments                   |
+|iidbconstants                   |
+|iidbdepends                     |
+|iidbms_comment                  |
+|iidb_subcomments                |
+|iidefault                       |
+|iidefaultidx                    |
+|iidevices                       |
+|iidistcol                       |
+|iidistcols                      |
+|iidistscheme                    |
+|iidistschemes                   |
+|iidistval                       |
+|iievent                         |
+|iievents                        |
+|iiextended_relation             |
+|iifile_info                     |
+|iigw06_attribute                |
+|iigw06_relation                 |
+|iihistogram                     |
+|iihistograms                    |
+|iiindex                         |
+|iiindex_columns                 |
+|iiindexes                       |
+|iiingres_tables                 |
+|iiintegrities                   |
+|iiintegrity                     |
+|iiintegrityidx                  |
+|iikey                           |
+|iikey_columns                   |
+|iikeys                          |
+|iilog_help                      |
+|iilpartitions                   |
+|iimulti_locations               |
+|iiocolumns                      |
+|iiotables                       |
+|iipartname                      |
+|iipermits                       |
+|iiphysical_columns              |
+|iiphysical_tables               |
+|iipriv                          |
+|iiprivlist                      |
+|iiproc_access                   |
+|iiprocedure                     |
+|iiprocedure_parameter           |
+|iiprocedures                    |
+|iiproc_params                   |
+|iiproc_rescols                  |
+|iiprotect                       |
+|iiqrytext                       |
+|iirange                         |
+|iiref_constraints               |
+|iiregistrations                 |
+|iirelation                      |
+|iirel_idx                       |
+|iirule                          |
+|iiruleidx                       |
+|iiruleidx1                      |
+|iirules                         |
+|iischema                        |
+|iischemaidx                     |
+|iisecalarm                      |
+|iisectype                       |
+|iisecurity_alarms               |
+|iisequence                      |
+|iisequences                     |
+|iisession_privileges            |
+|iistatistics                    |
+|iistats                         |
+|iisynonym                       |
+|iisynonyms                      |
+|iitables                        |
+|iitree                          |
+|iiviews                         |
+|iixdbdepends                    |
+|iixevent                        |
+|iixpriv                         |
+|iixprocedure                    |
+|iixsynonym                      |
++--------------------------------+
+(87 rows)
+>>
+<<
+
++--------------------------------+
+|table_name                      |
++--------------------------------+
+|iiaccess                        |
+|iialt_columns                   |
+|iiattribute                     |
+|iiaudittables                   |
+|iicolumns                       |
+|iiconstraint_indexes            |
+|iiconstraints                   |
+|iidb_comments                   |
+|iidb_subcomments                |
+|iidbcapabilities                |
+|iidbconstants                   |
+|iidbdepends                     |
+|iidbms_comment                  |
+|iidefault                       |
+|iidefaultidx                    |
+|iidevices                       |
+|iidistcol                       |
+|iidistcols                      |
+|iidistscheme                    |
+|iidistschemes                   |
+|iidistval                       |
+|iievent                         |
+|iievents                        |
+|iiextended_relation             |
+|iifile_info                     |
+|iigw06_attribute                |
+|iigw06_relation                 |
+|iihistogram                     |
+|iihistograms                    |
+|iiindex                         |
+|iiindex_columns                 |
+|iiindexes                       |
+|iiingres_tables                 |
+|iiintegrities                   |
+|iiintegrity                     |
+|iiintegrityidx                  |
+|iikey                           |
+|iikey_columns                   |
+|iikeys                          |
+|iilog_help                      |
+|iilpartitions                   |
+|iimulti_locations               |
+|iiocolumns                      |
+|iiotables                       |
+|iipartname                      |
+|iipermits                       |
+|iiphysical_columns              |
+|iiphysical_tables               |
+|iipriv                          |
+|iiprivlist                      |
+|iiproc_access                   |
+|iiproc_params                   |
+|iiproc_rescols                  |
+|iiprocedure                     |
+|iiprocedure_parameter           |
+|iiprocedures                    |
+|iiprotect                       |
+|iiqrytext                       |
+|iirange                         |
+|iiref_constraints               |
+|iiregistrations                 |
+|iirel_idx                       |
+|iirelation                      |
+|iirule                          |
+|iiruleidx                       |
+|iiruleidx1                      |
+|iirules                         |
+|iischema                        |
+|iischemaidx                     |
+|iisecalarm                      |
+|iisectype                       |
+|iisecurity_alarms               |
+|iisequence                      |
+|iisequences                     |
+|iisession_privileges            |
+|iistatistics                    |
+|iistats                         |
+|iisynonym                       |
+|iisynonyms                      |
+|iitables                        |
+|iitree                          |
+|iiviews                         |
+|iixdbdepends                    |
+|iixevent                        |
+|iixpriv                         |
+|iixprocedure                    |
+|iixsynonym                      |
++--------------------------------+
+(87 rows)
+>>
+* select distinct table_name from iiviews order by 1;\g 
+<< IF (ING_CHARSET == "UTF8") 
+
++--------------------------------+
+|table_name                      |
++--------------------------------+
+|iiaccess                        |
+|iialt_columns                   |
+|iiaudittables                   |
+|iicolumns                       |
+|iiconstraint_indexes            |
+|iiconstraints                   |
+|iidb_comments                   |
+|iidbconstants                   |
+|iidb_subcomments                |
+|iidistcols                      |
+|iidistschemes                   |
+|iievents                        |
+|iifile_info                     |
+|iihistograms                    |
+|iiindex_columns                 |
+|iiindexes                       |
+|iiingres_tables                 |
+|iiintegrities                   |
+|iikey_columns                   |
+|iikeys                          |
+|iilog_help                      |
+|iilpartitions                   |
+|iimulti_locations               |
+|iiocolumns                      |
+|iiotables                       |
+|iipermits                       |
+|iiphysical_columns              |
+|iiphysical_tables               |
+|iiproc_access                   |
+|iiprocedures                    |
+|iiproc_params                   |
+|iiproc_rescols                  |
+|iiref_constraints               |
+|iiregistrations                 |
+|iirules                         |
+|iisecurity_alarms               |
+|iisequences                     |
+|iisession_privileges            |
+|iistats                         |
+|iisynonyms                      |
+|iitables                        |
+|iiviews                         |
++--------------------------------+
+(42 rows)
+>>
+<<
+
++--------------------------------+
+|table_name                      |
++--------------------------------+
+|iiaccess                        |
+|iialt_columns                   |
+|iiaudittables                   |
+|iicolumns                       |
+|iiconstraint_indexes            |
+|iiconstraints                   |
+|iidb_comments                   |
+|iidb_subcomments                |
+|iidbconstants                   |
+|iidistcols                      |
+|iidistschemes                   |
+|iievents                        |
+|iifile_info                     |
+|iihistograms                    |
+|iiindex_columns                 |
+|iiindexes                       |
+|iiingres_tables                 |
+|iiintegrities                   |
+|iikey_columns                   |
+|iikeys                          |
+|iilog_help                      |
+|iilpartitions                   |
+|iimulti_locations               |
+|iiocolumns                      |
+|iiotables                       |
+|iipermits                       |
+|iiphysical_columns              |
+|iiphysical_tables               |
+|iiproc_access                   |
+|iiproc_params                   |
+|iiproc_rescols                  |
+|iiprocedures                    |
+|iiref_constraints               |
+|iiregistrations                 |
+|iirules                         |
+|iisecurity_alarms               |
+|iisequences                     |
+|iisession_privileges            |
+|iistats                         |
+|iisynonyms                      |
+|iitables                        |
+|iiviews                         |
++--------------------------------+
+(42 rows)
+>>
+* select table_name,table_owner,column_name,column_datatype, 
+<<
+>>
+* column_length, column_scale, column_nulls,
+<<
+>>
+* column_defaults, column_sequence, key_sequence,
+<<
+>>
+* sort_direction, column_ingdatatype, column_internal_datatype,
+<<
+>>
+* column_internal_length, column_internal_ingtype, column_system_maintained,
+<<
+>>
+* column_updateable, column_has_default, char(column_default_val,20) as column_def_v-
+al, security_audit_key
+<<
+>>
+* from iicolumns where table_name='iilog_help' and column_name='create_date' order b-
+y table_name, column_name;\g
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+-------------+-------------+------+-
+------+-------------+-------------+------+-------------+-----------------------------
+----+-------------+------+------+------+------+--------------------+------+
+|table_name                      |table_owner                     |column_name      -
+               |column_datatype                 |column_length|column_scale |column|-
+column|column_sequen|key_sequence |sort_d|column_ingdat|column_internal_datatype    -
+    |column_intern|column|column|column|column|column_def_val      |securi|
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+-------------+-------------+------+-
+------+-------------+-------------+------+-------------+-----------------------------
+----+-------------+------+------+------+------+--------------------+------+
+|iilog_help                      |$ingres                         |create_date      -
+               |CHAR                            |           25|            0|N     |-
+Y     |            3|            0|A     |           20|CHAR                        -
+    |           25|    20|N     |      |      |                    |N     |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+-------------+-------------+------+-
+------+-------------+-------------+------+-------------+-----------------------------
+----+-------------+------+------+------+------+--------------------+------+
+(1 row)
+>>
+<<
+
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+-------------+-------------+------+-
+------+-------------+-------------+------+-------------+-----------------------------
+----+-------------+------+------+------+------+--------------------+------+
+|table_name                      |table_owner                     |column_name      -
+               |column_datatype                 |column_length|column_scale |column|-
+column|column_sequen|key_sequence |sort_d|column_ingdat|column_internal_datatype    -
+    |column_intern|column|column|column|column|column_def_val      |securi|
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+-------------+-------------+------+-
+------+-------------+-------------+------+-------------+-----------------------------
+----+-------------+------+------+------+------+--------------------+------+
+|iilog_help                      |$ingres                         |create_date      -
+               |DATE                            |            0|            0|N     |-
+Y     |            3|            0|A     |            3|DATE                        -
+    |            0|     3|N     |      |      |                    |N     |
++--------------------------------+--------------------------------+------------------
+---------------+--------------------------------+-------------+-------------+------+-
+------+-------------+-------------+------+-------------+-----------------------------
+----+-------------+------+------+------+------+--------------------+------+
+(1 row)
+>>
+* select base_name, index_name from iiindexes order by 1, 2;\g 
+<<
+
++--------------------------------+--------------------------------+
+|base_name                       |index_name                      |
++--------------------------------+--------------------------------+
+|iidbdepends                     |iixdbdepends                    |
+|iidefault                       |iidefaultidx                    |
+|iievent                         |iixevent                        |
+|iiintegrity                     |iiintegrityidx                  |
+|iipriv                          |iixpriv                         |
+|iiprocedure                     |iixprocedure                    |
+|iirelation                      |iirel_idx                       |
+|iirule                          |iiruleidx                       |
+|iirule                          |iiruleidx1                      |
+|iischema                        |iischemaidx                     |
+|iisynonym                       |iixsynonym                      |
++--------------------------------+--------------------------------+
+(11 rows)
+>>
+* select relid,relowner from iirelation 
+<<
+>>
+* where mod(relstat/16384,2) = 1 order by relid;\g
+/*
+extended catalogs
+*/
+<< IF (ING_CHARSET == "UTF8") 
+
++--------------------------------+--------------------------------+
+|relid                           |relowner                        |
++--------------------------------+--------------------------------+
+|iiaccess                        |$ingres                         |
+|iialt_columns                   |$ingres                         |
+|iiaudittables                   |$ingres                         |
+|iicolumns                       |$ingres                         |
+|iiconstraint_indexes            |$ingres                         |
+|iiconstraints                   |$ingres                         |
+|iidbcapabilities                |$ingres                         |
+|iidb_comments                   |$ingres                         |
+|iidbconstants                   |$ingres                         |
+|iidb_subcomments                |$ingres                         |
+|iidistcols                      |$ingres                         |
+|iidistschemes                   |$ingres                         |
+|iievents                        |$ingres                         |
+|iifile_info                     |$ingres                         |
+|iihistograms                    |$ingres                         |
+|iiindex_columns                 |$ingres                         |
+|iiindexes                       |$ingres                         |
+|iiingres_tables                 |$ingres                         |
+|iiintegrities                   |$ingres                         |
+|iikey_columns                   |$ingres                         |
+|iikeys                          |$ingres                         |
+|iilog_help                      |$ingres                         |
+|iilpartitions                   |$ingres                         |
+|iimulti_locations               |$ingres                         |
+|iiocolumns                      |$ingres                         |
+|iiotables                       |$ingres                         |
+|iipermits                       |$ingres                         |
+|iiphysical_columns              |$ingres                         |
+|iiphysical_tables               |$ingres                         |
+|iiprivlist                      |$ingres                         |
+|iiproc_access                   |$ingres                         |
+|iiprocedures                    |$ingres                         |
+|iiproc_params                   |$ingres                         |
+|iiproc_rescols                  |$ingres                         |
+|iiref_constraints               |$ingres                         |
+|iiregistrations                 |$ingres                         |
+|iirules                         |$ingres                         |
+|iisectype                       |$ingres                         |
+|iisecurity_alarms               |$ingres                         |
+|iisequences                     |$ingres                         |
+|iisession_privileges            |$ingres                         |
+|iistats                         |$ingres                         |
+|iisynonyms                      |$ingres                         |
+|iitables                        |$ingres                         |
+|iiviews                         |$ingres                         |
++--------------------------------+--------------------------------+
+(45 rows)
+>>
+<<
+
++--------------------------------+--------------------------------+
+|relid                           |relowner                        |
++--------------------------------+--------------------------------+
+|iiaccess                        |$ingres                         |
+|iialt_columns                   |$ingres                         |
+|iiaudittables                   |$ingres                         |
+|iicolumns                       |$ingres                         |
+|iiconstraint_indexes            |$ingres                         |
+|iiconstraints                   |$ingres                         |
+|iidb_comments                   |$ingres                         |
+|iidb_subcomments                |$ingres                         |
+|iidbcapabilities                |$ingres                         |
+|iidbconstants                   |$ingres                         |
+|iidistcols                      |$ingres                         |
+|iidistschemes                   |$ingres                         |
+|iievents                        |$ingres                         |
+|iifile_info                     |$ingres                         |
+|iihistograms                    |$ingres                         |
+|iiindex_columns                 |$ingres                         |
+|iiindexes                       |$ingres                         |
+|iiingres_tables                 |$ingres                         |
+|iiintegrities                   |$ingres                         |
+|iikey_columns                   |$ingres                         |
+|iikeys                          |$ingres                         |
+|iilog_help                      |$ingres                         |
+|iilpartitions                   |$ingres                         |
+|iimulti_locations               |$ingres                         |
+|iiocolumns                      |$ingres                         |
+|iiotables                       |$ingres                         |
+|iipermits                       |$ingres                         |
+|iiphysical_columns              |$ingres                         |
+|iiphysical_tables               |$ingres                         |
+|iiprivlist                      |$ingres                         |
+|iiproc_access                   |$ingres                         |
+|iiproc_params                   |$ingres                         |
+|iiproc_rescols                  |$ingres                         |
+|iiprocedures                    |$ingres                         |
+|iiref_constraints               |$ingres                         |
+|iiregistrations                 |$ingres                         |
+|iirules                         |$ingres                         |
+|iisectype                       |$ingres                         |
+|iisecurity_alarms               |$ingres                         |
+|iisequences                     |$ingres                         |
+|iisession_privileges            |$ingres                         |
+|iistats                         |$ingres                         |
+|iisynonyms                      |$ingres                         |
+|iitables                        |$ingres                         |
+|iiviews                         |$ingres                         |
++--------------------------------+--------------------------------+
+(45 rows)
+>>
+* select relid,relowner from iirelation 
+<<
+>>
+* where mod(relstat/2,2) = 1 order by relid;\g
+/*
+system catalogs
+*/
+<< IF (ING_CHARSET == "UTF8") 
+
++--------------------------------+--------------------------------+
+|relid                           |relowner                        |
++--------------------------------+--------------------------------+
+|iiattribute                     |$ingres                         |
+|iidbdepends                     |$ingres                         |
+|iidbms_comment                  |$ingres                         |
+|iidefault                       |$ingres                         |
+|iidefaultidx                    |$ingres                         |
+|iidistcol                       |$ingres                         |
+|iidistscheme                    |$ingres                         |
+|iidistval                       |$ingres                         |
+|iievent                         |$ingres                         |
+|iiextended_relation             |$ingres                         |
+|iigw06_attribute                |$ingres                         |
+|iigw06_relation                 |$ingres                         |
+|iiindex                         |$ingres                         |
+|iiintegrity                     |$ingres                         |
+|iiintegrityidx                  |$ingres                         |
+|iikey                           |$ingres                         |
+|iipartname                      |$ingres                         |
+|iipriv                          |$ingres                         |
+|iiprocedure                     |$ingres                         |
+|iiprocedure_parameter           |$ingres                         |
+|iiprotect                       |$ingres                         |
+|iiqrytext                       |$ingres                         |
+|iirange                         |$ingres                         |
+|iirelation                      |$ingres                         |
+|iirel_idx                       |$ingres                         |
+|iirule                          |$ingres                         |
+|iiruleidx                       |$ingres                         |
+|iiruleidx1                      |$ingres                         |
+|iischema                        |$ingres                         |
+|iischemaidx                     |$ingres                         |
+|iisecalarm                      |$ingres                         |
+|iisequence                      |$ingres                         |
+|iisynonym                       |$ingres                         |
+|iitree                          |$ingres                         |
+|iixdbdepends                    |$ingres                         |
+|iixevent                        |$ingres                         |
+|iixpriv                         |$ingres                         |
+|iixprocedure                    |$ingres                         |
+|iixsynonym                      |$ingres                         |
++--------------------------------+--------------------------------+
+(39 rows)
+>>
+<<
+
++--------------------------------+--------------------------------+
+|relid                           |relowner                        |
++--------------------------------+--------------------------------+
+|iiattribute                     |$ingres                         |
+|iidbdepends                     |$ingres                         |
+|iidbms_comment                  |$ingres                         |
+|iidefault                       |$ingres                         |
+|iidefaultidx                    |$ingres                         |
+|iidistcol                       |$ingres                         |
+|iidistscheme                    |$ingres                         |
+|iidistval                       |$ingres                         |
+|iievent                         |$ingres                         |
+|iiextended_relation             |$ingres                         |
+|iigw06_attribute                |$ingres                         |
+|iigw06_relation                 |$ingres                         |
+|iiindex                         |$ingres                         |
+|iiintegrity                     |$ingres                         |
+|iiintegrityidx                  |$ingres                         |
+|iikey                           |$ingres                         |
+|iipartname                      |$ingres                         |
+|iipriv                          |$ingres                         |
+|iiprocedure                     |$ingres                         |
+|iiprocedure_parameter           |$ingres                         |
+|iiprotect                       |$ingres                         |
+|iiqrytext                       |$ingres                         |
+|iirange                         |$ingres                         |
+|iirel_idx                       |$ingres                         |
+|iirelation                      |$ingres                         |
+|iirule                          |$ingres                         |
+|iiruleidx                       |$ingres                         |
+|iiruleidx1                      |$ingres                         |
+|iischema                        |$ingres                         |
+|iischemaidx                     |$ingres                         |
+|iisecalarm                      |$ingres                         |
+|iisequence                      |$ingres                         |
+|iisynonym                       |$ingres                         |
+|iitree                          |$ingres                         |
+|iixdbdepends                    |$ingres                         |
+|iixevent                        |$ingres                         |
+|iixpriv                         |$ingres                         |
+|iixprocedure                    |$ingres                         |
+|iixsynonym                      |$ingres                         |
++--------------------------------+--------------------------------+
+(39 rows)
+>>
+* \q 
+<<
+>>
+
+
+Ending at: Thu Sep 18 13:37:20 2008
