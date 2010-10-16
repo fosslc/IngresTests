@@ -1,5 +1,5 @@
 /*
-**  Copyright (c) 2005, 2007 Ingres Corp.
+**  Copyright (c) 2009 Ingres Corp.
 **
 **  Stress Test Application Suite
 **
@@ -7,9 +7,10 @@
 **
 **  History:
 **
-**  14-Oct-2005 sarjo01: Created
+**  14-Oct-2005 sarjo01: Created.
 **  31-May-2007 (Ralph Loen) Bug 118428
 **     Ported to VMS.
+**  20-Jan-2009 sarjo01: Made cleanup dependent on -c flag for init/run. 
 **
 */
 #ifdef _WIN32
@@ -66,7 +67,7 @@ char  *syntax =
  "<option>    program option of the form -x[value]\n\n"
  " Option Function Description                    Param Values     Default\n"
  " ------ -------- ------------------------------ ---------------- -------\n"
- "   -c   run      Enable force cleanup           none             disabled\n"
+ "   -c   run/init Enable force cleanup           none             disabled\n"
  "   -i   run      Set transaction count (per     1 to 1000000     100\n"
  "                 thread)\n"
  "   -s   run      Set table count                1 to 1000        10\n"
@@ -499,11 +500,8 @@ void createobjs()
 
    EXEC SQL set autocommit on;
 
-   cleanup();
-
-   EXEC SQL whenever sqlerror call print_sqlcode_exit;
-
-   printf("Creating objects...\n");
+   if (cleanit)
+      cleanup();
 
 }
 
