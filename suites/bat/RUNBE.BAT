@@ -127,7 +127,10 @@ REM     30-Oct-2008 (vande02)
 REM             Changed Unicode enabled db variable for qryproc to SEPPARAMDB3.
 REM     26-Feb-2009 (vande02)
 REM             Corrected TST_TESTTOOLS to TST_TESTOOLS.
-REM     27-Feb-2009 (boija02) Replacing all ING_CHARSETs with SEPPARAM_CHARSETs.
+REM     27-Feb-2009 (boija02)
+REM		Replacing all ING_CHARSETs with SEPPARAM_CHARSETs.
+REM     26-Apr-2010 (vande02)
+REM		Add utildb5/utildb6 for BOOLEAN util tests.
 
 REM ---------------------------------------------------------------------------
 REM			Setup Area
@@ -574,6 +577,8 @@ if "%2"=="" goto END
 	  set SEPPARAMDB=utildb
           set SEPPARAMDB3=utildb3
           set SEPPARAMDB4=utildb4
+          set SEPPARAMDB5=utildb5
+          set SEPPARAMDB6=utildb6
 	  set AREA=util
 	  set CFG_FILE=beutil.cfg
 	  set LIS_FILE=beutil.lis
@@ -770,6 +775,8 @@ if not "%2" == "" goto CleanLoop
 	destroydb utildb >>%TST_OUTPUT%\beclean.out
         destroydb utildb3 >>%TST_OUTPUT%\beclean.out
         destroydb utildb4 >>%TST_OUTPUT%\beclean.out
+        destroydb utildb5 >>%TST_OUTPUT%\beclean.out
+        destroydb utildb6 >>%TST_OUTPUT%\beclean.out
 	if "%2"=="all" goto CleanBlob
 	shift
 	goto CleanLoop

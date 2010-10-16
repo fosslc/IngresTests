@@ -225,6 +225,8 @@
 #	        Set ING_CHARSET to match SEPPARAM_CHARSET.
 # 27-Feb-2009 (boija02)
 #		Replacing all ING_CHARSET references with SEPPARAM_CHARSET
+# 23-Apr-2010 (vande02)
+#             Add utildb5/utildb6 for BOOLEAN util tests.
 #
 betestlist="access accntl alttbl api blob c2secure datetime datatypes miscfunc fastload lar qryproc ttpp util"
 diflvl=
@@ -1013,7 +1015,10 @@ then
         		SEPPARAMDB=utildb
                         SEPPARAMDB3=utildb3
                         SEPPARAMDB4=utildb4
+                        SEPPARAMDB5=utildb5
+                        SEPPARAMDB6=utildb6
         		export SEPPARAMDB SEPPARAMDB3 SEPPARAMDB4
+                        export SEPPARAMDB5 SEPPARAMDB6
  	
 			AREA=util
 			TST_DATA=$ING_TST
@@ -1302,6 +1307,9 @@ then
 			destroydb utildb >>$TST_OUTPUT/beclean.out
 			destroydb utildb3 >>$TST_OUTPUT/beclean.out
                         destroydb utildb4 >>$TST_OUTPUT/beclean.out
+                        destroydb utildb5 >>$TST_OUTPUT/beclean.out
+                        destroydb utildb6 >>$TST_OUTPUT/beclean.out
+                        destroydb utl74db >>$TST_OUTPUT/beclean.out
                         destroydb exdb >>$TST_OUTPUT/beclean.out
                         AREA=util
 			export AREA

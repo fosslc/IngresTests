@@ -1,6 +1,6 @@
 @echo off
 setlocal
-REM Copyright (c) 2009 Ingres Corporation
+REM Copyright (c) 2010 Ingres Corporation
 REM
 REM
 setlocal
@@ -79,6 +79,8 @@ REM	31-Jul-2009 (vande02)
 REM		Removed the % sign around 'lback' and name the vnode for the
 REM		Loopback tests specifically which is 'lback'.  It doesn't need
 REM		to be a variable.
+REM	26-Apr-2010 (vande02)
+REM		 Add utildb5/utildb6 for BOOLEAN util tests.
 
 
 
@@ -199,6 +201,8 @@ if "%1"=="init" goto END
 set SEPPARAMDB=utildb
 set SEPPARAMDB3=utildb3
 set SEPPARAMDB4=utildb4
+set SEPPARAMDB3=utildb5
+set SEPPARAMDB4=utildb6
 executor %TST_CFG%\beutil.cfg >%TST_OUTPUT%\util\beutil.out
 goto END
 
