@@ -1,6 +1,6 @@
 @echo off
 setlocal
-REM Copyright (c) 2007 Ingres Corporation
+REM Copyright (c) 2009 Ingres Corporation
 REM
 REM
 setlocal
@@ -75,7 +75,11 @@ REM	11-Dec-2008 (wanfr01)
 REM		SIR 121355
 REM		Allow SEPPARAM_SLEEP and SEPPARAM_SLEEP_2 to be set by shell
 REM		and change default to 5 seconds
-REM
+REM	31-Jul-2009 (vande02)
+REM		Removed the % sign around 'lback' and name the vnode for the
+REM		Loopback tests specifically which is 'lback'.  It doesn't need
+REM		to be a variable.
+
 
 
 if "%1"=="starldbs" goto STARLDBS
@@ -341,7 +345,7 @@ goto END
 
 :GAA
 set TST_DATA=%ING_TST%\gcf\gcc\data
-set SEPPARAM_NODE=%lback%::gaadb
+set SEPPARAM_NODE=lback::gaadb
 if "%1"=="init" destroydb gaadb >>%TST_OUTPUT%\netinit.out
 if "%1"=="init" createdb gaadb >>%TST_OUTPUT%\netinit.out
 if "%1"=="init" goto END
@@ -350,7 +354,7 @@ goto END
 
 :GBA  
 set TST_DATA=%ING_TST%\gcf\gcc\data
-set SEPPARAM_NODE=%lback%::gbadb
+set SEPPARAM_NODE=lback::gbadb
 if "%1"=="init" destroydb gbadb >>%TST_OUTPUT%\netinit.out
 if "%1"=="init" createdb gbadb >>%TST_OUTPUT%\netinit.out
 if "%1"=="init" goto END
@@ -359,7 +363,7 @@ goto END
 
 :GCA
 set TST_DATA=%ING_TST%\gcf\gcc\data
-set SEPPARAM_NODE=%lback%::gcadb
+set SEPPARAM_NODE=lback::gcadb
 if "%1"=="init" destroydb gcadb >>%TST_OUTPUT%\netinit.out
 if "%1"=="init" createdb gcadb >>%TST_OUTPUT%\netinit.out
 if "%1"=="init" goto END
