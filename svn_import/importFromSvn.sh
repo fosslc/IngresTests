@@ -164,12 +164,19 @@ else
         exit 1
       fi
 
-      # Add the revision number to the log
-      echo "${CurrentRev}" >> ${RevLog}
-      git add ${RevLog}
+      git status | grep "nothing to commit"
+      if [ $? != 0 ]
+      then
+        echo "No change to tests"
+      else
 
-      # Commit, with the same commit message
-      git commit -F ${CommitMessage}
+        # Add the revision number to the log
+        echo "${CurrentRev}" >> ${RevLog}
+        git add ${RevLog}
+
+        # Commit, with the same commit message
+        git commit -F ${CommitMessage}
+      fi
 
     done # Looping for each revision
   fi
