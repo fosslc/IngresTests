@@ -1,0 +1,229 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : utl100.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN data type with the
+		  COPY TABLE command.
+
+  Databases     : SEPPARAMDB (utildb)
+  Tables        : utl100_t1, utl100_t2, utl100_t3
+  Filled Files  : utl100_t1.dat
+  Copied Files  : 
+  Input Files   : 
+  Output Files  : utl100_t2_char.dat, utl100_t3_binary.dat
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : This test will use 'COPY TABLE...FROM|INTO' using all BOOLEAN
+		  values (TRUE|FALSE|NULL).  It will also verify tables with
+		  BOOLEAN columns with 'NULL' values can be copied into and
+		  from either character or binary based data files.
+
+  Known Issues  : None
+
+  History       : 17-Feb-2010 (vande02) Created.
+*/
+? fill utl100_t1.dat 
+!!
+!!
+? fill utl100_t2_char.dat
+!!
+!!
+? fill utl100_t3_binary.dat
+!!
+!!
+? fill utl100_t1.dat
+!!
+101	false	true	true	Virginia
+104	false	true	true	James
+105	false	true	true	Liz
+107	false	true	true	Cheryl
+111	false	true	true	MaryBeth
+115	false	true	true	Lynette
+116	true	true	false	Lucille
+109	false	true	false	Ted
+998	true	false	false	Superman
+999	true	false	false	Superwoman
+!!
+? sql -s SEPPARAMDB
+<<
+>>
+* drop table utl100_t1, utl100_t2, utl100_t3\g
+<<
+~
+>>
+* create table utl100_t1(id integer not null, active boolean not null,-
+  retired boolean not null, deceased boolean not null,-
+  name char(15) not null)\g 
+<<
+>>
+/*
+Verify table utl100_t1 can be accessed after the COPY TABLE...from using a
+character based data file utl100_t1.dat and all BOOLEAN columns are NOT NULL.
+*/
+* copy table utl100_t1(id=c0tab, active=c0tab, retired=c0tab,-
+  deceased=c0tab, name=c0nl) from 'utl100_t1.dat'\g
+<<
+(10 rows)
+>>
+* select * from utl100_t1 order by 1\g
+<<
+
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
+|          101|FALSE|TRUE |TRUE |Virginia       |
+|          104|FALSE|TRUE |TRUE |James          |
+|          105|FALSE|TRUE |TRUE |Liz            |
+|          107|FALSE|TRUE |TRUE |Cheryl         |
+|          109|FALSE|TRUE |FALSE|Ted            |
+|          111|FALSE|TRUE |TRUE |MaryBeth       |
+|          115|FALSE|TRUE |TRUE |Lynette        |
+|          116|TRUE |TRUE |FALSE|Lucille        |
+|          998|TRUE |FALSE|FALSE|Superman       |
+|          999|TRUE |FALSE|FALSE|Superwoman     |
++-------------+-----+-----+-----+---------------+
+(10 rows)
+>>
+* commit\g
+<<
+>>
+* create table utl100_t2 as select * from utl100_t1\g
+<<
+(10 rows)
+>>
+* modify utl100_t2 to btree with page_size=4096\g
+<<
+(10 rows)
+>>
+* alter table utl100_t2 alter column retired boolean with default null\g
+<<
+>>
+* insert into utl100_t2 values(901,0,null,1,'Moe')\g
+<<
+(1 row)
+>>
+* insert into utl100_t2 values(902,0,null,1,'Larry')\g
+<<
+(1 row)
+>>
+* insert into utl100_t2 values(903,0,null,1,'Curly')\g
+<<
+(1 row)
+>>
+* commit\g
+<<
+>>
+/*
+Verify table utl100_t2 can be accessed after the COPY TABLE...INTO and
+COPY TABLE...FROM  using a character based data file utl100_t2_char.dat
+where one BOOLEAN column 'retired' IS NULL.
+*/
+* copy table utl100_t2(id=c0tab, active=varchar(0)tab,-
+  retired=varchar(0)tab with null(']^NULL^['),-
+  deceased=varchar(0)tab, name=varchar(0)nl) into 'utl100_t2_char.dat'\g
+<<
+(13 rows)
+>>
+* delete from utl100_t2\g
+<<
+(13 rows)
+>>
+* select * from utl100_t2\g
+<<
+
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
++-------------+-----+-----+-----+---------------+
+(0 rows)
+>>
+* commit\g
+<<
+>>
+* copy table utl100_t2(id=c0tab, active=varchar(0)tab,-
+  retired=varchar(0)tab with null(']^NULL^['),-
+  deceased=varchar(0)tab, name=varchar(0)nl) from 'utl100_t2_char.dat'\g
+<<
+(13 rows)
+>>
+* select * from utl100_t2 order by id\g
+<<
+
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
+|          101|FALSE|TRUE |TRUE |Virginia       |
+|          104|FALSE|TRUE |TRUE |James          |
+|          105|FALSE|TRUE |TRUE |Liz            |
+|          107|FALSE|TRUE |TRUE |Cheryl         |
+|          109|FALSE|TRUE |FALSE|Ted            |
+|          111|FALSE|TRUE |TRUE |MaryBeth       |
+|          115|FALSE|TRUE |TRUE |Lynette        |
+|          116|TRUE |TRUE |FALSE|Lucille        |
+|          901|FALSE|     |TRUE |Moe            |
+|          902|FALSE|     |TRUE |Larry          |
+|          903|FALSE|     |TRUE |Curly          |
+|          998|TRUE |FALSE|FALSE|Superman       |
+|          999|TRUE |FALSE|FALSE|Superwoman     |
++-------------+-----+-----+-----+---------------+
+(13 rows)
+>>
+* create table utl100_t3 as select * from utl100_t2\g
+<<
+(13 rows)
+>>
+/*
+Verify table utl100_t3 can be accessed after the COPY TABLE...INTO and
+COPY TABLE...FROM  using a binary data file utl100_t3_binary.dat
+where one BOOLEAN column 'retired' IS NULL.
+*/
+* copy table utl100_t3 () into 'utl100_t3_binary.dat'\g
+<<
+(13 rows)
+>>
+* delete from utl100_t3\g
+<<
+(13 rows)
+>>
+* select * from utl100_t3\g
+<<
+
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
++-------------+-----+-----+-----+---------------+
+(0 rows)
+>>
+* commit\g
+<<
+>>
+* copy table utl100_t3 () from 'utl100_t3_binary.dat'\g
+<<
+(13 rows)
+>>
+* select * from utl100_t3 order by id\g
+<<
+
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
+|          101|FALSE|TRUE |TRUE |Virginia       |
+|          104|FALSE|TRUE |TRUE |James          |
+|          105|FALSE|TRUE |TRUE |Liz            |
+|          107|FALSE|TRUE |TRUE |Cheryl         |
+|          109|FALSE|TRUE |FALSE|Ted            |
+|          111|FALSE|TRUE |TRUE |MaryBeth       |
+|          115|FALSE|TRUE |TRUE |Lynette        |
+|          116|TRUE |TRUE |FALSE|Lucille        |
+|          901|FALSE|     |TRUE |Moe            |
+|          902|FALSE|     |TRUE |Larry          |
+|          903|FALSE|     |TRUE |Curly          |
+|          998|TRUE |FALSE|FALSE|Superman       |
+|          999|TRUE |FALSE|FALSE|Superwoman     |
++-------------+-----+-----+-----+---------------+
+(13 rows)
+>>
+* \q 
+<<
+>>

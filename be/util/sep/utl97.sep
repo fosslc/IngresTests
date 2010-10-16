@@ -1,0 +1,194 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : utl97.sep
+  Suite         : be!util
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN data type with the
+                  auditdb utility.
+
+  Databases     : SEPPARAMDB (utildb)))
+  Tables        : utl97_t1, utl97_t2
+  Indexes       : 
+  Filled Files  : 
+  Copied Files  :
+  Input Files   : 
+  Output Files  : utl97_t1.trl
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Verify auditdb is working with columns of data type BOOLEAN.
+                  It will use the "-table=tablename -file" option to create a
+                  tablename.trl file after inserting rows and executing several
+                  updates on utl97_t1.
+
+		  Table utl97_t2 will be used to copy information from the
+		  audit trail file to see what was audited for the BOOLEAN
+		  columns.
+
+  Known Issues  : None.
+ 
+  History       : 24-Feb-2010 (vande02) Created.
+*/
+? ckpdb +j +w SEPPARAMDB 
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop utl97_t1;\g 
+<<
+~
+>>
+* create table utl97_t1 (col1c char(10), col2b boolean, col3i integer)\g 
+<<
+>>
+* insert into utl97_t1 values ('abc', 1, 1)\g 
+<<
+(1 row)
+>>
+* insert into utl97_t1 values ('def', 0, 2)\g 
+<<
+(1 row)
+>>
+* insert into utl97_t1 values ('ghi', TRUE, 3)\g 
+<<
+(1 row)
+>>
+* insert into utl97_t1 values ('jkl', false, 4)\g 
+<<
+(1 row)
+>>
+* insert into utl97_t1 values ('mno', TRUE, 5)\g 
+<<
+(1 row)
+>>
+* insert into utl97_t1 values ('pqr', false, 6)\g 
+<<
+(1 row)
+>>
+* insert into utl97_t1 values ('stu', null, 7)\g 
+<<
+(1 row)
+>>
+* select * from utl97_t1 order by col3i\g
+<<
++----------+-----+-------------+
+|col1c     |col2b|col3i        |
++----------+-----+-------------+
+|abc       |TRUE |            1|
+|def       |FALSE|            2|
+|ghi       |TRUE |            3|
+|jkl       |FALSE|            4|
+|mno       |TRUE |            5|
+|pqr       |FALSE|            6|
+|stu       |     |            7|
++----------+-----+-------------+
+(7 rows)
+>>
+* commit\g
+<<
+>>
+/*
+Change the TRUE values to FALSE - 3 rows.
+*/
+* update utl97_t1 set col2b=false where col2b IS TRUE\g 
+<<
+(3 rows)
+>>
+/*
+Change all FALSE values to TRUE - 6 rows.
+*/
+* update utl97_t1 set col2b=true where col2b IS FALSE\g 
+<<
+(6 rows)
+>>
+/*
+Change all the rows that are NOT NULL to be NULL - 6 rows.
+*/
+* update utl97_t1 set col2b=null where col2b IS NOT NULL\g 
+<<
+(6 rows)
+>>
+* \q 
+<<
+>>
+? sleep 1
+<<
+>>
+? auditdb SEPPARAMDB -table=utl97_t1 -file -wait
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop utl97_t2;\g
+<<
+~
+>>
+* create table utl97_t2 (date date not null with default,-
+  username char(32) not null with default,-
+  operation char(8) not null with default,-
+  tranid1 integer not null with default,-
+  tranid2 integer not null with default,-
+  table_id1 integer not null with default,-
+  table_id2 integer not null with default,-
+  col1c char(10), col2b boolean, col3i integer)\g 
+<<
+>>
+* copy table utl97_t2 () from 'utl97_t1.trl'\g 
+<<
+(37 rows)
+>>
+* select operation, col1c, col2b, col3i from utl97_t2\g 
+<<
++--------+----------+-----+-------------+
+|operatio|col1c     |col2b|col3i        |
++--------+----------+-----+-------------+
+|append  |abc       |TRUE |            1|
+|append  |def       |FALSE|            2|
+|append  |ghi       |TRUE |            3|
+|append  |jkl       |FALSE|            4|
+|append  |mno       |TRUE |            5|
+|append  |pqr       |FALSE|            6|
+|append  |stu       |     |            7|
+|repold  |abc       |TRUE |            1|
+|repnew  |abc       |FALSE|            1|
+|repold  |ghi       |TRUE |            3|
+|repnew  |ghi       |FALSE|            3|
+|repold  |mno       |TRUE |            5|
+|repnew  |mno       |FALSE|            5|
+|repold  |abc       |FALSE|            1|
+|repnew  |abc       |TRUE |            1|
+|repold  |def       |FALSE|            2|
+|repnew  |def       |TRUE |            2|
+|repold  |ghi       |FALSE|            3|
+|repnew  |ghi       |TRUE |            3|
+|repold  |jkl       |FALSE|            4|
+|repnew  |jkl       |TRUE |            4|
+|repold  |mno       |FALSE|            5|
+|repnew  |mno       |TRUE |            5|
+|repold  |pqr       |FALSE|            6|
+|repnew  |pqr       |TRUE |            6|
+|repold  |abc       |TRUE |            1|
+|repnew  |abc       |     |            1|
+|repold  |def       |TRUE |            2|
+|repnew  |def       |     |            2|
+|repold  |ghi       |TRUE |            3|
+|repnew  |ghi       |     |            3|
+|repold  |jkl       |TRUE |            4|
+|repnew  |jkl       |     |            4|
+|repold  |mno       |TRUE |            5|
+|repnew  |mno       |     |            5|
+|repold  |pqr       |TRUE |            6|
+|repnew  |pqr       |     |            6|
++--------+----------+-----+-------------+
+(37 rows)
+>>
+* \q 
+<<
+>>
+? delete utl97_t1.trl 
+<<
+~
+>>

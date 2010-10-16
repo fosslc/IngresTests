@@ -1,0 +1,432 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : utl99.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN data type
+                  with the usermod utility.
+
+  Databases     : utildb3, utildb4
+  Tables        : utl99_t1
+  Indexes	: utl99_idx1, idx2, idx3, idx4, idx5 
+  Filled Files  : utl99_t1.dat
+  Copied Files  : 
+  Input Files   : utl99usermod.in, utl99_t1.testenv
+  Output Files  : utl99usermod.out
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : This test will copy table utl99_t1 and the indexes from
+		  utildb3 to utildb4. In database utildb4, insert some rows
+		  into the table. Then execute the usermod utility to modify
+		  the table.  All 5 indexes should be in utildb4 on table
+		  utl99_t1 after 'usermod' is executed because:
+			- utl99_idx1 created with persistence
+			- utl99_idx2 created as unique
+			- utl99_idx3 with nopersistence so it is recreated
+			- utl99_idx4 with nopersistence so it is recreated
+			- utl99_idx5 with nopersistence so it is recreated
+  Known Issues  : None
+
+  History       : 04-Feb-2010 (vande02) Created.
+*/
+? fill utl99_t1.dat
+!!
+!!
+? fill utl99_t1.dat 
+!!
+1	false	true	true	Virginia
+2	false	true	true	Kathy
+3	false	true	true	Susan
+4	false	true	true	James
+5	false	true	true	Liz
+7	false	true	true	Cheryl
+11	false	true	true	MaryBeth
+13	false	true	true	Job
+14	false	true	true	Ester
+15	false	true	true	Lynette
+16	true	true	false	Lucille
+20	true	true	false	Jenni
+8	false	true	false	Julie
+9	false	true	false	Ted
+0	true	false	false	Diana
+6	true	false	false	Jean
+10	true	false	false	Denise
+12	true	false	false	Caitlin
+17	true	false	false	John
+18	true	false	false	Karen
+19	true	false	false	Chris
+99	true	false	false	Superman
+100	true	false	false	Superwoman
+!!
+? sql -s SEPPARAMDB3 
+<<
+>>
+* drop utl99_t1\g
+<<
+~
+>>
+* create table utl99_t1(id integer not null, active boolean not null,-
+  retired boolean not null, deceased boolean not null,-
+  name char(15) not null) with page_size=4096\g 
+<<
+>>
+* copy table utl99_t1(id=c0tab, active=c0tab, retired=c0tab,-
+  deceased=c0tab, name=c0nl) from 'utl99_t1.dat'\g
+<<
+(23 rows)
+>>
+* alter table utl99_t1 add column comment char(512)\g
+<<
+>>
+* create index utl99_idx1 on utl99_t1(name) with structure=hash,persistence;\g
+<<
+(23 rows)
+>>
+* create index utl99_idx2 on utl99_t1(id) unique-
+  with structure=isam, compression;\g
+<<
+(23 rows)
+>>
+* create index utl99_idx3 on utl99_t1 (id, active)-
+  with structure=btree, nopersistence, key=(id, active)\g 
+<<
+(23 rows)
+>>
+* create index utl99_idx4 on utl99_t1(retired)-
+  with structure=isam, nopersistence;\g
+<<
+(23 rows)
+>>
+* create index utl99_idx5 on utl99_t1(deceased)-
+  with structure=isam, nopersistence;\g
+<<
+(23 rows)
+>>
+* select count(*) from utl99_t1 where active = false\g 
+<<
++-------------+
+|col1         |
++-------------+
+|           12|
++-------------+
+(1 row)
+>>
+* select count(*) from utl99_t1 where retired = 'FALSE' \g 
+<<
++-------------+
+|col1         |
++-------------+
+|            9|
++-------------+
+(1 row)
+>>
+* select count(*) from utl99_t1 where deceased = true \g 
+<<
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* select id,active from utl99_t1 where active = FALSE order by id,active\g
+<<
++-------------+-----+
+|id           |activ|
++-------------+-----+
+|            1|FALSE|
+|            2|FALSE|
+|            3|FALSE|
+|            4|FALSE|
+|            5|FALSE|
+|            7|FALSE|
+|            8|FALSE|
+|            9|FALSE|
+|           11|FALSE|
+|           13|FALSE|
+|           14|FALSE|
+|           15|FALSE|
++-------------+-----+
+(12 rows)
+>>
+* \q
+<<
+>>
+? copydb SEPPARAMDB3 -add_drop -with_tables -with_data -with_index-
+  -infile=utl99usermod.in -outfile=utl99usermod.out -noint utl99_t1
+<<
+INGRES COPYDB Copyright 2009 Ingres Corporation
+Unload directory is '/qa1/output/ii100b116/UTF8/be/util'.
+Reload directory is '/qa1/output/ii100b116/UTF8/be/util'.
+There is one table owned by user 'testenv'.
+
+COPYDB has created the scripts copy.out and copy.in. From an Ingres
+prompt, run sql utildb3 < copy.out to copy the data.
+>>
+? sql -s SEPPARAMDB3
+<<
+>>
+* \i utl99usermod.out
+<<
+~
+>>
+* \q
+<<
+>>
+? sql -s SEPPARAMDB4
+<<
+>>
+* drop table utl99_t1\g
+<<
+~
+>>
+* \i utl99usermod.in
+<<
+~
+>>
+* insert into utl99_t1 values(101,0,1,0,'Hewy',null)\g
+<<
+(1 row)
+>>
+* insert into utl99_t1 values(103,0,1,0,'Lewy',null)\g
+<<
+(1 row)
+>>
+* insert into utl99_t1 values(102,0,1,0,'Dewy',null)\g
+<<
+(1 row)
+>>
+* \q
+<<
+>>
+? usermod SEPPARAMDB4 utl99_t1 -noint
+<<
+INGRES COPYDB Copyright 2009 Ingres Corporation
+Unload directory is '/tmp'.
+Reload directory is '/tmp'.
+There is one table owned by user 'testenv'.
+INGRES TERMINAL MONITOR Copyright 2009 Ingres Corporation
+set autocommit on
+set nojournaling
+set session with privileges=all
+
+        /* TABLES */
+modify utl99_t1 to heap
+with extend = 16,
+        allocation = 4,
+        page_size = 4096,
+        nodependency_check
+(26 rows)
+create index (utl99_idx2 on utl99_t1 (
+        id) unique
+with structure = isam,
+        page_size = 2048,
+        compression = (nokey, data),
+        key = (id),
+        fillfactor = 80,
+        location = (ii_database)),
+(utl99_idx3 on utl99_t1 (
+        id,
+        active)
+with structure = btree,
+        page_size = 2048,
+        nocompression,
+        key = (id, active),
+        nonleaffill = 80,
+        leaffill = 70,
+        fillfactor = 80,
+        location = (ii_database)),
+(utl99_idx4 on utl99_t1 (
+        retired)
+with structure = isam,
+        page_size = 2048,
+        nocompression,
+        key = (retired),
+        fillfactor = 80,
+        location = (ii_database)),
+(utl99_idx5 on utl99_t1 (
+        deceased)
+with structure = isam,
+        page_size = 2048,
+        nocompression,
+        key = (deceased),
+        fillfactor = 80,
+        location = (ii_database))
+(26 rows)
+>>
+? sql -s SEPPARAMDB4
+<<
+>>
+* select count(*) from utl99_t1\g
+<<
++-------------+
+|col1         |
++-------------+
+|           26|
++-------------+
+(1 row)
+>>
+* select first 10 name from utl99_idx1 order by name\g
+<<
++---------------+
+|name           |
++---------------+
+|Caitlin        |
+|Cheryl         |
+|Chris          |
+|Denise         |
+|Dewy           |
+|Diana          |
+|Ester          |
+|Hewy           |
+|James          |
+|Jean           |
++---------------+
+(10 rows)
+>>
+* select first 10 id from utl99_idx2 order by id\g
+<<
++-------------+
+|id           |
++-------------+
+|            0|
+|            1|
+|            2|
+|            3|
+|            4|
+|            5|
+|            6|
+|            7|
+|            8|
+|            9|
++-------------+
+(10 rows)
+>>
+* select first 10 id,active from utl99_idx3 order by id,active\g
+<<
++-------------+-----+
+|id           |activ|
++-------------+-----+
+|            0|TRUE |
+|            1|FALSE|
+|            2|FALSE|
+|            3|FALSE|
+|            4|FALSE|
+|            5|FALSE|
+|            6|TRUE |
+|            7|FALSE|
+|            8|FALSE|
+|            9|FALSE|
++-------------+-----+
+(10 rows)
+>>
+* select first 10 retired from utl99_idx4 order by retired\g
+<<
++-----+
+|retir|
++-----+
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|TRUE |
++-----+
+(10 rows)
+>>
+* select first 10 deceased from utl99_idx5 order by deceased\g
+<<
++-----+
+|decea|
++-----+
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
++-----+
+(10 rows)
+>>
+* select count(*) from utl99_t1\g
+<<
++-------------+
+|col1         |
++-------------+
+|           26|
++-------------+
+(1 row)
+>>
+* select count(*) from utl99_t1 where active = false\g 
+<<
++-------------+
+|col1         |
++-------------+
+|           15|
++-------------+
+(1 row)
+>>
+* select count(*) from utl99_t1 where retired = 'FALSE' \g 
+<<
++-------------+
+|col1         |
++-------------+
+|            9|
++-------------+
+(1 row)
+>>
+* select count(*) from utl99_t1 where deceased = true \g 
+<<
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* select id,active from utl99_t1 where active = FALSE order by id,active\g
+<<
++-------------+-----+
+|id           |activ|
++-------------+-----+
+|            1|FALSE|
+|            2|FALSE|
+|            3|FALSE|
+|            4|FALSE|
+|            5|FALSE|
+|            7|FALSE|
+|            8|FALSE|
+|            9|FALSE|
+|           11|FALSE|
+|           13|FALSE|
+|           14|FALSE|
+|           15|FALSE|
+|          101|FALSE|
+|          102|FALSE|
+|          103|FALSE|
++-------------+-----+
+(15 rows)
+>>
+* \q 
+<<
+>>
+? delete utl99usermod.in
+<<
+file was deleted
+>>
+? delete utl99usermod.out
+<<
+file was deleted
+>>
+? delete utl99_t1.testenv
+<<
+file was deleted
+>>

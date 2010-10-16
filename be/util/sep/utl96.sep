@@ -1,0 +1,1010 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : utl96.sep
+  Suite         : be!datatypes
+  Focus         : Ingres 10.0 New Data Type:  BOOLEAN data type with the
+		  copydb and unloaddb utilities.
+
+  Databases     : utildb5,utildb6
+  Tables        : utl96_t1, utl96_t2, utl96_t3, utl96_syn, utl96_view
+  Indexes	: utl96_idx1, idx2, idx3
+  Filled Files  : utl96_t1.dat
+  Copied Files  : 
+  Input Files   : utl96copydb.in, utl96_t1.testenv, utl96_t2.testenv,
+		  util96_t3.testenv, utl96copydbnull.in
+  Output Files  : utl96copydb.out, copy.in, copy.out, unload.ing, reload.ing,
+                  utl96copydbnull.out
+  Prerequisites : None 
+  Run as user   : testenv
+  Summary       : This test will copy all objects from utildb5 to utildb6
+		  using 'copydb'.  Selects will be executed on utildb5 to
+                  ensure the objects are there with X amount of rows.  After
+		  the 'copydb', selects will be executed in utildb6 to ensure
+		  the following objects where copied into the new database,
+		  and X amount of rows are retrieved (added 3 more rows into
+		  utildb6 after the 'copydb'.)
+			- 2 tables
+			- 3 indexes
+			- 1 view
+			- 1 synonym
+			- 2 procedures
+
+                  Create, modify, and alter a new table (utl96_t3) which
+		  includes some NULL BOOLEAN values.  Use copydb to copy out
+		  all objects/data from SEPPARAMDB6.  Destroydb/createdb
+		  database SEPPARAMDB6 and reload it with the utl96copydbnull.in
+		  file.  Verify all objects are accessible.
+
+		  Lastely, execute unloaddb on SEPPARAMDB6, destroydb, createdb,
+                  and reload it.  Execute queries on each object.
+
+  Known Issues  : None
+
+  History       : 04-Feb-2010 (vande02) Created.
+		: 17-Feb-2010 (vande02) Added NULL values and another copydb.
+*/
+? fill utl96_t1.dat 
+!!
+!!
+? fill utl96_t1.dat
+!!
+101	false	true	true	Virginia
+104	false	true	true	James
+105	false	true	true	Liz
+107	false	true	true	Cheryl
+111	false	true	true	MaryBeth
+115	false	true	true	Lynette
+116	true	true	false	Lucille
+109	false	true	false	Ted
+998	true	false	false	Superman
+999	true	false	false	Superwoman
+!!
+? destroydb SEPPARAMDB5
+<<
+~
+>>
+? destroydb SEPPARAMDB6
+<<
+~
+>>
+? createdb SEPPARAMDB5
+<<
+~
+>>
+? createdb SEPPARAMDB6
+<<
+~
+>>
+.if (UNIX)
+? fill utl96_rmvfiles.sh
+!!
+rm ii_*
+!!
+? run chmod 755 utl96_rmvfiles.sh
+<<
+>>
+.else
+.if (NT_GENERIC)
+? fill utl96_rmvfiles.bat
+!!
+rm ii_*
+!!
+.else
+.if (VMS)
+? fill utl96_rmvfiles.com
+!!
+$ delete ii_*.*;*
+!!
+.endif
+.endif
+.endif
+? sql -s SEPPARAMDB5
+<<
+>>
+* drop table utl96_t1, utl96_t2\g
+<<
+~
+>>
+* drop procedure utl96_proc1\g
+<<
+~
+>>
+* drop procedure utl96_proc2\g
+<<
+~
+>>
+* create table utl96_t1(id integer not null, active boolean not null,-
+  retired boolean not null, deceased boolean not null,-
+  name char(15) not null) with page_size=4096\g 
+<<
+>>
+* copy table utl96_t1(id=c0tab, active=c0tab, retired=c0tab,-
+  deceased=c0tab, name=c0nl) from 'utl96_t1.dat'\g
+<<
+(10 rows)
+>>
+* commit\g
+<<
+>>
+* alter table utl96_t1 add column comment char(512) null\g
+<<
+>>
+* create index utl96_idx1 on utl96_t1 (id, active)-
+  with structure=btree, nopersistence, key=(id, active)\g 
+<<
+(10 rows)
+>>
+* create index utl96_idx2 on utl96_t1(retired)-
+  with structure=isam, nopersistence\g
+<<
+(10 rows)
+>>
+* create index utl96_idx3 on utl96_t1(deceased)-
+  with structure=hash, nopersistence\g
+<<
+(10 rows)
+>>
+* create view utl96_view as select id,active,name from utl96_t1\g
+<<
+>>
+* create synonym utl96_syn for utl96_t1\g
+<<
+>>
+* create table utl96_t2 as select id, active from utl96_t1\g
+<<
+(10 rows)
+>>
+* create procedure utl96_proc1 result row (int, boolean) as-
+      declare ival integer;-
+              bval boolean;-
+      begin-
+         for select * into :ival, :bval from utl96_t2 order by 1-
+               do-
+                  return row(:ival, :bval);-
+         endfor;-
+      end;\g
+<<
+>>
+* create procedure utl96_proc2(param1 boolean) as-
+      declare bval boolean;-
+        begin bval = param1;-
+          if bval is false then-
+             message 'param1 = FALSE';-
+          elseif bval is true then-
+             message 'param1 = TRUE';-
+          elseif bval is null then-
+             message 'param1 = NULL';-
+          else-
+             message 'param1 is invalid';-
+          endif;-
+        end;\g
+<<
+>>
+* select count(*) from utl96_t1\g
+<<
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* select count(*) from utl96_t2\g
+<<
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* select id,active from utl96_idx1 order by id,active\g
+<<
++-------------+-----+
+|id           |activ|
++-------------+-----+
+|          101|FALSE|
+|          104|FALSE|
+|          105|FALSE|
+|          107|FALSE|
+|          109|FALSE|
+|          111|FALSE|
+|          115|FALSE|
+|          116|TRUE |
+|          998|TRUE |
+|          999|TRUE |
++-------------+-----+
+(10 rows)
+>>
+* select retired from utl96_idx2 order by retired\g
+<<
++-----+
+|retir|
++-----+
+|FALSE|
+|FALSE|
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
++-----+
+(10 rows)
+>>
+* select deceased from utl96_idx3 order by deceased\g
+<<
++-----+
+|decea|
++-----+
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
++-----+
+(10 rows)
+>>
+* select count(*) from utl96_view\g
+<<
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* select count(*) from utl96_syn\g
+<<
++-------------+
+|col1         |
++-------------+
+|           10|
++-------------+
+(1 row)
+>>
+* select * from utl96_proc1()\g
+<<
++-------------+-----+
+|result_column|resul|
++-------------+-----+
+|          101|FALSE|
+|          104|FALSE|
+|          105|FALSE|
+|          107|FALSE|
+|          109|FALSE|
+|          111|FALSE|
+|          115|FALSE|
+|          116|TRUE |
+|          998|TRUE |
+|          999|TRUE |
++-------------+-----+
+(10 rows)
+>>
+* \q
+<<
+>>
+/*
+Use copydb to copy all the objects and data from SEPPARAMDB5.
+*/
+? copydb -add_drop -all -relpath -infile=utl96copydb.in-
+  -outfile=utl96copydb.out -noint SEPPARAMDB5
+<<
+~
+>>
+? sql -s SEPPARAMDB5
+<<
+>>
+* \i utl96copydb.out
+<<
+~
+>>
+* \q
+<<
+>>
+/*
+Now copy all the objects and data into a new database SEPPARAMDB6.
+*/
+? sql -s SEPPARAMDB6
+<<
+>>
+* \i utl96copydb.in
+<<
+~
+>>
+* insert into utl96_t1 values(901,0,1,1,'Moe',null)\g
+<<
+(1 row)
+>>
+* insert into utl96_t1 values(903,0,1,1,'Larry',null)\g
+<<
+(1 row)
+>>
+* insert into utl96_t1 values(902,0,1,1,'Curly',null)\g
+<<
+(1 row)
+>>
+* select id,active,retired,deceased,name from utl96_t1 order by id\g
+<<
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
+|          101|FALSE|TRUE |TRUE |Virginia       |
+|          104|FALSE|TRUE |TRUE |James          |
+|          105|FALSE|TRUE |TRUE |Liz            |
+|          107|FALSE|TRUE |TRUE |Cheryl         |
+|          109|FALSE|TRUE |FALSE|Ted            |
+|          111|FALSE|TRUE |TRUE |MaryBeth       |
+|          115|FALSE|TRUE |TRUE |Lynette        |
+|          116|TRUE |TRUE |FALSE|Lucille        |
+|          901|FALSE|TRUE |TRUE |Moe            |
+|          902|FALSE|TRUE |TRUE |Curly          |
+|          903|FALSE|TRUE |TRUE |Larry          |
+|          998|TRUE |FALSE|FALSE|Superman       |
+|          999|TRUE |FALSE|FALSE|Superwoman     |
++-------------+-----+-----+-----+---------------+
+(13 rows)
+>>
+* select id,active from utl96_idx1 order by id,active\g
+<<
++-------------+-----+
+|id           |activ|
++-------------+-----+
+|          101|FALSE|
+|          104|FALSE|
+|          105|FALSE|
+|          107|FALSE|
+|          109|FALSE|
+|          111|FALSE|
+|          115|FALSE|
+|          116|TRUE |
+|          901|FALSE|
+|          902|FALSE|
+|          903|FALSE|
+|          998|TRUE |
+|          999|TRUE |
++-------------+-----+
+(13 rows)
+>>
+* select retired from utl96_idx2 order by retired\g
+<<
++-----+
+|retir|
++-----+
+|FALSE|
+|FALSE|
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
++-----+
+(13 rows)
+>>
+* select deceased from utl96_idx3 order by deceased\g
+<<
++-----+
+|decea|
++-----+
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
++-----+
+(13 rows)
+>>
+* select count(*) from utl96_view\g
+<<
++-------------+
+|col1         |
++-------------+
+|           13|
++-------------+
+(1 row)
+>>
+* select id,active,retired,deceased,name from utl96_syn order by id\g
+<<
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
+|          101|FALSE|TRUE |TRUE |Virginia       |
+|          104|FALSE|TRUE |TRUE |James          |
+|          105|FALSE|TRUE |TRUE |Liz            |
+|          107|FALSE|TRUE |TRUE |Cheryl         |
+|          109|FALSE|TRUE |FALSE|Ted            |
+|          111|FALSE|TRUE |TRUE |MaryBeth       |
+|          115|FALSE|TRUE |TRUE |Lynette        |
+|          116|TRUE |TRUE |FALSE|Lucille        |
+|          901|FALSE|TRUE |TRUE |Moe            |
+|          902|FALSE|TRUE |TRUE |Curly          |
+|          903|FALSE|TRUE |TRUE |Larry          |
+|          998|TRUE |FALSE|FALSE|Superman       |
+|          999|TRUE |FALSE|FALSE|Superwoman     |
++-------------+-----+-----+-----+---------------+
+(13 rows)
+>>
+* select * from utl96_proc1()\g
+<<
++-------------+-----+
+|result_column|resul|
++-------------+-----+
+|          101|FALSE|
+|          104|FALSE|
+|          105|FALSE|
+|          107|FALSE|
+|          109|FALSE|
+|          111|FALSE|
+|          115|FALSE|
+|          116|TRUE |
+|          998|TRUE |
+|          999|TRUE |
++-------------+-----+
+(10 rows)
+>>
+* execute procedure utl96_proc2 (param1 = false)\g
+<<
+MESSAGE 0: param1 = FALSE
+>>
+* execute procedure utl96_proc2 (param1 = true)\g
+<<
+MESSAGE 0: param1 = TRUE
+>>
+* execute procedure utl96_proc2 (param1 = null)\g
+<<
+MESSAGE 0: param1 = NULL
+>>
+* execute procedure utl96_proc2 (param1 = 'FALSE')\g
+<<
+MESSAGE 0: param1 = FALSE
+>>
+* execute procedure utl96_proc2 (param1 = 'TRUE')\g
+<<
+MESSAGE 0: param1 = TRUE
+>>
+* execute procedure utl96_proc2 (param1 = 0 )\g
+<<
+MESSAGE 0: param1 = FALSE
+>>
+* execute procedure utl96_proc2 (param1 = 1)\g
+<<
+MESSAGE 0: param1 = TRUE
+>>
+* execute procedure utl96_proc2 (param1 = 2)\g
+<<
+E_AD106B '2' is not a valid integer value for casting to BOOLEAN.
+    (Mon Feb  1 17:42:19 2010)
+>>
+* commit\g
+<<
+>>
+/*
+Now create a new table, modify it, and alter the 'deceased' column to allow
+it to be null.
+*/
+* create table utl96_t3 as select id, active, retired, deceased, name-
+  from utl96_t1\g
+<<
+(13 rows)
+>>
+* modify utl96_t3 to btree with page_size=4096\g
+<<
+(13 rows)
+>>
+* alter table utl96_t3 alter column deceased boolean null\g
+<<
+>>
+* insert into utl96_t3 values(904,0,1,null,'Tom')\g
+<<
+(1 row)
+>>
+* insert into utl96_t3 values(905,0,1,null,'Dick')\g
+<<
+(1 row)
+>>
+* insert into utl96_t3 values(906,0,1,null,'Harry')\g
+<<
+(1 row)
+>>
+* select id,active,retired,deceased,name from utl96_t3 order by id\g
+<<
+
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
+|          101|FALSE|TRUE |TRUE |Virginia       |
+|          104|FALSE|TRUE |TRUE |James          |
+|          105|FALSE|TRUE |TRUE |Liz            |
+|          107|FALSE|TRUE |TRUE |Cheryl         |
+|          109|FALSE|TRUE |FALSE|Ted            |
+|          111|FALSE|TRUE |TRUE |MaryBeth       |
+|          115|FALSE|TRUE |TRUE |Lynette        |
+|          116|TRUE |TRUE |FALSE|Lucille        |
+|          901|FALSE|TRUE |TRUE |Moe            |
+|          902|FALSE|TRUE |TRUE |Curly          |
+|          903|FALSE|TRUE |TRUE |Larry          |
+|          904|FALSE|TRUE |     |Tom            |
+|          905|FALSE|TRUE |     |Dick           |
+|          906|FALSE|TRUE |     |Harry          |
+|          998|TRUE |FALSE|FALSE|Superman       |
+|          999|TRUE |FALSE|FALSE|Superwoman     |
++-------------+-----+-----+-----+---------------+
+(16 rows)
+>>
+* \q 
+<<
+>>
+/*
+Use copydb to copy out a all objects and data which now allows null values
+from SEPPARAMDB6.
+*/
+? copydb -c -add_drop -all -relpath -infile=utl96copydbnull.in-
+  -outfile=utl96copydbnull.out -noint SEPPARAMDB6
+<<
+~
+>>
+? sql -s SEPPARAMDB6
+<<
+>>
+* \i utl96copydbnull.out
+<<
+~
+>>
+* \q
+<<
+>>
+? destroydb SEPPARAMDB6
+<<
+Destroying database 'utildb6' . . .
+
+
+Destruction of database 'utildb6' completed successfully.
+>>
+? createdb SEPPARAMDB6
+<<
+Creating database 'utildb6' . . .
+
+  Creating DBMS System Catalogs . . .
+  Modifying DBMS System Catalogs . . .
+  Creating Standard Catalog Interface . . .
+  Creating Front-end System Catalogs . . .
+
+Creation of database 'utildb6' completed successfully.
+>>
+/*
+Now copy in a all objects and data into a new database SEPPARAMDB6 and
+verify the NULL values have been copied in, more nulls can be updated,
+and all the rows can be accessed.
+
+Rows 904 to 999 should have a null value for BOOLEAN column 'deceased'.
+*/
+? sql -s SEPPARAMDB6
+<<
+>>
+* \i utl96copydbnull.in
+<<
+~
+>>
+* commit\g
+<<
+>>
+* update utl96_t3 set deceased = NULL where name like 'Super%'\g
+<<
+(2 rows)
+>>
+* select id,active,retired,deceased,name from utl96_t3 order by id\g
+<<
+
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
+|          101|FALSE|TRUE |TRUE |Virginia       |
+|          104|FALSE|TRUE |TRUE |James          |
+|          105|FALSE|TRUE |TRUE |Liz            |
+|          107|FALSE|TRUE |TRUE |Cheryl         |
+|          109|FALSE|TRUE |FALSE|Ted            |
+|          111|FALSE|TRUE |TRUE |MaryBeth       |
+|          115|FALSE|TRUE |TRUE |Lynette        |
+|          116|TRUE |TRUE |FALSE|Lucille        |
+|          901|FALSE|TRUE |TRUE |Moe            |
+|          902|FALSE|TRUE |TRUE |Curly          |
+|          903|FALSE|TRUE |TRUE |Larry          |
+|          904|FALSE|TRUE |     |Tom            |
+|          905|FALSE|TRUE |     |Dick           |
+|          906|FALSE|TRUE |     |Harry          |
+|          998|TRUE |FALSE|     |Superman       |
+|          999|TRUE |FALSE|     |Superwoman     |
++-------------+-----+-----+-----+---------------+
+(16 rows)
+>>
+* \q
+<<
+>>
+/*
+Now execute unloaddb on SEPPARAMDB6 - destroydb, createdb, and reload it.
+*/
+? unloaddb -c SEPPARAMDB6
+<<
+~
+>>
+.if (UNIX)
+? run unload.ing
+<<
+~
+>>
+.else
+.if (NT_GENERIC)
+? run unload.bat
+<<
+~
+>>
+.else
+.if (VMS)
+? source unload.ing
+<<
+~
+>>
+.endif
+.endif
+.endif
+? destroydb SEPPARAMDB6
+<<
+~
+>>
+? createdb SEPPARAMDB6
+<<
+Creating database 'utildb6' . . .
+
+  Creating DBMS System Catalogs . . .
+  Modifying DBMS System Catalogs . . .
+  Creating Standard Catalog Interface . . .
+  Creating Front-end System Catalogs . . .
+
+Creation of database 'utildb6' completed successfully.
+>>
+.if (UNIX)
+? run reload.ing
+<<
+~
+>>
+.else
+.if (NT_GENERIC)
+? run reload.bat
+<<
+~
+>>
+.else
+.if (VMS)
+? source reload.ing
+<<
+~
+>>
+.endif
+.endif
+.endif
+? sleep 5
+<<
+~
+>>
+? ckpdb +w +j SEPPARAMDB6
+<<
+~
+>>
+/*
+Now verify all the objects were relocaded by unload/reload and can be
+executed in the new SEPPARAMDB6 including table utl96_t3 with NULL
+BOOLEAN values.
+*/
+? sql -s SEPPARAMDB6
+<<
+>>
+* select id,active,retired,deceased,name from utl96_t1 order by id\g
+<<
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
+|          101|FALSE|TRUE |TRUE |Virginia       |
+|          104|FALSE|TRUE |TRUE |James          |
+|          105|FALSE|TRUE |TRUE |Liz            |
+|          107|FALSE|TRUE |TRUE |Cheryl         |
+|          109|FALSE|TRUE |FALSE|Ted            |
+|          111|FALSE|TRUE |TRUE |MaryBeth       |
+|          115|FALSE|TRUE |TRUE |Lynette        |
+|          116|TRUE |TRUE |FALSE|Lucille        |
+|          901|FALSE|TRUE |TRUE |Moe            |
+|          902|FALSE|TRUE |TRUE |Curly          |
+|          903|FALSE|TRUE |TRUE |Larry          |
+|          998|TRUE |FALSE|FALSE|Superman       |
+|          999|TRUE |FALSE|FALSE|Superwoman     |
++-------------+-----+-----+-----+---------------+
+(13 rows)
+>>
+* select id,active from utl96_idx1 order by id,active\g
+<<
++-------------+-----+
+|id           |activ|
++-------------+-----+
+|          101|FALSE|
+|          104|FALSE|
+|          105|FALSE|
+|          107|FALSE|
+|          109|FALSE|
+|          111|FALSE|
+|          115|FALSE|
+|          116|TRUE |
+|          901|FALSE|
+|          902|FALSE|
+|          903|FALSE|
+|          998|TRUE |
+|          999|TRUE |
++-------------+-----+
+(13 rows)
+>>
+* select retired from utl96_idx2 order by retired\g
+<<
++-----+
+|retir|
++-----+
+|FALSE|
+|FALSE|
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
++-----+
+(13 rows)
+>>
+* select deceased from utl96_idx3 order by deceased\g
+<<
++-----+
+|decea|
++-----+
+|FALSE|
+|FALSE|
+|FALSE|
+|FALSE|
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
+|TRUE |
++-----+
+(13 rows)
+>>
+* select id, active, name from utl96_view\g
+<<
++-------------+-----+---------------+
+|id           |activ|name           |
++-------------+-----+---------------+
+|          101|FALSE|Virginia       |
+|          104|FALSE|James          |
+|          105|FALSE|Liz            |
+|          107|FALSE|Cheryl         |
+|          111|FALSE|MaryBeth       |
+|          115|FALSE|Lynette        |
+|          116|TRUE |Lucille        |
+|          109|FALSE|Ted            |
+|          998|TRUE |Superman       |
+|          999|TRUE |Superwoman     |
+|          901|FALSE|Moe            |
+|          903|FALSE|Larry          |
+|          902|FALSE|Curly          |
++-------------+-----+---------------+
+(13 rows)
+>>
+* select id,active,retired,deceased,name from utl96_syn order by id\g
+<<
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
+|          101|FALSE|TRUE |TRUE |Virginia       |
+|          104|FALSE|TRUE |TRUE |James          |
+|          105|FALSE|TRUE |TRUE |Liz            |
+|          107|FALSE|TRUE |TRUE |Cheryl         |
+|          109|FALSE|TRUE |FALSE|Ted            |
+|          111|FALSE|TRUE |TRUE |MaryBeth       |
+|          115|FALSE|TRUE |TRUE |Lynette        |
+|          116|TRUE |TRUE |FALSE|Lucille        |
+|          901|FALSE|TRUE |TRUE |Moe            |
+|          902|FALSE|TRUE |TRUE |Curly          |
+|          903|FALSE|TRUE |TRUE |Larry          |
+|          998|TRUE |FALSE|FALSE|Superman       |
+|          999|TRUE |FALSE|FALSE|Superwoman     |
++-------------+-----+-----+-----+---------------+
+(13 rows)
+>>
+* select * from utl96_proc1()\g
+<<
++-------------+-----+
+|result_column|resul|
++-------------+-----+
+|          101|FALSE|
+|          104|FALSE|
+|          105|FALSE|
+|          107|FALSE|
+|          109|FALSE|
+|          111|FALSE|
+|          115|FALSE|
+|          116|TRUE |
+|          998|TRUE |
+|          999|TRUE |
++-------------+-----+
+(10 rows)
+>>
+* execute procedure utl96_proc2 (param1 = false)\g
+<<
+MESSAGE 0: param1 = FALSE
+>>
+* execute procedure utl96_proc2 (param1 = true)\g
+<<
+MESSAGE 0: param1 = TRUE
+>>
+* execute procedure utl96_proc2 (param1 = null)\g
+<<
+MESSAGE 0: param1 = NULL
+>>
+* execute procedure utl96_proc2 (param1 = 'FALSE')\g
+<<
+MESSAGE 0: param1 = FALSE
+>>
+* execute procedure utl96_proc2 (param1 = 'TRUE')\g
+<<
+MESSAGE 0: param1 = TRUE
+>>
+* execute procedure utl96_proc2 (param1 = 0 )\g
+<<
+MESSAGE 0: param1 = FALSE
+>>
+* execute procedure utl96_proc2 (param1 = 1)\g
+<<
+MESSAGE 0: param1 = TRUE
+>>
+* execute procedure utl96_proc2 (param1 = 2)\g
+<<
+E_AD106B '2' is not a valid integer value for casting to BOOLEAN.
+    (Mon Feb  1 17:42:19 2010)
+>>
+* select id,active,retired,deceased,name from utl96_t3 order by id\g
+<<
+
++-------------+-----+-----+-----+---------------+
+|id           |activ|retir|decea|name           |
++-------------+-----+-----+-----+---------------+
+|          101|FALSE|TRUE |TRUE |Virginia       |
+|          104|FALSE|TRUE |TRUE |James          |
+|          105|FALSE|TRUE |TRUE |Liz            |
+|          107|FALSE|TRUE |TRUE |Cheryl         |
+|          109|FALSE|TRUE |FALSE|Ted            |
+|          111|FALSE|TRUE |TRUE |MaryBeth       |
+|          115|FALSE|TRUE |TRUE |Lynette        |
+|          116|TRUE |TRUE |FALSE|Lucille        |
+|          901|FALSE|TRUE |TRUE |Moe            |
+|          902|FALSE|TRUE |TRUE |Curly          |
+|          903|FALSE|TRUE |TRUE |Larry          |
+|          904|FALSE|TRUE |     |Tom            |
+|          905|FALSE|TRUE |     |Dick           |
+|          906|FALSE|TRUE |     |Harry          |
+|          998|TRUE |FALSE|     |Superman       |
+|          999|TRUE |FALSE|     |Superwoman     |
++-------------+-----+-----+-----+---------------+
+(16 rows)
+>>
+* \q
+<<
+>>
+? delete utl96copydb.in
+<<
+file was deleted
+>>
+? delete utl96copydb.out
+<<
+file was deleted
+>>
+? delete utl96copydbnull.in
+<<
+file was deleted
+>>
+? delete utl96copydbnull.out
+<<
+file was deleted
+>>
+? delete utl96_t1.testenv
+<<
+file was deleted
+>>
+? delete utl96_t2.testenv
+<<
+file was deleted
+>>
+? delete utl96_t3.testenv
+<<
+file was deleted
+>>
+? delete copy.in
+<<
+file was deleted
+>>
+? delete copy.out
+<<
+file was deleted
+>>
+.if (UNIX) || (VMS)
+? delete unload.ing
+<<
+file was deleted
+>>
+? delete reload.ing
+<<
+file was deleted
+>>
+.endif
+.if (UNIX)
+? run utl96_rmvfiles.sh
+<<
+>>
+.else
+.if (NT_GENERIC)
+? run utl96_rmvfiles.bat
+<<
+>>
+? delete unload.bat
+<<
+file was deleted
+>>
+? delete reload.bat
+<<
+file was deleted
+>>
+.else
+.if (VMS)
+? run utl96_rmvfiles.com
+<<
+>>
+.endif
+.endif
+.endif
+? delete utl96_rmvfiles.sh
+<<
+~
+>>
+? delete utl96_rmvfiles.bat
+<<
+~
+>>
+? delete utl96_rmvfiles.com
+<<
+~
+>>

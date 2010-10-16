@@ -1,0 +1,360 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+
+  Test Name     : sta08.sep
+  Suite         : star!ddl
+  Focus         : Ingres 10.0 New Data Type: BOOLEAN data type with Ingres/STAR
+
+  Databases     : utildb3, utildb4
+  Databases     : SEPPARAMDB1 , SEPPARAMDB (ldb1, starddb1/star)
+  Tables        : sta08_t1, sta08_t1_lnk, sta08_v1, sta08_v1_lnk
+  Filled Files  : 
+  Copied Files  :
+  Input Files   : 
+  Output Files  : 
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Test the creation/select of tables with data type BOOLEAN
+		  in a distributed database i.e. register a link for a
+		  table and a view with BOOLEAN columns.
+
+  Known Issues  : 142625 - Inserts into STAR database fail when BOOLEAN
+		  columns are included. See the test cases in the comment
+		  below that will need to be added once issue is fixed.
+
+  History       : 08-Feb-2010 (vande02) Created.
+*/
+? sql -s SEPPARAMDB1 
+<<
+>>
+* drop table sta08_t1\g
+<<
+~
+>>
+* create table sta08_t1 (c1_int integer not null not default,-
+  c2_bool boolean, c3_name char(15) not null, c4_comment char(20) null)\g
+<<
+>>
+* insert into sta08_t1 values (100, true, 'Moe', null)\g
+<<
+(1 row)
+>>
+* insert into sta08_t1 values (300, null, 'Dolly', null)\g
+<<
+(1 row)
+>>
+* insert into sta08_t1 values (500, 'FALSE', 'Curly', null)\g
+<<
+(1 row)
+>>
+* insert into sta08_t1 values (700, 1, 'Lewy', null)\g
+<<
+(1 row)
+>>
+* create view sta08_v1 as select c1_int, c2_bool, c3_name from sta08_t1\g
+<<
+>>
+* insert into sta08_v1 values (900, 0, 'Molly')\g
+<<
+(1 row)
+>>
+* select * from sta08_t1 order by c1_int\g
+<<
+
++-------------+-----+---------------+--------------------+
+|c1_int       |c2_bo|c3_name        |c4_comment          |
++-------------+-----+---------------+--------------------+
+|          100|TRUE |Moe            |                    |
+|          300|     |Dolly          |                    |
+|          500|FALSE|Curly          |                    |
+|          700|TRUE |Lewy           |                    |
+|          900|FALSE|Molly          |                    |
++-------------+-----+---------------+--------------------+
+(5 rows)
+>>
+* select * from sta08_v1 order by c1_int\g
+<<
++-------------+-----+---------------+
+|c1_int       |c2_bo|c3_name        |
++-------------+-----+---------------+
+|          100|TRUE |Moe            |
+|          300|     |Dolly          |
+|          500|FALSE|Curly          |
+|          700|TRUE |Lewy           |
+|          900|FALSE|Molly          |
++-------------+-----+---------------+
+(5 rows)
+>>
+* \q 
+<<
+>>
+? sql -s SEPPARAMDB 
+<<
+>>
+* drop link sta08_t1_lnk\g
+<<
+~
+>>
+* drop link sta08_v1_lnk\g
+<<
+~
+>>
+* register sta08_t1_lnk as link from sta08_t1 with node=snode1,-
+  database=ldb1, dbms=ingres\g
+<<
+>>
+* register sta08_v1_lnk as link from sta08_v1 with node=snode1,-
+  database=ldb1, dbms=ingres\g
+<<
+>>
+* select c1_int, c2_bool, c3_name, c4_comment from sta08_t1_lnk order by 1\g
+<<
+
++-------------+-----+---------------+--------------------+
+|c1_int       |c2_bo|c3_name        |c4_comment          |
++-------------+-----+---------------+--------------------+
+|          100|TRUE |Moe            |                    |
+|          300|     |Dolly          |                    |
+|          500|FALSE|Curly          |                    |
+|          700|TRUE |Lewy           |                    |
+|          900|FALSE|Molly          |                    |
++-------------+-----+---------------+--------------------+
+(5 rows)
+>>
+* select * from sta08_v1_lnk order by c1_int\g
+<<
+
++-------------+-----+---------------+
+|c1_int       |c2_bo|c3_name        |
++-------------+-----+---------------+
+|          100|TRUE |Moe            |
+|          300|     |Dolly          |
+|          500|FALSE|Curly          |
+|          700|TRUE |Lewy           |
+|          900|FALSE|Molly          |
++-------------+-----+---------------+
+(5 rows)
+>>
+* insert into sta08_t1_lnk values (200, 0, 'Larry', null)\g
+<<
+(1 row)
+>>
+* insert into sta08_t1_lnk values (400, 1, 'Sammy', null)\g
+<<
+(1 row)
+>>
+* insert into sta08_t1_lnk values (600, 'false', 'Hewy', null)\g
+<<
+(1 row)
+>>
+* insert into sta08_t1_lnk values (800, 'TRUE', 'Dewy', null)\g
+<<
+(1 row)
+>>
+* insert into sta08_v1_lnk values (1000, 1, 'Liza')\g
+<<
+(1 row)
+>>
+* select c1_int, c2_bool, c3_name, c4_comment from sta08_t1_lnk order by 1\g
+<<
+
++-------------+-----+---------------+--------------------+
+|c1_int       |c2_bo|c3_name        |c4_comment          |
++-------------+-----+---------------+--------------------+
+|          100|TRUE |Moe            |                    |
+|          200|FALSE|Larry          |                    |
+|          300|     |Dolly          |                    |
+|          400|TRUE |Sammy          |                    |
+|          500|FALSE|Curly          |                    |
+|          600|FALSE|Hewy           |                    |
+|          700|TRUE |Lewy           |                    |
+|          800|TRUE |Dewy           |                    |
+|          900|FALSE|Molly          |                    |
+|         1000|TRUE |Liza           |                    |
++-------------+-----+---------------+--------------------+
+(10 rows)
+>>
+* select * from sta08_v1_lnk order by c1_int\g
+<<
+
++-------------+-----+---------------+
+|c1_int       |c2_bo|c3_name        |
++-------------+-----+---------------+
+|          100|TRUE |Moe            |
+|          200|FALSE|Larry          |
+|          300|     |Dolly          |
+|          400|TRUE |Sammy          |
+|          500|FALSE|Curly          |
+|          600|FALSE|Hewy           |
+|          700|TRUE |Lewy           |
+|          800|TRUE |Dewy           |
+|          900|FALSE|Molly          |
+|         1000|TRUE |Liza           |
++-------------+-----+---------------+
+(10 rows)
+>>
+* commit\g
+<<
+>>
+/*
+Known Issue - 142625 - inserts fail from STAR database using BOOLEAN columns.
+Actually, only the literal values (input) of TRUE and FALSE fail.
+STAR inserts to a registered table or view do accept 0, 1, 'true', 'FALSE'.
+
+These inserts fail along with updates/deletes:
+
+* insert into sta08_t1_lnk values (901,true,'denise',null)\g
+* insert into sta08_t1_lnk values (903,false,'denise',null)\g
+* insert into sta08_t1_lnk values (905,NULL,'denise',null)\g
+* insert into sta08_v1_lnk values (907,true,'denise')\g
+* insert into sta08_v1_lnk values (909,FALSE,'denise')\g
+* insert into sta08_v1_lnk values (911,null,'denise')\g
+
+Add some inserts using TRUE, FALSE, and NULL when issue is fixed along with
+some updates and deletes.
+
+8-Feb-2010 -
+The following delete statements do not work either.  Added to SD 142625
+* delete from sta08_t1_lnk where c2_bool = 0 | 1 \g
+* delete from sta08_t1_lnk where c2_bool = false | true \g
+* delete from sta08_t1_lnk where c2_bool = 'FALSE' | 'true'\g
+
+*/
+* update sta08_t1_lnk set c2_bool='true' where c1_int between 599 and 1000\g
+<<
+(5 rows)
+>>
+* select * from sta08_t1_lnk order by c1_int\g
+<<
+
+
++-------------+-----+---------------+--------------------+
+|c1_int       |c2_bo|c3_name        |c4_comment          |
++-------------+-----+---------------+--------------------+
+|          100|TRUE |Moe            |                    |
+|          200|FALSE|Larry          |                    |
+|          300|     |Dolly          |                    |
+|          400|TRUE |Sammy          |                    |
+|          500|FALSE|Curly          |                    |
+|          600|TRUE |Hewy           |                    |
+|          700|TRUE |Lewy           |                    |
+|          800|TRUE |Dewy           |                    |
+|          900|TRUE |Molly          |                    |
+|         1000|TRUE |Liza           |                    |
++-------------+-----+---------------+--------------------+
+(10 rows)
+>>
+* delete from sta08_t1_lnk where c2_bool IS FALSE\g
+<<
+(2 rows)
+>>
+* select * from sta08_t1_lnk order by c1_int\g
+<<
++-------------+-----+---------------+--------------------+
+|c1_int       |c2_bo|c3_name        |c4_comment          |
++-------------+-----+---------------+--------------------+
+|          100|TRUE |Moe            |                    |
+|          300|     |Dolly          |                    |
+|          400|TRUE |Sammy          |                    |
+|          600|TRUE |Hewy           |                    |
+|          700|TRUE |Lewy           |                    |
+|          800|TRUE |Dewy           |                    |
+|          900|TRUE |Molly          |                    |
+|         1000|TRUE |Liza           |                    |
++-------------+-----+---------------+--------------------+
+(8 rows)
+>>
+* update sta08_v1_lnk set c2_bool='false' where c1_int between 100 and 600\g
+<<
+(4 rows)
+>>
+* select * from sta08_v1_lnk order by c1_int\g
+<<
+
++-------------+-----+---------------+
+|c1_int       |c2_bo|c3_name        |
++-------------+-----+---------------+
+|          100|FALSE|Moe            |
+|          300|FALSE|Dolly          |
+|          400|FALSE|Sammy          |
+|          600|FALSE|Hewy           |
+|          700|TRUE |Lewy           |
+|          800|TRUE |Dewy           |
+|          900|TRUE |Molly          |
+|         1000|TRUE |Liza           |
++-------------+-----+---------------+
+(8 rows)
+>>
+* delete from sta08_v1_lnk where c2_bool IS UNKNOWN\g
+<<
+(0 rows)
+>>
+* delete from sta08_v1_lnk where c2_bool IS TRUE\g
+<<
+(4 rows)
+>>
+* select * from sta08_v1_lnk order by 1\g
+<<
++-------------+-----+---------------+
+|c1_int       |c2_bo|c3_name        |
++-------------+-----+---------------+
+|          100|FALSE|Moe            |
+|          300|FALSE|Dolly          |
+|          400|FALSE|Sammy          |
+|          600|FALSE|Hewy           |
++-------------+-----+---------------+
+(4 rows)
+>>
+* delete from sta08_v1_lnk where c2_bool IS NOT TRUE\g
+<<
+(4 rows)
+>>
+* select * from sta08_v1_lnk order by 1\g
+<<
+
++-------------+-----+---------------+
+|c1_int       |c2_bo|c3_name        |
++-------------+-----+---------------+
++-------------+-----+---------------+
+(0 rows)
+>>
+* select * from sta08_t1_lnk order by c1_int\g
+<<
+
++-------------+-----+---------------+--------------------+
+|c1_int       |c2_bo|c3_name        |c4_comment          |
++-------------+-----+---------------+--------------------+
++-------------+-----+---------------+--------------------+
+(0 rows)
+>>
+* rollback\g
+<<
+>>
+* \q
+<<
+>>
+? sql -s SEPPARAMDB1 
+<<
+>>
+* select * from sta08_t1 order by 1\g
+<<
+
++-------------+-----+---------------+--------------------+
+|c1_int       |c2_bo|c3_name        |c4_comment          |
++-------------+-----+---------------+--------------------+
+|          100|TRUE |Moe            |                    |
+|          200|FALSE|Larry          |                    |
+|          300|     |Dolly          |                    |
+|          400|TRUE |Sammy          |                    |
+|          500|FALSE|Curly          |                    |
+|          600|FALSE|Hewy           |                    |
+|          700|TRUE |Lewy           |                    |
+|          800|TRUE |Dewy           |                    |
+|          900|FALSE|Molly          |                    |
+|         1000|TRUE |Liza           |                    |
++-------------+-----+---------------+--------------------+
+(10 rows)
+>>
+* \q
+<<
+>>
