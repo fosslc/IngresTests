@@ -52,6 +52,8 @@
 #		Added SEP_DIFF_SLEEP and SEP_CMD_SLEEP syntax to be set to
 #		default of 250 so the SEP commands can complete before the
 #		next one is executed.
+#	07-Nov-2008 (vande02)
+#		Added SEPPARAM_CHARSET to enable tests to run with UTF8.
 #	11-Dec-2008 (wanfr01)
 #		SIR 121355
 #               Allow SEPPARAM_SLEEP and SEPPARAM_SLEEP_2 to be set by shell
@@ -61,6 +63,11 @@
 #---------------------------------------------------------------------------
 umask 2 
 umask 
+# Set a variable that can be used to check the character set
+#
+ii_code=`ingprenv II_INSTALLATION`
+SEPPARAM_CHARSET=`ingprenv II_CHARSET$ii_code`
+export SEPPARAM_CHARSET
 
 # Set the output directory for test results.
 #

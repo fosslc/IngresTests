@@ -9,17 +9,15 @@ REM	This script is used to setup and run the Replicator SEP tests using
 REM listexec and excutor. 
 REM
 REM  History:
-REM	 30-Jul-1997 (hsuji01)	Created
-REM	22-feb-1999 (somsa01)
-REM	    Added cleanup segment.
-REM	11-may-1999 (somsa01)
-REM	    Corrected running of Replicator datatypes tests.
-REM	23-Sep-2004 (legru01)
-REM	    Modified script so it pertains to the Open Source
-REM         Acceptance Package test suites.
-REM	13-Feb-2008 (vande02)
-REM         Added cleanup/startup 10 Replicator services and
-REM         repinst remove in the clean block.
+REM     30-Jul-1997 (hsuji01) Created
+REM	22-feb-1999 (somsa01) Added cleanup segment.
+REM	11-may-1999 (somsa01) Corrected running of Replicator datatypes tests.
+REM	23-Sep-2004 (legru01) Modified script so it pertains to the Open Source
+REM                           Acceptance Package test suites.
+REM	13-Feb-2008 (vande02) Added cleanup/startup 10 Replicator services and
+REM                           repinst remove in the clean block.
+REM     07-Nov-2008 (vande02) Added SEPPARAM_CHARSET to enable tests to run
+REM                           with UTF8.
 REM
 REM ---------------------------------------------------------------------------
 REM			Setup Area
@@ -28,6 +26,12 @@ REM --------------------------------------------------------------------------
 REM Set the output directory for test results.
 REM
 setlocal
+
+REM Set a variable that can be used to check the character set
+REM
+call ipset ii_code ingprenv II_INSTALLATION
+call ipset SEPPARAM_CHARSET ingprenv II_CHARSET%ii_code%
+
 if not "%TST_ROOT_OUTPUT%"=="" set TST_OUTPUT=%TST_ROOT_OUTPUT%\rep
 if not "%TST_ROOT_OUTPUT%"=="" if not exist %TST_ROOT_OUTPUT%\rep\nul PCecho "Creating Directory - %TST_ROOT_OUTPUT%\rep"
 if not "%TST_ROOT_OUTPUT%"=="" if not exist %TST_ROOT_OUTPUT%\rep\nul md "%TST_ROOT_OUTPUT%\rep"

@@ -1,4 +1,6 @@
 /*
+Copyright (c) 2008 Ingres Corporation
+
 	Test Name: utl34.sep
 	Time: Tue Apr 24 15:51:23 2001
 	User Name: testenv
@@ -8,7 +10,12 @@
 	Module  : be/util
 	Filename: utl34.sep
 	Purpose	: To test the new copydb flags for the maximum size 32K 
-                  column, first available with II 2.6/0106 and later releases.
+                  character data type columns, first available with II 2.6/0106
+                  and later releases. And test maximum size of 16K for
+                  character data types of c, char, text, and varchar for UTF8.
+                  The maximum for long varchar is actually 2GB but that is not
+                  practical for this SEP test, so the column lengths will be
+                  32K (default) and 16K (UTF8) for long varchar.
 	Input Files  : kopy32.sc
 	Output Files : kopy32.exe
 	Database     : utildb3, utildb4
@@ -19,7 +26,7 @@
                        create five tables in database utildb3. Then these
                        tables will be copied to database utildb4. 
 
- History: 24-Apr-2001	(wu$ca01)	Created
+ History: 24-Apr-2001	(wu$ca01) Created
           05-Jun-2001	(wu$ca01) Test will fail on NT platform for 
                         'long varchar' data type. See issue 10928220. Once the
                         issue is fixed, <<IF (NT_GENERIC)>> CANON can be remove.
@@ -32,15 +39,24 @@
                         the drop statements to clean out the tables in the
                         database.
 	  21-Oct-2008   (wanfr01) utildb3 should be SEPPARAMDB3
+           4-Nov-2008   (vande02) The test program was changed to accept an
+                        additional argument SEPPARAM_CHARSET and set the max
+                        column size to 16K for UTF8 or 32K (default) for
+                        non-UTF8.  Conditional canon for UTF8 was also created.
+                        Removed the 'p' print SQL syntax.
 */
 ? fill kopy32.sc 
 !!
 /* This program is to create five tables, each with different character data 
-** type for testing the copydb with the maximum size column of 32K bytes.
+** type for testing the copydb with the maximum size column of 32K bytes
+** for a non-UTF8 instance and using maximum size columns of 16K bytes for UTF8.
 */
 
 #include <stdio.h>
 exec sql include sqlca;
+
+#define MAXVCSZ 32000
+#define MAXUTF8SZ 16000
 
 main(int argc, char* argv[])
 {
@@ -48,19 +64,26 @@ main(int argc, char* argv[])
       char   *dbname;
 	varchar struct {
 	    short	buf_size;
-	    char	buf[32000];
+	    char	buf[MAXVCSZ+1];
 	} vch;
 
 	varchar struct {
 	    short	buf_size;
-	    char	buf[32000];
+	    char	buf[MAXVCSZ+1];
 	} vch2;
-   
+    int vcsz;
+    char  *charset;
+    char stmtbuff[256];
     exec sql end declare section;
 
     exec sql whenever sqlerror call sqlprint;
 
     dbname = argv[1];
+    charset = argv[2];
+    if (strcmp(charset, "UTF8") == 0)
+      vcsz = MAXUTF8SZ;
+    else
+      vcsz = MAXVCSZ;
 
     exec sql connect :dbname;
     /* Ignore errors from drop table */
@@ -73,19 +96,20 @@ main(int argc, char* argv[])
 
     exec sql whenever sqlerror call sqlprint;
 /* Create table utl34_table1. */
-    exec sql create table utl34_table1(col_c c(32000));
+    sprintf(stmtbuff, "create table utl34_table1(col_c c(%d))", vcsz);
+    exec sql execute immediate :stmtbuff;
 
-    memset(vch.buf, 'a', 32000);
-    vch.buf_size = 32000;
+    memset(vch.buf, 'a', vcsz);
+    vch.buf_size = vcsz;
     memset(vch.buf+5, '@', 10);
-    memset(vch.buf+31990, '!', 10);
+    memset(vch.buf+vcsz-10, '!', 10);
 
     exec sql insert into utl34_table1 values (:vch);
 
     exec sql select col_c into :vch2 from utl34_table1;
 
     if (vch.buf_size == vch2.buf_size &&
-	memcmp(vch.buf, vch2.buf, 32000) == 0)
+	memcmp(vch.buf, vch2.buf, vcsz) == 0)
     {
         printf("Table utl34_table1 is successfully created!!!\n");
     }
@@ -93,19 +117,20 @@ main(int argc, char* argv[])
 	printf("Failure!!!\n");
 
 /* Create table utl34_table2. */
-    exec sql create table utl34_table2(col_char char(32000));
+    sprintf(stmtbuff, "create table utl34_table2(col_char char(%d))", vcsz);
+    exec sql execute immediate :stmtbuff;
 
-    memset(vch.buf, '3', 32000);
-    vch.buf_size = 32000;
+    memset(vch.buf, '3', vcsz);
+    vch.buf_size = vcsz;
     memset(vch.buf, '*', 10);
-    memset(vch.buf+31990, '!', 10);
+    memset(vch.buf+vcsz-10, '!', 10);
 
     exec sql insert into utl34_table2 values (:vch);
 
     exec sql select col_char into :vch2 from utl34_table2;
 
     if (vch.buf_size == vch2.buf_size &&
-        memcmp(vch.buf, vch2.buf, 32000) == 0)
+        memcmp(vch.buf, vch2.buf, vcsz) == 0)
     {
         printf("Table utl34_table2 is successfully created!!!\n");
     }
@@ -113,19 +138,20 @@ main(int argc, char* argv[])
         printf("Failure!!!\n");
 
 /* Create table utl34_table3. */
-    exec sql create table utl34_table3(col_text text(32000));
+    sprintf(stmtbuff, "create table utl34_table3(col_text text(%d))", vcsz);
+    exec sql execute immediate :stmtbuff;
 
-    memset(vch.buf, '@', 32000);
-    vch.buf_size = 32000;
+    memset(vch.buf, '@', vcsz);
+    vch.buf_size = vcsz;
     memset(vch.buf, '?', 10);
-    memset(vch.buf+31990, '#', 10);
+    memset(vch.buf+vcsz-10, '#', 10);
 
     exec sql insert into utl34_table3 values (:vch);
 
     exec sql select col_text into :vch2 from utl34_table3;
 
     if (vch.buf_size == vch2.buf_size &&
-        memcmp(vch.buf, vch2.buf, 32000) == 0)
+        memcmp(vch.buf, vch2.buf, vcsz) == 0)
     {
         printf("Table utl34_table3 is successfully created!!!\n");
     }
@@ -133,19 +159,20 @@ main(int argc, char* argv[])
         printf("Failure!!!\n");
 
 /* Create table utl34_table4. */
-    exec sql create table utl34_table4(col_varchar varchar(32000));
+    sprintf(stmtbuff,"create table utl34_table4(col_varchar varchar(%d))",vcsz);
+    exec sql execute immediate :stmtbuff;
 
-    memset(vch.buf, 'q', 32000);
-    vch.buf_size = 32000;
+    memset(vch.buf, 'q', vcsz);
+    vch.buf_size = vcsz;
     memset(vch.buf, '$', 10);
-    memset(vch.buf+31990, '?', 10);
+    memset(vch.buf+vcsz-10, '?', 10);
 
     exec sql insert into utl34_table4 values (:vch);
 
     exec sql select col_varchar into :vch2 from utl34_table4;
 
     if (vch.buf_size == vch2.buf_size &&
-        memcmp(vch.buf, vch2.buf, 32000) == 0)
+        memcmp(vch.buf, vch2.buf, vcsz) == 0)
     {
         printf("Table utl34_table4 is successfully created!!!\n");
     }
@@ -155,17 +182,17 @@ main(int argc, char* argv[])
 /* Create table utl34_table5. */
     exec sql create table utl34_table5(col_longvar long varchar);
 
-    memset(vch.buf, 'z', 32000);
-    vch.buf_size = 32000;
+    memset(vch.buf, 'z', vcsz);
+    vch.buf_size = vcsz;
     memset(vch.buf, '9', 10);
-    memset(vch.buf+31990, '0', 10);
+    memset(vch.buf+vcsz-10, '0', 10);
 
     exec sql insert into utl34_table5 values (:vch);
 
     exec sql select col_longvar into :vch2 from utl34_table5;
 
     if (vch.buf_size == vch2.buf_size &&
-        memcmp(vch.buf, vch2.buf, 32000) == 0)
+        memcmp(vch.buf, vch2.buf, vcsz) == 0)
     {
         printf("Table utl34_table5 is successfully created!!!\n");
     }
@@ -188,7 +215,7 @@ main(int argc, char* argv[])
 <<
 ~
 >>
-? run kopy32.exe SEPPARAMDB3 
+? run kopy32.exe SEPPARAMDB3 SEPPARAM_CHARSET
 <<
 Table utl34_table1 is successfully created!!!
 Table utl34_table2 is successfully created!!!
@@ -210,7 +237,7 @@ Table utl34_table5 is successfully created!!!
 >>
 * \q 
 <<
-~
+
 >>
 ? sql -s SEPPARAMDB4 
 <<
@@ -220,9 +247,8 @@ Table utl34_table5 is successfully created!!!
 <<
 ~
 >>
-* select varchar(left(col_c,20),60) from utl34_table1\p\g
+* select varchar(left(col_c,20),60) from utl34_table1\g
 <<
- select varchar(left(col_c,20),60) from utl34_table1
 
 +------------------------------------------------------------+
 |col1                                                        |
@@ -231,9 +257,8 @@ Table utl34_table5 is successfully created!!!
 +------------------------------------------------------------+
 (1 row)
 >>
-* select varchar(right(col_c,20),60) from utl34_table1\p\g
+* select varchar(right(col_c,20),60) from utl34_table1\g
 <<
- select varchar(right(col_c,20),60) from utl34_table1
 
 +------------------------------------------------------------+
 |col1                                                        |
@@ -242,9 +267,8 @@ Table utl34_table5 is successfully created!!!
 +------------------------------------------------------------+
 (1 row)
 >>
-* select varchar(left(col_char,20),60) from utl34_table2\p\g
+* select varchar(left(col_char,20),60) from utl34_table2\g
 <<
- select varchar(left(col_char,20),60) from utl34_table2
 
 +------------------------------------------------------------+
 |col1                                                        |
@@ -253,9 +277,8 @@ Table utl34_table5 is successfully created!!!
 +------------------------------------------------------------+
 (1 row)
 >>
-* select varchar(right(col_char,20),60) from utl34_table2\p\g
+* select varchar(right(col_char,20),60) from utl34_table2\g
 <<
- select varchar(right(col_char,20),60) from utl34_table2
 
 +------------------------------------------------------------+
 |col1                                                        |
@@ -264,9 +287,8 @@ Table utl34_table5 is successfully created!!!
 +------------------------------------------------------------+
 (1 row)
 >>
-* select varchar(left(col_text,20),60) from utl34_table3\p\g
+* select varchar(left(col_text,20),60) from utl34_table3\g
 <<
- select varchar(left(col_text,20),60) from utl34_table3
 
 +------------------------------------------------------------+
 |col1                                                        |
@@ -275,9 +297,8 @@ Table utl34_table5 is successfully created!!!
 +------------------------------------------------------------+
 (1 row)
 >>
-* select varchar(right(col_text,20),60) from utl34_table3\p\g
+* select varchar(right(col_text,20),60) from utl34_table3\g
 <<
- select varchar(right(col_text,20),60) from utl34_table3
 
 +------------------------------------------------------------+
 |col1                                                        |
@@ -286,9 +307,8 @@ Table utl34_table5 is successfully created!!!
 +------------------------------------------------------------+
 (1 row)
 >>
-* select varchar(left(col_varchar,20),60) from utl34_table4\p\g
+* select varchar(left(col_varchar,20),60) from utl34_table4\g
 <<
- select varchar(left(col_varchar,20),60) from utl34_table4
 
 +------------------------------------------------------------+
 |col1                                                        |
@@ -297,9 +317,8 @@ Table utl34_table5 is successfully created!!!
 +------------------------------------------------------------+
 (1 row)
 >>
-* select varchar(right(col_varchar,20),60) from utl34_table4\p\g
+* select varchar(right(col_varchar,20),60) from utl34_table4\g
 <<
- select varchar(right(col_varchar,20),60) from utl34_table4
 
 +------------------------------------------------------------+
 |col1                                                        |
@@ -308,9 +327,8 @@ Table utl34_table5 is successfully created!!!
 +------------------------------------------------------------+
 (1 row)
 >>
-* select varchar(left(col_longvar,20),60) from utl34_table5\p\g
+* select varchar(left(col_longvar,20),60) from utl34_table5\g
 <<
- select varchar(left(col_longvar,20),60) from utl34_table5
 
 +------------------------------------------------------------+
 |col1                                                        |
@@ -319,9 +337,8 @@ Table utl34_table5 is successfully created!!!
 +------------------------------------------------------------+
 (1 row)
 >>
-* select varchar(right(col_longvar,20),60) from utl34_table5\p\g
+* select varchar(right(col_longvar,20),60) from utl34_table5\g
 <<
- select varchar(right(col_longvar,20),60) from utl34_table5
 
 +------------------------------------------------------------+
 |col1                                                        |
@@ -332,36 +349,28 @@ Table utl34_table5 is successfully created!!!
 >>
 * \q
 <<
-~
 >>
 ? sql -s SEPPARAMDB3
 <<
 
 >>
-* drop table utl34_table1\p\g
+* drop table utl34_table1\g
 <<
-/* SQL Startup File */
- drop table utl34_table1
 >>
-* drop table utl34_table2\p\g
+* drop table utl34_table2\g
 <<
- drop table utl34_table2
 >>
-* drop table utl34_table3\p\g
+* drop table utl34_table3\g
 <<
- drop table utl34_table3
 >>
-* drop table utl34_table4\p\g
+* drop table utl34_table4\g
 <<
- drop table utl34_table4
 >>
-* drop table utl34_table5\p\g
+* drop table utl34_table5\g
 <<
- drop table utl34_table5
 >>
 * \q
 <<
-~
 >>
 ? delete kopy32.sc 
 <<
