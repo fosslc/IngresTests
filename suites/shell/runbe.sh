@@ -211,6 +211,8 @@
 #               run section for new test, api13.sep
 # 08-Sep-2008 (sarjo01)
 #               Moved setting of SEPPARAMAPI_INC to global location. 
+# 09-Sep-2008 (sarjo01)
+#               Broke up SEPPARAMAPI_INC setting into 2 commands for Solaris 
 
 #
 betestlist="access accntl alttbl api blob c2secure datetime datatypes miscfunc fastload lar qryproc ttpp util"
@@ -276,7 +278,8 @@ errorHelp() {
 umask 2 
 
 # Set variable needed for api program compilation
-export SEPPARAMAPI_INC=-I$II_SYSTEM/ingres/files
+SEPPARAMAPI_INC=-I$II_SYSTEM/ingres/files
+export SEPPARAMAPI_INC
 
 # Set the output directory for test results.
 #
@@ -967,7 +970,6 @@ then
                         OUT_FILE=beapi.out
                         export AREA
 			SEPPARAMDB=apidb2
-                        export SEPPARAMAPI_INC
                         export SEPPARAMDB
  
                 	echo "Running the API tests @ ", `date`
