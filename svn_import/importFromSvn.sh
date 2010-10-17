@@ -75,11 +75,14 @@ else
     exit 1
   else
     echo "Stepping through svn updates to update git"
-    CurrentRev=${GitLatest}
-    while [ ${CurrentRev} -lt ${SVNLatest} ]
+    # We're using svn log to see just the revisions that affect
+    # this code. This is a very efficient approach.
+    svn log -q -r${GitLatest}:HEAD ${URL} | \
+       grep "^r" | awk '{print $1}' | sed "s/r//g" | sort |\
+    while read CurrentRev
     do
-      PreviousRev=${CurrentRev}
-      CurrentRev=`expr ${CurrentRev} + 1` 
+      echo "DEBUG: expr ${CurrentRev} - 1"
+      PreviousRev=`expr ${CurrentRev} - 1` 
       echo " "
       echo "Processing revision: ${CurrentRev}"
       echo "================================"
@@ -103,7 +106,7 @@ else
       fi
 
       # Format the output so that we can process it
-      cat ${TempList} | egrep '^ {3}[ADMR] ' | sort -u > ${ChangeList}
+      cat ${TempList} | egrep '^ {3}[ADMR] ' | sed "s/\/main\/src\/tst\///g" | sort -u > ${ChangeList}
 
       # First, process all the files that were added or modified
       cat ${ChangeList} | grep -v "^D" | awk '{print $2}' |\
@@ -166,19 +169,13 @@ else
         exit 1
       fi
 
-      git status | grep "nothing to commit"
-      if [ $? != 0 ]
-      then
-        echo "No change to tests"
-      else
 
-        # Add the revision number to the log
-        echo "${CurrentRev}" >> ${RevLog}
-        git add ${RevLog}
+      # Add the revision number to the log
+      echo "${CurrentRev}" >> ${RevLog}
+      git add ${RevLog}
 
-        # Commit, with the same commit message
-        git commit -F ${CommitMessage}
-      fi
+      # Commit, with the same commit message
+      git commit -F ${CommitMessage}
 
     done # Looping for each revision
   fi
