@@ -14,6 +14,10 @@
 #                        Added new test dbpv1.
 #  06-Jan-2010 (sarjo01) Added zsum to default test set; increase parallel
 #                        depth for qp1, qp3.
+#  25-Mar-2010 (boija02) Wrapped dbpv1 in a utf8 conditional, so it will
+#			 not be run by default in utf8 environments. The
+#			 conditional can by overridden by setting RUNDBPV1
+#			 before executing this script.
 #
 
 #
@@ -47,6 +51,13 @@ then
 else
     dolist=$*
 fi
+case $SEPPARAM_CHARSET in 
+	utf8|UTF8)
+	   	AREUTF8=true
+		;;
+	*)
+		;;
+esac
 
 umask 2 
 
@@ -106,8 +117,22 @@ do
     qawtl APPSUITE: Begin $appname... 
     case $appname in
          dbpv1)
-             dbpv1.exe $appsuitedb init -n10000 -p1 > ./$appname.out
-             dbpv1.exe $appsuitedb run -t16 -v0 -i10000 -x100 >> ./$appname.out
+	     if [ "$RUNDBPV1" = "" -a "$AREUTF8" = "true" ] 
+	      then
+		 echo "While issue 140310 remains extant, this test will run"
+		 echo "very slowly in a UTF8 environment, so it will be skipped"
+		 echo "unless you set RUNDBPV1 to some value before executing"
+		 echo "runappsuite.sh" 
+		 echo "E.g., export RUNDBPV1=true"
+# Logfile
+		 echo "Skipping dbpv1 in utf8 environment as RUNDBPV1 not set."\
+		 > ./$appname.out
+		 qawtl "Skipping dbpv1 in utf8 environment as RUNDBPV1 not set."
+	     else
+             	 dbpv1.exe $appsuitedb init -n10000 -p1 > ./$appname.out
+             	 dbpv1.exe $appsuitedb run -t16 -v0 -i10000 -x100 \
+		 >> ./$appname.out
+	     fi
              ;;
          ddlv1)
              ddlv1.exe $appsuitedb init > ./$appname.out
