@@ -1,6 +1,7 @@
 #!/bin/sh
 #           SCRIPT FOR RUNNING THE EMBEDDED 3GL LANGUAGE TESTS
 #
+# Copyright (c) 2009 Ingres Corporation
 #
 # Description:
 #	This script is used to setup and run the embedded 3gl language tests
@@ -61,6 +62,8 @@
 #	        Fixed last comment (bad year, missing '#'). 
 #	02-Feb-09 (sarjo01)
 #	        Set ING_CHARSET, SEPPARAM_CHARSET.
+#	13-Jul-09 (boija02)
+#		Improved usage messages.
 #
 #------------------------------------------------------------------------------
 #			Setup Area
@@ -101,6 +104,25 @@ fi
 
 # Initialize variable input to shell script
 
+if [ "$1" = "" ]
+then
+	   echo
+	   echo "You must choose to initialize or run the tests"
+	   echo "and specify the modules to be run."
+	   echo ""
+	   echo " Examples: sh $TST_SHELL/runfe3gl.sh init all"
+	   echo "           sh $TST_SHELL/runfe3gl.sh init 3gl2"
+	   echo "           sh $TST_SHELL/runfe3gl.sh 3gl all"
+	   echo "           sh $TST_SHELL/runfe3gl.sh 3gl mt fortran"
+	   echo 
+	   echo "Where valid init modules are"
+ 	   echo "3gl1 3gl2"
+	   echo "and valid run modules are"
+	   echo "ada mt c cobol fortran basic pl1 pascal"
+	   echo 
+	   exit 1
+fi
+
 work=$1
 shift
 
@@ -121,14 +143,15 @@ if [ "$work" = "init" ]
 then 
      if [ "$*" = "" ]
      then
-	   echo "You must input the modules to be initalized "
+	   echo
+	   echo "You must input the modules to be initalized " 
 	   echo "or specify ""all""."
 	   echo ""
 	   echo " Example: sh $TST_SHELL/runfe3gl.sh init all "
-	   echo ""
-	   echo "          or "
-           echo ""
 	   echo "          sh $TST_SHELL/runfe3gl.sh init 3gl1 "
+	   echo
+	   echo "Where valid modules are;"
+ 	   echo "3gl1 3gl2"
 	   echo ""
 
 	   exit 1
@@ -184,12 +207,16 @@ if [ "$work" = "3gl" ]
 then
        if [ "$*" = "" ]
        then
+	    echo
             echo "You must input the 3gl modules to be tested "
 	    echo "as designated in the PRDF for your hardware."
 	    echo ""
-	    echo " Example: sh $TST_SHELL/runfe3gl.sh 3gl fortran c"
+	    echo " Examples: sh $TST_SHELL/runfe3gl.sh 3gl all"
+	    echo "           sh $TST_SHELL/runfe3gl.sh 3gl ada c"
+	    echo
+	    echo "Valid modules are;"
+	    echo "ada mt c cobol fortran basic pl1 pascal"
 	    echo ""
-
 	    exit 1
 
         else	
