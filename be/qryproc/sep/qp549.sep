@@ -1,0 +1,173 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : qp549.sep
+  Suite         : be!qryproc
+  Focus         : Ingres Regression Test
+                : Test for bug 106935 - Server SEGV (and other possible
+                : symptoms) when executing row producing proc with at
+                : least one varchar result field. 
+                :
+                :
+  Databases     : SEPPARAMDB
+  Tables        : b106935_*
+  Filled Files  : b106935.sc
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Verifies fix for bug 106935
+                :
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 10-Oct-2008 (sarjo01) Created.
+                : 10-Oct-2008 (sarjo01) Formalized for piccolo.
+                : 03-Nov-2008 (wanfr01) Cleaned up compiler warnings
+*/
+? fill b106935.sc
+!!
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+int main(int argc, char* argv[])
+{
+   EXEC SQL BEGIN DECLARE SECTION;
+      char      *dbname;
+
+      char    x1[10];
+      char    x2[18];
+      int     x4;
+      short   x5;
+      char    x6;
+      double  x7;
+      double  x8;
+      float   x9;
+      char    x10[26];
+      double  x11;
+      char    x12[8];
+   EXEC SQL END DECLARE SECTION;
+
+   EXEC SQL WHENEVER SQLERROR continue;
+
+   dbname = argv[1];
+
+   EXEC SQL CONNECT :dbname;
+
+printf("Procedure 2\n");
+   EXEC SQL execute procedure b106935_1p
+                    result row (:x1, :x2, :x4, :x5, :x6,
+                                :x7, :x8, :x9, :x10, :x11, :x12);
+   EXEC SQL begin;
+      printf("Proc Loop 2: %f\n", x7);
+   EXEC SQL end;
+
+   EXEC SQL disconnect;
+   return (0);
+}
+!!
+? sql -s SEPPARAMDB
+<<
+
+>>
+* drop table b106935_1t \g
+<<
+~
+>>
+* drop procedure b106935_1p \g
+<<
+~
+>>
+* create table b106935_1t (a1 char(10), a2 varchar(16), -
+                  a4 integer4, a5 integer2, a6 integer1, -
+                  a7 decimal(9,2), a8 float8, a9 float4, -
+                  a10 date, a11 money, a12 byte(3)) \g
+<<
+
+>>
+* insert into b106935_1t values ('charval', 'varcharval', -
+                        100, 100, 100, -
+                        123.45, 123.45, 123.45, -
+                        '01-jan-2001', 123.45, X'414243') \g
+<<
+(1 row)
+>>
+* insert into b106935_1t values ('charval1', 'varcharval1', -
+                        101, 101, 101, -
+                        123.46, 123.46, 123.46, -
+                        '02-jan-2001', 123.46, X'414244') \g
+<<
+(1 row)
+>>
+* create procedure b106935_1p -
+       result row(char(10), varchar(16), -
+                  integer4, integer2, integer1, -
+                  decimal(9,2), float8, float4, -
+                  date, money, byte(3)) -
+as declare -
+   v1 char(10); -
+   v2 varchar(16); -
+   v4 integer4; -
+   v5 integer2; -
+   v6 integer1; -
+   v7 decimal(9,2); -
+   v8 float8; -
+   v9 float4; -
+   v10 date; -
+   v11 money; -
+   v12 byte(3); -
+begin -
+   for select * into :v1, :v2, :v4, :v5, :v6, -
+                     :v7, :v8, :v9, :v10, :v11, :v12 -
+                from b106935_1t order by 1 do -
+      return row(:v1, :v2, :v4, :v5, :v6, -
+                 :v7, :v8, :v9, :v10, :v11, :v12); -
+   endfor; -
+end; \g
+<<
+
+>>
+* \q 
+<<
+~
+>>
+? esqlc b106935.sc
+<<
+ESQL b106935.sc:
+>>
+<<
+>>
+? sepcc b106935.c
+<<
+>>
+<<
+b106935.c
+>>
+? seplnk b106935
+<<
+>>
+? run b106935.exe SEPPARAMDB 
+<<
+Procedure 2
+Proc Loop 2: 123.450000
+Proc Loop 2: 123.460000
+>>
+? delete b106935.c
+<<
+~
+>>
+? delete b106935.obj
+<<
+~
+>>
+? delete b106935.exe
+<<
+~
+>>
+? delete b106935.o
+<<
+~
+>>

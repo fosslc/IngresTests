@@ -1,0 +1,185 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : glc38.sep
+  Suite         : embed!esqlc
+  Focus         : Ingres Regression Test
+                : Test for bug 120317 - connections that specify the
+                : -f flag to set float cause any future connections from the
+                : same process to take on the same formatting
+                :
+  Databases     : SEPPARAMDB
+  Tables        : b120317_*
+  Filled Files  : 
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv 
+  Summary       : Verifies fix for bug 120317
+                :
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 5-Sep-2008 (wanfr01) Created.
+                : 5-Sep-2008 (sarjo01) Formalized for piccolo.
+                : 03-Nov-2008 (wanfr01) Cleaned up compiler warnings
+*/
+? fill b120317.sc
+!!
+#include <stdio.h>
+#include <stdlib.h>
+
+EXEC SQL INCLUDE SQLCA;
+EXEC SQL INCLUDE SQLDA;
+int main(argc, argv)
+int argc;
+char *argv[];
+{
+EXEC SQL BEGIN DECLARE SECTION;
+ char dbname[100];
+ int    errnum;
+ int     dbms_errnum;
+ char    message_text[256];
+ char    error_text[512];
+ char    query_text[512];
+ char    username[512];
+ char    uname[512];
+ varchar struct {
+  short len;
+  char fbuf[256];
+ } vch_float;
+EXEC SQL END DECLARE SECTION;
+if (argc <3) {printf ("Please pass the database and user to the command. \n"); exit(0); }
+sprintf(dbname, argv[1]);
+sprintf(username, "-u%s", argv[2]);
+
+        EXEC SQL CONNECT :dbname session 1;
+        printf("Message: ****************\n");
+        EXEC SQL INQUIRE_SQL(:errnum = ERRORNO,
+                     :dbms_errnum = DBMSERROR,
+                     :error_text = ERRORTEXT,
+                     :message_text = MESSAGETEXT
+                     );
+        if (errnum == 0) 
+        {
+                EXEC SQL Select dbmsinfo ('username') INTO :uname;
+        }
+        else
+                printf ("CONNECT Error %d %s\n", errnum, error_text);
+        EXEC SQL SELECT VARCHAR(FLOAT8(1.23456789)) into :vch_float.fbuf;
+
+        EXEC SQL INQUIRE_SQL(:errnum = ERRORNO,
+                     :dbms_errnum = DBMSERROR,
+                     :error_text = ERRORTEXT,
+                     :message_text = MESSAGETEXT
+                     );
+        if (errnum != 0)
+                printf ("SELECT Error %d %s\n", errnum, error_text);
+        else
+                printf("vch_float=%s\n\n", vch_float.fbuf);
+
+
+        EXEC SQL CONNECT :dbname session 2 options='-f8F12.7';
+        printf("Message: ****************\n");
+        EXEC SQL INQUIRE_SQL(:errnum = ERRORNO,
+                     :dbms_errnum = DBMSERROR,
+                     :error_text = ERRORTEXT,
+                     :message_text = MESSAGETEXT,
+                     :query_text = QUERYTEXT
+                     );
+        if (errnum == 0) 
+        {
+                EXEC SQL Select dbmsinfo ('username') INTO :username;
+        }
+        else
+                printf ("CONNECT Error %d %s\n", errnum, error_text);
+        EXEC SQL SELECT VARCHAR(FLOAT8(1.23456789)) into :vch_float.fbuf;
+
+        EXEC SQL INQUIRE_SQL(:errnum = ERRORNO,
+                     :dbms_errnum = DBMSERROR,
+                     :error_text = ERRORTEXT,
+                     :message_text = MESSAGETEXT
+                     );
+        printf ("SELECT Error %d %s\n", errnum, error_text);
+        printf("vch_float=%s\n\n", vch_float.fbuf);
+
+
+        EXEC SQL CONNECT :dbname session 3;
+        printf("Message: ****************\n");
+        EXEC SQL INQUIRE_SQL(:errnum = ERRORNO,
+                     :dbms_errnum = DBMSERROR,
+                     :error_text = ERRORTEXT,
+                     :message_text = MESSAGETEXT,
+                     :query_text = QUERYTEXT
+                     );
+        if (errnum == 0) 
+        {
+                EXEC SQL Select dbmsinfo ('username') INTO :username;
+        }
+        else
+                printf ("CONNECT Error %d %s\n", errnum, error_text);
+        EXEC SQL SELECT VARCHAR(FLOAT8(1.23456789)) into :vch_float.fbuf;
+
+        EXEC SQL INQUIRE_SQL(:errnum = ERRORNO,
+                     :dbms_errnum = DBMSERROR,
+                     :error_text = ERRORTEXT,
+                     :message_text = MESSAGETEXT
+                     );
+        if (errnum !=0)
+                printf ("SELECT Error %d %s\n", errnum, error_text);
+        else
+                printf("vch_float=%s\n\n", vch_float.fbuf);
+
+        printf("\nsession 1 and 3 should both have 3 decimal points precision - else BUG\n");
+
+
+
+	return (0);
+}
+!!
+? esqlc b120317.sc
+<<
+ESQL b120317.sc:
+>>
+<<
+>>
+? sepcc b120317.c
+<<
+>>
+<<
+b120317.c
+>>
+? seplnk b120317
+<<
+>>
+? run b120317.exe SEPPARAMDB testenv
+<<
+Message: ****************
+vch_float=1.235
+
+Message: ****************
+SELECT Error 0
+vch_float=1.2345679
+
+Message: ****************
+vch_float=1.235
+
+
+session 1 and 3 should both have 3 decimal points precision - else BUG
+>>
+? delete b120317.c
+<<
+~
+>>
+? delete b120317.o
+<<
+~
+>>
+? delete b120317.obj
+<<
+~
+>>
+? delete b120317.exe
+<<
+~
+>>

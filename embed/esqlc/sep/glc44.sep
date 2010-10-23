@@ -1,0 +1,220 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : glc44.sep 
+  Suite         : embed!esqlc 
+  Focus         : Ingres Regression Test
+                : Test for bug 106509 - Update or delete statement without a
+                : where clause causes sqlwarn4 to be W on an immediate execute,
+                : when it should be only on prepare as documented.
+                :
+                :
+  Databases     : SEPPARAMDB
+  Tables        : b106509_*
+  Filled Files  : b106509.sc
+  Copied Files  : b106509.dat
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Verifies fix for bug 106509
+                :
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 09-Oct-2008 (sarjo01) Created.
+                : 09-Oct-2008 (sarjo01) Formalized for piccolo.
+                : 03-Nov-2008 (wanfr01) Cleaned up compiler warnings
+*/
+? fill b106509.dat
+!!
+!!
+? cp @file(ing_tst,embed,esqlc,src,b106509.dat) b106509.dat
+<<
+>>
+? fill b106509.sc 
+!!
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <stdio.h>
+#include <string.h>
+
+int main (int argc, char *argv[])
+{
+exec sql include sqlca;
+
+exec sql begin declare section;
+        char *dbname;
+        static char err_priv[256];
+        char statement[256];
+exec sql end declare section;
+
+dbname = argv[1];
+strcpy(statement,"delete from b106509_1t");
+
+exec sql connect :dbname;
+         /*session 1;*/
+
+exec sql execute immediate :statement;
+
+exec sql inquire_sql(:err_priv = ERRORTEXT);
+printf("errortext is: %s", err_priv);
+
+printf("sqlca.sqlcode = %d \n",sqlca.sqlcode);
+printf("sqlca.sqlerrd[0] = %d \n",sqlca.sqlerrd[0]);
+printf("sqlca.sqlerrd[2] = %d \n",sqlca.sqlerrd[2]);
+printf("sqlca.sqlwarn.sqlwarn0 = %c \n",sqlca.sqlwarn.sqlwarn0);
+printf("sqlca.sqlwarn.sqlwarn1 = %c \n",sqlca.sqlwarn.sqlwarn1);
+printf("sqlca.sqlwarn.sqlwarn2 = %c \n",sqlca.sqlwarn.sqlwarn2);
+printf("sqlca.sqlwarn.sqlwarn3 = %c \n",sqlca.sqlwarn.sqlwarn3);
+printf("sqlca.sqlwarn.sqlwarn4 = %c \n",sqlca.sqlwarn.sqlwarn4);
+printf("sqlca.sqlwarn.sqlwarn5 = %c \n",sqlca.sqlwarn.sqlwarn5);
+printf("sqlca.sqlwarn.sqlwarn6 = %c \n",sqlca.sqlwarn.sqlwarn6);
+printf("sqlca.sqlwarn.sqlwarn7 = %c \n",sqlca.sqlwarn.sqlwarn7);
+
+
+exec sql commit;
+exec sql inquire_sql(:err_priv = ERRORTEXT);
+printf("errortext is: %s", err_priv);
+
+printf("sqlca.sqlcode = %d \n",sqlca.sqlcode);
+printf("sqlca.sqlerrd[0] = %d \n",sqlca.sqlerrd[0]);
+printf("sqlca.sqlerrd[2] = %d \n",sqlca.sqlerrd[2]);
+printf("sqlca.sqlwarn.sqlwarn0 = %c \n",sqlca.sqlwarn.sqlwarn0);
+printf("sqlca.sqlwarn.sqlwarn1 = %c \n",sqlca.sqlwarn.sqlwarn1);
+printf("sqlca.sqlwarn.sqlwarn2 = %c \n",sqlca.sqlwarn.sqlwarn2);
+printf("sqlca.sqlwarn.sqlwarn3 = %c \n",sqlca.sqlwarn.sqlwarn3);
+printf("sqlca.sqlwarn.sqlwarn4 = %c \n",sqlca.sqlwarn.sqlwarn4);
+printf("sqlca.sqlwarn.sqlwarn5 = %c \n",sqlca.sqlwarn.sqlwarn5);
+printf("sqlca.sqlwarn.sqlwarn6 = %c \n",sqlca.sqlwarn.sqlwarn6);
+printf("sqlca.sqlwarn.sqlwarn7 = %c \n",sqlca.sqlwarn.sqlwarn7);
+
+exec sql disconnect :dbname;
+return(0);
+}
+!!
+? sql -s SEPPARAMDB
+<<
+
+>>
+* drop table b106509_1t \g
+<<
+~
+>>
+* create table b106509_1t( -
+	id integer not null not default, -
+	status_installatie i1 not null not default, -
+	volgnr_aanw_file smallint not null not default, -
+	id_bundel integer not null not default, -
+	id_file integer not null not default, -
+	id_object_node_conf integer not null not default, -
+	vlag_dirty i1 not null not default, -
+	marker integer not null default 0 -
+) -
+with duplicates, -
+location = (ii_database), -
+security_audit=(table,norow) \g
+<<
+
+>>
+* modify b106509_1t to btree unique on -
+	id -
+with nonleaffill = 80, -
+	leaffill = 70, -
+	fillfactor = 80, -
+	extend = 16, -
+	allocation = 4 \g
+<<
+(0 rows)
+>>
+* copy b106509_1t( -
+	id= c0tab, -
+	status_installatie= c0tab, -
+	volgnr_aanw_file= c0tab, -
+	id_bundel= c0tab, -
+	id_file= c0tab, -
+	id_object_node_conf= c0tab, -
+	vlag_dirty= c0tab, -
+	marker= c0nl, -
+	nl= d1) -
+from 'b106509.dat' \g
+<<
+(1 row)
+>>
+* create unique index zz_gfi_node_file_bun on b106509_1t ( -
+	id_object_node_conf, -
+	id_file, -
+	id_bundel, -
+	status_installatie, -
+	vlag_dirty, -
+	id) -
+with structure = btree, -
+	nocompression, -
+	key = (id_object_node_conf, id_file, id_bundel), -
+	nonleaffill = 80, -
+	leaffill = 70, -
+	fillfactor = 80, -
+	location = (ii_database) \g
+<<
+(1 row)
+>>
+* \q
+<<
+
+>>
+? esqlc b106509.sc
+<<
+ESQL b106509.sc:
+>>
+<<
+>>
+? sepcc b106509.c
+<<
+>>
+<<
+b106509.c
+>>
+? seplnk b106509
+<<
+>>
+? run b106509.exe SEPPARAMDB
+<<
+errortext is: sqlca.sqlcode = 0 
+sqlca.sqlerrd[0] = 0 
+sqlca.sqlerrd[2] = 1 
+sqlca.sqlwarn.sqlwarn0 =   
+sqlca.sqlwarn.sqlwarn1 =   
+sqlca.sqlwarn.sqlwarn2 =   
+sqlca.sqlwarn.sqlwarn3 =   
+sqlca.sqlwarn.sqlwarn4 =   
+sqlca.sqlwarn.sqlwarn5 =   
+sqlca.sqlwarn.sqlwarn6 =   
+sqlca.sqlwarn.sqlwarn7 =   
+errortext is: sqlca.sqlcode = 0 
+sqlca.sqlerrd[0] = 0 
+sqlca.sqlerrd[2] = 0 
+sqlca.sqlwarn.sqlwarn0 =   
+sqlca.sqlwarn.sqlwarn1 =   
+sqlca.sqlwarn.sqlwarn2 =   
+sqlca.sqlwarn.sqlwarn3 =   
+sqlca.sqlwarn.sqlwarn4 =   
+sqlca.sqlwarn.sqlwarn5 =   
+sqlca.sqlwarn.sqlwarn6 =   
+sqlca.sqlwarn.sqlwarn7 =   
+>>
+? delete b106509.o 
+<<
+~
+>>
+? delete b106509.c 
+<<
+~
+>>
+? delete b106509.exe 
+<<
+~
+>>
+? delete b106509.obj
+<<
+~
+>>

@@ -1,0 +1,161 @@
+/*
+  Copyright (c) 2008 Ingres Corporation
+
+  Test Name     : qp565.sep 
+  Suite         : be!qryproc
+  Focus         : Ingres Regression Test
+                : Test for bug 87272 - E_DM93E0_BAD_INDEX_ALLOC followed by
+                : E_DM942C_CRASH_LOG when inserting into a table with a
+                : btree secondary index. 
+                :
+  Databases     : SEPPARAMDB
+  Tables        : b87272_*
+  Filled Files  : b87272.sc
+  Copied Files  :
+  Output Files  :
+  Prerequisites : None
+  Run as user   : testenv
+  Summary       : Verifies fix for bug 87272
+                :
+                :
+  Exp. DIFFs    : None
+                :
+  History       : 15-Sep-2008 (sarjo01) Created.
+                : 03-Nov-2008 (wanfr01) Cleaned up compiler warnings
+*/
+? fill b87272.sc 
+!!
+# include 	<stdio.h>
+exec sql include sqlca;
+
+int main(argc, argv)
+int argc;
+char **argv;
+{
+    exec sql begin declare section;
+	char    *dbname = argv[1];
+	int num;
+    exec sql end declare section;
+
+    exec sql connect :dbname;
+    EXEC SQL set nologging;
+    for (num = 1; num < 500; num++)
+    {
+       EXEC SQL REPEATED  INSERT into b87272_1t (i) values (:num);
+	if (num % 1000 == 0)
+	    printf("....%d\n", num);
+       if (sqlca.sqlcode < 0)
+	{
+	    printf("ERROR num = %d\n", num);
+	    break;
+	}
+
+    }
+    EXEC SQL commit;
+    exec sql disconnect;
+    return (0);
+}
+!!
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table b87272_1t\g
+<<
+~
+>>
+* create table b87272_1t (i int)\g
+<<
+
+>>
+* \q 
+<<
+
+>>
+? esqlc b87272.sc
+<<
+ESQL b87272.sc:
+>>
+<<
+>>
+? sepcc b87272.c
+<<
+>>
+<<
+b87272.c
+>>
+? seplnk b87272
+<<
+>>
+? run b87272.exe SEPPARAMDB 
+<<
+>>
+? delete b87272.exe
+<<
+~
+>>
+? delete b87272.o
+<<
+~
+>>
+? delete b87272.c
+<<
+~
+>>
+? delete b87272.obj
+<<
+~
+>>
+? sql -s SEPPARAMDB 
+<<
+
+>>
+* drop table b87272_2t \g
+<<
+~
+>>
+* create table b87272_2t ( -
+id integer not null default 0, -
+rel smallint not null default 0, -
+visitdate date not null default '', -
+visittime smallint not null default 0, -
+visittype c16 not null default '', -
+outcome char (3) not null default '', -
+recn smallint not null default 0, -
+date date not null default '', -
+status i1 not null default 0, -
+source char (3) not null default '', -
+temp i1 not null default 0, -
+unqid integer) -
+with noduplicates, page_size=4096 \g
+<<
+
+>>
+* insert into b87272_2t (id,unqid) select i,i from b87272_1t where mod(i,2) =0 -
+  and i< 150 \g
+<<
+(74 rows)
+>>
+* create index trkunqid on b87272_2t (unqid) -
+with structure=btree,compression=(nokey),key=(unqid), -
+persistence, -
+nonleaffill = 80, -
+leaffill=70, -
+page_size=2048, -
+fillfactor = 80 \g
+<<
+(74 rows)
+>>
+* insert into b87272_2t (id,unqid) select i,i from b87272_1t where mod(i,2) =1 -
+  and i< 106\g
+<<
+(53 rows)
+>>
+* insert into b87272_2t (id,unqid) values (107,107)\g
+<<
+(1 row)
+>>
+* \q
+<<
+
+>>
