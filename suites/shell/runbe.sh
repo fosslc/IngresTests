@@ -225,10 +225,12 @@
 #	        Set ING_CHARSET to match SEPPARAM_CHARSET.
 # 27-Feb-2009 (boija02)
 #		Replacing all ING_CHARSET references with SEPPARAM_CHARSET
+# 7-Apr-2010 (troal01)
+#       Added the geo test suite
 # 23-Apr-2010 (vande02)
 #             Add utildb5/utildb6 for BOOLEAN util tests.
 #
-betestlist="access accntl alttbl api blob c2secure datetime datatypes miscfunc fastload lar qryproc ttpp util"
+betestlist="access accntl alttbl api blob c2secure datetime datatypes miscfunc fastload lar qryproc ttpp util geo"
 diflvl=
 joblvl=
 hostname="`iipmhost`"
@@ -801,6 +803,29 @@ qawtl "TURNING C2 SECURITY AUDITING ON THEN STOPPING AND RESTARTING INGRES"
 			  exit 1
 			fi
 		fi
+#
+#GEO
+#
+        if [ "$fac" = "all" -o "$fac" = "geo" ]
+        then
+
+           if [ ! -d $TST_OUTPUT/geo ]
+            then
+            echo "Creating Directory - $TST_OUTPUT/geo"
+            mkdir $TST_OUTPUT/geo
+           fi
+
+            echo "Creating BE/GEO database @ ", `date`
+            echo ""
+            destroydb geodb >> $TST_OUTPUT/beinit.out
+            createdb geodb >> $TST_OUTPUT/beinit.out
+            if [ $? != 0 ]
+            then
+              echo Creation of Backend database geodb Failed.
+              echo See $TST_OUTPUT/beinit.out for error messages.
+              exit 1
+            fi
+        fi
       done
     
     echo Backend databases are created and ready for testing.
@@ -1137,6 +1162,26 @@ then
 			doit;
 		fi
 #
+        if [ "$fac" = "all" -o "$fac" = "geo" ]
+        then
+#
+# Run the GEO tests
+#
+            SEPPARAMDB=geodb
+            export SEPPARAMDB
+    
+            AREA=geo
+            CFG_FILE=begeo.cfg
+            LIS_FILE=begeo.lis
+            OUT_FILE=begeo.out
+            export AREA
+
+        echo "Running the GEO tests @ ", `date`
+        echo ""
+        qawtl RUNNING BE/GEO TESTS
+            doit;
+        fi
+#
 	if [ "$fac" = "all" -o "$fac" = "c2secure" ]
 	then
 #
@@ -1388,6 +1433,18 @@ qawtl "TURNING C2 SECURITY AUDITING OFF THEN STOPPING AND RESTARTING INGRES"
 			AREA=fld
 			export AREA
 		fi
+#
+#GEO
+#
+        if [ "$fac" = "all" -o "$fac" = "geo" ]
+        then
+        
+            echo "Destroying BE/GEO database @ ",`date`
+            echo ""
+            destroydb geodb >> $TST_OUTPUT/beclean.out
+            AREA=geo
+            export AREA
+        fi
 	    done
         fi
 	echo Backend databases are destroyed.

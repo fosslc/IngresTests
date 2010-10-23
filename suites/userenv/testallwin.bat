@@ -38,9 +38,9 @@ call %TST_SHELL%\runbe.bat clean access accntl alttbl api blob
 call %TST_SHELL%\runbe.bat init  datatypes datetime fastload qryproc util ttpp
 call %TST_SHELL%\runbe.bat be    datatypes datetime fastload qryproc util ttpp
 call %TST_SHELL%\runbe.bat clean datatypes datetime fastload qryproc util ttpp
-call %TST_SHELL%\runbe.bat init  lar
-call %TST_SHELL%\runbe.bat be    lar
-call %TST_SHELL%\runbe.bat clean lar
+call %TST_SHELL%\runbe.bat init  lar geo
+call %TST_SHELL%\runbe.bat be    lar geo
+call %TST_SHELL%\runbe.bat clean lar geo
 call %TST_SHELL%\runbevps.bat  8 all init vps
 call %TST_SHELL%\runbevps.bat  8 all vps vps
 call %TST_SHELL%\runbevps.bat  64 all init vps

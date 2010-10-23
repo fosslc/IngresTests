@@ -1,0 +1,175 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+    Test ID : geo16.sep
+    Module :
+    Filename: geo16.sep
+    Purpose : To test spatial rtree index
+    Input Files :
+    Output Files :
+    Database : SEPPARAMDB
+    Tables : geo16
+    Synopsis : Tests spatial indexing.  Spatial types cannot be hash, btree
+               or isam.  An rtree index is created.  Values are inserted into
+               the table after index is created.  The overlaps, intersects and
+               inside functions use rtree in the qep.
+    History: 14-SEP-2010 Created by Chuck Thibert
+
+*/
+? fill geo16a.sql 
+!!
+CREATE TABLE geo16 (shape POLYGON);
+\g
+insert into geo16 values(polyfromtext('POLYGON((20 60, 20 75, 30 75, 30 60, 20 60))'))\g
+insert into geo16 values(polyfromtext('POLYGON((35 65, 35 75, 51 75, 51 65, 35 65))'))\g
+insert into geo16 values(polyfromtext('POLYGON((46 35, 46 50, 55 50, 55 35, 46 35))'))\g
+insert into geo16 values(polyfromtext('POLYGON((4 8, 4 39, 15 39, 15 8, 4 8))'))\g
+!!
+? fill geo16b.sql
+!!
+insert into geo16 values(polyfromtext('POLYGON((5 5, 5 12, 25 12, 25 5, 5 5))'))\g
+insert into geo16 values(polyfromtext('POLYGON((20 16, 20 25, 35 25, 35 16, 20 16))'))\g
+insert into geo16 values(polyfromtext('POLYGON((53 15, 53 17, 70 17, 70 15, 53 15))'))\g
+insert into geo16 values(polyfromtext('POLYGON((60 33, 60 40, 68 40, 68 33, 60 33))'))\g
+insert into geo16 values(polyfromtext('POLYGON((65 10, 65 25, 80 25, 80 10, 65 10))'))\g
+!!
+<<
+>>
+? sql SEPPARAMDB -S 
+<<
+>>
+* \i geo16a.sql
+<<
+>>
+* modify geo16 to hash\g
+<<
+E_US0883 Line 1. CREATE/MODIFY:  Column 'shape' cannot be used as a key
+    field. The datatype of the field has been restricted from use as a key.
+    (Tue Sep 14 11:24:54 2010)
+>>
+* modify geo16 to btree\g
+<<
+E_US0883 Line 1. CREATE/MODIFY:  Column 'shape' cannot be used as a key
+    field. The datatype of the field has been restricted from use as a key.
+    (Tue Sep 14 11:24:54 2010)
+>>
+* modify geo16 to isam\g
+<<
+E_US0883 Line 1. CREATE/MODIFY:  Column 'shape' cannot be used as a key
+    field. The datatype of the field has been restricted from use as a key.
+    (Tue Sep 14 11:24:54 2010)
+>>
+* create index geo16_idx on geo16(shape) with structure=rtree,range=((0,0),(1234,1234))\g
+<<
+>>
+* select astext(shape) from geo16_idx\g
+<<
+col1 
+POLYGON ((46 35, 55 35, 55 50, 46 50, 46 35))
+POLYGON ((20 60, 30 60, 30 75, 20 75, 20 60))
+POLYGON ((35 65, 51 65, 51 75, 35 75, 35 65))
+POLYGON ((4 8, 15 8, 15 39, 4 39, 4 8))
+>>
+* \i geo16b.sql
+<<
+>>
+* select astext(shape) from geo16_idx\g
+<<
+col1 
+POLYGON ((53 15, 70 15, 70 17, 53 17, 53 15))
+POLYGON ((46 35, 55 35, 55 50, 46 50, 46 35))
+POLYGON ((20 60, 30 60, 30 75, 20 75, 20 60))
+POLYGON ((20 16, 35 16, 35 25, 20 25, 20 16))
+POLYGON ((35 65, 51 65, 51 75, 35 75, 35 65))
+POLYGON ((4 8, 15 8, 15 39, 4 39, 4 8))
+POLYGON ((60 33, 68 33, 68 40, 60 40, 60 33))
+POLYGON ((5 5, 25 5, 25 12, 5 12, 5 5))
+POLYGON ((65 10, 80 10, 80 25, 65 25, 65 10))
+>>
+* set qep\g
+<<
+>>
+* select asText(shape) from geo16 where overlaps(polyfromtext('POLYGON((48 30, 48 40, 50 40, 50 30, 48 30))'), shape) = 1\g
+<<
+********************************************************************
+
+QUERY PLAN 2,1, no timeout, of main query 
+
+                        T Join(hilbert)
+                        Heap
+                        Pages 1 Tups 2
+                        D3 C0
+             /                      \
+            Proj-rest               geo16
+            Heap                    Heap
+            Pages 1 Tups 2          Pages 3 Tups 4
+            D1 C0
+ /
+geo16_idx
+I(geo16)
+R-Tree(NU)
+Pages 4 Tups 4
+
+********************************************************************
+
+col1
+POLYGON ((46 35, 46 50, 55 50, 55 35, 46 35))
+>>
+* select asText(shape) from geo16 where inside(polyfromtext('POLYGON((8 15, 8 20, 10 20, 10 15, 8 15))'), shape) = 1\g
+<<
+********************************************************************
+
+QUERY PLAN 2,1, no timeout, of main query 
+
+                        T Join(hilbert)
+                        Heap
+                        Pages 1 Tups 2
+                        D3 C0
+             /                      \
+            Proj-rest               geo16
+            Heap                    Heap
+            Pages 1 Tups 2          Pages 3 Tups 4
+            D1 C0
+ /
+geo16_idx
+I(geo16)
+R-Tree(NU)
+Pages 4 Tups 4
+
+********************************************************************
+
+col1
+POLYGON ((4 8, 4 39, 15 39, 15 8, 4 8))
+>>
+* select asText(shape) from geo16 where intersects(polyfromtext('POLYGON((6 10, 7 7, 10 7, 10 11, 6 10))'), shape) = 1\g
+<<
+********************************************************************
+
+QUERY PLAN 2,1, no timeout, of main query 
+
+                        T Join(hilbert)
+                        Heap
+                        Pages 1 Tups 2
+                        D3 C0
+             /                      \
+            Proj-rest               geo16
+            Heap                    Heap
+            Pages 1 Tups 2          Pages 3 Tups 4
+            D1 C0
+ /
+geo16_idx
+I(geo16)
+R-Tree(NU)
+Pages 4 Tups 4
+
+********************************************************************
+
+col1
+POLYGON ((4 8, 4 39, 15 39, 15 8, 4 8))
+POLYGON ((5 5, 5 12, 25 12, 25 5, 5 5))
+>>
+* \q
+<<
+>>
+
+
+Ending at: Tue Sep  14 14:37:39 2010

@@ -384,7 +384,7 @@ if "%2"=="" goto END
 	  goto INIT
 
 :InitBlob
-	if not "%2"=="all" if not "%2"=="blob" goto InitC2secure
+	if not "%2"=="all" if not "%2"=="blob" goto InitGeo
 	  if not exist %TST_OUTPUT%\blob\nul echo Creating Directory - %TST_OUTPUT%\blob
 	  if not exist %TST_OUTPUT%\blob\nul mkdir %TST_OUTPUT%\blob
 	  call ipset datevar PCdate
@@ -393,6 +393,20 @@ if "%2"=="" goto END
 	  destroydb blobdb >>%TST_OUTPUT%\beinit.out
 	  createdb blobdb >>%TST_OUTPUT%\beinit.out
 	  set AREA=blob
+	  if "%2"=="all" goto InitGeo
+	  shift
+	  goto INIT
+	  
+:InitGeo
+	if not "%2"=="all" if not "%2"=="geo" goto InitC2secure
+	  if not exist %TST_OUTPUT%\geo\nul echo Creating Directory - %TST_OUTPUT%\geo
+	  if not exist %TST_OUTPUT%\geo\nul mkdir %TST_OUTPUT%\geo
+	  call ipset datevar PCdate
+	  PCecho " Creating BE\GEO database @ %datevar% . . ."
+	  title   Creating BE\GEO database @ %datevar% . . .
+	  destroydb geodb >>%TST_OUTPUT%\beinit.out
+	  createdb geodb >>%TST_OUTPUT%\beinit.out
+	  set AREA=geo
 	  if "%2"=="all" goto InitC2Secure
 	  shift
 	  goto INIT
@@ -607,7 +621,7 @@ if "%2"=="" goto END
 	  goto RUNTEST
 
 :BLOB
-	if not "%2"=="all" if not "%2"=="blob" goto ALTTBL
+	if not "%2"=="all" if not "%2"=="blob" goto GEO
 	  set SEPPARAMDB=blobdb
 	  set AREA=blob
 	  set CFG_FILE=beblob.cfg
@@ -616,6 +630,21 @@ if "%2"=="" goto END
 	  call ipset datevar PCdate
 	  PCecho " Running the BE BLOB tests @ %datevar%    . . ."
 	  title   Running the BE BLOB tests @ %datevar%    . . .
+	  call rundobe
+	  if "%2"=="all" goto GEO
+	  shift
+	  goto RUNTEST
+
+:GEO
+	if not "%2"=="all" if not "%2"=="geo" goto ALTTBL
+	  set SEPPARAMDB=geodb
+	  set AREA=geo
+	  set CFG_FILE=begeo.cfg
+	  set LIS_FILE=begeo.lis
+	  set OUT_FILE=begeo.out
+	  call ipset datevar PCdate
+	  PCecho " Running the BE GEO tests @ %datevar%    . . ."
+	  title   Running the BE GEO tests @ %datevar%    . . .
 	  call rundobe
 	  if "%2"=="all" goto ALTTBL
 	  shift
@@ -782,12 +811,23 @@ if not "%2" == "" goto CleanLoop
 	goto CleanLoop
 
 :CleanBlob
-    if not "%2"=="all" if not "%2"=="blob" goto CleanAlttbl
+    if not "%2"=="all" if not "%2"=="blob" goto CleanGeo
 	call ipset datevar PCdate
 	PCecho "Destroying BE/BLOB database @ %datevar%"
 	title  Destroying BE/BLOB database @ %datevar%
 	echo.
 	destroydb blobdb >>%TST_OUTPUT%\beclean.out
+	if "%2"=="all" goto CleanGeo
+	shift
+	goto CleanLoop
+
+:CleanGeo
+    if not "%2"=="all" if not "%2"=="geo" goto CleanAlttbl
+	call ipset datevar PCdate
+	PCecho "Destroying BE/GEO database @ %datevar%"
+	title  Destroying BE/GEO database @ %datevar%
+	echo.
+	destroydb geodb >>%TST_OUTPUT%\beclean.out
 	if "%2"=="all" goto CleanAlttbl
 	shift
 	goto CleanLoop

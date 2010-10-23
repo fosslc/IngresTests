@@ -1,0 +1,549 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+    Test ID : geo00.sep
+    Module :
+    Filename: geo00.sep
+    Purpose : To ensure Simple Features 1.1 compliance of geometry types and functio-
+ns (T-series tests)
+    Input Files :
+    Output Files :
+    Database : SEPPARAMDB
+    Tables : lakes, road_segments, divided_routes, buildings, forests, bridges,
+    named_places, streams, ponds, map_neatlines
+    Synopsis : These tests are required for compliance
+    History: 21-Dec-2008 (Joe Wakefield) Converted to Ingres SEP format from the
+                                         Simple Features 1.1 standard document
+        23-MAR-2010 (Alex Trofast) Updates to make it run in SEP.
+        18-OCT-2010 (Alex Trofast) Fixed for WITHIN change.
+
+*/
+>>
+? Fill srs.cpy 
+!!
+INSERT INTO spatial_ref_sys (srid, auth_name, auth_srid, srtext) VALUES(101, 'POSC',-
+ 32214, 'PROJCS["UTM_ZONE_14N", GEOGCS["World Geodetic System 72",DATUM["WGS_72",  E-
+LLIPSOID["NWL_10D", 6378135, 298.26]],PRIMEM["Greenwich", 0], UNIT["Meter", 1.0]],PR-
+OJECTION["Transverse_Mercator"],PARAMETER["False_Easting", 500000.0],PARAMETER["Fals-
+e_Northing", 0.0],PARAMETER["Central_Meridian", -99.0],PARAMETER["Scale_Factor", 0.9-
+996],PARAMETER["Latitude_of_origin", 0.0],UNIT["Meter", 1.0]]') \g
+!!
+<<
+>>
+? sql SEPPARAMDB +U -S 
+<<
+>>
+* GRANT ALL ON spatial_ref_sys to PUBLIC\g
+<<
+>>
+* \q
+<<
+>>
+? sql SEPPARAMDB -S 
+<<
+>>
+* \i srs.cpy
+<<
+>>
+* CREATE TABLE lakes (fid INTEGER NOT NULL PRIMARY KEY, name VARCHAR(64), shore POLY-
+GON SRID 101) \g 
+<<
+>>
+* CREATE TABLE road_segments (fid INTEGER NOT NULL PRIMARY KEY, name VARCHAR(64), al-
+iases VARCHAR(64), num_lanes INTEGER, centerline LINESTRING SRID 101) \g 
+<<
+>>
+* CREATE TABLE divided_routes (fid INTEGER NOT NULL PRIMARY KEY, name VARCHAR(64), n-
+um_lanes INTEGER, centerlines MULTILINESTRING SRID 101) \g 
+<<
+>>
+* CREATE TABLE forests (fid INTEGER NOT NULL PRIMARY KEY, name VARCHAR(64), boundary-
+ MULTIPOLYGON SRID 101) \g 
+<<
+>>
+* CREATE TABLE bridges (fid INTEGER NOT NULL PRIMARY KEY, name VARCHAR(64), position-
+ POINT SRID 101) \g 
+<<
+>>
+* CREATE TABLE streams (fid INTEGER NOT NULL PRIMARY KEY, name VARCHAR(64), centerli-
+ne LINESTRING SRID 101) \g 
+<<
+>>
+* CREATE TABLE buildings (fid INTEGER NOT NULL PRIMARY KEY, address VARCHAR(64), pos-
+ition POINT SRID 101, footprint POLYGON SRID 101) \g 
+<<
+>>
+* CREATE TABLE ponds (fid INTEGER NOT NULL PRIMARY KEY, name VARCHAR(64), type VARCH-
+AR(64), shores MULTIPOLYGON SRID 101) \g 
+<<
+>>
+* CREATE TABLE named_places (fid INTEGER NOT NULL PRIMARY KEY, name VARCHAR(64), bou-
+ndary POLYGON SRID 101) \g 
+<<
+>>
+* CREATE TABLE map_neatlines (fid INTEGER NOT NULL PRIMARY KEY, neatline POLYGON SRI-
+D 101) \g 
+<<
+>>
+* INSERT INTO lakes VALUES (101, 'Blue Lake', PolyFromText('POLYGON((52 18,66 23,73 -
+9,48 6,52 18), (59 18,67 18,67 13,59 13,59 18))', 101)) \g 
+<<
+>>
+* INSERT INTO road_segments VALUES(102, 'Route 5', NULL, 2, LineFromText('LINESTRING-
+( 0 18, 10 21, 16 23, 28 26, 44 31 )' ,101)) \g 
+<<
+>>
+* INSERT INTO road_segments VALUES(103, 'Route 5', 'Main Street', 4, LineFromText('L-
+INESTRING( 44 31, 56 34, 70 38 )' ,101)) \g 
+<<
+>>
+* INSERT INTO road_segments VALUES(104, 'Route 5', NULL, 2, LineFromText('LINESTRING-
+( 70 38, 72 48 )' ,101)) \g 
+<<
+>>
+* INSERT INTO road_segments VALUES(105, 'Main Street', NULL, 4, LineFromText('LINEST-
+RING( 70 38, 84 42 )' ,101)) \g 
+<<
+>>
+* INSERT INTO road_segments VALUES(106, 'Dirt Road by Green Forest', NULL, 1, LineFr-
+omText('LINESTRING( 28 26, 28 0 )',101)) \g                                     
+<<
+>>
+* INSERT INTO divided_routes VALUES(119, 'Route 75', 4, MLineFromText('MULTILINESTRI-
+NG((10 48,10 21,10 0), (16 0,16 23,16 48))', 101)) \g 
+<<
+>>
+* INSERT INTO forests VALUES(109, 'Green Forest', MPolyFromText('MULTIPOLYGON(((28 2-
+6,28 0,84 0,84 42,28 26), (52 18,66 23,73 9,48 6,52 18)),((59 18,67 18,67 13,59 13,5-
+9 18)))', 101)) \g 
+<<
+>>
+* INSERT INTO bridges VALUES(110, 'Cam Bridge', PointFromText('POINT( 44 31 )', 101)-
+) \g 
+<<
+>>
+* INSERT INTO streams VALUES(111, 'Cam Stream', LineFromText('LINESTRING( 38 48, 44 -
+41, 41 36, 44 31, 52 18 )', 101)) \g 
+<<
+>>
+* INSERT INTO streams VALUES(112, NULL, LineFromText('LINESTRING( 76 0, 78 4, 73 9 )-
+', 101)) \g 
+<<
+>>
+* INSERT INTO buildings VALUES(113, '123 Main Street', PointFromText('POINT( 52 30 )-
+', 101), PolyFromText('POLYGON( ( 50 31, 54 31, 54 29, 50 29, 50 31) )', 101)) \g 
+<<
+>>
+* INSERT INTO buildings VALUES(114, '215 Main Street', PointFromText('POINT( 64 33 )-
+', 101), PolyFromText('POLYGON( ( 66 34, 62 34, 62 32, 66 32, 66 34) )', 101)) \g 
+<<
+>>
+* INSERT INTO ponds VALUES(120, NULL, 'Stock Pond', MPolyFromText('MULTIPOLYGON( ( (-
+ 24 44, 22 42, 24 40, 24 44) ), ( ( 26 44, 26 40, 28 42, 26 44) ) )', 101)) \g 
+<<
+>>
+* INSERT INTO named_places VALUES(117, 'Ashton', PolyFromText('POLYGON( ( 62 48, 84 -
+48, 84 30, 56 30, 56 34, 62 48) )', 101)) \g 
+<<
+>>
+* INSERT INTO named_places VALUES(118, 'Goose Island', PolyFromText('POLYGON( ( 67 1-
+3, 67 18, 59 18, 59 13, 67 13) )', 101)) \g 
+<<
+>>
+* INSERT INTO map_neatlines VALUES(115, PolyFromText('POLYGON( ( 0 0, 0 48, 84 48, 8-
+4 0, 0 0 ) )', 101)) \g 
+<<
+>>
+* SELECT f_table_name FROM geometry_columns \g 
+<<
+f_table_name
+
+
+
+lakes
+
+
+
+road_segments
+
+
+
+divided_routes
+
+
+
+forests
+
+
+
+bridges
+
+
+
+streams
+
+
+
+buildings
+
+
+
+buildings
+
+
+
+ponds
+
+
+
+named_places
+
+
+
+map_neatlines
+
+
+
+>>
+* SELECT f_geometry_column FROM geometry_columns WHERE f_table_name = 'streams' \g 
+<<
+f_geometry_column
+
+
+
+centerline
+
+
+
+>>
+* SELECT coord_dimension FROM geometry_columns WHERE f_table_name = 'streams' \g 
+<<
+coord_ 
+     2 
+>>
+* SELECT srid FROM geometry_columns WHERE f_table_name = 'streams' \g 
+<<
+srid          
+          101 
+>>
+* SELECT srtext FROM SPATIAL_REF_SYS WHERE SRID = 101 \g 
+<<
+srtext                                                                              -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                 
+PROJCS["UTM_ZONE_14N", GEOGCS["World Geodetic System 72",DATUM["WGS_72",  ELLIPSOID[-
+"NWL_10D", 6378135, 298.26]],PRIMEM["Greenwich", 0], UNIT["Meter", 1.0]],PROJECTION[-
+"Transverse_Mercator"],PARAMETER["False_Easting", 500000.0],PARAMETER["False_Northin-
+g", 0.0],PARAMETER["Central_Meridian", -99.0],PARAMETER["Scale_Factor", 0.9996],PARA-
+METER["Latitude_of_origin", 0.0],UNIT["Meter", 1.0]]                                -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                                                                    -
+                                 
+>>
+* SELECT Dimension(shore) FROM lakes WHERE name = 'Blue Lake' \g 
+<<
+col1   
+     2 
+>>
+* SELECT GeometryType(centerlines) FROM divided_routes WHERE name = 'Route 75' \g 
+<<
+col1                           
+MultiLineString                
+>>
+* SELECT AsText(boundary) FROM named_places WHERE name = 'Goose Island' \g 
+<<
+col1                             
+ POLYGON ((67 13, 67 18, 59 18, 59 13, 67 13)) 
+>>
+* SELECT AsText(PolyFromWKB(AsBinary(boundary),101)) FROM named_places WHERE name = -
+'Goose Island' \g 
+<<
+col1                             
+ POLYGON ((67 13, 67 18, 59 18, 59 13, 67 13)) 
+>>
+* SELECT SRID(boundary) FROM named_places WHERE name = 'Goose Island' \g 
+<<
+col1          
+          101 
+>>
+* SELECT IsEmpty(centerline) FROM road_segments WHERE name = 'Route 5' AND aliases =-
+ 'Main Street' \g 
+<<
+col1          
+            0 
+>>  
+* SELECT IsSimple(shore) FROM lakes WHERE name = 'Blue Lake' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT AsText(Boundary(boundary)) FROM named_places WHERE name = 'Goose Island' \g-
+ 
+<<
+col1                             
+ LINESTRING (67 13, 67 18, 59 18, 59 13, 67 13) 
+>>
+* SELECT AsText(Envelope(boundary)) FROM named_places WHERE name = 'Goose Island' \g-
+ 
+<<
+col1                             
+ POLYGON ((59 13, 67 13, 67 18, 59 18, 59 13)) 
+>>
+* SELECT X(position) FROM bridges WHERE name = 'Cam Bridge' \g 
+<<
+col1
+     44.000
+>>  
+* SELECT Y(position) FROM bridges WHERE name = 'Cam Bridge' \g 
+<<
+col1
+     31.000
+>>  
+* SELECT AsText(StartPoint(centerline)) FROM road_segments WHERE fid = 102 \g 
+<<
+col1                             
+ POINT (0 18)                     
+>>
+* SELECT AsText(EndPoint(centerline)) FROM road_segments WHERE fid = 102 \g 
+<<
+col1                             
+ POINT (44 31)                    
+>>
+* SELECT IsClosed(LineFromWKB(AsBinary(Boundary(boundary)),SRID(boundary))) FROM nam-
+ed_places WHERE name = 'Goose Island' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT IsRing(LineFromWKB(AsBinary(Boundary(boundary)),SRID(boundary))) FROM named-
+_places WHERE name = 'Goose Island' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT ST_Length(centerline) FROM road_segments WHERE fid = 106 \g 
+<<
+col1
+     26.000
+>>  
+* SELECT NumPoints(centerline) FROM road_segments WHERE fid = 102 \g 
+<<
+col1
+            5
+>>  
+* SELECT AsText(PointN(centerline, 1)) FROM road_segments WHERE fid = 102 \g 
+<<
+col1                             
+ POINT (0 18)                     
+>>
+* SELECT AsText(Centroid(boundary)) FROM named_places WHERE name = 'Goose Island' \g-
+ 
+<<
+col1                             
+ POINT (63 15.5)                  
+>>
+* SELECT Contains(boundary, pointfromwkb(asbinary(PointOnSurface(boundary)))) FROM n-
+amed_places WHERE name = 'Goose Island' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT Area(boundary) FROM named_places WHERE name = 'Goose Island' \g 
+<<
+col1        
+     40.000 
+>>  
+* SELECT AsText(ExteriorRing(shore)) FROM lakes WHERE name = 'Blue Lake' \g 
+<<
+col1                             
+ LINESTRING (52 18, 66 23, 73 9, 48 6, 52 18) 
+>>
+* SELECT NumInteriorRing(shore) FROM lakes WHERE name = 'Blue Lake' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT AsText(InteriorRingN(shore, 1)) FROM lakes WHERE name = 'Blue Lake' \g 
+<<
+col1                             
+ LINESTRING (59 18, 67 18, 67 13, 59 13, 59 18) 
+>>
+* SELECT NumGeometries(centerlines) FROM divided_routes WHERE name = 'Route 75' \g 
+<<
+col1          
+            2 
+>>   
+* SELECT AsText(GeometryN(centerlines, 2)) FROM divided_routes WHERE name = 'Route 7-
+5' \g 
+<<
+col1                             
+ LINESTRING (16 0, 16 23, 16 48)  
+>>
+* SELECT IsClosed(centerlines) FROM divided_routes WHERE name = 'Route 75' \g 
+<<
+col1          
+            0 
+>>  
+* SELECT ST_Length(centerlines) FROM divided_routes WHERE name = 'Route 75' \g 
+<<
+col1
+     96.000
+>>  
+* SELECT AsText(Centroid(shores)) FROM ponds WHERE fid = 120 \g 
+<<
+col1                             
+ POINT (25 42)                    
+>>
+* SELECT Contains(shores, PointOnSurface(shores)) FROM ponds WHERE fid = 120 \g 
+<<
+col1
+            1
+>>  
+* SELECT Area(shores) FROM ponds WHERE fid = 120 \g  
+<<
+col1        
+      8.000 
+>>
+* SELECT Equals(boundary, PolyFromText('POLYGON( ( 67 13, 67 18, 59 18, 59 13, 67 13-
+) )',1)) FROM named_places WHERE name = 'Goose Island' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT Disjoint(centerlines, boundary) FROM divided_routes, named_places WHERE div-
+ided_routes.name = 'Route 75' AND named_places.name = 'Ashton' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT Touches(centerline, shore) FROM streams, lakes WHERE streams.name = 'Cam St-
+ream' AND lakes.name = 'Blue Lake' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT Within(boundary, footprint) FROM named_places, buildings WHERE named_places-
+.name = 'Ashton' AND buildings.address = '215 Main Street' \g 
+<<
+col1          
+            0 
+>>  
+* SELECT Overlaps(forests.boundary, named_places.boundary) FROM forests, named_place-
+s WHERE forests.name = 'Green Forest' AND named_places.name = 'Ashton' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT Crosses(road_segments.centerline, divided_routes.centerlines) FROM road_seg-
+ments, divided_routes WHERE road_segments.fid = 102 AND divided_routes.name = 'Route-
+ 75' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT Intersects(road_segments.centerline, divided_routes.centerlines) FROM road_-
+segments, divided_routes WHERE road_segments.fid = 102 AND divided_routes.name = 'Ro-
+ute 75' \g 
+<<
+col1          
+            1 
+>>  
+* SELECT Contains(forests.boundary, named_places.boundary) FROM forests, named_place-
+s WHERE forests.name = 'Green Forest' AND named_places.name = 'Ashton' \g 
+<<
+col1          
+            0 
+>>  
+* SELECT Relate(forests.boundary, named_places.boundary, 'TTTTTTTTT') FROM forests, -
+named_places WHERE forests.name = 'Green Forest' AND named_places.name = 'Ashton' \g-
+ 
+<<
+col1          
+            1 
+>>  
+* SELECT Distance(position, boundary) FROM bridges, named_places WHERE bridges.name -
+= 'Cam Bridge' AND named_places.name = 'Ashton' \g 
+<<
+col1        
+     12.000 
+>>  
+* SELECT AsText(Intersection(centerline, shore)) FROM streams, lakes WHERE streams.n-
+ame = 'Cam Stream' AND lakes.name = 'Blue Lake' \g 
+<<
+col1                             
+ POINT (52 18)                    
+>>
+* SELECT AsText(Difference(named_places.boundary, forests.boundary)) FROM named_plac-
+es, forests WHERE named_places.name = 'Ashton' AND forests.name = 'Green Forest' \g 
+<<
+col1                             
+ POLYGON ((62 48, 84 48, 84 42, 56 34, 62 48)) 
+>>
+* SELECT AsText(Union(shore, boundary)) FROM lakes, named_places WHERE lakes.name = -
+'Blue Lake' AND named_places.name = 'Goose Island' \g 
+<<
+col1                             
+ POLYGON ((52 18, 66 23, 73 9, 48 6, 52 18)) 
+>>
+* SELECT AsText(SymDifference(shore, boundary)) FROM lakes, named_places WHERE lakes-
+.name = 'Blue Lake' AND named_places.name = 'Ashton' \g 
+<<
+col1                             
+ MULTIPOLYGON (((52 18, 66 23, 73 9, 48 6, 52 18), (59 18, 59 13, 67 13, 67 18, 59 1-
+8)), ((62 48, 84 48, 84 30, 56 30, 56 34, 62 48))) 
+>>
+* SELECT count(*) FROM buildings, bridges WHERE Contains(Buffer(bridges.position, 15-
+.0), buildings.footprint) = 1 \g 
+<<
+col1          
+            1 
+>>  
+* SELECT AsText(ConvexHull(shore)) FROM lakes WHERE lakes.name = 'Blue Lake' \g 
+<<
+col1                             
+ POLYGON ((48 6, 52 18, 66 23, 73 9, 48 6)) 
+>>
+* \q
+<<
+>>
+
+
+Ending at: Tue May  4 07:24:27 2010

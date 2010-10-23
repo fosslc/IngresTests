@@ -1,0 +1,185 @@
+/*
+  Copyright (c) 2010 Ingres Corporation
+    Test ID : geo15.sep
+    Module  : 
+    Filename: geo15.sep
+    Purpose : Tests unloaddb and copydb with geospatial types.
+    Input Files  :
+    Output Files :
+    Database     : SEPPARAMDB2, SEPPARAMDB3
+    Tables       : geo15a, geo15b, geo15c
+    Synopsis     : Unloaddb and copydb with both SRID and no
+                   SRID data.
+
+  History       : 26-July-2010 (troal01) Created.
+                  12-Oct-2010 (troal01) Add missing >> to end.
+*/
+
+? fill geo15ddl.sql 
+!!
+CREATE TABLE geo15a (fid INT NOT NULL PRIMARY KEY, shape POINT SRID 4059);
+CREATE TABLE geo15b (fid INT NOT NULL PRIMARY KEY, shape POLYGON, data LONG VARCHAR)-
+;
+\g
+INSERT INTO geo15a VALUES (1, PointFromText('POINT(1 1)', 4059));
+INSERT INTO geo15a VALUES (2, PointFromText('POINT EMPTY', 4059));
+INSERT INTO geo15b VALUES (1, PolyFromText('POLYGON((1 1, 2 2, 3 3, 4 4, 1 1))'), 'S-
+ome long varchar data');
+INSERT INTO geo15b VALUES (2, PolyFromText('POLYGON((1 1, 5 5, 6 6, 7 9, 10 12, 5 10-
+, 1 1))'), 'Additional long varchar data');
+\g
+!!
+<<
+>>
+? destroydb SEPPARAMDB2 
+<<
+~
+>>
+? createdb SEPPARAMDB2 
+<<
+~
+>>
+? sql SEPPARAMDB2 -S 
+<<
+>>
+* \i geo15ddl.sql
+<<
+>>
+* SELECT fid, AsText(shape) FROM geo15a\g
+<<
+fid           col2                             
+            1 POINT (1 1)                      
+            2 POINT EMPTY                      
+>>
+* SELECT fid, AsText(shape), data FROM geo15b\g
+<<
+fid           col2                             data                             
+            1 POLYGON ((1 1, 2 2, 3 3, 4 4, 1 1)) Some long varchar data           
+            2 POLYGON ((1 1, 5 5, 6 6, 7 9, 10 12, 5 10, 1 1)) Additional long varch-
+ar data     
+>>
+* \q
+<<
+>>
+? copydb SEPPARAMDB2 -infile=geo15copydb.in -outfile=geo15copydb.out 
+<<
+~
+>>
+? destroydb SEPPARAMDB3 
+<<
+~
+>>
+? createdb SEPPARAMDB3 
+<<
+~
+>>
+? sql SEPPARAMDB2 -S 
+<<
+>>
+* \i geo15copydb.out
+<<
+~
+>>
+* \q
+<<
+>>
+? sql SEPPARAMDB3 -S 
+<<
+>>
+* \i geo15copydb.in
+<<
+~
+>>
+* SELECT fid, AsText(shape) FROM geo15a\g
+<<
+fid           col2                             
+            1 POINT (1 1)                      
+            2 POINT EMPTY                      
+>>
+* SELECT fid, AsText(shape), data FROM geo15b\g
+<<
+fid           col2                             data                             
+            1 POLYGON ((1 1, 2 2, 3 3, 4 4, 1 1)) Some long varchar data           
+            2 POLYGON ((1 1, 5 5, 6 6, 7 9, 10 12, 5 10, 1 1)) Additional long varch-
+ar data     
+>>
+* \q
+<<
+>>
+? unloaddb SEPPARAMDB3
+<<
+~
+>>
+.if (UNIX)
+? run unload.ing
+<<
+~
+>>
+.else
+.if (NT_GENERIC)
+? run unload.bat
+<<
+~
+>>
+.else
+.if (VMS)
+? source unload.ing
+<<
+~
+>>
+.endif
+.endif
+.endif
+? destroydb SEPPARAMDB3
+<<
+~
+>>
+? createdb SEPPARAMDB3
+<<
+~
+>>
+.if (UNIX)
+? run reload.ing
+<<
+~
+>>
+.else
+.if (NT_GENERIC)
+? run reload.bat
+<<
+~
+>>
+.else
+.if (VMS)
+? source reload.ing
+<<
+~
+>>
+.endif
+.endif
+.endif
+? sleep 5
+<<
+~
+>>
+? sql SEPPARAMDB3 -S
+<<
+>>
+* SELECT fid, AsText(shape) FROM geo15a\g
+<<
+fid           col2                             
+            1 POINT (1 1)                      
+            2 POINT EMPTY                      
+>>
+* SELECT fid, AsText(shape), data FROM geo15b\g
+<<
+fid           col2                             data                             
+            1 POLYGON ((1 1, 2 2, 3 3, 4 4, 1 1)) Some long varchar data           
+            2 POLYGON ((1 1, 5 5, 6 6, 7 9, 10 12, 5 10, 1 1)) Additional long varch-
+ar data     
+>>
+* \q
+<<
+>>
+
+Ending at: Tue Jul 27 12:15:02 2010
